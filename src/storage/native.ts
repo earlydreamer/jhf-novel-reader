@@ -1,31 +1,30 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor } from '@capacitor/core';
+import { Directory, Encoding, Filesystem, type FilesystemPlugin } from '@capacitor/filesystem';
+import { Preferences } from '@capacitor/preferences';
+import { StorageError, storageError } from './errors';
+import { check } from './validation';
+import { createLibraryStore } from './library';
+import { createReaderStore } from './store';
 import {
-  Directory,
-  Encoding,
-  Filesystem,
-  type FilesystemPlugin,
-} from "@capacitor/filesystem";
-import { Preferences } from "@capacitor/preferences";
-import { StorageError, storageError } from "./errors";
-import { check } from "./validation";
-import { createReaderStore } from "./store";
-import { createSettingsRepository, type PreferenceBackend } from "./settings";
-import type { PrivateFiles } from "./journal";
-const platform = () =>
-  Capacitor.isNativePlatform() ? Capacitor.getPlatform() : "web";
+  createReadingSettingsRepository,
+  createSettingsRepository,
+  type PreferenceBackend,
+} from './settings';
+import type { PrivateFiles } from './journal';
+const platform = () => (Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web');
 function native(getPlatform: () => string) {
   const name = getPlatform();
-  if (name !== "android" && name !== "ios")
-    throw new StorageError("unsupported_platform");
+  if (name !== 'android' && name !== 'ios') throw new StorageError('unsupported_platform');
 }
 function privatePath(path: string): string {
   check(
-    /^(chapters|positions)\/[a-zA-Z0-9.-]+$/.test(path) && !path.includes(".."),
+    /^(chapters|positions|library|versions|reading|works)\/[a-zA-Z0-9.-]+$/.test(path) &&
+      !path.includes('..'),
   );
   return `narou-reader/${path}`;
 }
 export function createNativePrivateFiles(
-  backend: Pick<FilesystemPlugin, "readFile" | "writeFile"> = Filesystem,
+  backend: Pick<FilesystemPlugin, 'readFile' | 'writeFile'> = Filesystem,
   getPlatform: () => string = platform,
 ): PrivateFiles {
   return {
@@ -38,14 +37,14 @@ export function createNativePrivateFiles(
       };
       try {
         const result = await backend.readFile(options);
-        check(typeof result.data === "string");
+        check(typeof result.data === 'string');
         return result.data;
       } catch (error) {
         if (
           error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "OS-PLUG-FILE-0008"
+          typeof error === 'object' &&
+          'code' in error &&
+          error.code === 'OS-PLUG-FILE-0008'
         )
           return null;
         throw storageError(error);
@@ -65,14 +64,14 @@ export function createNativePrivateFiles(
       } catch (error) {
         if (
           error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "OS-PLUG-FILE-0013" &&
-          "message" in error &&
-          typeof error.message === "string" &&
+          typeof error === 'object' &&
+          'code' in error &&
+          error.code === 'OS-PLUG-FILE-0013' &&
+          'message' in error &&
+          typeof error.message === 'string' &&
           /\b(?:ENOSPC|EDQUOT)\b/.test(error.message)
         )
-          throw new StorageError("disk_full");
+          throw new StorageError('disk_full');
         throw storageError(error);
       }
     },
@@ -108,4 +107,12 @@ export function createNativeReaderStore() {
 }
 export function createNativeSettingsRepository() {
   return createSettingsRepository(preferences);
+}
+
+export function createNativeLibraryStore() {
+  return createLibraryStore(files);
+}
+
+export function createNativeReadingSettingsRepository() {
+  return createReadingSettingsRepository(preferences);
 }

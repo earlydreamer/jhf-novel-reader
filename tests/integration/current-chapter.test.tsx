@@ -17,7 +17,7 @@ function setup() {
  const files={read:async(path:string)=>contents.get(path)??null,write:async(path:string,data:string)=>{contents.set(path,data);}};
  const preferences={get:async({key}:{key:string})=>({value:values.get(key)??null}),set:async({key,value}:{key:string,value:string})=>{values.set(key,value);}};
  const sourceTransport:SourceTransport={get:vi.fn(async(target)=>({status:200,headers:{'content-type':'text/html'},data:html,url:target}))};
- const modelTransport:ModelTransport={post:vi.fn(async(request)=>{
+ const modelTransport:ModelTransport={get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post:vi.fn(async(request)=>{
   const messages=request.body.messages as {role:string;content:string}[];
   const message=JSON.parse(messages.find(item=>item.role==='user')!.content) as {outputIds:string[]};
   return {status:200,url:request.url,headers:{},data:{choices:[{finish_reason:'stop',message:{content:JSON.stringify({paragraphs:message.outputIds.map((id,index)=>({id,text:`합성 번역 ${index+1}`}))})}}]}};

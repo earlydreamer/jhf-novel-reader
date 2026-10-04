@@ -13,7 +13,7 @@ function setup(){
  const files={read:async(path:string)=>contents.get(path)??null,write:async(path:string,data:string)=>{contents.set(path,data);}};
  const preferences={get:async({key}:{key:string})=>({value:values.get(key)??null}),set:async({key,value}:{key:string,value:string})=>{values.set(key,value);}};
  const sourceTransport:SourceTransport={get:vi.fn(async target=>({status:200,headers:{'content-type':'text/html'},data:html,url:target}))};
- const modelTransport:ModelTransport={post:vi.fn(async request=>{const input=JSON.parse((request.body.contents as {parts:{text:string}[]}[])[0]!.parts[0]!.text) as {outputIds:string[]};return {status:200,url:request.url,headers:{},data:{candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({paragraphs:input.outputIds.map(id=>({id,text:'합성 한국어'}))})}]}}]}};})};
+ const modelTransport:ModelTransport={get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post:vi.fn(async request=>{const input=JSON.parse((request.body.contents as {parts:{text:string}[]}[])[0]!.parts[0]!.text) as {outputIds:string[]};return {status:200,url:request.url,headers:{},data:{candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({paragraphs:input.outputIds.map(id=>({id,text:'합성 한국어'}))})}]}}]}};})};
  const secrets:SecretStore={get:vi.fn(async()=> 'synthetic-gemini-key'),set:vi.fn(),remove:vi.fn()};
  const lifecycle:AppLifecycle={subscribe:async()=>async()=>{},isActive:async()=>true};
  const deps={files,preferences,sourceTransport,modelTransport,secrets,lifecycle};
@@ -31,7 +31,7 @@ it('accounts for Gemini schema/framing when planning long escaped input',async()
  const chapter={canonicalUrl:url,workId:'n1234ab',chapterId:'n1234ab/1',title:'合成',prevUrl:null,nextUrl:null,sourceHash:'synthetic-hash',paragraphs:[{id:'p1',text:'\\"雨\n'.repeat(120),ruby:[]}]};
  const requests=planChunks(chapter,budget,{jobId:'job',chapterId:chapter.chapterId,settingsRevision:1});
  const post=vi.fn<ModelTransport['post']>(async input=>{const payload=JSON.parse((input.body.contents as {parts:{text:string}[]}[])[0]!.parts[0]!.text) as {outputIds:string[]};return {status:200,url:input.url,headers:{},data:{candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({paragraphs:payload.outputIds.map(id=>({id,text:'번역'}))})}]}}]}};});
- const provider=createGeminiProvider(budget,{post},{get:async()=> 'synthetic-key',set:async()=>{},remove:async()=>{}});
+ const provider=createGeminiProvider(budget,{get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post},{get:async()=> 'synthetic-key',set:async()=>{},remove:async()=>{}});
  for(const request of requests)await expect(provider.translateChunk(request,new AbortController().signal)).resolves.toMatchObject({finishReason:'complete'});
  expect(post).toHaveBeenCalledTimes(requests.length);
 });
