@@ -1,9 +1,27 @@
 import type { CompletedTranslation, ReadingPosition, WorkPage, SelectedModel } from '../contracts';
 import { check, integer, object, text, url } from './validation';
+import { StorageError } from './errors';
 import { secretRef } from './secrets';
 export function identifier(value: unknown): asserts value is string {
   text(value);
   check(/^[A-Za-z0-9][A-Za-z0-9.-]{0,255}$/.test(value) && !value.includes('..'));
+}
+/** Domain payload identity, never interpolated into a private-file path. */
+export function chapterIdentity(value: unknown): asserts value is string {
+  text(value);
+  const match = /^(n[0-9]{4}[a-z]{1,2})\/(short|[1-9][0-9]*)$/.exec(value);
+  check(match !== null && (match[2] === 'short' || Number.isSafeInteger(Number(match[2]))));
+}
+/** Only TOC page references admit the single positive page parameter. */
+function workPageUrl(value: unknown, workId: string): void {
+  text(value);
+  const prefix = `https://ncode.syosetu.com/${workId}/`;
+  check(
+    value === prefix ||
+      (value.startsWith(prefix + '?p=') &&
+        /^[1-9][0-9]*$/.test(value.slice((prefix + '?p=').length)) &&
+        Number.isSafeInteger(Number(value.slice((prefix + '?p=').length)))),
+  );
 }
 function date(value: unknown) {
   text(value);
@@ -30,6 +48,8 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'createdAt',
     'provenance',
   ]);
+  if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 2)
+    throw new StorageError('unsupported_schema');
   check(value.schemaVersion === 2);
   identifier(value.versionId);
   text(value.text);
@@ -49,7 +69,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
   ]);
   const source = value.source;
   identifier(source.workId);
-  identifier(source.chapterId);
+  chapterIdentity(source.chapterId);
   url(source.canonicalUrl, true);
   text(source.title);
   text(source.sourceHash);
@@ -119,15 +139,15 @@ export async function workPage(value: unknown): Promise<WorkPage> {
   ]);
   identifier(value.workId);
   url(value.canonicalUrl, true);
-  url(value.pageUrl, true);
-  if (value.nextPageUrl !== null) url(value.nextPageUrl, true);
+  workPageUrl(value.pageUrl, value.workId);
+  if (value.nextPageUrl !== null) workPageUrl(value.nextPageUrl, value.workId);
   text(value.title);
   check(typeof value.complete === 'boolean' && Array.isArray(value.chapters));
   const ids = new Set<string>();
   for (const ref of value.chapters) {
     object(ref, ['workId', 'chapterId', 'canonicalUrl', 'title', 'ordinal']);
     check(ref.workId === value.workId);
-    identifier(ref.chapterId);
+    chapterIdentity(ref.chapterId);
     check(!ids.has(ref.chapterId));
     ids.add(ref.chapterId);
     url(ref.canonicalUrl, true);
@@ -138,7 +158,8 @@ export async function workPage(value: unknown): Promise<WorkPage> {
 }
 export async function readingPosition(value: unknown): Promise<ReadingPosition> {
   object(value, ['workId', 'chapterId', 'versionId', 'blockId', 'offset']);
-  for (const key of ['workId', 'chapterId', 'versionId', 'blockId']) identifier(value[key]);
+  for (const key of ['workId', 'versionId', 'blockId']) identifier(value[key]);
+  chapterIdentity(value.chapterId);
   integer(value.offset);
   return value as unknown as ReadingPosition;
 }

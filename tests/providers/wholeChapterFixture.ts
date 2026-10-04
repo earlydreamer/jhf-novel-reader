@@ -2,7 +2,7 @@ import type { SourceSnapshot } from '../../src/contracts';
 export const source: SourceSnapshot = {
   canonicalUrl: 'https://ncode.syosetu.com/n1234ab/1/',
   workId: 'n1234ab',
-  chapterId: 'n1234ab-1',
+  chapterId: 'n1234ab/1',
   title: 'chapter',
   prevUrl: null,
   nextUrl: null,

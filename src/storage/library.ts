@@ -1,7 +1,13 @@
 import type { CompletedTranslation, LibraryStore, WorkPage } from '../contracts';
 import { Journal, serial, type PrivateFiles } from './journal';
 import { check, object, snapshot, text } from './validation';
-import { completedTranslation, identifier, readingPosition, workPage } from './readingValidation';
+import {
+  completedTranslation,
+  identifier,
+  chapterIdentity,
+  readingPosition,
+  workPage,
+} from './readingValidation';
 type Index = {
   versions: { versionId: string; chapterId: string; workId: string; updatedAt: string }[];
   workIds: string[];
@@ -16,7 +22,7 @@ async function index(value: unknown): Promise<Index> {
   for (const v of value.versions) {
     object(v, ['versionId', 'chapterId', 'workId', 'updatedAt']);
     identifier(v.versionId);
-    identifier(v.chapterId);
+    chapterIdentity(v.chapterId);
     identifier(v.workId);
     text(v.updatedAt);
     check(Number.isFinite(Date.parse(v.updatedAt)) && !ids.has(v.versionId));
@@ -26,7 +32,7 @@ async function index(value: unknown): Promise<Index> {
   for (const v of value.recent) {
     object(v, ['versionId', 'chapterId', 'workId', 'updatedAt']);
     identifier(v.versionId);
-    identifier(v.chapterId);
+    chapterIdentity(v.chapterId);
     identifier(v.workId);
     text(v.updatedAt);
     check(
@@ -103,7 +109,7 @@ export function createLibraryStore(files: PrivateFiles): LibraryStore {
       }),
     listVersions: (chapterId) =>
       serial(files, async () => {
-        identifier(chapterId);
+        chapterIdentity(chapterId);
         const current = await readIndex();
         const result: CompletedTranslation[] = [];
         for (const v of [...current.versions]
@@ -119,7 +125,9 @@ export function createLibraryStore(files: PrivateFiles): LibraryStore {
       const value = snapshot(input);
       return serial(files, async () => {
         await completedTranslation(value);
-        const old = await readVersion(value.versionId);
+        const old =
+          (await journal.loadForWrite(`versions/${value.versionId}`, completedTranslation))
+            ?.value ?? null;
         if (old) check(JSON.stringify(old) === JSON.stringify(value));
         else await journal.save(`versions/${value.versionId}`, value, completedTranslation);
         const current = await indexForWrite();
