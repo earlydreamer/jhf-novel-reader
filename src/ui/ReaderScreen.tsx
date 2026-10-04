@@ -30,7 +30,11 @@ export function ReaderScreen(props: ReaderViewState & ReaderActions) {
  function restore() {
   if (!position) return;
   const node = Array.from(content.current?.querySelectorAll<HTMLElement>('[data-paragraph-id]') ?? []).find(node => node.dataset.paragraphId === position.paragraphId);
-  if (node && typeof node.scrollIntoView === 'function') { node.scrollIntoView({ block: 'start' }); if (position.offset > 0) window.scrollBy(0, Math.min(position.offset, node.offsetHeight)); }
+  if (node) {
+   // Match capture's viewport-relative offset, independent of CSS scroll-margin.
+   const offset = Math.max(0, Math.min(position.offset, Math.max(0, node.offsetHeight - 1)));
+   window.scrollBy(0, node.getBoundingClientRect().top + offset);
+  }
  }
  useEffect(() => { restore(); }, [chapter?.cacheKey]);
  useEffect(() => {
