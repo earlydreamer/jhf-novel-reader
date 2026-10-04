@@ -1,0 +1,7 @@
+.nr-application { background: #faf9f5; color: #28372f; font-family: system-ui, -apple-system, sans-serif; min-height: 100vh; padding: 16px 0; }
+.nr-app-notice, .nr-app-error { box-sizing: border-box; max-width: 712px; margin: 16px auto; padding: 0 22px; font-size: 13px; line-height: 1.7; }
+.nr-app-error { border: 1px solid #cba990; border-radius: 10px; padding: 14px 22px; background: #fff7ed; }
+.nr-app-controls { margin: 0; padding: 0; border: 0; min-width: 0; }
+.nr-application .nr-prefetch { display: none; }
+.nr-application .nr-reader { min-height: 0; }
+@media (max-width: 420px) { .nr-app-notice, .nr-app-error { margin: 16px; padding: 0; } .nr-app-error { padding: 12px; } }
