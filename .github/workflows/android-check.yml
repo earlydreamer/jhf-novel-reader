@@ -23,10 +23,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      # GitHub's hosted Ubuntu image includes Android SDK and accepted SDK licenses.
-      # Never pipe yes into sdkmanager or silently accept additional agreements.
-      - name: Install pinned SDK packages under existing runner licenses
-        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      # GitHub's hosted Ubuntu image already includes these packages.
+      # Fail clearly on an image change; do not accept new SDK agreements.
+      - name: Verify preinstalled SDK packages
+        run: |
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -- --run
