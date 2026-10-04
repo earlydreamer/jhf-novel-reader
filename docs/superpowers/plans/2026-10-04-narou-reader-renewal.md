@@ -1,7 +1,5 @@
 # Narou Reader Renewal Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 앱 안에서 찾은 작품의 원하는 회차를 한 번의 전체 번역 요청으로 저장하고 읽은 뒤, 실제 휴대폰에서 이 경로를 먼저 확인한다.
 
 **Architecture:** Android의 브리지 없는 원문 탐색 화면과 신뢰된 React 작품·리더·설정을 분리한다. 원문 추출, 모델 목록, 단일 전체 회차 번역, 버전별 저장을 좁은 계약으로 연결하고, 현재 설정과 독립된 저장본 조회를 사용한다. 첫 기능 화면을 먼저 연결하고 물리 기기 검증을 통과한 뒤 목차 확장·이어 읽기·이전을 진행한다.
