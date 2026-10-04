@@ -1,5 +1,5 @@
 import type { CompletedTranslation, ReadingPosition, WorkPage, SelectedModel } from '../contracts';
-import { check, integer, object, text, url } from './validation';
+import { check, integer, object, record, text, url } from './validation';
 import { StorageError } from './errors';
 import { secretRef } from './secrets';
 export function identifier(value: unknown): asserts value is string {
@@ -39,6 +39,9 @@ export function selected(value: unknown): asserts value is SelectedModel {
   if (c.authRef !== undefined) secretRef(c.authRef);
 }
 export async function completedTranslation(value: unknown): Promise<CompletedTranslation> {
+  record(value);
+  if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 2)
+    throw new StorageError('unsupported_schema');
   object(value, [
     'schemaVersion',
     'versionId',
@@ -48,8 +51,6 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'createdAt',
     'provenance',
   ]);
-  if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 2)
-    throw new StorageError('unsupported_schema');
   check(value.schemaVersion === 2);
   identifier(value.versionId);
   text(value.text);

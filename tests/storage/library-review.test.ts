@@ -143,22 +143,32 @@ test('save-only retry repairs a partial first body slot and refuses different va
   ).rejects.toThrow();
 });
 
-test('same UUID recovery protects unknown version schemas', async () => {
-  const { memory, store } = setup();
-  const value = await translated('https://ncode.syosetu.com/n1234ab/2/');
-  await store.commitVersion(value);
-  const key = 'versions/version-1.0.json';
-  const envelope = JSON.parse(memory.get(key)!) as {
-    format: number;
-    generation: number;
-    payload: Record<string, unknown>;
-    checksum: string;
-  };
-  envelope.payload.schemaVersion = 3;
-  const { digest } = await import('../../src/storage/journal');
-  envelope.checksum = await digest([1, envelope.generation, envelope.payload]);
-  const raw = JSON.stringify(envelope);
-  memory.set(key, raw);
-  await expect(store.commitVersion(value)).rejects.toMatchObject({ reason: 'unsupported_schema' });
-  expect(memory.get(key)).toBe(raw);
-});
+test.each(['unchanged fields', 'added future field', 'changed future field', 'removed v2 field'])(
+  'same UUID recovery protects unknown version schemas: %s',
+  async (shape) => {
+    const { memory, store } = setup();
+    const value = await translated('https://ncode.syosetu.com/n1234ab/2/');
+    await store.commitVersion(value);
+    const key = 'versions/version-1.0.json';
+    const envelope = JSON.parse(memory.get(key)!) as {
+      format: number;
+      generation: number;
+      payload: Record<string, unknown>;
+      checksum: string;
+    };
+    envelope.payload.schemaVersion = 3;
+    if (shape === 'added future field') envelope.payload.future = { segments: ['new schema'] };
+    if (shape === 'changed future field') envelope.payload.text = { segments: ['new schema'] };
+    if (shape === 'removed v2 field') delete envelope.payload.source;
+    const { digest } = await import('../../src/storage/journal');
+    envelope.checksum = await digest([1, envelope.generation, envelope.payload]);
+    const raw = JSON.stringify(envelope);
+    memory.set(key, raw);
+    const before = [...memory.entries()];
+    await expect(store.commitVersion(value)).rejects.toMatchObject({
+      reason: 'unsupported_schema',
+    });
+    expect(memory.get(key)).toBe(raw);
+    expect([...memory.entries()]).toEqual(before);
+  },
+);
