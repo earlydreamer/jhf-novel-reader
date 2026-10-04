@@ -9,7 +9,7 @@ const signal=()=>new AbortController().signal;
 function setup(overrides:Partial<ProviderConfig>={},data:unknown=envelope(),status=200){
  const post=vi.fn(async(input:ModelRequest,_signal:AbortSignal):Promise<HttpResponse>=>({status,headers:{},data,url:input.url}));
  const secrets:SecretStore={get:vi.fn(async()=> 'synthetic-gemini-key'),set:vi.fn(),remove:vi.fn()};
- return {post,secrets,provider:createGeminiProvider({...config,...overrides},{post},secrets)};
+ return {get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post,secrets,provider:createGeminiProvider({...config,...overrides},{get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post},secrets)};
 }
 describe('Gemini fixed endpoint and payload',()=>{
  it('sends Gemini JSON with header-only key and preserves ordered outputs',async()=>{

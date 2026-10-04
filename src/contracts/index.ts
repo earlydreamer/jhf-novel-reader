@@ -229,6 +229,10 @@ export interface ModelRequest {
 /** Abort does NOT prove server cancellation. Promise waits for native settlement before rejecting,
  * so a scheduler that awaits it cannot overlap another native model request. Never auto-retry POST. */
 export interface ModelTransport {
+  get(
+    request: { url: string; authorization?: string; geminiApiKey?: string },
+    signal: AbortSignal,
+  ): Promise<HttpResponse>;
   post(request: ModelRequest, signal: AbortSignal): Promise<HttpResponse>;
 }
 export interface AppLifecycle {

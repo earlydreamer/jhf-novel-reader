@@ -18,7 +18,7 @@ function setup(enabled=false) {
  const files={read:async(path:string)=>contents.get(path)??null,write:async(path:string,data:string)=>{contents.set(path,data);}};
  const preferences={get:async({key}:{key:string})=>({value:values.get(key)??null}),set:async({key,value}:{key:string,value:string})=>{values.set(key,value);}};
  const sourceTransport={get:vi.fn(async(target:string)=>({status:200,url:target,headers:{'content-type':'text/html'},data:`<h1 class="p-novel__title">合成 ${target}</h1><div class="p-novel__body"><div class="p-novel__text"><p>雨が降る。</p></div></div><a class="c-pager__item c-pager__item--next" href="${url(Number(new URL(target).pathname.split('/')[2])+1)}">次へ</a>`}))};
- const modelTransport={post:vi.fn(async(request:ModelRequest,_signal:AbortSignal)=>response(request))};
+ const modelTransport={get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post:vi.fn(async(request:ModelRequest,_signal:AbortSignal)=>response(request))};
  const lifecycle:AppLifecycle={subscribe:async(listener)=>{notify=listener;return async()=>{};},isActive:async()=>true};
  const deps={files,preferences,sourceTransport,modelTransport,lifecycle,secrets:{get:async()=>null,set:async()=>{},remove:async()=>{}}};
  const settings=createSettingsRepository(preferences);

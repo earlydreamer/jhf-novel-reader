@@ -140,7 +140,7 @@ describe('deterministic chunk planning', () => {
    expect(planned.length).toBeGreaterThan(0);
    const posted: ModelRequest[] = [];
    const secrets: SecretStore = { get: async () => null, set: async () => {}, remove: async () => {} };
-   const provider = createOpenAICompatibleProvider({ ...config, ...budget }, { post: async request => {
+   const provider = createOpenAICompatibleProvider({ ...config, ...budget }, { get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post: async request => {
     posted.push(request);
     const messages = request.body.messages as { role: string; content: string }[];
     const payload = JSON.parse(messages[1]!.content) as { outputIds: string[] };

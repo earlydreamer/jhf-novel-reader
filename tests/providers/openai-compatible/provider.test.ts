@@ -11,7 +11,7 @@ const lmStudio = { id:'chatcmpl-lmstudio', object:'chat.completion', model:'loca
 function setup(overrides: Partial<ProviderConfig> = {}, data: unknown = ollama, status = 200) {
  const post = vi.fn(async (_request: ModelRequest, _signal: AbortSignal):Promise<HttpResponse> => ({status,headers:{},data,url:'http://192.168.1.2:11434/v1/chat/completions'}));
  const secrets:SecretStore = {get:vi.fn(async()=> 'test-secret'),set:vi.fn(),remove:vi.fn()};
- return {post,secrets,provider:createOpenAICompatibleProvider({...config,...overrides},{post},secrets)};
+ return {get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post,secrets,provider:createOpenAICompatibleProvider({...config,...overrides},{get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post},secrets)};
 }
 const signal = () => new AbortController().signal;
 afterEach(()=>vi.restoreAllMocks());
@@ -95,7 +95,7 @@ describe('fail-closed boundaries',()=>{
  it('waits for transport settlement on cancellation and ignores late output',async()=>{
   const c=new AbortController();let release!:(response:HttpResponse)=>void;
   const post=vi.fn(()=>new Promise<HttpResponse>(resolve=>{release=resolve;}));const secrets:SecretStore={get:vi.fn(),set:vi.fn(),remove:vi.fn()};
-  const provider=createOpenAICompatibleProvider(config,{post},secrets);let settled=false;
+  const provider=createOpenAICompatibleProvider(config,{get: async () => { throw new Error('Catalog not used in legacy fixture'); }, post},secrets);let settled=false;
   const pending=provider.translateChunk(request,c.signal).finally(()=>{settled=true;});c.abort();await Promise.resolve();expect(settled).toBe(false);
   release({status:200,headers:{},data:ollama,url:config.baseUrl+'/v1/chat/completions'});await expect(pending).rejects.toMatchObject({code:'cancelled',outcome:'unknown'});expect(post).toHaveBeenCalledTimes(1);
  });
