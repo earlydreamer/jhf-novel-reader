@@ -40,8 +40,13 @@ it('does not mistake a novel title containing login words for a gate',async()=>{
  expect((await parseChapter('<title>異世界にログインした勇者の物語</title>'+html,url)).paragraphs[0]!.text).toBe('本文');
 });
 it('bounds deep markup with a typed parse error',async()=>{
- await expect(parseChapter(html.replace('本文','<span>'.repeat(4000)+'本文'+'</span>'.repeat(4000)),url)).rejects.toMatchObject({code:'source_parse'});
+ await expect(parseChapter(html.replace('本文','<span>'.repeat(512)+'本文'+'</span>'.repeat(512)),url)).rejects.toMatchObject({code:'source_parse'});
 });
+// Keep the original adversarial input; jsdom parsing can exceed the default 5s
+// when the full integration suite runs concurrently. Production limits are unchanged.
+it('rejects adversarial 4000-level markup without dropping the depth guard',async()=>{
+ await expect(parseChapter(html.replace('本文','<span>'.repeat(4000)+'本文'+'</span>'.repeat(4000)),url)).rejects.toMatchObject({code:'source_parse'});
+},20000);
 it('discards percent-encoded neighbor paths before resolution',async()=>{
  expect((await parseChapter(html+'<a class="c-pager__item--next" href="/n1234ab/%2e%2e/n1234ab/3/">次へ</a>',url)).nextUrl).toBeNull();
 });
