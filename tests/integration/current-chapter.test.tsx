@@ -46,11 +46,13 @@ describe('synthetic current chapter application',()=>{
   expect(snapshots.filter(s=>s.reader.job.phase==='ready').every(s=>s.reader.position?.offset===22)).toBe(true);
   expect(h.deps.sourceTransport.get).not.toHaveBeenCalled();expect(h.deps.modelTransport.post).not.toHaveBeenCalled();await second.dispose();
  });
- it('shows app-owned budget inputs and settings failures with prefetch unavailable',async()=>{
+ it('shows app-owned budget inputs and settings failures with visible default-off prefetch opt-in',async()=>{
   const h=setup(), controller=await h.create();await controller.initialize();render(<Application controller={controller}/>);
   expect(screen.getByLabelText('전체 컨텍스트 예산')).toHaveValue(16384);expect(screen.getByLabelText('출력 예산')).toHaveValue(4096);
   const style=document.createElement('style');style.textContent=readFileSync('src/app/application.css','utf8');document.head.append(style);
-  const checkbox=screen.getByRole('checkbox',{hidden:true});expect(checkbox).not.toBeVisible();style.remove();
+  const checkbox=screen.getByRole('checkbox',{name:'다음 한 화 미리 번역'});expect(checkbox).toBeVisible();expect(checkbox).not.toBeChecked();
+  expect(screen.getByText(/원문을 설정한 모델 서버로 추가 전송/)).toBeVisible();
+  fireEvent.click(checkbox);expect(checkbox).toBeChecked();style.remove();
   fireEvent.change(screen.getByLabelText('출력 예산'),{target:{value:'20000'}});fireEvent.click(screen.getByRole('button',{name:'예산 적용'}));
   expect(screen.getByRole('alert')).toHaveTextContent('출력 예산');
   act(()=>controller.settingsActions.onConfigChange({...config,baseUrl:'http://192.0.2.1/private'}));

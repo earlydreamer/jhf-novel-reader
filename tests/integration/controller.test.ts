@@ -23,9 +23,9 @@ function harness(options: {lifecycle?:AppLifecycle; secrets?:SecretStore; ready?
  return {controller,engine,store,secrets,settings,data,pointer,publish(next:EngineSnapshot){snapshot=next;listeners.forEach(listener=>listener());},async initialize(){await settings.save({config,preferences:{fontSize:18,prefetchEnabled:true}});await controller.initialize();}};
 }
 describe('application controller',()=>{
- it('restores settings with prefetch forced off and exposes a stable snapshot',async()=>{
+ it('restores settings with persisted prefetch opt-in and exposes a stable snapshot',async()=>{
   const h=harness(); await h.initialize(); const snapshot=h.controller.getSnapshot();
-  expect(snapshot.settings.config).toEqual(config);expect(snapshot.settings.preferences.prefetchEnabled).toBe(false);expect(h.controller.getSnapshot()).toBe(snapshot);
+  expect(snapshot.settings.config).toEqual(config);expect(snapshot.settings.preferences.prefetchEnabled).toBe(true);expect(h.controller.getSnapshot()).toBe(snapshot);
   h.controller.readerActions.onOpen('https://ncode.syosetu.com/n1234ab/1/'); expect(h.engine.startChapter).toHaveBeenCalledWith('https://ncode.syosetu.com/n1234ab/1/',config);
  });
  it('does not dispatch before lifecycle initialization or when inactive',async()=>{

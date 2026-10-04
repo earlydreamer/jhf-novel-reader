@@ -1,5 +1,7 @@
 import { Capacitor } from '@capacitor/core';
-import type { AppLifecycle, ModelTransport, SecretStore, SourceTransport } from '../contracts';
+import type { AppLifecycle, ModelTransport, ProviderConfig, SecretStore, SourceTransport } from '../contracts';
+import { createPrefetchCoordinator } from '../jobs/prefetch';
+import { createRequestScheduler } from '../jobs/scheduler';
 import { createTranslationEngine } from '../jobs/engine';
 import { capacitorHttpClient } from '../platform/http/capacitor';
 import { createModelTransport, createSourceTransport } from '../platform/http';
@@ -26,15 +28,19 @@ export function createReaderApplication(adapters: ApplicationAdapters): ReaderCo
   const store = createReaderStore(adapters.files);
   const settings = createSettingsRepository(adapters.preferences);
   const pointer = createLastChapterRepository(adapters.preferences);
-  const engine = createTranslationEngine({
+  const shared = {
     source: new NarouSourceAdapter(adapters.sourceTransport),
-    createProvider: config => createOpenAICompatibleProvider(config, adapters.modelTransport, adapters.secrets),
-    store,
+    createProvider: (config: ProviderConfig) => createOpenAICompatibleProvider(config, adapters.modelTransport, adapters.secrets),
+    store, scheduler: createRequestScheduler(),
+  };
+  const prefetch = createPrefetchCoordinator(createTranslationEngine({ ...shared, priority: 'prefetch' }));
+  const engine = createTranslationEngine({
+    ...shared,
     // The engine owns session validity and exposes current write errors as
     // retryable storage state; no obsolete job can set a global UI error.
     onCacheKey: key => pointer.save(key),
   });
-  const controller = createReaderController({ engine, store, settings, pointer, secrets: adapters.secrets, lifecycle: adapters.lifecycle });
+  const controller = createReaderController({ engine, prefetch, store, settings, pointer, secrets: adapters.secrets, lifecycle: adapters.lifecycle });
   return controller;
 }
 /** Never fall back to browser HTTP, browser preferences or plaintext web credential storage. */
