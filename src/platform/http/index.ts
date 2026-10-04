@@ -13,7 +13,7 @@ async function dispatch(client: NativeHttpClient, request: NativeHttpRequest, si
  let response: HttpResponse;
  try { response = await client.request(request); }
  catch (error) {
-  if (error instanceof ReaderError) throw error;
+  if (error instanceof ReaderError) throw new ReaderError(error.code, error.outcome, error.status);
   if (signal.aborted) throw new ReaderError('cancelled', source ? 'not_sent' : 'unknown');
   throw new ReaderError(source ? 'connection' : 'timeout_unknown', source ? 'not_sent' : 'unknown');
  }
@@ -34,7 +34,13 @@ export function createModelTransport(client: NativeHttpClient): ModelTransport {
  return { async post(input, signal) {
   const url = validateUrl(input.url, false);
   const headers: Record<string,string> = { Accept: 'application/json', 'Content-Type': 'application/json' };
-  if (input.authorization) headers.Authorization = input.authorization;
-  return dispatch(client, { url: url.href, method: 'POST', headers, data: { ...input.body, stream: false }, responseType: 'text', disableRedirects: true, connectTimeout: 15000, readTimeout: 120000 }, signal, false);
+  const gemini = input.geminiApiKey !== undefined;
+  if (gemini) {
+   // Match the unnormalized input: URL normalization must not hide traversal or delimiters.
+   if (!/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/[A-Za-z0-9][A-Za-z0-9._-]{0,255}:generateContent$/.test(input.url)) throw new ReaderError('connection');
+   if (input.authorization !== undefined || !input.geminiApiKey || /[\u0000-\u0020\u007f]/.test(input.geminiApiKey)) throw new ReaderError('auth');
+   headers['x-goog-api-key'] = input.geminiApiKey;
+  } else if (input.authorization) headers.Authorization = input.authorization;
+  return dispatch(client, { url: url.href, method: 'POST', headers, data: gemini ? { ...input.body } : { ...input.body, stream: false }, responseType: 'text', disableRedirects: true, connectTimeout: 15000, readTimeout: 120000 }, signal, false);
  } };
 }

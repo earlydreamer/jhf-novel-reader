@@ -5,6 +5,7 @@ import {
  type TranslationProvider, type ValidatedChunk,
 } from '../contracts';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/openai-compatible';
+import { normalizeGeminiBaseUrl, normalizeGeminiModel } from '../providers/gemini';
 import { createRequestScheduler, type RequestPriority, type RequestScheduler } from './scheduler';
 import { planChunks, PROMPT_VERSION, reassembleParagraphs, validateChunk } from './chunking';
 
@@ -60,8 +61,8 @@ function safe(error: unknown, code: 'storage' | 'source_access' | 'timeout_unkno
  return error instanceof ReaderError ? new ReaderError(error.code,error.outcome,error.status) : new ReaderError(code,code==='timeout_unknown'?'unknown':'not_sent');
 }
 function normalizeConfig(input: ProviderConfig): ProviderConfig {
- if (input.provider!=='openai-compatible' || !input.model.trim() || !Number.isSafeInteger(input.settingsRevision) || input.settingsRevision<0 || !Number.isSafeInteger(input.contextBudget) || !Number.isSafeInteger(input.outputBudget) || input.outputBudget<=0 || input.contextBudget<=input.outputBudget) throw new ReaderError('connection');
- return {...input,baseUrl:normalizeOpenAICompatibleBaseUrl(input.baseUrl),model:input.model.trim()};
+ if ((input.provider!=='openai-compatible' && input.provider!=='gemini') || !input.model.trim() || !Number.isSafeInteger(input.settingsRevision) || input.settingsRevision<0 || !Number.isSafeInteger(input.contextBudget) || !Number.isSafeInteger(input.outputBudget) || input.outputBudget<=0 || input.contextBudget<=input.outputBudget) throw new ReaderError('connection');
+ return {...input,baseUrl:input.provider==='gemini' ? normalizeGeminiBaseUrl(input.baseUrl) : normalizeOpenAICompatibleBaseUrl(input.baseUrl),model:input.provider==='gemini' ? normalizeGeminiModel(input.model) : input.model.trim()};
 }
 function identity(chapter: Chapter, config: ProviderConfig): CacheIdentity {
  return {canonicalUrl:chapter.canonicalUrl,sourceHash:chapter.sourceHash,provider:config.provider,normalizedEndpoint:config.baseUrl,model:config.model,promptVersion:PROMPT_VERSION,languageDirection:'ja-ko'};

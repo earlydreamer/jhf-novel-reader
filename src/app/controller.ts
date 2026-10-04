@@ -7,6 +7,7 @@ import {
 import type { PrefetchCoordinator } from '../jobs/prefetch';
 import type { TranslationEngine } from '../jobs/engine';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/openai-compatible';
+import { normalizeGeminiBaseUrl, normalizeGeminiModel } from '../providers/gemini';
 import type { SavedSettings } from '../storage/settings';
 
 export interface SettingsRepository { read(): Promise<SavedSettings>; save(settings: SavedSettings): Promise<void> }
@@ -32,13 +33,15 @@ export const DEFAULT_CONFIG: ProviderConfig = Object.freeze({
   contextBudget: 16384, outputBudget: 4096, settingsRevision: 0,
 });
 function normalizeConfig(input: ProviderConfig): ProviderConfig {
-  if (input.provider !== 'openai-compatible' || !input.model.trim() || input.model.trim().length > 256 ||
+  if (!['openai-compatible', 'gemini'].includes(input.provider) || !input.model.trim() || input.model.trim().length > 256 ||
       !Number.isSafeInteger(input.contextBudget) || !Number.isSafeInteger(input.outputBudget) ||
       input.outputBudget < 1 || input.contextBudget <= input.outputBudget ||
       !Number.isSafeInteger(input.settingsRevision) || input.settingsRevision < 0 ||
       (input.authRef !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(input.authRef))) throw new ReaderError('connection');
   return {
-    provider: input.provider, baseUrl: normalizeOpenAICompatibleBaseUrl(input.baseUrl), model: input.model.trim(),
+    provider: input.provider,
+    baseUrl: input.provider === 'gemini' ? normalizeGeminiBaseUrl(input.baseUrl) : normalizeOpenAICompatibleBaseUrl(input.baseUrl),
+    model: input.provider === 'gemini' ? normalizeGeminiModel(input.model) : input.model.trim(),
     contextBudget: input.contextBudget, outputBudget: input.outputBudget, settingsRevision: input.settingsRevision,
     ...(input.authRef ? { authRef: input.authRef } : {}),
   };
@@ -188,10 +191,15 @@ export function createReaderController(deps: ControllerDependencies) {
       if (!initialized || disposed) return;
       try {
         const next = normalizeConfig({ ...input, settingsRevision: config.settingsRevision + 1 });
-        const endpointChanged = next.baseUrl !== config.baseUrl || next.provider !== config.provider;
+        const providerChanged = next.provider !== config.provider;
+        const endpointChanged = next.baseUrl !== config.baseUrl || providerChanged;
         // Callers cannot inject an auth reference. Only an explicit secure-store save can attach one.
         const safe = withoutAuth(next);
         if (endpointChanged) { endpointGeneration++; secretOperation++; secretStatus = 'unset'; }
+        if (providerChanged) {
+          preferences = { ...preferences, prefetchEnabled: false };
+          deps.prefetch?.setPrefetchEnabled(false);
+        }
         void changeConfig({ ...safe, ...(!endpointChanged && config.authRef ? { authRef: config.authRef } : {}) });
       } catch { fail('configuration'); }
     },

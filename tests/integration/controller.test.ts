@@ -97,4 +97,48 @@ describe('application controller',()=>{
   const h=harness();await h.initialize();h.settings.save=async()=>{throw new Error('sensitive backend');};
   h.controller.readerActions.onFontSize(22);await vi.waitFor(()=>expect(h.controller.getSnapshot().appError).toBe('settings'));expect(JSON.stringify(h.controller.getSnapshot())).not.toContain('sensitive backend');
  });
+ it('applies explicit Gemini config without reusing local credentials or prefetch consent',async()=>{
+  const h=harness();await h.initialize();await h.controller.settingsActions.onSaveSecret('synthetic-local-secret');
+  const before=h.controller.getSnapshot().settings.config;
+  h.controller.settingsActions.onConfigChange({...before,provider:'gemini',baseUrl:'https://generativelanguage.googleapis.com/v1beta/',model:'models/synthetic-gemini',contextBudget:8192,outputBudget:2048});
+  const after=h.controller.getSnapshot().settings;
+  expect(after.config).toEqual({provider:'gemini',baseUrl:'https://generativelanguage.googleapis.com/v1beta',model:'synthetic-gemini',contextBudget:8192,outputBudget:2048,settingsRevision:before.settingsRevision+1});
+  expect(after.secretStatus).toBe('unset');expect(after.preferences.prefetchEnabled).toBe(false);
+  await vi.waitFor(async()=>expect((await h.settings.read()).config).toEqual(after.config));
+  expect((await h.settings.read()).preferences.prefetchEnabled).toBe(false);
+ });
+ it('does not attach a late local key save after switching to Gemini',async()=>{
+  const pending=deferred<void>();const h=harness({secrets:{get:async()=>null,set:()=>pending.promise,remove:vi.fn().mockResolvedValue(undefined)}});await h.initialize();
+  const saving=h.controller.settingsActions.onSaveSecret('synthetic-local-secret');
+  h.controller.settingsActions.onConfigChange({...config,provider:'gemini',baseUrl:'https://generativelanguage.googleapis.com/v1beta',model:'synthetic-gemini'});pending.resolve();await saving;
+  expect(h.controller.getSnapshot().settings.config.provider).toBe('gemini');expect(h.controller.getSnapshot().settings.config.authRef).toBeUndefined();
+  expect(h.controller.getSnapshot().settings.secretStatus).toBe('unset');expect(h.secrets.remove).toHaveBeenCalledTimes(1);
+ });
+ it('restores a previously applied Gemini config with its own secure reference',async()=>{
+  const h=harness();const gemini={...config,provider:'gemini' as const,baseUrl:'https://generativelanguage.googleapis.com/v1beta',model:'synthetic-gemini',authRef:'provider.gemini'};
+  await h.settings.save({config:gemini,preferences:{fontSize:18,prefetchEnabled:false}});await h.controller.initialize();
+  expect(h.controller.getSnapshot().initialized).toBe(true);expect(h.controller.getSnapshot().settings.config).toEqual(gemini);
+  h.controller.readerActions.onOpen('https://ncode.syosetu.com/n1234ab/1/');expect(h.engine.startChapter).toHaveBeenCalledWith('https://ncode.syosetu.com/n1234ab/1/',gemini);
+ });
+ it.each(['https://example.com/v1beta','http://generativelanguage.googleapis.com/v1beta','https://generativelanguage.googleapis.com/v1beta?key=private'])('rejects Gemini configuration with unsafe endpoint %s',baseUrl=>{
+  return (async()=>{const h=harness();await h.initialize();h.controller.settingsActions.onConfigChange({...config,provider:'gemini',baseUrl,model:'synthetic-gemini'});
+   expect(h.controller.getSnapshot().settings.config).toEqual(config);expect(h.controller.getSnapshot().appError).toBe('configuration');})();
+ });
+ it.each(['','../other','gemini?key=secret','gemini/model'])('rejects unsafe Gemini model %s',model=>{
+  return (async()=>{const h=harness();await h.initialize();h.controller.settingsActions.onConfigChange({...config,provider:'gemini',baseUrl:'https://generativelanguage.googleapis.com/v1beta',model});
+   expect(h.controller.getSnapshot().settings.config).toEqual(config);expect(h.controller.getSnapshot().appError).toBe('configuration');})();
+ });
+
+ it('keeps Gemini credentials scoped while model changes and removes the reference when switching back to local',async()=>{
+  const h=harness();await h.initialize();
+  h.controller.settingsActions.onConfigChange({...config,provider:'gemini',baseUrl:'https://generativelanguage.googleapis.com/v1beta',model:'synthetic-gemini'});
+  await h.controller.settingsActions.onSaveSecret('synthetic-gemini-key');
+  h.controller.settingsActions.onPrefetchChange(true);const cloud=h.controller.getSnapshot().settings.config;
+  h.controller.settingsActions.onConfigChange({...cloud,model:'synthetic-gemini-other'});
+  expect(h.controller.getSnapshot().settings.config.authRef).toBe(cloud.authRef);expect(h.controller.getSnapshot().settings.preferences.prefetchEnabled).toBe(true);
+  h.controller.settingsActions.onConfigChange({...config,authRef:cloud.authRef});
+  expect(h.controller.getSnapshot().settings.config.authRef).toBeUndefined();expect(h.controller.getSnapshot().settings.secretStatus).toBe('unset');
+  expect(h.controller.getSnapshot().settings.preferences.prefetchEnabled).toBe(false);
+ });
+
 });

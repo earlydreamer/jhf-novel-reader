@@ -7,6 +7,7 @@ import { capacitorHttpClient } from '../platform/http/capacitor';
 import { createModelTransport, createSourceTransport } from '../platform/http';
 import { capacitorLifecycle } from '../platform/lifecycle';
 import { createOpenAICompatibleProvider } from '../providers/openai-compatible';
+import { createGeminiProvider } from '../providers/gemini';
 import { NarouSourceAdapter } from '../source';
 import { createNativePreferences, createNativePrivateFiles } from '../storage/native';
 import { createNativeSecretStore } from '../storage/secrets';
@@ -30,7 +31,9 @@ export function createReaderApplication(adapters: ApplicationAdapters): ReaderCo
   const pointer = createLastChapterRepository(adapters.preferences);
   const shared = {
     source: new NarouSourceAdapter(adapters.sourceTransport),
-    createProvider: (config: ProviderConfig) => createOpenAICompatibleProvider(config, adapters.modelTransport, adapters.secrets),
+    createProvider: (config: ProviderConfig) => config.provider === 'gemini'
+      ? createGeminiProvider(config, adapters.modelTransport, adapters.secrets)
+      : createOpenAICompatibleProvider(config, adapters.modelTransport, adapters.secrets),
     store, scheduler: createRequestScheduler(),
   };
   const prefetch = createPrefetchCoordinator(createTranslationEngine({ ...shared, priority: 'prefetch' }));
