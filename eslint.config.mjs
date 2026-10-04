@@ -2,7 +2,17 @@ import babelParser from '@babel/eslint-parser';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
-  { ignores: ['node_modules/**', 'dist/**', 'android/**', '.superpowers/**', 'src/ui/legacy/**', 'src/app/legacy/**', 'tests/ui/mockReaderController.tsx'] },
+  {
+    ignores: [
+      'node_modules/**',
+      'dist/**',
+      'android/**',
+      '.superpowers/**',
+      'src/ui/legacy/**',
+      'src/app/legacy/**',
+      'tests/ui/mockReaderController.tsx',
+    ],
+  },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {

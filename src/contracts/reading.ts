@@ -1,27 +1,80 @@
-import type { Chapter, ProviderId, ReaderError } from "./index";
+import type { Chapter, ProviderId, ReaderError } from './index';
 
-export type ChapterRef = { workId: string; chapterId: string; canonicalUrl: string; title: string; ordinal: number };
-export type WorkPage = { workId: string; canonicalUrl: string; title: string; chapters: readonly ChapterRef[];
-  pageUrl: string; nextPageUrl: string | null; complete: boolean };
-export type SourceSnapshot = Chapter & ({ captureKind: 'fetched'; fetchedAt: string; rawHtml: string }
-  | { captureKind: 'legacy-import'; fetchedAt: null; rawHtml: null });
+export type ChapterRef = {
+  workId: string;
+  chapterId: string;
+  canonicalUrl: string;
+  title: string;
+  ordinal: number;
+};
+export type WorkPage = {
+  workId: string;
+  canonicalUrl: string;
+  title: string;
+  chapters: readonly ChapterRef[];
+  pageUrl: string;
+  nextPageUrl: string | null;
+  complete: boolean;
+};
+export type SourceSnapshot = Chapter &
+  (
+    | { captureKind: 'fetched'; fetchedAt: string; rawHtml: string }
+    | { captureKind: 'legacy-import'; fetchedAt: null; rawHtml: null }
+  );
 
-export type ConnectionConfig = { provider: ProviderId; baseUrl: string; authRef?: string; revision: number };
+export type ConnectionConfig = {
+  provider: ProviderId;
+  baseUrl: string;
+  authRef?: string;
+  revision: number;
+};
 export type ModelChoice = { id: string; displayName: string; supportsGeneration: boolean };
 export type SelectedModel = { connection: ConnectionConfig; modelId: string };
 export type TranslationToken = { requestId: string; chapterId: string; settingsRevision: number };
-export type WholeChapterRequest = { token: TranslationToken; source: SourceSnapshot;
-  languageDirection: 'ja-ko'; contractVersion: 'plain-v1'; promptVersion: 'hymt2-ko-v1' };
-export type WholeChapterResult = { text: string; finishReason: 'complete' | 'length' | 'blocked' | 'unknown' };
+export type WholeChapterRequest = {
+  token: TranslationToken;
+  source: SourceSnapshot;
+  languageDirection: 'ja-ko';
+  contractVersion: 'plain-v1';
+  promptVersion: 'hymt2-ko-v1';
+};
+export type WholeChapterResult = {
+  text: string;
+  finishReason: 'complete' | 'length' | 'blocked' | 'unknown';
+};
 export type TranslationBlock = { id: string; text: string }; // translated IDs, never source paragraph IDs
-export type CompletedTranslation = { schemaVersion: 2; versionId: string; source: SourceSnapshot;
-  text: string; blocks: readonly TranslationBlock[]; createdAt: string;
-  provenance: { provider: ProviderId; connectionId: string; modelId: string;
-    contractVersion: string; promptVersion: string; languageDirection: 'ja-ko' } };
-export type ReadingPosition = { workId: string; chapterId: string; versionId: string; blockId: string; offset: number };
-export type TranslationPhase = 'idle' | 'preparing' | 'translating' | 'validating' | 'saving' | 'ready' | 'failed' | 'unknown';
-export type TranslationState = { phase: TranslationPhase; token?: TranslationToken; elapsedMs: number;
-  error?: ReaderError; pendingSave?: CompletedTranslation };
+export type CompletedTranslation = {
+  schemaVersion: 2;
+  versionId: string;
+  source: SourceSnapshot;
+  text: string;
+  blocks: readonly TranslationBlock[];
+  createdAt: string;
+  provenance: {
+    provider: ProviderId;
+    connectionId: string;
+    modelId: string;
+    contractVersion: string;
+    promptVersion: string;
+    languageDirection: 'ja-ko';
+  };
+};
+export type ReadingPosition = {
+  workId: string;
+  chapterId: string;
+  versionId: string;
+  blockId: string;
+  offset: number;
+};
+export type TranslationPhase =
+  'idle' | 'preparing' | 'translating' | 'validating' | 'saving' | 'ready' | 'failed' | 'unknown';
+export type TranslationState = {
+  phase: TranslationPhase;
+  token?: TranslationToken;
+  elapsedMs: number;
+  error?: ReaderError;
+  pendingSave?: CompletedTranslation;
+};
 export interface RenewalSource {
   getWorkPage(url: string, signal: AbortSignal): Promise<WorkPage>;
   getChapter(ref: ChapterRef, signal: AbortSignal): Promise<SourceSnapshot>;
@@ -33,7 +86,9 @@ export interface ProviderSession {
 export interface LibraryStore {
   saveWorkPage(page: WorkPage): Promise<void>;
   readWork(workId: string): Promise<readonly WorkPage[]>;
-  listRecent(): Promise<readonly { workId: string; chapterId: string; versionId: string; updatedAt: string }[]>;
+  listRecent(): Promise<
+    readonly { workId: string; chapterId: string; versionId: string; updatedAt: string }[]
+  >;
   listVersions(chapterId: string): Promise<readonly CompletedTranslation[]>;
   readVersion(versionId: string): Promise<CompletedTranslation | null>;
   commitVersion(value: CompletedTranslation): Promise<void>;
@@ -41,4 +96,4 @@ export interface LibraryStore {
   readPosition(versionId: string): Promise<ReadingPosition | null>;
 }
 
-export type { ProviderId } from "./index";
+export type { ProviderId } from './index';

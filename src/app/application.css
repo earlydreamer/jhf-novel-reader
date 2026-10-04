@@ -1,16 +1,97 @@
-.nr-application { background: #faf9f5; color: #28372f; font-family: system-ui, -apple-system, sans-serif; min-height: 100vh; padding: 16px 0; }
-.nr-app-notice, .nr-app-error { box-sizing: border-box; max-width: 712px; margin: 16px auto; padding: 0 22px; font-size: 13px; line-height: 1.7; }
-.nr-app-error { border: 1px solid #cba990; border-radius: 10px; padding: 14px 22px; background: #fff7ed; }
-.nr-app-controls { margin: 0; padding: 0; border: 0; min-width: 0; }
-.nr-application .nr-reader { min-height: 0; }
-@media (max-width: 420px) { .nr-app-notice, .nr-app-error { margin: 16px; padding: 0; } .nr-app-error { padding: 12px; } }
+.nr-application {
+  background: #faf9f5;
+  color: #28372f;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  min-height: 100vh;
+  padding: 16px 0;
+}
+.nr-app-notice,
+.nr-app-error {
+  box-sizing: border-box;
+  max-width: 712px;
+  margin: 16px auto;
+  padding: 0 22px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.nr-app-error {
+  border: 1px solid #cba990;
+  border-radius: 10px;
+  padding: 14px 22px;
+  background: #fff7ed;
+}
+.nr-app-controls {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.nr-application .nr-reader {
+  min-height: 0;
+}
+@media (max-width: 420px) {
+  .nr-app-notice,
+  .nr-app-error {
+    margin: 16px;
+    padding: 0;
+  }
+  .nr-app-error {
+    padding: 12px;
+  }
+}
 /* Renewal screen shell. Controls stay outside the scrolling chapter body. */
-.nr-application { max-width: 52rem; margin: 0 auto; padding: 1rem; }
-.nr-application header, .nr-application nav { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
-.nr-application header { justify-content: space-between; margin-bottom: 1.5rem; }
-.nr-application label { display: grid; gap: .4rem; margin-block: 1rem; }
-.nr-application input, .nr-application select { max-width: 100%; box-sizing: border-box; min-height: 2.75rem; }
-.nr-application button { min-height: 2.75rem; cursor: pointer; }
-.nr-application button:disabled { cursor: default; }
-.nr-reading-body { position: relative; line-height: 1.8; padding: 1.25rem; margin-top: 1rem; overflow-y: auto; max-height: 65vh; white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (max-width: 420px) { .nr-application { padding: .75rem; } .nr-reading-body { padding: .75rem; } }
+.nr-application {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+.nr-application header,
+.nr-application nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.nr-application header {
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.nr-application label {
+  display: grid;
+  gap: 0.4rem;
+  margin-block: 1rem;
+}
+.nr-application input,
+.nr-application select {
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+}
+.nr-application button {
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+.nr-application button:disabled {
+  cursor: default;
+}
+.nr-reading-body {
+  position: relative;
+  line-height: 1.8;
+  padding: 1.25rem;
+  margin-top: 1rem;
+  overflow-y: auto;
+  max-height: 65vh;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 420px) {
+  .nr-application {
+    padding: 0.75rem;
+  }
+  .nr-reading-body {
+    padding: 0.75rem;
+  }
+}
