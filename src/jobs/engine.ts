@@ -5,6 +5,7 @@ import {
  type TranslationProvider, type ValidatedChunk,
 } from '../contracts';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/openai-compatible';
+import { createRequestScheduler, type RequestPriority, type RequestScheduler } from './scheduler';
 import { planChunks, PROMPT_VERSION, reassembleParagraphs, validateChunk } from './chunking';
 
 export interface EngineSnapshot {
@@ -30,6 +31,8 @@ export interface EngineDependencies {
  createProvider(config: ProviderConfig): TranslationProvider;
  store: ReaderStore;
  onCacheKey?(key: string): Promise<void>;
+ scheduler?: RequestScheduler;
+ priority?: RequestPriority;
 }
 interface Session {
  config: ProviderConfig;
@@ -50,6 +53,7 @@ interface Session {
  recoveredCheckpoint: boolean;
  position: ReadPosition | null;
  inFlight: boolean;
+ responsePending: boolean;
 }
 const idle = (): EngineSnapshot => ({job:{phase:'idle',completedChunks:0,totalChunks:0},chapter:null,position:null,cacheKey:null});
 function safe(error: unknown, code: 'storage' | 'source_access' | 'timeout_unknown' | 'invalid_output'): ReaderError {
@@ -69,10 +73,10 @@ function validateCompleted(value: CompletedChapter, expected: CacheIdentity, key
  const source=value.source;
  if(value.schemaVersion!==1 || value.cacheKey!==key || !sameIdentity(value.identity,expected) || source.canonicalUrl!==expected.canonicalUrl || source.sourceHash!==expected.sourceHash || !source.paragraphs.length || value.paragraphs.length!==source.paragraphs.length || new Set(source.paragraphs.map(p=>p.id)).size!==source.paragraphs.length || value.paragraphs.some((p,i)=>p.id!==source.paragraphs[i]!.id || typeof p.text!=='string' || (source.paragraphs[i]!.text.trim()? !p.text.trim():p.text!==source.paragraphs[i]!.text))) throw new ReaderError('invalid_output');
 }
-/** One instance per application. The queue is retained across navigation and cancellation. */
+/** One engine per reader role; current and prefetch share the application scheduler. */
 export function createTranslationEngine(deps: EngineDependencies): TranslationEngine {
  let snapshot=idle(), current:Session|null=null, foreground=false, sequence=0;
- let modelQueue:Promise<unknown>=Promise.resolve();
+ const scheduler=deps.scheduler??createRequestScheduler();
  const listeners=new Set<()=>void>();
  const emit=(next:EngineSnapshot)=>{snapshot=next;for(const listener of listeners)listener();};
  const valid=(session:Session)=>current===session && !session.abort.signal.aborted;
@@ -99,14 +103,13 @@ export function createTranslationEngine(deps: EngineDependencies): TranslationEn
   state(session,'saving');await storage(session,()=>deps.store.saveCheckpoint(checkpoint(session)));session.needsCheckpoint=false;await pointer(session);
  }
  async function model(session:Session,request:ChunkRequest) {
-  const task=modelQueue.then(async()=>{
-   check(session);session.inFlight=true;
+  const task=scheduler.schedule(deps.priority??'current',session.abort.signal,async()=>{
+   check(session);session.inFlight=true;session.responsePending=true;
    try{return await deps.createProvider(session.config).translateChunk(request,session.abort.signal);}
    catch(error){throw safe(error,'timeout_unknown');}
    finally{session.inFlight=false;}
   });
   // Never race this with an abort or JS timeout: the native promise owns the slot.
-  modelQueue=task.then(()=>undefined,()=>undefined);
   const result=await task;check(session);return result;
  }
  function adoptCheckpoint(session:Session,cp:Checkpoint) {
@@ -176,7 +179,7 @@ export function createTranslationEngine(deps: EngineDependencies): TranslationEn
     const request={...session.requests![index]!,token:session.token};
     const response=await model(session,request);check(session);
     state(session,'validating');
-    const chunk=validateChunk(request,response);check(session);
+    const chunk=validateChunk(request,response);check(session);session.responsePending=false;
     session.chunks=[...session.chunks,chunk];session.needsCheckpoint=true;
     await saveCheckpoint(session);
    }
@@ -193,7 +196,7 @@ export function createTranslationEngine(deps: EngineDependencies): TranslationEn
  }
  function launch(mode:Session['mode'],config:ProviderConfig,input:string,previous?:Session):JobHandle {
   current?.abort.abort();
-  const session:Session={...(previous??{}),config:{...config},abort:new AbortController(),token:{jobId:`job-${++sequence}`,chapterId:previous?.chapter?.chapterId??'',settingsRevision:config.settingsRevision},mode,url:mode==='start'?input:previous?.url,key:mode==='start'?previous?.key:input,chunks:previous?[...previous.chunks]:[],loaded:previous?.loaded??false,needsCheckpoint:previous?.needsCheckpoint??false,pointerSaved:previous?.pointerSaved??false,position:previous?.position??null,inFlight:false,committed:previous?.committed??false,recoveredCheckpoint:false};
+  const session:Session={...(previous??{}),config:{...config},abort:new AbortController(),token:{jobId:`job-${++sequence}`,chapterId:previous?.chapter?.chapterId??'',settingsRevision:config.settingsRevision},mode,url:mode==='start'?input:previous?.url,key:mode==='start'?previous?.key:input,chunks:previous?[...previous.chunks]:[],loaded:previous?.loaded??false,needsCheckpoint:previous?.needsCheckpoint??false,pointerSaved:previous?.pointerSaved??false,position:previous?.position??null,inFlight:false,responsePending:false,committed:previous?.committed??false,recoveredCheckpoint:false};
   current=session;state(session,'preparing');
   const done=run(session);
   return {done,cancel(){if(current===session)cancel();}};
@@ -201,7 +204,9 @@ export function createTranslationEngine(deps: EngineDependencies): TranslationEn
  function cancel() {
   const session=current;
   if(!session || snapshot.job.phase==='ready' || snapshot.job.phase==='idle')return;
-  const unknown=session.inFlight || snapshot.job.error?.outcome==='unknown';
+  // A provider can settle before its response reaches validation. Discarding
+  // that response must not turn a sent request into an automatically resumable pause.
+  const unknown=session.inFlight || session.responsePending || snapshot.job.error?.outcome==='unknown';
   session.abort.abort();
   emit({...snapshot,chapter:null,position:null,job:{...snapshot.job,phase:unknown?'unknown':'paused',error:new ReaderError('cancelled',unknown?'unknown':'not_sent')}});
  }

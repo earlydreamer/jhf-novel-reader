@@ -4,6 +4,7 @@ import {
   type ReaderPreferences, type ReaderStore, type ReaderViewState, type SecretStore,
   type SettingsActions, type SettingsViewState,
 } from '../contracts';
+import type { PrefetchCoordinator } from '../jobs/prefetch';
 import type { TranslationEngine } from '../jobs/engine';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/openai-compatible';
 import type { SavedSettings } from '../storage/settings';
@@ -19,6 +20,7 @@ export interface ApplicationSnapshot {
 }
 export interface ControllerDependencies {
   readonly engine: TranslationEngine;
+  readonly prefetch?: PrefetchCoordinator;
   readonly store: ReaderStore;
   readonly settings: SettingsRepository;
   readonly secrets: SecretStore;
@@ -78,10 +80,13 @@ export function createReaderController(deps: ControllerDependencies) {
       localPosition = next.position;
     engineSnapshot = next;
     publish();
+    // A subscriber can synchronously navigate, change settings or dispose.
+    if (!disposed && deps.engine.getSnapshot() === next && next.job.phase === 'ready' && next.chapter)
+      deps.prefetch?.onCurrentChapterReady(next.chapter, { ...config });
   });
   function persistSettings(): Promise<boolean> {
     const operation = ++settingsOperation;
-    const saved: SavedSettings = { config: configured ? { ...config } : null, preferences: { ...preferences, prefetchEnabled: false } };
+    const saved: SavedSettings = { config: configured ? { ...config } : null, preferences: { ...preferences } };
     const task = settingsQueue.then(() => deps.settings.save(saved));
     settingsQueue = task.catch(() => {});
     return task.then(() => {
@@ -92,6 +97,7 @@ export function createReaderController(deps: ControllerDependencies) {
   function changeConfig(next: ProviderConfig) {
     config = next;
     configured = true;
+    deps.prefetch?.onCurrentChapterChanged();
     deps.engine.invalidate();
     engineSnapshot = deps.engine.getSnapshot();
     localPosition = engineSnapshot.position;
@@ -104,6 +110,7 @@ export function createReaderController(deps: ControllerDependencies) {
   function open(url: string) {
     if (!dispatchAllowed()) { if (initialized && !configured) fail('configuration'); return; }
     showOriginal = false; appError = null;
+    deps.prefetch?.onCurrentChapterChanged();
     deps.engine.startChapter(url, { ...config });
     publish();
   }
@@ -121,6 +128,7 @@ export function createReaderController(deps: ControllerDependencies) {
             lifecycleEvents++;
             foreground = active;
             deps.engine.setForeground(active);
+            deps.prefetch?.onForegroundChanged(active);
           });
           if (disposed) { await unsubscribe(); return; }
           unsubscribeLifecycle = unsubscribe;
@@ -129,13 +137,15 @@ export function createReaderController(deps: ControllerDependencies) {
         if (disposed) return;
         if (lifecycleEvents === eventAtStart) foreground = active;
         deps.engine.setForeground(foreground);
+        deps.prefetch?.onForegroundChanged(foreground);
         let saved: SavedSettings;
         try { saved = await deps.settings.read(); } catch { fail('settings'); return; }
         if (disposed) return;
         try { config = saved.config ? normalizeConfig(saved.config) : DEFAULT_CONFIG; }
         catch { fail('configuration'); return; }
         configured = saved.config !== null;
-        preferences = { fontSize: saved.preferences.fontSize, prefetchEnabled: false };
+        preferences = { ...saved.preferences };
+        deps.prefetch?.setPrefetchEnabled(preferences.prefetchEnabled);
         secretStatus = config.authRef ? 'saved' : 'unset';
         let key: string | null;
         try { key = await deps.pointer.read(); } catch { fail('last_chapter'); key = null; }
@@ -143,20 +153,20 @@ export function createReaderController(deps: ControllerDependencies) {
         initialized = true;
         publish();
         if (key && configured) await deps.engine.restoreChapter(key, { ...config }).done;
-      } catch { if (!disposed) { foreground = false; deps.engine.setForeground(false); fail('startup'); } }
+      } catch { if (!disposed) { foreground = false; deps.engine.setForeground(false); deps.prefetch?.onForegroundChanged(false); fail('startup'); } }
       finally { initializePromise = null; }
     })();
     return initializePromise;
   }
   const readerActions: ReaderActions = {
     onOpen: open, onNavigate: open,
-    onCancel() { if (!disposed) deps.engine.cancel(); },
-    onRetry() { if (dispatchAllowed()) { appError = null; deps.engine.retry(); publish(); } },
-    onResume() { if (dispatchAllowed()) deps.engine.retry(); },
+    onCancel() { if (!disposed) { deps.prefetch?.onCurrentChapterChanged(); deps.engine.cancel(); } },
+    onRetry() { if (dispatchAllowed()) { appError = null; deps.prefetch?.onCurrentChapterChanged(); deps.engine.retry(); publish(); } },
+    onResume() { if (dispatchAllowed()) { deps.prefetch?.onCurrentChapterChanged(); deps.engine.retry(); } },
     onShowOriginal(show) { showOriginal = show; publish(); },
     onFontSize(size) {
       if (!initialized || !Number.isSafeInteger(size) || size < 10 || size > 48 || disposed) return;
-      preferences = { fontSize: size, prefetchEnabled: false }; publish(); void persistSettings();
+      preferences = { ...preferences, fontSize: size }; publish(); void persistSettings();
     },
     onPosition(position) {
       const chapter = engineSnapshot.chapter;
@@ -222,7 +232,12 @@ export function createReaderController(deps: ControllerDependencies) {
         throw new ReaderError('auth');
       }
     },
-    onPrefetchChange() { /* Issue #7 is deliberately inactive. */ },
+    onPrefetchChange(enabled) {
+      if (!initialized || disposed) return;
+      preferences = { ...preferences, prefetchEnabled: enabled };
+      deps.prefetch?.setPrefetchEnabled(enabled);
+      publish(); void persistSettings();
+    },
   };
   return {
     getSnapshot: () => snapshot,
@@ -231,6 +246,7 @@ export function createReaderController(deps: ControllerDependencies) {
     async dispose() {
       if (disposed) return;
       disposed = true; endpointGeneration++; secretOperation++;
+      deps.prefetch?.onCurrentChapterChanged();
       deps.engine.invalidate(); unsubscribeEngine(); listeners.clear();
       const unsubscribe = unsubscribeLifecycle; unsubscribeLifecycle = null;
       if (unsubscribe) { try { await unsubscribe(); } catch { /* Native listener is no longer allowed to affect state. */ } }

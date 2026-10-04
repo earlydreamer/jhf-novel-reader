@@ -8,7 +8,7 @@
 - Secret entry uses an uncontrolled password input, cleared before awaiting `onSaveSecret`. Neither config nor state snapshots receive the value. Generic failures never render raw exceptions. Status comes from the controller/secure store. The controller must not claim success without secure persistence.
 - Font size, original/translation toggle, navigation and reading-position events are controlled. On focus and scrolling the current paragraph ID and pixel offset emit through `onPosition`. Matching restored positions scroll once when the committed chapter identity changes; the explicit “읽던 위치로” control restores again. A future font/layout change may shift a pixel offset within a paragraph.
 - Unknown outcomes have a duplicate-processing/cost warning and explicit retry. Storage failures request storage retry. The controller owns idempotency, network cancellation and server-settlement policy.
-- Prefetch reads the shared default-off preference and emits explicit changes; UI makes zero requests. The future cloud-provider notice is shown before the checkbox when a cloud config is injected.
+- Prefetch reads the shared default-off preference and emits explicit changes; UI makes zero requests. The source-transmission and potential cloud-cost notice is shown before the checkbox for all endpoints, including hosted OpenAI-compatible servers.
 
 ## Synthetic preview and tests
 

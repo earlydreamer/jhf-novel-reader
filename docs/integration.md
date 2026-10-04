@@ -4,7 +4,7 @@ The app now composes the source parser, OpenAI-compatible local-model provider, 
 
 ## Translation and durable readiness
 
-`createTranslationEngine` in `src/jobs/engine.ts` owns a current job and one model-request queue. `startChapter(url, config)` reads the source and constructs the shared cache fingerprint; `restoreChapter(key, config)` reads a saved snapshot without contacting the source or model; `resumeChapter(key, config)` explicitly resumes a compatible checkpoint. Each returns a handle with `done` and `cancel()`. The application keeps one engine instance, observes its immutable snapshots and uses `retry()` to retain validated in-memory output after a storage failure.
+`createTranslationEngine` in `src/jobs/engine.ts` owns a job and uses the shared priority scheduler in `src/jobs/scheduler.ts`. `startChapter(url, config)` reads the source and constructs the shared cache fingerprint; `restoreChapter(key, config)` reads a saved snapshot without contacting the source or model; `resumeChapter(key, config)` explicitly resumes a compatible checkpoint. Each returns a handle with `done` and `cancel()`. The application keeps separate current/prefetch engines with one shared native model slot, observes only current-engine immutable snapshots and uses `retry()` to retain validated in-memory output after a storage failure.
 
 The planner in `src/jobs/chunking.ts` groups ordered paragraphs, assigns deterministic UTF-16-range IDs to split paragraphs and preserves code-point/ruby boundaries. An indivisible ruby span that cannot fit is rejected rather than truncated. Empty source paragraphs and whitespace-only split ranges bypass the model and are restored exactly. Context is a bounded previous segment, distinct from output IDs. Input estimates include nested JSON escaping plus a system/framing reserve; output estimates include ID/JSON overhead and conservative text expansion. These are planning estimates, not a model-specific tokenizer guarantee. The provider independently checks its exact serialized prompt; truncation is always rejected.
 
@@ -14,7 +14,7 @@ A result must have the expected chunk ID, complete finish reason and exactly ord
 
 Cancellation or a settings change immediately invalidates the UI job. A queued job rechecks its identity and foreground state before starting. The model slot remains occupied until the native promise actually settles; aborting JavaScript is not evidence of server cancellation. A stuck native operation can therefore delay the next job. There is no automatic POST retry and no cloud fallback.
 
-Backgrounding stops further source/model dispatch and invalidates in-flight results. Returning to the foreground does not automatically continue. If a model request may have been sent, the UI warns about unknown server outcome and duplicate processing/cost before explicit retry. Incomplete checkpoints found after restart receive the same warning: the saved schema cannot prove that no subsequent request was active when the process died. Storage failures preserve validated output in memory and retry checkpoint/commit without resending those chunks to the model.
+Backgrounding stops further source/model dispatch and invalidates in-flight results. Returning to the foreground does not automatically continue the current-reader job; speculative work continues only after a known-unsent pause. If a model request may have been sent, the UI warns about unknown server outcome and duplicate processing/cost before explicit retry. Incomplete checkpoints found after restart receive the same warning: the saved schema cannot prove that no subsequent request was active when the process died. Storage failures preserve validated output in memory and retry checkpoint/commit without resending those chunks to the model.
 
 ## Cache, offline restore and settings
 
@@ -22,7 +22,7 @@ The cache fingerprint includes canonical source URL/hash, provider, normalized e
 
 Application-owned Preferences hold a strict last-cache-key pointer separately from body files. Startup restores a completed chapter and its saved position in one snapshot. Positions are viewport pixel offsets, rounded to nonnegative safe integers before persistence; UI restoration clamps them to the rendered paragraph height. Settings and pointer failures are visible without exposing raw exceptions or credentials.
 
-An endpoint change detaches the previous credential reference. Secret save/remove operations use captured endpoint generations, so stale completions cannot assign credentials to a newer endpoint. Secret values never enter snapshots or Preferences. The existing explicit save action uses the native secure store; no plaintext fallback is introduced. Prefetch remains inactive and hidden in the production composition until issue #7.
+An endpoint change detaches the previous credential reference. Secret save/remove operations use captured endpoint generations, so stale completions cannot assign credentials to a newer endpoint. Secret values never enter snapshots or Preferences. The existing explicit save action uses the native secure store; no plaintext fallback is introduced. Prefetch is an explicit, persisted, default-off setting; see [prefetch.md](prefetch.md) for its foreground and checkpoint policy.
 
 ## Evidence and limits
 

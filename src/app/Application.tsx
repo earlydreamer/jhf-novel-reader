@@ -19,7 +19,7 @@ function UsageNotice() {
     <strong>narou-reader · 현재 한 화 읽기</strong>
     <p>네트워크 번역과 보안 저장은 Android 네이티브 앱에서만 사용할 수 있습니다. 웹 화면에서는 실제 원문·모델 요청을 보내지 않습니다.</p>
     <p>접근과 번역이 허용된 공개 회차만 사용하세요. 로그인, 연령 확인, 접근 제한을 우회하지 않습니다. 원문은 설정한 모델 서버로 전송됩니다.</p>
-    <p>다음 화 미리 번역은 아직 지원하지 않습니다. 앱이 닫히거나 백그라운드로 전환되면 새 번역 요청을 멈춥니다.</p>
+    <p>다음 한 화 미리 번역은 기본 꺼짐이며 설정에서 켤 수 있습니다. 현재 화를 저장한 뒤 앱이 전면에 있을 때만 준비합니다. 앱이 닫히거나 백그라운드로 전환되면 새 번역 요청을 멈춥니다.</p>
   </aside>;
 }
 function BudgetSettings({ config, apply }: { config: ProviderConfig; apply(config: Omit<ProviderConfig, 'settingsRevision'>): void }) {
