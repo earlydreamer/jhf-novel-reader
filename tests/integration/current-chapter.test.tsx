@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import '@testing-library/jest-dom/vitest';
 import type { AppLifecycle, ModelTransport, ProviderConfig, SecretStore, SourceTransport } from '../../src/contracts';
 import { createReaderApplication } from '../../src/app/compose';
-import { Application } from '../../src/app/Application';
+import { Application } from '../../src/app/legacy/Application';
 import { createSettingsRepository } from '../../src/storage/settings';
 import { createReaderStore } from '../../src/storage/store';
 import { createLastChapterRepository } from '../../src/app/lastChapter';

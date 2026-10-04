@@ -262,3 +262,6 @@ export function createReaderController(deps: ControllerDependencies) {
   };
 }
 export type ReaderController = ReturnType<typeof createReaderController>;
+
+export { createRenewalController } from "./renewalController";
+export type { RenewalController, RenewalDependencies, RenewalSnapshot } from "./renewalController";

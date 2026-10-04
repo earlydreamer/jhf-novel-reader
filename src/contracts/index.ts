@@ -48,7 +48,7 @@ export interface ReaderStore {
 }
 /** Native only: reject unsupported platforms/errors, never use a plaintext fallback. */
 export interface SecretStore { get(ref: string): Promise<string | null>; set(ref: string, secret: string): Promise<void>; remove(ref: string): Promise<void> }
-export const ERROR_CODES = ['source_access','source_parse','connection','auth','timeout_unknown','invalid_output','storage','cancelled'] as const;
+export const ERROR_CODES = ['source_access','source_parse','connection','auth','timeout_unknown','invalid_output','storage','cancelled','model_list','model_missing','input_limit','output_limit','blocked'] as const;
 export type ErrorCode = typeof ERROR_CODES[number];
 export type RequestOutcome = 'not_sent' | 'unknown' | 'received';
 export class ReaderError extends Error {
@@ -119,3 +119,5 @@ export function toSafeLog(input: Record<string,unknown>): Record<string,string |
  if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) && input.durationMs >= 0) result.durationMs = input.durationMs;
  return result;
 }
+
+export type * from "./reading";
