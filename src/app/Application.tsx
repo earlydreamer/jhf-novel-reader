@@ -1,6 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { ProviderConfig } from '../contracts';
-import { getLocalConnectionGuidance } from '../providers/openai-compatible';
+import { useEffect, useSyncExternalStore } from 'react';
 import { ReaderScreen } from '../ui/ReaderScreen';
 import { SettingsScreen } from '../ui/SettingsScreen';
 import type { ApplicationError, ReaderController } from './controller';
@@ -22,27 +20,6 @@ function UsageNotice() {
     <p>다음 한 화 미리 번역은 기본 꺼짐이며 설정에서 켤 수 있습니다. 현재 화를 저장한 뒤 앱이 전면에 있을 때만 준비합니다. 앱이 닫히거나 백그라운드로 전환되면 새 번역 요청을 멈춥니다.</p>
   </aside>;
 }
-function BudgetSettings({ config, apply }: { config: ProviderConfig; apply(config: Omit<ProviderConfig, 'settingsRevision'>): void }) {
-  const [context, setContext] = useState(String(config.contextBudget));
-  const [output, setOutput] = useState(String(config.outputBudget));
-  const [error, setError] = useState('');
-  useEffect(() => { setContext(String(config.contextBudget)); setOutput(String(config.outputBudget)); }, [config.contextBudget, config.outputBudget]);
-  return <section className="nr-settings nr-card" aria-label="번역 예산"><h2>모델 예산</h2>
-    <form onSubmit={event => {
-      event.preventDefault();
-      const contextBudget = Number(context), outputBudget = Number(output);
-      if (!Number.isSafeInteger(contextBudget) || !Number.isSafeInteger(outputBudget) || outputBudget < 1 || contextBudget <= outputBudget) {
-        setError('출력 예산은 1 이상의 정수이며 전체 컨텍스트 예산보다 작아야 합니다.'); return;
-      }
-      setError(''); apply({ ...config, contextBudget, outputBudget });
-    }}>
-      <label>전체 컨텍스트 예산<input type="number" min="2" step="1" required value={context} onChange={event => setContext(event.target.value)} /></label>
-      <label>출력 예산<input type="number" min="1" step="1" required value={output} onChange={event => setOutput(event.target.value)} /></label>
-      <small>모델이 지원하는 토큰 한도 안에서 설정하세요. 앱은 보수적인 바이트 추정치로 문단을 나누며 모델별 정확한 토큰 수를 보장하지 않습니다.</small>
-      {error && <p role="alert">{error}</p>}<button type="submit">예산 적용</button>
-    </form>
-  </section>;
-}
 function ConnectedApplication({ controller }: { controller: ReaderController }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   useEffect(() => { void controller.initialize(); return () => { void controller.dispose(); }; }, [controller]);
@@ -52,8 +29,6 @@ function ConnectedApplication({ controller }: { controller: ReaderController }) 
     {!state.initialized && <section className="nr-app-notice"><p>기기에 저장된 설정을 준비하고 있습니다.</p>{state.appError && <button onClick={() => void controller.initialize()}>초기화 다시 시도</button>}</section>}
     <fieldset className="nr-app-controls" disabled={!state.initialized}>
       <SettingsScreen {...state.settings} {...controller.settingsActions} />
-      <p className="nr-app-notice">{getLocalConnectionGuidance()}</p>
-      <BudgetSettings config={state.settings.config} apply={controller.settingsActions.onConfigChange} />
       <ReaderScreen {...state.reader} {...controller.readerActions} />
     </fieldset>
   </div>;

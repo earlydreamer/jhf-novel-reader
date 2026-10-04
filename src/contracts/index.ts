@@ -89,7 +89,9 @@ export interface NativeHttpRequest {
 /** Implementations must really disable redirects before dispatch, not just check final URL. */
 export interface NativeHttpClient { request(options: NativeHttpRequest): Promise<HttpResponse> }
 export interface SourceTransport { get(url: string, signal: AbortSignal): Promise<HttpResponse> }
-export interface ModelRequest { readonly url: string; readonly body: Readonly<Record<string,unknown>>; readonly authorization?: string }
+export interface ModelRequest { readonly url: string; readonly body: Readonly<Record<string,unknown>>; readonly authorization?: string;
+ /** Header-only key, accepted exclusively for the fixed Gemini generateContent endpoint. */
+ readonly geminiApiKey?: string }
 /** Abort does NOT prove server cancellation. Promise waits for native settlement before rejecting,
  * so a scheduler that awaits it cannot overlap another native model request. Never auto-retry POST. */
 export interface ModelTransport { post(request: ModelRequest, signal: AbortSignal): Promise<HttpResponse> }

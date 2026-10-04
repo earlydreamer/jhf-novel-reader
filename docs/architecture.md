@@ -31,7 +31,7 @@ Common commands: `npm ci`, `npm run typecheck`, `npm test -- --run`, `npm run bu
 
 ## HTTP and cancellation
 
-SourceTransport exposes GET(url, signal), without a headers/auth argument. It constructs a fresh Accept-only header map; credentials in URL userinfo and non-HTTPS source URLs are rejected. Source host/path allowlisting belongs to #2. ModelTransport owns optional Authorization and JSON POST, forcibly sets `stream:false`, and performs exactly one request. There is no automatic cloud fallback or POST retry.
+SourceTransport exposes GET(url, signal), without a headers/auth argument. It constructs a fresh Accept-only header map; credentials in URL userinfo and non-HTTPS source URLs are rejected. Source host/path allowlisting belongs to #2. ModelTransport owns optional Authorization and JSON POST for local requests, forcibly sets `stream:false`, and performs exactly one request. Issue #9 adds a narrowly scoped Gemini key field and fixed-target header route without OpenAI fields; see [the Gemini boundary review](gemini-provider.md). There is no automatic cloud fallback or POST retry.
 
 Direct `CapacitorHttp.request` is native-only; browser fallback fails closed. Global fetch/XMLHttpRequest patching stays disabled. `disableRedirects:true` is sent before dispatch; every 3xx is rejected, with final URL equality checked as defense in depth. Installed Capacitor 8.5.2 Android source was inspected: HttpRequestHandler passes the flag to CapacitorHttpUrlConnection, which calls setInstanceFollowRedirects(false). [Official HTTP API](https://capacitorjs.com/docs/apis/http). Injected clients must honor the same pre-dispatch guarantee. The comparison after response alone is not a credential-leak defense.
 
