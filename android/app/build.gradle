@@ -1,7 +1,32 @@
 apply plugin: 'com.android.application'
 
+// Bind packaged native/web bytes to the source checkout used for this build.
+// The final artifact audit rejects dirty or stale provenance.
+def provenanceAssets = layout.buildDirectory.dir('generated/sourceProvenance/assets')
+def gitValue = { List<String> arguments ->
+    providers.exec {
+        workingDir rootProject.projectDir.parentFile
+        commandLine(['git'] + arguments)
+    }.standardOutput.asText.get().trim()
+}
+def generateSourceProvenance = tasks.register('generateSourceProvenance') {
+    outputs.dir(provenanceAssets)
+    outputs.upToDateWhen { false }
+    doLast {
+        def destination = provenanceAssets.get().file('source-provenance.json').asFile
+        destination.parentFile.mkdirs()
+        destination.text = groovy.json.JsonOutput.toJson([
+            commit: gitValue(['rev-parse', 'HEAD']),
+            tree: gitValue(['rev-parse', 'HEAD^{tree}']),
+            dirty: !gitValue(['status', '--porcelain', '--untracked-files=normal']).isEmpty()
+        ]) + '\n'
+    }
+}
+tasks.named('preBuild').configure { dependsOn(generateSourceProvenance) }
+
 android {
     namespace = "app.narou.reader"
+    sourceSets.main.assets.srcDir(provenanceAssets)
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "app.narou.reader"

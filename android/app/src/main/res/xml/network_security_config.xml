@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- The model endpoint is chosen at runtime, so a static domain list cannot
+         represent it. This is an app-wide opt-in, NOT a local-network allowlist.
+         SourceTransport requires HTTPS; model redirects remain disabled.
+         Trust anchors and TLS verification are intentionally unchanged. -->
+    <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">syosetu.com</domain>
+    </domain-config>
+</network-security-config>
