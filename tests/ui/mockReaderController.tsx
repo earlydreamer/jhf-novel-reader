@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DEFAULT_PREFERENCES, type ReaderViewState, type SettingsViewState } from '../../src/contracts';
-import { ReaderScreen } from '../../src/ui/ReaderScreen';
-import { SettingsScreen } from '../../src/ui/SettingsScreen';
+import { ReaderScreen } from '../../src/ui/legacy/ReaderScreen';
+import { SettingsScreen } from '../../src/ui/legacy/SettingsScreen';
 const initial: ReaderViewState = {job:{phase:'ready',completedChunks:3,totalChunks:3},showOriginal:false,position:null,preferences:DEFAULT_PREFERENCES,chapter:{schemaVersion:1,cacheKey:'synthetic',completedAt:'2026-10-04',identity:{canonicalUrl:'https://ncode.syosetu.com/n1234ab/1/',sourceHash:'synthetic',provider:'openai-compatible',normalizedEndpoint:'http://192.168.1.2:1234/v1',model:'my-local-model',promptVersion:'v1',languageDirection:'ja-ko'},source:{canonicalUrl:'https://ncode.syosetu.com/n1234ab/1/',workId:'n1234ab',chapterId:'1',title:'비가 그친 오후',sourceHash:'synthetic',prevUrl:null,nextUrl:'https://ncode.syosetu.com/n1234ab/2/',paragraphs:[{id:'one',text:'雨が止んだ。',ruby:[{start:0,end:1,reading:'あめ'}]},{id:'two',text:'窓を開けると、涼しい風が部屋に入ってきた。',ruby:[]}]},paragraphs:[{id:'one',text:'오후 내내 내리던 비가 그쳤다. 창가에 놓아둔 책 위로 옅은 햇살이 번졌다.'},{id:'two',text:'창문을 열자 서늘한 바람이 방 안으로 들어왔다. 나는 읽던 페이지의 모서리를 짚고, 천천히 다음 문장을 읽었다.'}]}};
 function MockReaderController(){
  const [state,setState]=useState(initial);

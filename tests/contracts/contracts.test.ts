@@ -14,7 +14,7 @@ describe('shared contracts', () => {
   expect(key).toMatch(/^v1-[a-f0-9]{64}$/);
  });
  it('keeps stable failure categories and conservative defaults', () => {
-  expect(ERROR_CODES).toEqual(['source_access','source_parse','connection','auth','timeout_unknown','invalid_output','storage','cancelled']);
+  expect(ERROR_CODES).toEqual(['source_access','source_parse','connection','auth','timeout_unknown','invalid_output','storage','cancelled','model_list','model_missing','input_limit','output_limit','blocked']);
   expect(DEFAULT_PREFERENCES.prefetchEnabled).toBe(false);
  });
  it('rejects stale job or settings revisions', () => {

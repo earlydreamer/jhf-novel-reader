@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { ReaderError } from '../../src/contracts';
-import { ReaderScreen } from '../../src/ui/ReaderScreen';
+import { ReaderScreen } from '../../src/ui/legacy/ReaderScreen';
 import { reader, actions } from './fixtures';
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 describe('ReaderScreen',()=>{

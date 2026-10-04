@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Application } from '../../src/app/Application';
+import { Application } from '../../src/app/legacy/Application';
 it('renders a truthful native-only shell with source access and rights limits', () => {
  const html = renderToStaticMarkup(<Application controller={null} />);
  expect(html).toContain('narou-reader');

@@ -1,0 +1,6 @@
+node_modules
+android
+dist
+.superpowers
+src/ui/legacy
+src/app/legacy
