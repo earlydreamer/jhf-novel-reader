@@ -4,6 +4,8 @@ import type { ChunkRequest, ChunkResult, ModelTransport, ProviderConfig, SecretS
 /** Canonical API base used for both requests and cache identity. No credentials in URLs. */
 export function normalizeOpenAICompatibleBaseUrl(value: string): string {
  try {
+  // URL.search/hash are empty for bare delimiters, but href retains them.
+  if (/[?#]/.test(value)) throw new Error();
   const url = new URL(value.trim());
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
   const path = url.pathname.replace(/\/+$/, '');

@@ -100,3 +100,19 @@ describe('fail-closed boundaries',()=>{
   release({status:200,headers:{},data:ollama,url:config.baseUrl+'/v1/chat/completions'});await expect(pending).rejects.toMatchObject({code:'cancelled',outcome:'unknown'});expect(post).toHaveBeenCalledTimes(1);
  });
 });
+
+describe('endpoint and ordered output regressions',()=>{
+ it.each(['http://host?', 'http://host#', 'http://host/v1?', 'http://host/v1/#'])('rejects empty URL delimiters in %s',baseUrl=>{
+  expect(()=>setup({baseUrl})).toThrow(ReaderError);
+ });
+ const multi:ChunkRequest={...request,paragraphs:[...request.paragraphs,{id:'p2',text:'次の文',ruby:[]}],outputIds:['p1','p2']};
+ const ordered=[...output,{id:'p2',text:'다음 문장'}];
+ it('preserves multi-paragraph order and excludes read-only context',async()=>{
+  const data={choices:[{finish_reason:'stop',message:{content:JSON.stringify({paragraphs:ordered})}}]};
+  expect(await setup({},data).provider.translateChunk(multi,signal())).toEqual({chunkId:'chunk',paragraphs:ordered,finishReason:'complete'});
+ });
+ it.each([{paragraphs:[...ordered].reverse()},{paragraphs:[{id:'context',text:'앞 문장'},ordered[1]]}])('rejects reordered IDs or leaked context IDs',async({paragraphs})=>{
+  const data={choices:[{finish_reason:'stop',message:{content:JSON.stringify({paragraphs})}}]};
+  await expect(setup({},data).provider.translateChunk(multi,signal())).rejects.toMatchObject({code:'invalid_output',outcome:'received'});
+ });
+});
