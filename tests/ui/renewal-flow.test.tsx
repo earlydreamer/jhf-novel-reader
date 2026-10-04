@@ -376,6 +376,10 @@ describe('route restoration across works', () => {
     expect(controller.getSnapshot().route).toEqual({ kind: 'reader', versionId: saved.versionId });
     expect(controller.getSnapshot().work?.workId).toBe(page.workId);
     expect(controller.getSnapshot().chapter?.chapterId).toBe(saved.source.chapterId);
+    render(<Application controller={controller} />);
+    fireEvent.click(screen.getByRole('button', { name: '목차' }));
+    expect(screen.getByText('번역 저장됨')).toBeVisible();
+    expect(controller.getSnapshot().savedChapterIds).toEqual([saved.source.chapterId]);
   });
 });
 

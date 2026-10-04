@@ -180,6 +180,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         work,
         chapter,
         version,
+        savedChapterIds: work ? (savedChaptersByWork.get(work.workId) ?? []) : [],
         position: positionsByVersion.get(route.versionId) ?? null,
       });
     }
