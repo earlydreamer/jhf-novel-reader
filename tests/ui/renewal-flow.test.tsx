@@ -378,3 +378,108 @@ describe('route restoration across works', () => {
     expect(controller.getSnapshot().chapter?.chapterId).toBe(saved.source.chapterId);
   });
 });
+
+describe('review P1: translation ownership survives navigation', () => {
+  function deferredRequest() {
+    let resolve: (() => void) | undefined;
+    let reject: ((error: Error) => void) | undefined;
+    const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    return {
+      promise,
+      resolve: () => resolve?.(),
+      reject: () => reject?.(new Error('Synthetic late failure')),
+    };
+  }
+  async function activeFixture() {
+    const value = fixture();
+    const request = deferredRequest();
+    const start = vi.fn(async () => request.promise);
+    const controller = controllers.createRenewalController({
+      ...value.dependencies,
+      startTranslation: start,
+    });
+    await controller.openWork(page.canonicalUrl);
+    await controller.selectChapter(chapters[0]!);
+    controller.changeConnection({
+      provider: 'openai-compatible',
+      baseUrl: 'http://192.168.1.2:1234/v1',
+    });
+    await controller.checkConnection();
+    controller.chooseModel('fixture-hymt2');
+    const pending = controller.translate();
+    return { controller, request, pending, start };
+  }
+  it.each([0, 1])(
+    'prevents a second dispatch after selecting chapter index %s while the first request is unresolved',
+    async (index) => {
+      const value = await activeFixture();
+      value.controller.back();
+      await value.controller.selectChapter(chapters[index]!);
+      const second = value.controller.translate();
+      const dispatchCount = value.start.mock.calls.length;
+      expect(value.controller.getSnapshot().translationActive).toBe(true);
+      value.request.resolve();
+      await Promise.all([value.pending, second]);
+      expect(dispatchCount).toBe(1);
+      expect(value.controller.getSnapshot().translationActive).toBe(false);
+    },
+  );
+  it('ignores a late failure from the previous chapter', async () => {
+    const value = await activeFixture();
+    value.controller.back();
+    await value.controller.selectChapter(chapters[1]!);
+    value.request.reject();
+    await value.pending;
+    expect(value.controller.getSnapshot().chapter?.chapterId).toBe(chapters[1]!.chapterId);
+    expect(value.controller.getSnapshot().translation.phase).toBe('idle');
+    expect(value.controller.getSnapshot().translation.error).toBeUndefined();
+  });
+  it('ignores a late failure after settings changed and the chapter was reselected', async () => {
+    const value = await activeFixture();
+    value.controller.changeConnection({
+      provider: 'openai-compatible',
+      baseUrl: 'http://192.168.1.3:1234/v1',
+    });
+    value.controller.back();
+    await value.controller.selectChapter(chapters[0]!);
+    value.request.reject();
+    await value.pending;
+    expect(value.controller.getSnapshot().translation.phase).toBe('idle');
+    expect(value.controller.getSnapshot().translation.error).toBeUndefined();
+  });
+  it('reports a failure for the currently owned request and releases the latch', async () => {
+    const value = await activeFixture();
+    value.request.reject();
+    await value.pending;
+    expect(value.controller.getSnapshot().translation.phase).toBe('failed');
+    expect(value.controller.getSnapshot().translationActive).toBe(false);
+  });
+  it('releases the global latch only after settlement so the next explicit action can run', async () => {
+    const value = await activeFixture();
+    value.controller.back();
+    await value.controller.selectChapter(chapters[1]!);
+    value.request.resolve();
+    await value.pending;
+    await value.controller.translate();
+    expect(value.start).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('review P2: library-only continuation restores saved metadata', () => {
+  it('shows the saved marker after cold-start offline continue reading and contents navigation', async () => {
+    const value = fixture(true);
+    const controller = controllers.createRenewalController({ library: value.dependencies.library });
+    render(<Application controller={controller} />);
+    await controller.continueReading(saved.versionId);
+    await screen.findByText(saved.text);
+    fireEvent.click(screen.getByRole('button', { name: '목차' }));
+    expect(screen.getByRole('heading', { name: page.title })).toBeVisible();
+    expect(screen.getByText('번역 저장됨')).toBeVisible();
+    expect(controller.getSnapshot().savedChapterIds).toEqual([saved.source.chapterId]);
+    expect(value.dependencies.connect).not.toHaveBeenCalled();
+    expect(value.dependencies.source?.getWorkPage).not.toHaveBeenCalled();
+  });
+});

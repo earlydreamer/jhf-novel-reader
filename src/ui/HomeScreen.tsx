@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useState } from 'react';
 import type { RenewalSnapshot } from '../app/renewalController';
 export interface HomeScreenProps {
@@ -7,7 +8,7 @@ export interface HomeScreenProps {
   onOpen(url: string): void;
   onContinue(versionId: string): void;
 }
-export function HomeScreen(props: HomeScreenProps) {
+export function HomeScreen(props: HomeScreenProps): JSX.Element {
   const [url, setUrl] = useState('');
   return (
     <section aria-label="홈">

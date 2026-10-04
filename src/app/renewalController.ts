@@ -64,6 +64,7 @@ export interface RenewalSnapshot {
   readonly sourceAvailable: boolean;
   readonly connectionAvailable: boolean;
   readonly translationAvailable: boolean;
+  readonly translationActive: boolean;
 }
 const DEFAULT_CONNECTION: ConnectionConfig = {
   provider: 'openai-compatible',
@@ -92,7 +93,31 @@ function errorLabel(error: unknown): CatalogStatus {
   if (error instanceof ReaderError && error.code === 'connection') return 'connection';
   return 'model_list';
 }
-export function createRenewalController(dependencies: RenewalDependencies = {}) {
+export interface RenewalController {
+  getSnapshot(): RenewalSnapshot;
+  subscribe(listener: () => void): () => void;
+  initialize(): Promise<void>;
+  navigate(route: Route): void;
+  back(): void;
+  openWork(url: string): Promise<void>;
+  selectChapter(chapter: ChapterRef): Promise<void>;
+  continueReading(versionId: string): Promise<void>;
+  changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
+  checkConnection(secret?: string): Promise<void>;
+  chooseModel(modelId: string): void;
+  translate(): Promise<void>;
+  showContents(): void;
+  adjacentChapter(direction: -1 | 1): void;
+  changeFontSize(fontSize: number): void;
+  savePosition(blockId: string, offset: number): Promise<void>;
+  showOriginal(show: boolean): void;
+  dispose(): void;
+}
+interface ActiveTranslation {
+  readonly chapterId: string;
+  readonly settingsRevision: number;
+}
+export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
   let snapshot: RenewalSnapshot = {
     route: { kind: 'home' },
     work: null,
@@ -113,6 +138,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
     sourceAvailable: Boolean(dependencies.source),
     connectionAvailable: Boolean(dependencies.connect),
     translationAvailable: Boolean(dependencies.startTranslation),
+    translationActive: false,
   };
   const listeners = new Set<() => void>();
   const history: Route[] = [];
@@ -126,6 +152,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
   let selectionOperation = 0;
   let catalogOperation = 0;
   let session: ProviderSession | null = null;
+  let activeTranslation: ActiveTranslation | null = null;
   let catalogAbort: AbortController | null = null;
   let sourceAbort: AbortController | null = null;
   function publish(update: Partial<RenewalSnapshot>): void {
@@ -176,6 +203,25 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
       publish({ error: '저장된 독서 기록을 불러오지 못했습니다.' });
     }
   }
+  async function readSavedChapterIds(chapters: readonly ChapterRef[]): Promise<readonly string[]> {
+    const library = dependencies.library;
+    if (!library) return [];
+    const savedEntries = await Promise.all(
+      chapters.map(async (chapter) => {
+        const versions = await library.listVersions(chapter.chapterId);
+        return versions.length > 0 ? chapter.chapterId : null;
+      }),
+    );
+    return savedEntries.filter((chapterId): chapterId is string => chapterId !== null);
+  }
+  function ownsVisibleTranslation(request: ActiveTranslation): boolean {
+    return (
+      snapshot.route.kind === 'translation' &&
+      snapshot.route.chapterId === request.chapterId &&
+      snapshot.chapter?.chapterId === request.chapterId &&
+      snapshot.connection.revision === request.settingsRevision
+    );
+  }
   async function openWork(url: string): Promise<void> {
     if (!dependencies.source) {
       publish({ error: '원문 탐색 연결은 아직 사용할 수 없습니다.' });
@@ -189,19 +235,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
       const page = await dependencies.source.getWorkPage(url, sourceAbort.signal);
       if (operation !== sourceOperation || disposed) return;
       if (dependencies.library) await dependencies.library.saveWorkPage(page);
-      const savedChapterIds: string[] = [];
-      const library = dependencies.library;
-      if (library) {
-        const entries = await Promise.all(
-          page.chapters.map(async (chapter) => ({
-            chapterId: chapter.chapterId,
-            versions: await library.listVersions(chapter.chapterId),
-          })),
-        );
-        entries.forEach((entry) => {
-          if (entry.versions.length > 0) savedChapterIds.push(entry.chapterId);
-        });
-      }
+      const savedChapterIds = await readSavedChapterIds(page.chapters);
       if (operation !== sourceOperation || disposed) return;
       worksById.set(page.workId, page);
       page.chapters.forEach((chapter) => chaptersById.set(chapter.chapterId, chapter));
@@ -263,21 +297,27 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
         publish({ error: '저장된 번역을 찾지 못했습니다.' });
         return;
       }
-      const pages = await dependencies.library.readWork(version.source.workId);
+      const pages = (await dependencies.library.readWork(version.source.workId)).filter(
+        (page) => page.workId === version.source.workId,
+      );
       const work = pages[0] ?? null;
       const chapter =
         pages
           .flatMap((page) => page.chapters)
           .find((value) => value.chapterId === version.source.chapterId) ?? null;
       const position = await dependencies.library.readPosition(versionId);
+      const savedChapterIds = await readSavedChapterIds(pages.flatMap((page) => page.chapters));
       if (operation !== selectionOperation || disposed) return;
-      if (work) worksById.set(work.workId, work);
+      if (work) {
+        worksById.set(work.workId, work);
+        savedChaptersByWork.set(work.workId, savedChapterIds);
+      }
       pages
         .flatMap((page) => page.chapters)
         .forEach((value) => chaptersById.set(value.chapterId, value));
       versionsById.set(version.versionId, version);
       positionsByVersion.set(version.versionId, position);
-      publish({ work, chapter, version, position });
+      publish({ work, chapter, version, position, savedChapterIds });
       navigate({ kind: 'reader', versionId });
     } catch {
       publish({ error: '저장된 번역을 불러오지 못했습니다.' });
@@ -340,6 +380,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
       !session ||
       !snapshot.chapter ||
       !snapshot.selectedModelId ||
+      activeTranslation !== null ||
+      disposed ||
       snapshot.translation.phase !== 'idle'
     )
       return;
@@ -348,13 +390,25 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
       connection: snapshot.connection,
       modelId: snapshot.selectedModelId,
     };
-    publish({ translation: { phase: 'preparing', elapsedMs: 0 } });
+    const request: ActiveTranslation = {
+      chapterId: chapter.chapterId,
+      settingsRevision: selectedModel.connection.revision,
+    };
+    activeTranslation = request;
+    publish({ translation: { phase: 'preparing', elapsedMs: 0 }, translationActive: true });
     try {
       await dependencies.startTranslation(chapter, selectedModel, session);
     } catch {
-      publish({
-        translation: { phase: 'failed', elapsedMs: 0, error: new ReaderError('connection') },
-      });
+      if (activeTranslation === request && ownsVisibleTranslation(request)) {
+        publish({
+          translation: { phase: 'failed', elapsedMs: 0, error: new ReaderError('connection') },
+        });
+      }
+    } finally {
+      if (activeTranslation === request) {
+        activeTranslation = null;
+        publish({ translationActive: false });
+      }
     }
   }
   function showContents(): void {
@@ -438,4 +492,3 @@ export function createRenewalController(dependencies: RenewalDependencies = {}) 
     dispose,
   };
 }
-export type RenewalController = ReturnType<typeof createRenewalController>;

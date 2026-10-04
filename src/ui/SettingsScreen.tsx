@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useRef } from 'react';
 import type { CatalogStatus, RenewalSnapshot } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
@@ -18,7 +19,12 @@ const catalogLabels: Record<CatalogStatus, string> = {
   model_missing: '선택했던 모델이 목록에서 사라졌습니다. 다시 선택하세요.',
   unavailable: '모델 서버 연결은 아직 사용할 수 없습니다.',
 };
-export function SettingsScreen({ state, onChange, onCheck, onSelect }: SettingsScreenProps) {
+export function SettingsScreen({
+  state,
+  onChange,
+  onCheck,
+  onSelect,
+}: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
   function update(value: Partial<Pick<ConnectionConfig, 'provider' | 'baseUrl'>>): void {
     if (secret.current) secret.current.value = '';

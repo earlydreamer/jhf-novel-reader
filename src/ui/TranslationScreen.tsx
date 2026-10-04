@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { ChapterRef, ConnectionConfig, TranslationState } from '../contracts/reading';
 export interface TranslationScreenProps {
   chapter: ChapterRef;
@@ -5,6 +6,7 @@ export interface TranslationScreenProps {
   modelId: string | null;
   state: TranslationState;
   available: boolean;
+  requestActive: boolean;
   onTranslate(): void;
   onSettings(): void;
 }
@@ -18,7 +20,7 @@ const phases: Record<TranslationState['phase'], string> = {
   failed: '번역 실패',
   unknown: '요청 결과 확인 불가',
 };
-export function TranslationScreen(props: TranslationScreenProps) {
+export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
   const active = ['preparing', 'translating', 'validating', 'saving'].includes(props.state.phase);
   return (
     <section aria-label="회차 번역">
@@ -32,8 +34,15 @@ export function TranslationScreen(props: TranslationScreenProps) {
       <p>모델: {props.modelId ?? '선택하지 않음'}</p>
       {!props.modelId && <button onClick={props.onSettings}>연결 설정</button>}
       {!props.available && <p>한 화 번역 연결은 아직 사용할 수 없습니다.</p>}
+      {props.requestActive && <p>진행 중인 번역 요청이 끝날 때까지 새 요청을 기다립니다.</p>}
       <button
-        disabled={!props.available || !props.modelId || active || props.state.phase !== 'idle'}
+        disabled={
+          !props.available ||
+          !props.modelId ||
+          active ||
+          props.requestActive ||
+          props.state.phase !== 'idle'
+        }
         onClick={props.onTranslate}
       >
         이 화 번역

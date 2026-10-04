@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { ChapterRef, WorkPage } from '../contracts/reading';
 export interface WorkScreenProps {
   work: WorkPage;
@@ -12,7 +13,7 @@ export function WorkScreen({
   savedChapterIds,
   busy,
   onSelect,
-}: WorkScreenProps) {
+}: WorkScreenProps): JSX.Element {
   return (
     <section aria-label="작품 목차">
       <h1>{work.title}</h1>

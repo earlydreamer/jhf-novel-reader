@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useEffect, useRef } from 'react';
 import type { CompletedTranslation, ReadingPosition, WorkPage } from '../contracts/reading';
 export interface ReaderScreenProps {
@@ -12,7 +13,7 @@ export interface ReaderScreenProps {
   onContents(): void;
   onAdjacent(direction: -1 | 1): void;
 }
-export function ReaderScreen(props: ReaderScreenProps) {
+export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   const body = useRef<HTMLElement>(null);
   const initialPosition = useRef(props.position);
   useEffect(() => {

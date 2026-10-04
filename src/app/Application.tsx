@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useEffect, useSyncExternalStore } from 'react';
 import { HomeScreen } from '../ui/HomeScreen';
 import { WorkScreen } from '../ui/WorkScreen';
@@ -12,7 +13,7 @@ function RouteScreen({
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
-}) {
+}): JSX.Element {
   switch (state.route.kind) {
     case 'home':
       return (
@@ -44,6 +45,7 @@ function RouteScreen({
           modelId={state.selectedModelId}
           state={state.translation}
           available={state.translationAvailable}
+          requestActive={state.translationActive}
           onTranslate={() => void controller.translate()}
           onSettings={() => controller.navigate({ kind: 'settings' })}
         />
@@ -79,7 +81,7 @@ function RouteScreen({
       );
   }
 }
-export function Application({ controller }: { controller: RenewalController }) {
+export function Application({ controller }: { controller: RenewalController }): JSX.Element {
   const state = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
