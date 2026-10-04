@@ -21,15 +21,25 @@ export function WorkScreen({
         작품 원문
       </a>
       <h2>목차</h2>
+      <a href={work.pageUrl} target="_blank" rel="noreferrer">
+        현재 목차 원문
+      </a>
+      {work.chapters.length > 0 && (
+        <p>
+          현재 확인한 범위: {work.chapters[0]!.ordinal}–
+          {work.chapters[work.chapters.length - 1]!.ordinal}화 ({work.chapters.length}개 회차)
+        </p>
+      )}
       <p>
         {work.complete
           ? '확인된 전체 목차'
           : '일부 목차입니다. 전체 목록은 아직 확인하지 않았습니다.'}
       </p>
-      <ol>
+      <ol start={work.chapters[0]?.ordinal || 1}>
         {work.chapters.map((chapter) => (
           <li
             key={chapter.chapterId}
+            value={chapter.ordinal}
             aria-current={chapter.chapterId === selectedChapterId ? 'true' : undefined}
           >
             <button disabled={busy} onClick={() => onSelect(chapter)}>
