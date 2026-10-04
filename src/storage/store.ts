@@ -90,7 +90,7 @@ export function createReaderStore(files: PrivateFiles): ReaderStore {
           restored = {
             chapterId: source.chapterId,
             paragraphId: paragraph.id,
-            offset: exists ? Math.min(pos.offset, paragraph.text.length) : 0,
+            offset: exists ? pos.offset : 0,
           };
         }
         return { ...entry.value, position: restored };

@@ -184,7 +184,7 @@ describe("private reader repository", () => {
         store.saveCheckpoint(bad as Checkpoint),
       ).rejects.toMatchObject({ reason: "invalid" });
   });
-  it("restores and clamps position and corrects removed paragraph by saved ordinal", async () => {
+  it("restores pixel position and corrects removed paragraph by saved ordinal", async () => {
     const files = new Files(),
       store = createReaderStore(files),
       c = await fixture();
@@ -195,7 +195,7 @@ describe("private reader repository", () => {
       offset: 999,
     });
     expect((await createReaderStore(files).read(c.cacheKey))?.position).toEqual(
-      { chapterId: c.source.chapterId, paragraphId: "p2", offset: 4 },
+      { chapterId: c.source.chapterId, paragraphId: "p2", offset: 999 },
     );
     const next = await fixture({ sourceHash: "source-2" });
     const changed = {
@@ -355,4 +355,46 @@ it("returns a sanitized rejected promise for non-cloneable inputs", async () => 
     reason: "invalid",
     message: "storage",
   });
+});
+
+it.each([false, true])(
+  "preserves future-envelope fields with older valid slot: %s",
+  async (older) => {
+    const files = new Files(),
+      store = createReaderStore(files),
+      c = await fixture();
+    await store.commitChapter(c);
+    if (older)
+      await store.commitChapter({ ...c, completedAt: "2026-10-05T00:00:00Z" });
+    const key = [...files.data.keys()].at(-1)!,
+      future = {
+        ...JSON.parse(files.data.get(key)!),
+        format: 2,
+        futureField: true,
+      };
+    files.data.set(key, JSON.stringify(future));
+    const unchanged = new Map(files.data);
+    await expect(store.read(c.cacheKey)).rejects.toMatchObject({
+      reason: "unsupported_schema",
+    });
+    await expect(store.commitChapter(c)).rejects.toMatchObject({
+      reason: "unsupported_schema",
+    });
+    expect(files.data).toEqual(unchanged);
+  },
+);
+
+it("preserves a pixel position offset larger than the paragraph character count", async () => {
+  const files = new Files(),
+    store = createReaderStore(files),
+    c = await fixture();
+  await store.commitChapter(c);
+  await store.savePosition({
+    chapterId: c.source.chapterId,
+    paragraphId: "p1",
+    offset: 120,
+  });
+  expect(
+    (await createReaderStore(files).read(c.cacheKey))?.position?.offset,
+  ).toBe(120);
 });

@@ -9,6 +9,7 @@ import {
   check,
   integer,
   object,
+  record,
   text,
   url,
   snapshot as cloneInput,
@@ -53,8 +54,11 @@ function validate(value: unknown): SavedSettings {
 function decode(raw: string): SavedSettings {
   try {
     const data: unknown = JSON.parse(raw);
+    record(data);
+    if (typeof data.schemaVersion === "number" && data.schemaVersion !== 1)
+      throw new StorageError("unsupported_schema");
     object(data, ["schemaVersion", "settings"]);
-    if (data.schemaVersion !== 1) throw new StorageError("unsupported_schema");
+    check(data.schemaVersion === 1);
     return validate(data.settings);
   } catch (error) {
     if (error instanceof StorageError && error.reason === "unsupported_schema")

@@ -110,3 +110,25 @@ describe("non-secret preferences", () => {
     });
   });
 });
+
+it("classifies future settings with additional keys before applying the v1 allowlist", async () => {
+  const b = backend(),
+    store = createSettingsRepository(b.api);
+  await store.save({
+    config,
+    preferences: { fontSize: 18, prefetchEnabled: false },
+  });
+  const key = [...b.data.keys()][0]!,
+    raw = JSON.stringify({ schemaVersion: 2, settings: {}, futureField: true });
+  b.data.set(key, raw);
+  await expect(store.read()).rejects.toMatchObject({
+    reason: "unsupported_schema",
+  });
+  await expect(
+    store.save({
+      config: null,
+      preferences: { fontSize: 18, prefetchEnabled: false },
+    }),
+  ).rejects.toMatchObject({ reason: "unsupported_schema" });
+  expect(b.data.get(key)).toBe(raw);
+});

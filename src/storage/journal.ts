@@ -1,5 +1,5 @@
 import { StorageError, storageError } from "./errors";
-import { check, integer, object } from "./validation";
+import { check, integer, object, record } from "./validation";
 export interface PrivateFiles {
   read(path: string): Promise<string | null>;
   write(path: string, text: string): Promise<void>;
@@ -38,8 +38,11 @@ export class Journal {
       found = true;
       try {
         const envelope: unknown = JSON.parse(raw);
+        record(envelope);
+        if (typeof envelope.format === "number" && envelope.format !== 1)
+          throw new StorageError("unsupported_schema");
         object(envelope, ["format", "generation", "payload", "checksum"]);
-        if (envelope.format !== 1) throw new StorageError("unsupported_schema");
+        check(envelope.format === 1);
         integer(envelope.generation, 1);
         check(
           envelope.checksum ===

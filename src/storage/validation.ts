@@ -9,11 +9,16 @@ import { StorageError } from "./errors";
 export function check(condition: unknown): asserts condition {
   if (!condition) throw new StorageError("invalid");
 }
+export function record(
+  value: unknown,
+): asserts value is Record<string, unknown> {
+  check(value !== null && typeof value === "object" && !Array.isArray(value));
+}
 export function object(
   value: unknown,
   keys: string[],
 ): asserts value is Record<string, unknown> {
-  check(value !== null && typeof value === "object" && !Array.isArray(value));
+  record(value);
   check(Object.keys(value).every((key) => keys.includes(key)));
 }
 export function text(value: unknown): asserts value is string {
@@ -48,13 +53,17 @@ export function cacheKey(value: unknown): asserts value is string {
 }
 function translations(
   value: unknown,
+  source: Chapter,
 ): asserts value is { id: string; text: string }[] {
   check(Array.isArray(value) && value.length > 0);
   const ids = new Set<string>();
   for (const item of value) {
     object(item, ["id", "text"]);
     text(item.id);
-    text(item.text);
+    check(typeof item.text === "string");
+    const original = source.paragraphs.find((p) => p.id === item.id);
+    if (original && !original.text.trim()) check(item.text === original.text);
+    else text(item.text);
     check(!ids.has(item.id));
     ids.add(item.id);
   }
@@ -82,7 +91,7 @@ function chapter(value: unknown): asserts value is Chapter {
   for (const p of value.paragraphs) {
     object(p, ["id", "text", "ruby"]);
     text(p.id);
-    text(p.text);
+    check(typeof p.text === "string");
     check(!ids.has(p.id));
     ids.add(p.id);
     check(Array.isArray(p.ruby));
@@ -138,7 +147,7 @@ export async function completed(value: unknown): Promise<CompletedChapter> {
     "completedAt",
   ]);
   await common(value, value.source);
-  translations(value.paragraphs);
+  translations(value.paragraphs, value.source as Chapter);
   text(value.completedAt);
   check(Number.isFinite(Date.parse(value.completedAt)));
   const source = value.source as Chapter;
@@ -168,7 +177,7 @@ export async function checkpoint(value: unknown): Promise<Checkpoint> {
     text(chunk.chunkId);
     check(chunk.validated === true && !ids.has(chunk.chunkId));
     ids.add(chunk.chunkId);
-    translations(chunk.paragraphs);
+    translations(chunk.paragraphs, value.chapter as Chapter);
     for (const p of chunk.paragraphs) {
       check(!paragraphs.has(p.id));
       paragraphs.add(p.id);
