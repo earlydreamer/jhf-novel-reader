@@ -3,8 +3,11 @@ import { expect, it } from 'vitest';
 import { createRenewalApplication } from '../../src/app/compose';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 import { createLibraryStore } from '../../src/storage/library';
+import { createLastChapterRepository } from '../../src/app/lastChapter';
+import { createReaderStore } from '../../src/storage/store';
 import { createAttemptRepository } from '../../src/translation/attempts';
 import type { NativeHttpRequest, HttpResponse, AppLifecycle } from '../../src/contracts';
+import { createCacheKey, type CompletedChapter } from '../../src/contracts/legacy';
 
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
 const chapterUrl = workUrl + '2/';
@@ -22,6 +25,7 @@ function harness() {
   const bytes = new Map<string, string>(),
     preferences = new Map<string, string>(),
     secrets = new Map<string, string>();
+  let chapterHtml = html;
   const requests: NativeHttpRequest[] = [];
   let failSave = false,
     holdSave = false;
@@ -61,7 +65,7 @@ function harness() {
           ? JSON.stringify({ data: [{ id: 'hymt2-7b' }] })
           : options.url === workUrl
             ? toc
-            : html,
+            : chapterHtml,
       };
     },
   };
@@ -117,6 +121,9 @@ function harness() {
       holdSave = true;
     },
     releaseSave: () => saveGate.resolve(),
+    setChapterHtml: (value: string) => {
+      chapterHtml = value;
+    },
     store: createLibraryStore(files),
   };
 }
@@ -128,6 +135,34 @@ async function prepare(h: ReturnType<typeof harness>) {
   h.app.changeConnection({ provider: 'openai-compatible', baseUrl: 'http://100.64.0.8:1234' });
   await h.app.checkConnection();
   h.app.chooseModel('hymt2-7b');
+}
+async function legacyCompleted(): Promise<CompletedChapter> {
+  const identity = {
+    canonicalUrl: 'https://ncode.syosetu.com/n9999ab/1/',
+    sourceHash: 'legacy-source',
+    provider: 'openai-compatible' as const,
+    normalizedEndpoint: 'http://192.0.2.1:1234/v1',
+    model: 'legacy-model',
+    promptVersion: 'legacy-prompt',
+    languageDirection: 'ja-ko' as const,
+  };
+  return {
+    schemaVersion: 1,
+    cacheKey: await createCacheKey(identity),
+    identity,
+    source: {
+      canonicalUrl: identity.canonicalUrl,
+      sourceHash: identity.sourceHash,
+      workId: 'n9999ab',
+      chapterId: 'n9999ab/1',
+      title: '레거시 화',
+      prevUrl: null,
+      nextUrl: null,
+      paragraphs: [{ id: 'p1', text: '原文', ruby: [] }],
+    },
+    paragraphs: [{ id: 'p1', text: '저장된 번역' }],
+    completedAt: '2026-10-04T00:00:00.000Z',
+  };
 }
 async function dispatched(h: ReturnType<typeof harness>) {
   await expect.poll(() => h.posts().length).toBe(1);
@@ -157,6 +192,23 @@ it('browse_select_translate_save_read uses actual parser, native transport, cata
   expect(state.version!.source.rawHtml).toBe(html);
   expect(await h.store.readVersion(state.version!.versionId)).toEqual(state.version);
   expect(h.posts()).toHaveLength(1);
+  h.app.dispose();
+});
+it('initialization migrates only the v1 chapter reached by its last-chapter pointer', async () => {
+  const h = harness();
+  const legacy = await legacyCompleted();
+  await createReaderStore(h.adapters.files).commitChapter(legacy);
+  await createLastChapterRepository(h.adapters.preferences).save(legacy.cacheKey);
+
+  await h.app.initialize();
+
+  const versions = await h.store.listVersions(legacy.source.chapterId);
+  expect(versions).toHaveLength(1);
+  expect(versions[0]?.source.captureKind).toBe('legacy-import');
+  expect(h.app.getSnapshot().recent[0]).toMatchObject({
+    versionId: versions[0]?.versionId,
+    chapterId: legacy.source.chapterId,
+  });
   h.app.dispose();
 });
 it('open_and_double_tap_generate_once without queued replacement', async () => {
@@ -245,6 +297,28 @@ it('source_and_catalog_not_generation and saved reading independent of server', 
   await h.app.continueReading(id);
   expect(h.app.getSnapshot().route).toEqual({ kind: 'reader', versionId: id });
   expect(h.posts()).toHaveLength(1);
+  h.app.dispose();
+});
+it('reopening detects a changed source without generation and refresh creates a new version', async () => {
+  const h = harness();
+  await prepare(h);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.settle();
+  await first;
+  const previous = h.app.getSnapshot().version!.versionId;
+  const postCount = h.posts().length;
+  h.setChapterHtml(html.replace('終わり', '変化'));
+
+  await h.app.continueReading(previous);
+
+  await expect.poll(() => h.app.getSnapshot().sourceChange).toBe('changed');
+  expect(h.posts()).toHaveLength(postCount);
+  await h.app.refreshSource();
+  const next = h.app.getSnapshot().version!.versionId;
+  expect(next).not.toBe(previous);
+  expect(h.posts()).toHaveLength(postCount + 1);
+  expect(await h.store.listVersions('n1234ab/2')).toHaveLength(2);
   h.app.dispose();
 });
 it('background prevents dispatch and does not restart on foreground', async () => {

@@ -19,6 +19,7 @@ export interface ApplicationAdapters {
 import { createRenewalController, type RenewalController } from './renewalController';
 import { createRenewalSource, normalizeSourceInput } from '../source/work';
 import { createLibraryStore } from '../storage/library';
+import { createV1Migration } from '../storage/migration';
 import { createReadingSettingsRepository } from '../storage/settings';
 import { createAttemptRepository } from '../translation/attempts';
 import { createWholeChapterFlow } from '../translation/wholeChapter';
@@ -35,6 +36,7 @@ export function createRenewalApplication(
 ): RenewalController {
   const source = createRenewalSource(adapters.sourceTransport),
     library = createLibraryStore(adapters.files);
+  const migrateV1 = createV1Migration(adapters.files, adapters.preferences, library);
   const flow = createWholeChapterFlow({
     source,
     store: library,
@@ -46,6 +48,7 @@ export function createRenewalApplication(
   return createRenewalController({
     source,
     library,
+    migrateLegacy: migrateV1,
     flow,
     clock: adapters.clock,
     lifecycle: adapters.lifecycle,

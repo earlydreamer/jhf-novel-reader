@@ -255,6 +255,29 @@ describe('renewal controller boundaries', () => {
 });
 
 describe('renewal reading affordances', () => {
+  it('shows a changed-source notice and an explicit refresh action without generating automatically', async () => {
+    const value = fixture(true);
+    const controller = controllers.createRenewalController({
+      ...value.dependencies,
+      source: {
+        getWorkPage: async () => page,
+        getChapter: async () => ({
+          ...saved.source,
+          captureKind: 'fetched' as const,
+          fetchedAt: '2026-10-05T00:00:00Z',
+          sourceHash: 'changed-source',
+          rawHtml: '<p>변경된 원문</p>',
+        }),
+      },
+    });
+    render(<Application controller={controller} />);
+    await controller.openWork(page.canonicalUrl);
+    await controller.selectChapter(chapters[0]!);
+
+    expect(await screen.findByText('원문이 변경되었습니다.')).toBeVisible();
+    expect(screen.getByRole('button', { name: '원문 새로 고침' })).toBeVisible();
+    expect(value.generate).not.toHaveBeenCalled();
+  });
   it('shows saved status in the work contents before choosing a chapter', async () => {
     await setup(true);
     expect(screen.getByText('번역 저장됨')).toBeVisible();
