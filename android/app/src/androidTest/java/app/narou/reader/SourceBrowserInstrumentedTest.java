@@ -141,6 +141,7 @@ public class SourceBrowserInstrumentedTest {
                     }
                 });
                 Instrumentation.ActivityResult result = scenario.getResult();
+                awaitDestroyed(scenario);
                 if (retainedWork.get()) {
                     assertEquals(Activity.RESULT_OK, result.getResultCode());
                     assertNotNull(result.getResultData());
@@ -178,6 +179,7 @@ public class SourceBrowserInstrumentedTest {
                 activity.findViewById(SourceBrowserActivity.CLOSE_ID).performClick();
             });
             Instrumentation.ActivityResult result = scenario.getResult();
+            awaitDestroyed(scenario);
             assertEquals(Activity.RESULT_CANCELED, result.getResultCode());
             assertNull(result.getResultData());
         }
@@ -277,6 +279,7 @@ public class SourceBrowserInstrumentedTest {
                 activity.findViewById(SourceBrowserActivity.CLOSE_ID).performClick();
             });
             assertEquals(Activity.RESULT_CANCELED, scenario.getResult().getResultCode());
+            awaitDestroyed(scenario);
             assertNull(scenario.getResult().getResultData());
         }
     }
@@ -354,6 +357,14 @@ public class SourceBrowserInstrumentedTest {
                 throw new IOException("Forbidden redirect reached the fixture transport");
             }
         }
+    }
+
+    private void awaitDestroyed(ActivityScenario<SourceBrowserActivity> scenario) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (scenario.getState() != androidx.lifecycle.Lifecycle.State.DESTROYED
+            && System.nanoTime() < deadline) Thread.sleep(20);
+        // The result can arrive before onDestroy. Do not race cleanup's empty-activity launch.
+        assertEquals(androidx.lifecycle.Lifecycle.State.DESTROYED, scenario.getState());
     }
 
     private void tapFirstLink() {
