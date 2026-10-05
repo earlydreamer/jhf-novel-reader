@@ -7,12 +7,19 @@ import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
 import android.view.KeyEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.pressKey;
+import androidx.test.espresso.action.GeneralClickAction;
+import androidx.test.espresso.action.Press;
+import androidx.test.espresso.action.Tap;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import android.webkit.WebView;
 import android.widget.Button;
 import androidx.test.core.app.ActivityScenario;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.net.InetAddress;
@@ -109,10 +116,9 @@ public class SourceBrowserInstrumentedTest {
             try (ActivityScenario<SourceBrowserActivity> scenario = launchForResultWithoutNetwork()) {
                 installFixture(scenario, fixtureLoader, workUrl);
                 awaitBrowserState(scenario, workUrl, true);
-                tapFirstLink();
+                tapFirstLink(scenario, "Valid work fixture");
                 if (destination.startsWith("https:")) {
-                    onView(androidx.test.espresso.matcher.ViewMatchers.withText("취소"))
-                        .perform(androidx.test.espresso.action.ViewActions.click());
+                    cancelExternalDialog(destination);
                 }
                 InstrumentationRegistry.getInstrumentation().waitForIdleSync();
                 // No unsupported native network/file request may reach the fixture transport.
@@ -138,6 +144,7 @@ public class SourceBrowserInstrumentedTest {
                     }
                 });
                 Instrumentation.ActivityResult result = scenario.getResult();
+                awaitDestroyed(scenario);
                 if (retainedWork.get()) {
                     assertEquals(Activity.RESULT_OK, result.getResultCode());
                     assertNotNull(result.getResultData());
@@ -164,7 +171,7 @@ public class SourceBrowserInstrumentedTest {
         try (ActivityScenario<SourceBrowserActivity> scenario = launchForResultWithoutNetwork()) {
             installFixture(scenario, fixtureLoader, workUrl);
             awaitBrowserState(scenario, workUrl, true);
-            tapFirstLink();
+            tapFirstLink(scenario, "Valid work fixture");
             awaitBrowserState(scenario, unsupported, false);
             assertEquals(java.util.Arrays.asList(workUrl, unsupported), requests);
             scenario.onActivity(activity -> {
@@ -175,6 +182,7 @@ public class SourceBrowserInstrumentedTest {
                 activity.findViewById(SourceBrowserActivity.CLOSE_ID).performClick();
             });
             Instrumentation.ActivityResult result = scenario.getResult();
+            awaitDestroyed(scenario);
             assertEquals(Activity.RESULT_CANCELED, result.getResultCode());
             assertNull(result.getResultData());
         }
@@ -242,6 +250,7 @@ public class SourceBrowserInstrumentedTest {
             target.positiveControl();
             String home = "https://syosetu.com/fixture/home";
             String redirect = "https://yomou.syosetu.com/fixture/main-redirect";
+            String deniedPageIcon = "https://yomou.syosetu.com/favicon.ico";
             String forbidden = "https://127.0.0.1:" + target.port() + "/model";
             List<String> requests = new CopyOnWriteArrayList<>();
             SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
@@ -250,14 +259,20 @@ public class SourceBrowserInstrumentedTest {
                     return fixturePage(uri, "Main redirect fixture", "<a href='" + redirect + "'>Redirected page</a>");
                 }
                 if (uri.toString().equals(redirect)) return fixtureRedirect(uri, forbidden);
+                if (uri.toString().equals(deniedPageIcon)) return SourceBrowserLoader.denied(uri);
                 connectForbiddenIfReached(uri, target);
                 throw new IOException("Unexpected fixture destination");
             });
             installFixture(scenario, fixtureLoader, home);
             awaitBrowserState(scenario, home, false);
-            tapFirstLink();
+            tapFirstLink(scenario, "Main redirect fixture");
             awaitBrowserState(scenario, redirect, false);
-            assertEquals(java.util.Arrays.asList(home, redirect), requests);
+            // A blocked redirect has no HTML icon declaration. This WebView may request its
+            // exact same-origin favicon; every other extra destination must still fail.
+            assertEquals("Observed fixture requests: " + requests,
+                java.util.Arrays.asList(home, redirect),
+                requests.stream().filter(url -> !url.equals(deniedPageIcon))
+                    .collect(java.util.stream.Collectors.toList()));
             target.assertNoConnectionsAfterControl();
             scenario.onActivity(activity -> {
                 Button open = activity.findViewById(SourceBrowserActivity.OPEN_ID);
@@ -267,6 +282,7 @@ public class SourceBrowserInstrumentedTest {
                 activity.findViewById(SourceBrowserActivity.CLOSE_ID).performClick();
             });
             assertEquals(Activity.RESULT_CANCELED, scenario.getResult().getResultCode());
+            awaitDestroyed(scenario);
             assertNull(scenario.getResult().getResultData());
         }
     }
@@ -326,7 +342,9 @@ public class SourceBrowserInstrumentedTest {
     }
 
     private SourceBrowserLoader.Resource fixturePage(URI uri, String title, String body) {
-        byte[] html = ("<html><head><title>" + title + "</title></head><body>" + body + "</body></html>").getBytes(StandardCharsets.UTF_8);
+        // Declare an inline icon so WebView does not add an unrelated /favicon.ico request.
+        // Exact request-list and forbidden-target assertions remain unchanged.
+        byte[] html = ("<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><link rel='icon' href='data:,'><style>body{margin:0}a{display:block;min-height:48px}</style><title>" + title + "</title></head><body>" + body + "</body></html>").getBytes(StandardCharsets.UTF_8);
         return new SourceBrowserLoader.Resource(uri, 200, "text/html", "UTF-8", Collections.emptyMap(), html);
     }
 
@@ -344,24 +362,123 @@ public class SourceBrowserInstrumentedTest {
         }
     }
 
-    private void tapFirstLink() {
+    private void awaitDestroyed(ActivityScenario<SourceBrowserActivity> scenario) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (scenario.getState() != androidx.lifecycle.Lifecycle.State.DESTROYED
+            && System.nanoTime() < deadline) Thread.sleep(20);
+        // The result can arrive before onDestroy. Do not race cleanup's empty-activity launch.
+        assertEquals(androidx.lifecycle.Lifecycle.State.DESTROYED, scenario.getState());
+    }
+
+    private void tapFirstLink(ActivityScenario<SourceBrowserActivity> scenario, String pageTitle) throws Exception {
+        // loadUrl can expose the new URL with the previous progress=100 before HTML arrives.
+        awaitTitle(scenario, pageTitle);
+        CountDownLatch painted = new CountDownLatch(1);
+        scenario.onActivity(activity -> {
+            WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
+            view.postVisualStateCallback(0, new WebView.VisualStateCallback() {
+                @Override public void onComplete(long requestId) { painted.countDown(); }
+            });
+        });
+        assertTrue("Fixture content must be ready to draw before its first touch", painted.await(3, TimeUnit.SECONDS));
+        // fixturePage has zero body margin. Touch the visible first line of link text,
+        // rather than empty space in its block box. Keyboard activation lacks hasGesture().
         onView(withId(SourceBrowserActivity.BROWSER_ID))
-            .perform(pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_ENTER));
+            .perform(new GeneralClickAction(Tap.SINGLE, view -> {
+                int[] origin = new int[2];
+                view.getLocationOnScreen(origin);
+                float density = view.getResources().getDisplayMetrics().density;
+                return new float[] { origin[0] + 12f * density, origin[1] + 8f * density };
+            }, Press.FINGER));
+    }
+
+    private void cancelExternalDialog(String destination) throws Exception {
+        // Inspect the actual active dialog, independently of ActivityScenario's result host.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        do {
+            AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                .getUiAutomation().getRootInActiveWindow();
+            if (root != null && "app.narou.reader".contentEquals(root.getPackageName())
+                && !root.findAccessibilityNodeInfosByText("외부 링크").isEmpty()
+                && !root.findAccessibilityNodeInfosByText(destination).isEmpty()) {
+                for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText("취소")) {
+                    if ("app.narou.reader".contentEquals(node.getPackageName())
+                        && "취소".contentEquals(node.getText()) && node.isEnabled() && node.isClickable()) {
+                        assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK));
+                        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                        AccessibilityNodeInfo active = InstrumentationRegistry.getInstrumentation()
+                            .getUiAutomation().getRootInActiveWindow();
+                        assertTrue("External dialog must be dismissed by its cancel button",
+                            active == null || active.findAccessibilityNodeInfosByText("외부 링크").isEmpty());
+                        return;
+                    }
+                }
+            }
+            Thread.sleep(20);
+        } while (System.nanoTime() < deadline);
+        fail("The actual external-link confirmation dialog was not available");
+    }
+
+    @Test public void newWindowWorkLinkUsesTheSameFilteredBrowserAndHistory() throws Exception {
+        String search = "https://yomou.syosetu.com/search.php?word=syntheticword";
+        String work = "https://ncode.syosetu.com/n1234ab/";
+        List<String> requests = new CopyOnWriteArrayList<>();
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+            requests.add(uri.toString());
+            if (search.equals(uri.toString())) return fixturePage(uri, "Search fixture",
+                "<a target='_blank' href='" + work + "'>Work result</a>");
+            if (work.equals(uri.toString())) return fixturePage(uri, "Work fixture", "<h1>合成作品</h1>");
+            throw new IOException("Unexpected new-window destination");
+        });
+        try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
+            installFixture(scenario, fixtureLoader, search);
+            awaitBrowserState(scenario, search, false);
+            tapFirstLink(scenario, "Search fixture");
+            awaitBrowserState(scenario, work, true);
+            assertEquals(java.util.Arrays.asList(search, work), requests);
+            scenario.onActivity(activity -> activity.findViewById(SourceBrowserActivity.BACK_ID).performClick());
+            awaitBrowserState(scenario, search, false);
+        }
+    }
+
+    @Test public void nativeToolbarAndBrowserStayOutsideSystemBars() throws Exception {
+        try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
+            scenario.onActivity(activity -> {
+                WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
+                Button open = activity.findViewById(SourceBrowserActivity.OPEN_ID);
+                WindowInsetsCompat windowInsets = ViewCompat.getRootWindowInsets(view);
+                assertNotNull(windowInsets);
+                Insets bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout());
+                int[] toolbarOrigin = new int[2];
+                int[] browserOrigin = new int[2];
+                open.getLocationOnScreen(toolbarOrigin);
+                view.getLocationOnScreen(browserOrigin);
+                assertTrue("Toolbar must not overlap status bar or display cutout", toolbarOrigin[1] >= bars.top);
+                assertTrue("Browser must not overlap navigation bar",
+                    browserOrigin[1] + view.getHeight() <= view.getRootView().getHeight() - bars.bottom);
+            });
+        }
     }
 
     private void awaitBrowserState(ActivityScenario<SourceBrowserActivity> scenario, String expectedUrl, boolean importEnabled) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         AtomicReference<Boolean> settled = new AtomicReference<>(false);
+        AtomicReference<String> observed = new AtomicReference<>();
         do {
             scenario.onActivity(activity -> {
                 WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
                 Button open = activity.findViewById(SourceBrowserActivity.OPEN_ID);
-                settled.set(expectedUrl.equals(view.getUrl()) && view.getProgress() == 100 && open.isEnabled() == importEnabled);
+                settled.set(expectedUrl.equals(view.getUrl()) && view.getProgress() == 100
+                    && open.isEnabled() == importEnabled && view.hasWindowFocus());
+                observed.set("url=" + view.getUrl() + ", progress=" + view.getProgress()
+                    + ", import=" + open.isEnabled() + ", focus=" + view.hasWindowFocus()
+                    + ", title=" + view.getTitle() + ", hit=" + view.getHitTestResult().getType());
             });
             if (settled.get()) return;
             Thread.sleep(20);
         } while (System.nanoTime() < deadline);
-        fail("Production browser did not settle at " + expectedUrl + " with expected native selection state");
+        fail("Production browser did not settle at " + expectedUrl + "; observed " + observed.get());
     }
 
     private void awaitTitle(ActivityScenario<SourceBrowserActivity> scenario, String wanted) throws Exception {

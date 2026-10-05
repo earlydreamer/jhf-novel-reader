@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createParagraphId, createCacheKey, ERROR_CODES, DEFAULT_PREFERENCES, isCurrentJob } from '../../src/contracts';
+import { createParagraphId, ERROR_CODES } from '../../src/contracts';
+import { createCacheKey, DEFAULT_PREFERENCES, isCurrentJob } from '../../src/contracts/legacy';
 const identity = { canonicalUrl: 'https://ncode.syosetu.com/n1234ab/1/', sourceHash: 'source', provider: 'openai-compatible' as const, normalizedEndpoint: 'http://192.168.1.2:11434/v1', model: 'local', promptVersion: 'v1', languageDirection: 'ja-ko' as const };
 describe('shared contracts', () => {
  it('gives stable ordered paragraph identity including ruby', async () => {

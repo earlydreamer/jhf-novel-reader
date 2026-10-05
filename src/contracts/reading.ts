@@ -64,6 +64,7 @@ export type ReadingPosition = {
   chapterId: string;
   versionId: string;
   blockId: string;
+  /** Visual distance in CSS pixels from the saved block, not a character index. */
   offset: number;
 };
 export type TranslationPhase =

@@ -7,6 +7,7 @@ export interface ReaderScreenProps {
   position: ReadingPosition | null;
   fontSize: number;
   showOriginal: boolean;
+  onDisplayed?(versionId: string): void;
   onFontSize(value: number): void;
   onPosition(blockId: string, offset: number): void;
   onShowOriginal(value: boolean): void;
@@ -15,6 +16,11 @@ export interface ReaderScreenProps {
 }
 export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   const body = useRef<HTMLElement>(null);
+  const reportDisplayed = props.onDisplayed,
+    displayedVersionId = props.version.versionId;
+  useEffect(() => {
+    reportDisplayed?.(displayedVersionId);
+  }, [reportDisplayed, displayedVersionId]);
   const initialPosition = useRef(props.position);
   useEffect(() => {
     const position = initialPosition.current;

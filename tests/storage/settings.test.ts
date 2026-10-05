@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  createSettingsRepository,
-  type PreferenceBackend,
-} from "../../src/storage/settings";
-import type { ProviderConfig } from "../../src/contracts";
+import { type PreferenceBackend } from '../../src/storage/settings';
+import { createSettingsRepository } from '../../src/storage/legacy/settings';
+import type { ProviderConfig } from '../../src/contracts/legacy';
 const config: ProviderConfig = {
   provider: "openai-compatible",
   baseUrl: "http://192.0.2.1:1234/v1",

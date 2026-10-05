@@ -5,6 +5,7 @@ export interface HomeScreenProps {
   recent: RenewalSnapshot['recent'];
   busy: boolean;
   sourceAvailable: boolean;
+  onBrowse?(): void;
   onOpen(url: string): void;
   onContinue(versionId: string): void;
 }
@@ -27,8 +28,13 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
         </ul>
       )}
       <h2>작품 탐색</h2>
-      <p>앱 안의 나로우 탐색은 네이티브 탐색 연결 후 사용할 수 있습니다.</p>
-      <button disabled>나로우에서 작품 찾기 (준비 중)</button>
+      <p>앱 안에서 검색·랭킹·분류로 작품을 찾고, 원하는 회차를 선택하세요.</p>
+      <button
+        disabled={props.busy || !props.sourceAvailable || !props.onBrowse}
+        onClick={props.onBrowse}
+      >
+        나로우에서 작품 찾기
+      </button>
       <form
         onSubmit={(event) => {
           event.preventDefault();

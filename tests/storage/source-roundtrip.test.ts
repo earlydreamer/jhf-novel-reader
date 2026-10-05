@@ -1,11 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { parseChapter } from "../../src/source";
-import {
-  createCacheKey,
-  type Checkpoint,
-  type CompletedChapter,
-} from "../../src/contracts";
+import { createCacheKey, type Checkpoint, type CompletedChapter } from '../../src/contracts/legacy';
 import { createReaderStore, type PrivateFiles } from "../../src/storage/store";
 async function fixture(): Promise<CompletedChapter> {
   const source = await parseChapter(

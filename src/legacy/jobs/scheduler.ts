@@ -1,4 +1,4 @@
-import { ReaderError } from '../contracts';
+import { ReaderError } from '../../contracts/index';
 
 export type RequestPriority = 'current' | 'prefetch';
 export interface RequestScheduler {

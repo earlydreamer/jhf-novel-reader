@@ -1,6 +1,6 @@
 import { ReaderError } from '../contracts';
 import type { PreferenceBackend } from '../storage/settings';
-import type { LastChapterRepository } from './controller';
+import type { LastChapterRepository } from './legacy/controller';
 const KEY = 'narou-reader.last-chapter.v1';
 const queues = new WeakMap<PreferenceBackend, Promise<unknown>>();
 function validKey(value: unknown): value is string { return typeof value === 'string' && /^v1-[a-f0-9]{64}$/.test(value); }

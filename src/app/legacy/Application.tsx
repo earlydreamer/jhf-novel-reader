@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { ReaderScreen } from '../../ui/legacy/ReaderScreen';
 import { SettingsScreen } from '../../ui/legacy/SettingsScreen';
-import type { ApplicationError, ReaderController } from '../controller';
+import type { ApplicationError, ReaderController } from './controller';
 import '../application.css';
 
 const errorMessages: Record<ApplicationError, string> = {

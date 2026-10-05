@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createCacheKey,
-  type CacheIdentity,
-  type CompletedChapter,
-  type Checkpoint,
-} from "../../src/contracts";
+import { createCacheKey, type CacheIdentity, type CompletedChapter, type Checkpoint } from '../../src/contracts/legacy';
 import { createReaderStore, type PrivateFiles } from "../../src/storage/store";
 export class Files implements PrivateFiles {
   data = new Map<string, string>();

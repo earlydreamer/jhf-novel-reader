@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ProviderId, SettingsActions, SettingsViewState } from '../../contracts';
+import type { ProviderId } from '../../contracts';
+import type { SettingsActions, SettingsViewState } from '../../contracts/legacy';
 import { GEMINI_BASE_URL, normalizeGeminiBaseUrl, normalizeGeminiModel } from '../../providers/gemini';
 import { getLocalConnectionGuidance, normalizeOpenAICompatibleBaseUrl } from '../../providers/openai-compatible';
 import '../reader.css';

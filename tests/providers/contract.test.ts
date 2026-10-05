@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ChunkRequest, ModelTransport, ProviderConfig } from '../../src/contracts';
+import type { ModelTransport } from '../../src/contracts';
+import type { ChunkRequest, ProviderConfig } from '../../src/contracts/legacy';
 import { createOpenAICompatibleProvider } from '../../src/providers/openai-compatible';
 import { createGeminiProvider, GEMINI_BASE_URL } from '../../src/providers/gemini';
 const request:ChunkRequest={token:{jobId:'job',chapterId:'chapter',settingsRevision:1},chunkId:'chunk',context:[{id:'before',text:'前',ruby:[]}],paragraphs:[{id:'a',text:'雨',ruby:[]},{id:'b',text:'空',ruby:[]}],outputIds:['a','b'],languageDirection:'ja-ko',promptVersion:'ja-ko-v1'};

@@ -48,7 +48,9 @@ export function SettingsScreen({
           }
         >
           <option value="openai-compatible">LM Studio / Ollama</option>
-          <option value="gemini">Google Gemini</option>
+          <option value="gemini" disabled>
+            Google Gemini (후속 단계, 현재 사용 불가)
+          </option>
         </select>
       </label>
       <p>
@@ -74,8 +76,8 @@ export function SettingsScreen({
         />
       </label>
       <p>
-        인증값은 연결 확인에만 전달하며 화면 상태와 로그에 보관하지 않습니다. 보안 저장은 네이티브
-        연결 단계에서 제공합니다.
+        연결 확인 시 입력한 인증값을 기기의 보안 저장소에 저장합니다. 화면 상태·일반 설정·로그에는
+        보관하지 않습니다. 인증이 없는 서버는 비워 두세요.
       </p>
       <div className="nr-row">
         <button

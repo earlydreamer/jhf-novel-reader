@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Chapter, ChunkRequest, ChunkResult, JobToken, ModelRequest, Paragraph, ProviderConfig, SecretStore, ValidatedChunk } from '../../src/contracts';
+import type { Chapter, ModelRequest, Paragraph, SecretStore } from '../../src/contracts';
+import type { ChunkRequest, ChunkResult, JobToken, ProviderConfig, ValidatedChunk } from '../../src/contracts/legacy';
 import { ReaderError } from '../../src/contracts';
 import { createOpenAICompatibleProvider } from '../../src/providers/openai-compatible';
-import { PROMPT_VERSION, planChunks, reassembleParagraphs, validateChunk } from '../../src/jobs/chunking';
+import { PROMPT_VERSION, planChunks, reassembleParagraphs, validateChunk } from '../../src/legacy/jobs/chunking';
 
 const token: JobToken = { jobId: 'job-1', chapterId: 'chapter-1', settingsRevision: 0 };
 const config: ProviderConfig = { provider: 'openai-compatible', baseUrl: 'http://192.0.2.1:11434', model: 'synthetic', contextBudget: 8192, outputBudget: 2048, settingsRevision: 0 };

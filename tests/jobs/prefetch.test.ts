@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRequestScheduler } from '../../src/jobs/scheduler';
-import { createTranslationEngine } from '../../src/jobs/engine';
-import { createPrefetchCoordinator } from '../../src/jobs/prefetch';
-import { ReaderError, type Chapter, type ChunkRequest, type ChunkResult, type ProviderConfig, type ReaderStore, type StoredReaderData } from '../../src/contracts';
+import { createRequestScheduler } from '../../src/legacy/jobs/scheduler';
+import { createTranslationEngine } from '../../src/legacy/jobs/engine';
+import { createPrefetchCoordinator } from '../../src/legacy/jobs/prefetch';
+import { ReaderError, type Chapter } from '../../src/contracts';
+import { type ChunkRequest, type ChunkResult, type ProviderConfig, type ReaderStore, type StoredReaderData } from '../../src/contracts/legacy';
 
 const config: ProviderConfig = {provider:'openai-compatible',baseUrl:'http://model.test/v1',model:'local',contextBudget:8192,outputBudget:1024,settingsRevision:1};
 const chapter=(n:number):Chapter=>({canonicalUrl:`https://ncode.syosetu.com/n1234ab/${n}/`,workId:'n1234ab',chapterId:`n1234ab/${n}`,sourceHash:`hash-${n}`,title:'合成',prevUrl:null,nextUrl:n<3?`https://ncode.syosetu.com/n1234ab/${n+1}/`:null,paragraphs:[{id:`p-${n}`,text:'合成本文。',ruby:[]}]});

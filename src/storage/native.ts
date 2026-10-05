@@ -4,12 +4,7 @@ import { Preferences } from '@capacitor/preferences';
 import { StorageError, storageError } from './errors';
 import { check } from './validation';
 import { createLibraryStore } from './library';
-import { createReaderStore } from './store';
-import {
-  createReadingSettingsRepository,
-  createSettingsRepository,
-  type PreferenceBackend,
-} from './settings';
+import { createReadingSettingsRepository, type PreferenceBackend } from './settings';
 import type { PrivateFiles } from './journal';
 const platform = () => (Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web');
 function native(getPlatform: () => string) {
@@ -18,7 +13,7 @@ function native(getPlatform: () => string) {
 }
 function privatePath(path: string): string {
   check(
-    /^(chapters|positions|library|versions|reading|works)\/[a-zA-Z0-9.-]+$/.test(path) &&
+    /^(chapters|positions|library|versions|reading|works|attempts)\/[a-zA-Z0-9.-]+$/.test(path) &&
       !path.includes('..'),
   );
   return `narou-reader/${path}`;
@@ -102,13 +97,6 @@ export function createNativePreferences(
 }
 const files = createNativePrivateFiles(),
   preferences = createNativePreferences();
-export function createNativeReaderStore() {
-  return createReaderStore(files);
-}
-export function createNativeSettingsRepository() {
-  return createSettingsRepository(preferences);
-}
-
 export function createNativeLibraryStore() {
   return createLibraryStore(files);
 }

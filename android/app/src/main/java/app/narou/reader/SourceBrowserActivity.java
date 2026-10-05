@@ -24,6 +24,9 @@ import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 
@@ -67,7 +70,14 @@ public final class SourceBrowserActivity extends AppCompatActivity {
         browser = new WebView(this);
         browser.setId(BROWSER_ID);
         screen.addView(browser, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        ViewCompat.setOnApplyWindowInsetsListener(screen, (view, windowInsets) -> {
+            Insets bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()
+                | WindowInsetsCompat.Type.displayCutout());
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return windowInsets;
+        });
         setContentView(screen);
+        ViewCompat.requestApplyInsets(screen);
         configureBrowser();
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() { goBack(); }

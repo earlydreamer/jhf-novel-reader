@@ -1,23 +1,9 @@
-import type {
-  Chapter,
-  Checkpoint,
-  CompletedChapter,
-  ReadPosition,
-  ReaderStore,
-  StoredReaderData,
-} from "../contracts";
+import type { Chapter } from '../contracts';
+import type { Checkpoint, CompletedChapter, ReadPosition, ReaderStore, StoredReaderData } from '../contracts/legacy';
 import { StorageError } from "./errors";
 import { Journal, digest, serial, type PrivateFiles } from "./journal";
-import {
-  cacheKey,
-  check,
-  checkpoint,
-  completed,
-  integer,
-  object,
-  position,
-  snapshot as cloneInput,
-} from "./validation";
+import { check, integer, object, snapshot as cloneInput } from './validation';
+import { cacheKey, checkpoint, completed, position } from './legacy/validation';
 export type { PrivateFiles } from "./journal";
 type Body = { chapter: CompletedChapter | null; checkpoint: Checkpoint | null };
 type PositionRecord = { position: ReadPosition; ordinal: number };

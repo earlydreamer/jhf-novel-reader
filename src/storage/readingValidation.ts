@@ -161,6 +161,11 @@ export async function readingPosition(value: unknown): Promise<ReadingPosition> 
   object(value, ['workId', 'chapterId', 'versionId', 'blockId', 'offset']);
   for (const key of ['workId', 'versionId', 'blockId']) identifier(value[key]);
   chapterIdentity(value.chapterId);
-  integer(value.offset);
+  check(
+    typeof value.offset === 'number' &&
+      Number.isFinite(value.offset) &&
+      value.offset >= 0 &&
+      value.offset <= Number.MAX_SAFE_INTEGER,
+  );
   return value as unknown as ReadingPosition;
 }

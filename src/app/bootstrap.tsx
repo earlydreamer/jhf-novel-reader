@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { Application } from './Application';
-import { createRenewalController } from './renewalController';
-// Native source, provider and library integration arrives in T4. Never dispatch legacy jobs.
+import { createNativeRenewalApplication } from './compose';
+// The trusted application composes native-only source, model and private storage adapters.
 const container = typeof document === 'undefined' ? null : document.getElementById('root');
-if (container) createRoot(container).render(<Application controller={createRenewalController()} />);
+if (container)
+  createRoot(container).render(<Application controller={createNativeRenewalApplication()} />);

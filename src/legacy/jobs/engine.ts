@@ -1,11 +1,7 @@
-import {
- createCacheKey, ReaderError, type CacheIdentity, type Chapter, type Checkpoint,
- type ChunkRequest, type CompletedChapter, type JobState, type JobToken,
- type ProviderConfig, type ReaderStore, type ReadPosition, type SourceAdapter,
- type TranslationProvider, type ValidatedChunk,
-} from '../contracts';
-import { normalizeOpenAICompatibleBaseUrl } from '../providers/openai-compatible';
-import { normalizeGeminiBaseUrl, normalizeGeminiModel } from '../providers/gemini';
+import { ReaderError, type Chapter, type SourceAdapter } from '../../contracts/index';
+import { createCacheKey, type CacheIdentity, type Checkpoint, type ChunkRequest, type CompletedChapter, type JobState, type JobToken, type ProviderConfig, type ReaderStore, type ReadPosition, type TranslationProvider, type ValidatedChunk } from '../../contracts/legacy';
+import { normalizeOpenAICompatibleBaseUrl } from '../../providers/openai-compatible/index';
+import { normalizeGeminiBaseUrl, normalizeGeminiModel } from '../../providers/gemini/index';
 import { createRequestScheduler, type RequestPriority, type RequestScheduler } from './scheduler';
 import { planChunks, PROMPT_VERSION, reassembleParagraphs, validateChunk } from './chunking';
 

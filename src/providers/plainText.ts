@@ -8,7 +8,7 @@ import type {
   WholeChapterResult,
 } from '../contracts';
 import { authorization, envelope, listModels, object } from './catalog';
-import { normalizeOpenAICompatibleBaseUrl } from './openai-compatible';
+import { normalizeOpenAICompatibleBaseUrl } from './endpoint';
 export function normalizeChapterInput(source: SourceSnapshot): string {
   return source.paragraphs
     .map((p) => {

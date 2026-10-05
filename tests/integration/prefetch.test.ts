@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { createReaderApplication } from '../../src/app/compose';
-import { createSettingsRepository } from '../../src/storage/settings';
+import { createReaderApplication } from '../../src/app/legacy/compose';
+import { createSettingsRepository } from '../../src/storage/legacy/settings';
 import { createLastChapterRepository } from '../../src/app/lastChapter';
 import { createReaderStore } from '../../src/storage/store';
-import type { AppLifecycle, HttpResponse, ModelRequest, ProviderConfig } from '../../src/contracts';
+import type { AppLifecycle, HttpResponse, ModelRequest } from '../../src/contracts';
+import type { ProviderConfig } from '../../src/contracts/legacy';
 const url=(n:number)=>`https://ncode.syosetu.com/n1234ab/${n}/`;
 const config:ProviderConfig={provider:'openai-compatible',baseUrl:'http://192.0.2.1:1234/v1',model:'synthetic',contextBudget:8192,outputBudget:1024,settingsRevision:1};
 function response(request:ModelRequest):HttpResponse {

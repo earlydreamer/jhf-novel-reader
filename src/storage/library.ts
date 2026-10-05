@@ -168,7 +168,7 @@ export function createLibraryStore(files: PrivateFiles): LibraryStore {
             version.source.chapterId === value.chapterId,
         );
         const block = version.blocks.find((b) => b.id === value.blockId);
-        check(block !== undefined && value.offset <= block.text.length);
+        check(block !== undefined);
         await journal.save(`reading/${value.versionId}`, value, readingPosition);
         const current = await readIndex();
         current.recent = [
