@@ -83,7 +83,7 @@ export interface ModelRequest {
   readonly url: string;
   readonly body: Readonly<Record<string, unknown>>;
   readonly authorization?: string;
-  /** Header-only key, accepted exclusively for the fixed Gemini generateContent endpoint. */
+  /** Header-only key, accepted exclusively for fixed Gemini endpoints. */
   readonly geminiApiKey?: string;
 }
 /** Abort does NOT prove server cancellation. Promise waits for native settlement before rejecting,

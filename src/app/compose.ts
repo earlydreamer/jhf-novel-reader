@@ -4,7 +4,7 @@ import { createModelTransport, createSourceTransport } from '../platform/http';
 import { capacitorLifecycle } from '../platform/lifecycle';
 import { createNativePreferences, createNativePrivateFiles } from '../storage/native';
 import { createNativeSecretStore } from '../storage/secrets';
-import type { ModelTransport, SecretStore, SourceTransport, AppLifecycle } from '../contracts';
+import type { AppLifecycle, ModelChoice, ModelTransport, SecretStore, SourceTransport } from '../contracts';
 import type { PrivateFiles } from '../storage/journal';
 import type { PreferenceBackend } from '../storage/settings';
 export interface ApplicationAdapters {
@@ -25,8 +25,10 @@ import { createAttemptRepository } from '../translation/attempts';
 import { createWholeChapterFlow } from '../translation/wholeChapter';
 import { createProviderSession } from '../providers/plainText';
 import { listModels } from '../providers/catalog';
+import { createGeminiProviderSession, listGeminiModels } from '../providers/gemini/wholeChapter';
 import { openSourceBrowser } from '../platform/browse';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
+import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import { ReaderError } from '../contracts';
 export function createRenewalApplication(
   adapters: ApplicationAdapters & {
@@ -40,8 +42,16 @@ export function createRenewalApplication(
   const flow = createWholeChapterFlow({
     source,
     store: library,
-    createProvider: (selection) =>
-      createProviderSession(selection, adapters.modelTransport, adapters.secrets),
+    createProvider: (selection) => {
+      switch (selection.connection.provider) {
+        case 'openai-compatible':
+          return createProviderSession(selection, adapters.modelTransport, adapters.secrets);
+        case 'gemini':
+          return createGeminiProviderSession(selection, adapters.modelTransport, adapters.secrets);
+        default:
+          throw new ReaderError('model_missing');
+      }
+    },
     attempts: createAttemptRepository(adapters.files),
     clock: adapters.clock ?? { now: () => performance.now() },
   });
@@ -59,8 +69,18 @@ export function createRenewalApplication(
       return value.chapterUrl ?? value.workUrl;
     },
     async catalog(config, secret, signal) {
-      if (config.provider !== 'openai-compatible') throw new ReaderError('model_list');
-      const connection = { ...config, baseUrl: normalizeOpenAICompatibleBaseUrl(config.baseUrl) };
+      let baseUrl: string;
+      switch (config.provider) {
+        case 'openai-compatible':
+          baseUrl = normalizeOpenAICompatibleBaseUrl(config.baseUrl);
+          break;
+        case 'gemini':
+          baseUrl = normalizeGeminiBaseUrl(config.baseUrl);
+          break;
+        default:
+          throw new ReaderError('model_list');
+      }
+      const connection = { ...config, baseUrl };
       let newRef: string | null = null;
       try {
         if (secret) {
@@ -70,12 +90,22 @@ export function createRenewalApplication(
           connection.authRef = newRef;
         }
         if (signal.aborted) throw new ReaderError('cancelled');
-        const models = await listModels(
-          connection,
-          adapters.modelTransport,
-          adapters.secrets,
-          signal,
-        );
+        let models: readonly ModelChoice[];
+        switch (connection.provider) {
+          case 'openai-compatible':
+            models = await listModels(connection, adapters.modelTransport, adapters.secrets, signal);
+            break;
+          case 'gemini':
+            models = await listGeminiModels(
+              connection,
+              adapters.modelTransport,
+              adapters.secrets,
+              signal,
+            );
+            break;
+          default:
+            throw new ReaderError('model_list');
+        }
         if (signal.aborted) throw new ReaderError('cancelled');
         return { connection, models };
       } catch (error) {
