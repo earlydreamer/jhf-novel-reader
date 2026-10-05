@@ -73,14 +73,24 @@ export function createModelTransport(client: NativeHttpClient): ModelTransport {
   return {
     async get(input, signal) {
       const url = validateUrl(input.url, false);
+      const gemini = input.geminiApiKey !== undefined;
       if (
-        !/^https?:\/\/[^/?#]+(?:\/[A-Za-z0-9._-]+)*\/v1\/models$/.test(input.url) ||
         input.url.includes('/../') ||
-        input.geminiApiKey !== undefined
+        (gemini
+          ? input.url !== 'https://generativelanguage.googleapis.com/v1beta/models'
+          : !/^https?:\/\/[^/?#]+(?:\/[A-Za-z0-9._-]+)*\/v1\/models$/.test(input.url))
       )
         throw new ReaderError('connection');
       const headers: Record<string, string> = { Accept: 'application/json' };
-      if (input.authorization !== undefined) {
+      if (gemini) {
+        if (
+          input.authorization !== undefined ||
+          !input.geminiApiKey ||
+          /[\u0000-\u0020\u007f]/.test(input.geminiApiKey)
+        )
+          throw new ReaderError('auth');
+        headers['x-goog-api-key'] = input.geminiApiKey;
+      } else if (input.authorization !== undefined) {
         if (!/^Bearer [^\s\u007f]+$/.test(input.authorization)) throw new ReaderError('auth');
         headers.Authorization = input.authorization;
       }

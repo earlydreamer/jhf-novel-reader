@@ -48,9 +48,7 @@ export function SettingsScreen({
           }
         >
           <option value="openai-compatible">LM Studio / Ollama</option>
-          <option value="gemini" disabled>
-            Google Gemini (후속 단계, 현재 사용 불가)
-          </option>
+          <option value="gemini">Google Gemini</option>
         </select>
       </label>
       <p>

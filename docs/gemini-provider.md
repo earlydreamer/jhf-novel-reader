@@ -1,49 +1,36 @@
-# Optional Gemini provider (issue #9)
+# 선택형 Gemini 전체 회차 제공자 (renewal T8, issue #29)
 
-Gemini is an explicit alternative to the local OpenAI-compatible provider. It is not a fallback. This implementation has synthetic protocol/application tests, not a live-key acceptance test. No real Gemini requests or paid calls were made during development. Android physical-device gates in [android-validation.md](android-validation.md) remain open independently.
+Gemini는 renewal 경로에서만 사용할 수 있는 선택형 전체 회차 번역 제공자다. 기본값도 실패 시 대체 수단도 아니다. 사용자가 설정 화면에서 **Google Gemini**를 명시적으로 고르고, 자신의 API 키로 모델 목록을 확인한 뒤 모델을 선택해야만 Google 요청이 만들어진다.
 
-## Before use
+## 사용 전 확인
 
-1. In **번역 공급자**, choose **Gemini · Google 클라우드**. The endpoint is fixed to Google's HTTPS API.
-2. Check the current [models and capabilities](https://ai.google.dev/gemini-api/docs/models). Enter a text model ID that supports structured output and its appropriate budgets. No cloud model or model-specific capacity is bundled as a current default. The budgets are conservative application limits, not a promise about available quota or exact token counts.
-3. Review [pricing](https://ai.google.dev/gemini-api/docs/pricing) and [data processing / terms](https://ai.google.dev/gemini-api/terms), acknowledge transmission, then apply the provider/model/budgets together. Input paragraphs and their nearby read-only context go to Google. Fees and processing conditions depend on the selected model, service tier and region; unpaid data may be used for improvement and human review. Do not submit sensitive material to unpaid services. The app does not create an account or accept terms for the user.
-4. Save your own Gemini key in the Android OS-backed secure store. No shared key exists. Switching providers/endpoints detaches the old credential and requires a new explicit save. Only a reference is stored in settings; keys are never displayed, included in cache identity, or logged. The draft provider cannot receive a key before it has been applied.
-5. Open only a source chapter you are authorized to access and translate. Next-chapter prefetch starts off and resets off when changing providers. Turning it on can transmit an additional chapter and incur additional cost.
+1. 연결 설정에서 **Google Gemini**를 선택하고 API 기본 주소에 `https://generativelanguage.googleapis.com/v1beta`를 입력한다. 다른 호스트, HTTP, 포트, 경로, 쿼리, fragment, 사용자 정보가 있는 주소는 허용되지 않는다.
+2. 인증값에 자신의 Gemini API 키를 입력하고 연결을 확인한다. 키는 Android OS 보안 저장소에만 저장되며, 일반 설정과 저장된 번역본에는 키 자체가 남지 않는다. 저장된 `authRef`로만 요청 직전에 키를 읽는다.
+3. 앱은 Gemini ListModels 응답에서 `generateContent`를 지원한다고 보고한 모델만 선택 목록에 보인다. 모델 가용성, 한도, 가격, 지역별 조건은 계정과 시점에 따라 달라지므로 [Gemini 모델 문서](https://ai.google.dev/gemini-api/docs/models)와 [가격](https://ai.google.dev/gemini-api/docs/pricing)을 사용자가 직접 확인해야 한다.
+4. 원문 회차는 Google로 전송되고 비용이 발생할 수 있다. 민감한 원문을 보내지 말고 [데이터 처리·이용 조건](https://ai.google.dev/gemini-api/terms)을 확인한다.
 
-A timeout or uncertain cancellation does not prove Google stopped processing. Automatic POST retries are **zero**. Explicit Retry may duplicate processing and charges; the reader displays that warning. HTTP 429 remains a connection error with status 429 for quota diagnosis and never triggers a silent retry.
+## renewal 요청 계약
 
-## Protocol, checked 2026-10-04
+- 모델 목록 확인은 고정된 `GET https://generativelanguage.googleapis.com/v1beta/models`만 사용한다.
+- 사용자가 번역을 시작하면 선택한 모델의 `:generateContent`로 비스트리밍 `POST`를 정확히 한 번 보낸다. 자동 재시도, 청크 분할, 보정 요청, 다른 제공자 fallback은 없다.
+- 요청 본문은 `systemInstruction`, 전체 원문 `contents`, `generationConfig.candidateCount: 1`만 사용한다. `responseFormat`, JSON schema, 문단 ID JSON 계약은 renewal Gemini 경로에 없다.
+- 정상 결과는 일반 텍스트 한 덩어리다. `STOP`은 완료, `MAX_TOKENS`는 길이 제한, 안전·차단 finish reason은 차단, 나머지는 unknown으로 변환한다. 완료가 아닌 결과는 저장되지 않는다.
+- 완료된 일반 텍스트는 기존 `wholeChapter` 저장 흐름으로 버전 저장된다. 저장본은 제공자를 바꿔도 삭제되거나 다시 요청되지 않으며, provenance의 connection identity는 제공자와 해당 제공자의 정규화된 endpoint를 함께 사용한다.
 
-Primary references:
-- [generateContent endpoint and response](https://ai.google.dev/api/generate-content#method:-models.generatecontent)
-- [GenerationConfig](https://ai.google.dev/api/generate-content#GenerationConfig), [ResponseFormatConfig](https://ai.google.dev/api/generate-content#ResponseFormatConfig)
-- [API-key header guidance](https://ai.google.dev/gemini-api/docs/api-key)
-- [Troubleshooting / quota errors](https://ai.google.dev/gemini-api/docs/troubleshooting)
+## 전송 및 인증 경계
 
-The nonstreaming route is `/v1beta/models/{model}:generateContent`. Authentication uses `x-goog-api-key`, never a URL query parameter or Bearer substitution. The REST reference currently describes `generationConfig.responseFormat.text` with `mimeType: "APPLICATION_JSON"` and a JSON Schema. This implementation uses that shape; it does not copy the newer Interactions API's differently shaped `response_format`. `responseSchema` is documented but deprecated. API documentation evolves; this is a dated implementation contract, not live compatibility evidence for every account/model.
+- API 키는 URL 쿼리나 Bearer 토큰으로 보내지 않고 `x-goog-api-key` 헤더에만 담긴다.
+- Gemini 키가 있는 `GET`은 위의 고정 models endpoint만, `POST`는 고정 Google HTTPS `generateContent` endpoint만 native client로 전달한다. 다른 host·port·path, query, fragment, userinfo, traversal, mixed `Authorization`은 dispatch 전에 거부한다.
+- redirect는 native dispatch 전에 비활성화되고, 응답 URL도 요청 URL과 일치해야 한다. 요청 오류에는 키나 원문을 포함하지 않으며, POST는 자동 재시도하지 않는다.
 
-A single candidate is requested. The decoder accepts only STOP with valid JSON and exactly the requested nonempty paragraph IDs in source order. It omits `thought: true` text, joins ordinary text parts, and rejects tools, executable code, media and malformed parts. MAX_TOKENS, safety/recitation blocks, prompt blocks and unknown finish reasons cannot become completed chapters or validated checkpoints. Surrounding context stays input-only. Provider output remains text, never executable HTML or tool instructions.
+## legacy와의 분리
 
-The common planner is unchanged: conservative UTF-8 byte estimates and framing reserve determine ordered segments. Gemini additionally checks its complete provider-specific serialized body, including the JSON schema, plus framing and output reservation before reading any key or dispatching. Very small budgets can fail locally rather than send an oversized request. Output budget includes whatever tokens the selected model accounts against `maxOutputTokens`; thinking models may exhaust it before producing enough answer text. The service remains authoritative about its model limits.
+기존 `src/providers/gemini/index.ts`의 legacy `TranslationProvider`는 문단 단위 JSON 계약을 계속 사용한다. renewal T8은 이를 재사용하지 않고 `ProviderSession` 전체 회차 plain-text 계약을 별도로 구현한다. legacy 경로, v1 migration, 로컬 OpenAI-compatible 제공자 계약과 저장 형식은 변경하지 않는다.
 
-## Coordinated boundary/security review
+## 검증과 제한
 
-Issue #9 extends these shared paths only after coordinator approval:
-- `src/contracts/index.ts`: optional, narrowly named `ModelRequest.geminiApiKey`; no arbitrary header map and no changes to persisted data schemas.
-- `src/platform/http/index.ts`: Gemini key permitted exclusively for the literal HTTPS Google host, v1beta and safe model-ID generateContent path. Reject queries, fragments, userinfo, alternate hosts/ports, unsafe paths and mixed authentication before native dispatch. Gemini bodies do not receive OpenAI's `stream` field. Existing local requests still force `stream:false`.
-- Native redirects stay disabled before dispatch; the final URL is checked as defense in depth. Source transport constructs fresh Accept-only headers. Known native errors are reconstructed without raw message/cause; bridge logging stays disabled.
-- `src/app/compose.ts`, `src/app/controller.ts`, `src/jobs/engine.ts`: explicit provider construction, matching normalized endpoint/model cache identity, secret-generation isolation and the existing shared single-request scheduler. There is no secondary provider attempt on failure.
-- `src/ui/SettingsScreen.tsx`, `src/app/Application.tsx`: explicit cloud acknowledgment, no cloud defaults, provider/budget application, disabled credentials for an unapplied endpoint and visible cost/duplicate-request warnings. An applied persisted Gemini config represents the user's provider choice; with prefetch disabled, restoration makes no new request. A previously enabled prefetch preference can resume the one-next-chapter behavior after an offline-restored chapter becomes ready in the foreground.
+- `tests/providers/gemini/whole-chapter.test.ts`: 고정 선택, plain-text 단일 POST, finish reason 변환, generation-capable catalog filtering.
+- `tests/integration/renewal-gemini.test.tsx`: 명시적 선택, 실제 renewal composition, 단일 Google POST, 저장본 유지, blocked/unknown 미저장.
+- `tests/contracts/gemini-http.test.ts`: 고정 Gemini catalog GET과 header-only 키의 fail-closed transport 경계.
 
-No dependencies, permissions, API credentials, native security policy, account settings, proxy, backend or deployment were added. The platform contract change is covered by header-isolation, target rejection, no-retry, redirect, cancellation and sanitized-error fixtures; local boundary tests still run.
-
-## Verification
-
-Run `npm run typecheck && npm test -- --run && npm run build`, then `npx cap sync android`. Relevant suites:
-- `tests/providers/gemini/provider.test.ts`: independent Gemini envelopes, malformed output, safe model/endpoint, key and budget boundaries, completion/safety/truncation/quota and uncertain outcomes.
-- `tests/providers/contract.test.ts`: common provider ordering/context and no-retry invariants.
-- `tests/contracts/gemini-http.test.ts`: real application transport over an injected native client; no network.
-- `tests/integration/gemini.test.ts`: real parser/provider/store/engine composition, default-off prefetch, local failure isolation, offline restoration and explicit retry.
-- Settings/controller regressions verify acknowledgment, secret isolation and switching races.
-
-Rebuild and audit the debug APK using [the Android instructions](android-validation.md). Compiling an APK and instrumentation tests does not mean device tests ran. Cloud-browser preview was blocked on localhost in this environment; jsdom UI behavior and production build checks are separate evidence. Real-key calls require separate explicit permission and a spending limit; none is implied by building this adapter.
+모든 테스트는 mock transport를 사용한다. 개발과 검증에서 실제 Gemini API 호출, 실키 사용, 유료 요청은 하지 않았다. 실제 기기·계정·지역·할당량·모델별 장문 품질은 별도의 명시적 승인과 검증이 필요하다.

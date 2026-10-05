@@ -11,6 +11,7 @@ import type {
 } from '../contracts/reading';
 import { digest } from '../storage/journal';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
+import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import type { AttemptRepository } from './attempts';
 import { createSingleFlight } from './singleFlight';
 export interface FlowDependencies {
@@ -110,6 +111,17 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           );
         const text = result.text.replace(/\r\n/g, '\n');
         if (!text.trim()) throw new ReaderError('invalid_output', 'received');
+        let normalizedBaseUrl: string;
+        switch (selected.connection.provider) {
+          case 'openai-compatible':
+            normalizedBaseUrl = normalizeOpenAICompatibleBaseUrl(selected.connection.baseUrl);
+            break;
+          case 'gemini':
+            normalizedBaseUrl = normalizeGeminiBaseUrl(selected.connection.baseUrl);
+            break;
+          default:
+            throw new ReaderError('connection');
+        }
         const versionId = crypto.randomUUID();
         const value: CompletedTranslation = {
           schemaVersion: 2,
@@ -126,7 +138,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             provider: selected.connection.provider,
             connectionId: await digest([
               selected.connection.provider,
-              normalizeOpenAICompatibleBaseUrl(selected.connection.baseUrl),
+              normalizedBaseUrl,
             ]),
             modelId: selected.modelId,
             contractVersion: 'plain-v1',
