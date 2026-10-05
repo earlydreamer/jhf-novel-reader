@@ -1,0 +1,17 @@
+{
+  "engineBuild": "b11415",
+  "engineCommit": "8e1642198dcd4e408f8776222d6ae31b74d01187",
+  "archives": [
+    {
+      "name": "llama-b11415-bin-win-cuda-12.4-x64.zip",
+      "sha256": "9ef7ff523cf4ce128a6c9f52bf81fe0461badad0704acce04e3e670504d2e98e"
+    },
+    {
+      "name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+      "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
+    }
+  ],
+  "modelRevision": "ab8472660ac61fac25f1af43fac2599d52a8a775",
+  "modelSha256": "9f96256500f3fc1ab4d64336b58f52a949a95ad7516b0c229476eef782f9f77b",
+  "sourceCommit": "7074af82743aeedd0165d0f8fcf30b11deb549ad"
+}

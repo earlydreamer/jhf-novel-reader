@@ -1,0 +1,98 @@
+{
+  "runId": "ff7b1e62-4d26-4091-b018-3560ac8a8c49",
+  "mode": "no-repeat",
+  "model": "narou-hy-mt2-7b",
+  "startedAt": "2026-10-05T13:25:21.641Z",
+  "clientPosts": 1,
+  "loaded": {
+    "backend": "lmstudio",
+    "key": "hy-mt2-7b",
+    "architecture": "hunyuan-dense",
+    "quantization": {
+      "name": "Q4_K_M",
+      "bits_per_weight": 4
+    },
+    "config": {
+      "context_length": 16384,
+      "eval_batch_size": 2048,
+      "physical_batch_size": 512,
+      "parallel": 4,
+      "context_checkpoints": 32,
+      "flash_attention": true,
+      "offload_kv_cache_to_gpu": true,
+      "speculative_draft_mtp": false,
+      "speculative_draft_simple": false
+    }
+  },
+  "source": {
+    "canonicalUrl": "https://ncode.syosetu.com/n6517bw/3/",
+    "chars": 6792,
+    "paragraphs": 187,
+    "nonemptyParagraphs": 103,
+    "inputChars": 7258,
+    "inputHash": "728939898a852f0c93764a984fe043c5f73ea73010fd4bc5af66a418419d2132"
+  },
+  "requestSource": {
+    "scope": "nonempty-53-103",
+    "inputChars": 3430,
+    "inputHash": "4ad8dc2549251c584c0e4cf7b021a0834fa6096310c708eead7ec1617418c8a5",
+    "nonemptyRange": [
+      53,
+      103
+    ],
+    "acceptanceRun": false
+  },
+  "request": {
+    "roles": [
+      "user"
+    ],
+    "parameters": {
+      "stream": false,
+      "temperature": 0,
+      "repeat_penalty": 1
+    },
+    "messagesHash": "aa6e22fdd28dbea2f6f5af82e9905a4aa8e513ff3e95fde501fa903f23c5ae88"
+  },
+  "modelMs": 87357,
+  "httpStatus": 200,
+  "usage": {
+    "prompt_tokens": 3037,
+    "completion_tokens": 7661,
+    "total_tokens": 10698,
+    "reasoning_tokens": 0
+  },
+  "returnedModelMatchesSelection": true,
+  "finishReason": "stop",
+  "output": {
+    "chars": 4490,
+    "hash": "d06b5c7a0a0389d46003d7fd1075608578f7466487159aa119968147f44fc023",
+    "blocks": 34,
+    "hangulChars": 3703,
+    "kanaChars": 0
+  },
+  "cues": [
+    {
+      "name": "herb",
+      "sourceMatches": 3,
+      "outputMatches": 3
+    },
+    {
+      "name": "mushroom_any",
+      "sourceMatches": 7,
+      "outputMatches": 8
+    },
+    {
+      "name": "poisonous_mushroom",
+      "sourceMatches": 2,
+      "outputMatches": 2
+    },
+    {
+      "name": "magic_power",
+      "sourceMatches": 13,
+      "outputMatches": 5
+    }
+  ],
+  "quality": "NOT_ASSESSED_LEXICAL_CUES_ONLY",
+  "bodyStored": false,
+  "state": "completed"
+}
