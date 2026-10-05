@@ -51,6 +51,12 @@ export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
         제공자: {props.connection.provider === 'gemini' ? 'Google Gemini' : 'LM Studio / Ollama'}
       </p>
       <p>모델: {props.modelId ?? '선택하지 않음'}</p>
+      {props.catalogReady === false && (
+        <p role="status">서버 연결이 확인되지 않았습니다. 연결 설정에서 서버 주소를 확인하세요.</p>
+      )}
+      {props.catalogReady !== false && !props.modelId && (
+        <p role="status">생성 모델이 선택되지 않았습니다. 연결 설정에서 모델을 선택하세요.</p>
+      )}
       {(!props.modelId || props.catalogReady === false) && (
         <button onClick={props.onSettings}>연결 설정</button>
       )}
