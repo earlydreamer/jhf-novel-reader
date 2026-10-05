@@ -34,6 +34,7 @@ function RouteScreen({
           selectedChapterId={state.route.selectedChapterId}
           busy={state.busy}
           onSelect={(chapter) => void controller.selectChapter(chapter)}
+          onLoadMore={() => void controller.loadMoreWorkPage()}
         />
       ) : (
         <p>작품 목차를 찾지 못했습니다.</p>

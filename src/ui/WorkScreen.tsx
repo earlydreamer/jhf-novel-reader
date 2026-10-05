@@ -6,6 +6,7 @@ export interface WorkScreenProps {
   busy: boolean;
   savedChapterIds: readonly string[];
   onSelect(chapter: ChapterRef): void;
+  onLoadMore(): void;
 }
 export function WorkScreen({
   work,
@@ -13,6 +14,7 @@ export function WorkScreen({
   savedChapterIds,
   busy,
   onSelect,
+  onLoadMore,
 }: WorkScreenProps): JSX.Element {
   return (
     <section aria-label="작품 목차">
@@ -51,7 +53,9 @@ export function WorkScreen({
         ))}
       </ol>
       {work.nextPageUrl && (
-        <p>다음 목차 페이지가 있습니다. 여러 페이지 불러오기는 후속 단계에서 연결됩니다.</p>
+        <button disabled={busy} onClick={onLoadMore}>
+          다음 목차 페이지 불러오기
+        </button>
       )}
     </section>
   );
