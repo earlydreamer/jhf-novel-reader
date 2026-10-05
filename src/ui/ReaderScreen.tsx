@@ -7,10 +7,12 @@ export interface ReaderScreenProps {
   position: ReadingPosition | null;
   fontSize: number;
   showOriginal: boolean;
+  sourceChange: 'idle' | 'checking' | 'unchanged' | 'changed' | 'unavailable';
   onDisplayed?(versionId: string): void;
   onFontSize(value: number): void;
   onPosition(blockId: string, offset: number): void;
   onShowOriginal(value: boolean): void;
+  onRefreshSource(): void;
   onContents(): void;
   onAdjacent(direction: -1 | 1): void;
 }
@@ -70,6 +72,14 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
           다음 화
         </button>
       </nav>
+      {props.sourceChange === 'checking' && <p role="status">원문 변경을 확인하고 있습니다.</p>}
+      {props.sourceChange === 'unchanged' && <p role="status">원문이 변경되지 않았습니다.</p>}
+      {props.sourceChange === 'changed' && (
+        <p role="status">
+          원문이 변경되었습니다. <button onClick={props.onRefreshSource}>원문 새로 고침</button>
+        </p>
+      )}
+      {props.sourceChange === 'unavailable' && <p role="status">원문 변경을 확인할 수 없습니다.</p>}
       <label>
         글자 크기
         <input

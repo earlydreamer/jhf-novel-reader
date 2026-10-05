@@ -27,8 +27,10 @@ export type CatalogStatus =
   | 'empty'
   | 'model_missing'
   | 'unavailable';
+export type SourceChangeStatus = 'idle' | 'checking' | 'unchanged' | 'changed' | 'unavailable';
 export interface RenewalDependencies {
   readonly library?: LibraryStore;
+  readonly migrateLegacy?: () => Promise<void>;
   readonly clock?: { now(): number };
   readonly flow?: WholeChapterFlow;
   readonly lifecycle?: AppLifecycle;
@@ -65,6 +67,7 @@ export interface RenewalSnapshot {
   readonly translationTimings: (PhaseDurations & { readerDisplayMs: number }) | null;
   readonly version: CompletedTranslation | null;
   readonly position: ReadingPosition | null;
+  readonly sourceChange: SourceChangeStatus;
   readonly recent: readonly {
     workId: string;
     chapterId: string;
@@ -131,6 +134,7 @@ export interface RenewalController {
   checkConnection(secret?: string): Promise<void>;
   chooseModel(modelId: string): void;
   translate(): Promise<void>;
+  refreshSource(): Promise<void>;
   showContents(): void;
   adjacentChapter(direction: -1 | 1): void;
   changeFontSize(fontSize: number): void;
@@ -152,6 +156,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     chapter: null,
     version: null,
     position: null,
+    sourceChange: 'idle',
     translation: { phase: 'idle', elapsedMs: 0 },
     translationTimings: null,
     recent: [],
@@ -280,6 +285,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           if (lifecycleEvents === eventAtStart) foreground = active;
         }
         if (disposed) return;
+        await dependencies.migrateLegacy?.();
+        if (disposed) return;
         dependencies.flow?.setForeground(foreground);
         await dependencies.flow?.initialize();
         const saved = await dependencies.settings?.readReadingSettings();
@@ -365,6 +372,38 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       snapshot.chapter?.chapterId === request.chapterId &&
       snapshot.connection.revision === request.settingsRevision
     );
+  }
+  async function checkSourceChange(
+    version: CompletedTranslation,
+    chapter: ChapterRef | null,
+  ): Promise<void> {
+    if (!dependencies.source || !chapter) {
+      publish({ sourceChange: 'unavailable' });
+      return;
+    }
+    const operation = ++sourceOperation;
+    sourceAbort?.abort();
+    const control = new AbortController();
+    sourceAbort = control;
+    publish({ sourceChange: 'checking' });
+    try {
+      const current = await dependencies.source.getChapter(chapter, control.signal);
+      if (
+        disposed ||
+        operation !== sourceOperation ||
+        snapshot.route.kind !== 'reader' ||
+        snapshot.route.versionId !== version.versionId
+      )
+        return;
+      const changed =
+        current.sourceHash !== version.source.sourceHash ||
+        (version.source.rawHtml !== null && current.rawHtml !== version.source.rawHtml);
+      publish({ sourceChange: changed ? 'changed' : 'unchanged' });
+    } catch {
+      if (operation === sourceOperation && !disposed) publish({ sourceChange: 'unavailable' });
+    } finally {
+      if (sourceAbort === control) sourceAbort = null;
+    }
   }
   async function openWork(url: string): Promise<void> {
     if (!dependencies.source) {
@@ -472,8 +511,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         busy: false,
         translation: translationForChapter(chapter.chapterId),
       });
-      if (version) navigate({ kind: 'reader', versionId: version.versionId });
-      else navigate({ kind: 'translation', chapterId: chapter.chapterId });
+      if (version) {
+        navigate({ kind: 'reader', versionId: version.versionId });
+        void checkSourceChange(version, chapter);
+      } else navigate({ kind: 'translation', chapterId: chapter.chapterId });
     } catch {
       if (operation === selectionOperation)
         publish({
@@ -508,6 +549,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       positionsByVersion.set(version.versionId, position);
       publish({ work, chapter, version, position, savedChapterIds });
       navigate({ kind: 'reader', versionId });
+      void checkSourceChange(version, chapter);
     } catch {
       publish({ error: '저장된 번역을 불러오지 못했습니다.' });
     }
@@ -587,6 +629,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       },
     });
     persistSettings();
+  }
+  async function refreshSource(): Promise<void> {
+    const chapter = snapshot.chapter;
+    if (snapshot.route.kind !== 'reader' || !chapter) return;
+    publish({ sourceChange: 'idle', translation: { phase: 'idle', elapsedMs: 0 } });
+    navigate({ kind: 'translation', chapterId: chapter.chapterId });
+    await translate();
   }
   async function translate(): Promise<void> {
     if (
@@ -820,6 +869,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     checkConnection,
     chooseModel,
     translate,
+    refreshSource,
     showContents,
     adjacentChapter,
     changeFontSize,

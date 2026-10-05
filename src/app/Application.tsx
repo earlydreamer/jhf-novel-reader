@@ -68,10 +68,12 @@ function RouteScreen({
           position={state.position}
           fontSize={state.fontSize}
           showOriginal={state.showOriginal}
+          sourceChange={state.sourceChange}
           onDisplayed={controller.readerDisplayed}
           onFontSize={controller.changeFontSize}
           onPosition={(block, offset) => void controller.savePosition(block, offset)}
           onShowOriginal={controller.showOriginal}
+          onRefreshSource={() => void controller.refreshSource()}
           onContents={controller.showContents}
           onAdjacent={controller.adjacentChapter}
         />
