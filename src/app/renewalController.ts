@@ -141,6 +141,7 @@ interface ActiveTranslation {
   cancelled?: boolean;
   readonly chapterId: string;
   readonly settingsRevision: number;
+  readonly selectionOperation: number;
 }
 export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
   let snapshot: RenewalSnapshot = {
@@ -331,6 +332,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   function ownsVisibleTranslation(request: ActiveTranslation): boolean {
     return (
       !request.cancelled &&
+      request.selectionOperation === selectionOperation &&
       snapshot.route.kind === 'translation' &&
       snapshot.route.chapterId === request.chapterId &&
       snapshot.chapter?.chapterId === request.chapterId &&
@@ -557,6 +559,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const request: ActiveTranslation = {
       chapterId: chapter.chapterId,
       settingsRevision: selectedModel.connection.revision,
+      selectionOperation,
     };
     activeTranslation = request;
     publish({ translation: { phase: 'preparing', elapsedMs: 0 }, translationActive: true });
@@ -576,17 +579,18 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }
     } finally {
       if (activeTranslation === request) {
-        showNonAdoptingOutcome(request);
+        if (!ownsVisibleTranslation(request)) showNonAdoptingOutcome(request);
         activeTranslation = null;
         publish({ translationActive: false });
       }
     }
   }
-  function showNonAdoptingOutcome(request: ActiveTranslation) {
+  function showNonAdoptingOutcome(
+    request: Pick<ActiveTranslation, 'chapterId' | 'settingsRevision'>,
+  ) {
     if (
       snapshot.route.kind !== 'translation' ||
       snapshot.chapter?.chapterId !== request.chapterId ||
-      snapshot.connection.revision === request.settingsRevision ||
       !dependencies.flow
     )
       return;
@@ -595,7 +599,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({
         translation: state,
         error:
-          '설정이 변경되어 원래 요청의 결과를 자동으로 열지 않습니다. 저장본 열기 또는 현재 설정으로 명시적 재시도를 선택하세요.',
+          '이전 요청의 결과를 자동으로 열지 않습니다. 저장본 열기 또는 명시적 재시도를 선택하세요.',
       });
     }
   }
@@ -618,7 +622,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   const unsubscribeFlow = dependencies.flow?.subscribe((state) => {
     const token = state.token;
-    if (token && ownsVisibleTranslation(token)) publish({ translation: state });
+    const request = activeTranslation;
+    if (
+      token &&
+      request &&
+      token.chapterId === request.chapterId &&
+      token.settingsRevision === request.settingsRevision &&
+      ownsVisibleTranslation(request)
+    )
+      publish({ translation: state });
   });
   function cancelTranslation() {
     dependencies.flow?.cancel();
@@ -630,6 +642,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const request: ActiveTranslation = {
       chapterId: token.chapterId,
       settingsRevision: token.settingsRevision,
+      selectionOperation,
     };
     activeTranslation = request;
     publish({ translationActive: true });
@@ -644,7 +657,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ error: '기기 저장을 완료하지 못했습니다.' });
     } finally {
       if (activeTranslation === request) {
-        showNonAdoptingOutcome(request);
+        if (!ownsVisibleTranslation(request)) showNonAdoptingOutcome(request);
         activeTranslation = null;
         publish({ translationActive: false });
       }

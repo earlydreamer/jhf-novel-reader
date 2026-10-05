@@ -256,19 +256,29 @@ it('background prevents dispatch and does not restart on foreground', async () =
   expect(h.posts()).toHaveLength(0);
   h.app.dispose();
 });
-it('navigation away and back to the same chapter never adopts an old response', async () => {
-  const h = harness();
-  await prepare(h);
-  const first = h.app.translate();
-  await dispatched(h);
-  h.app.navigate({ kind: 'home' });
-  h.app.back();
-  h.settle();
-  await first;
-  expect(h.app.getSnapshot().route.kind).toBe('translation');
-  expect(h.app.getSnapshot().version).toBeNull();
-  h.app.dispose();
-});
+it.each(['back', 'select'] as const)(
+  'returning via %s to the same chapter never adopts an old response',
+  async (returnVia) => {
+    const h = harness();
+    await prepare(h);
+    const first = h.app.translate();
+    await dispatched(h);
+    h.app.navigate({ kind: 'home' });
+    if (returnVia === 'back') h.app.back();
+    else await h.app.selectChapter(h.app.getSnapshot().chapter!);
+    h.settle();
+    await first;
+    expect(h.app.getSnapshot().route.kind).toBe('translation');
+    expect(h.app.getSnapshot().version).toBeNull();
+    expect(h.app.getSnapshot().translation.phase).toBe('ready');
+    expect(h.posts()).toHaveLength(1);
+    expect(await h.store.listVersions('n1234ab/2')).toHaveLength(1);
+    await h.app.openSavedTranslation();
+    expect(h.app.getSnapshot().route.kind).toBe('reader');
+    expect(h.posts()).toHaveLength(1);
+    h.app.dispose();
+  },
+);
 it('cancel during durable save never opens the reader', async () => {
   const h = harness();
   await prepare(h);
