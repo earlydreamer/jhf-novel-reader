@@ -116,7 +116,7 @@ public class SourceBrowserInstrumentedTest {
             try (ActivityScenario<SourceBrowserActivity> scenario = launchForResultWithoutNetwork()) {
                 installFixture(scenario, fixtureLoader, workUrl);
                 awaitBrowserState(scenario, workUrl, true);
-                tapFirstLink(scenario);
+                tapFirstLink(scenario, "Valid work fixture");
                 if (destination.startsWith("https:")) {
                     cancelExternalDialog(destination);
                 }
@@ -171,7 +171,7 @@ public class SourceBrowserInstrumentedTest {
         try (ActivityScenario<SourceBrowserActivity> scenario = launchForResultWithoutNetwork()) {
             installFixture(scenario, fixtureLoader, workUrl);
             awaitBrowserState(scenario, workUrl, true);
-            tapFirstLink(scenario);
+            tapFirstLink(scenario, "Valid work fixture");
             awaitBrowserState(scenario, unsupported, false);
             assertEquals(java.util.Arrays.asList(workUrl, unsupported), requests);
             scenario.onActivity(activity -> {
@@ -265,7 +265,7 @@ public class SourceBrowserInstrumentedTest {
             });
             installFixture(scenario, fixtureLoader, home);
             awaitBrowserState(scenario, home, false);
-            tapFirstLink(scenario);
+            tapFirstLink(scenario, "Main redirect fixture");
             awaitBrowserState(scenario, redirect, false);
             // A blocked redirect has no HTML icon declaration. This WebView may request its
             // exact same-origin favicon; every other extra destination must still fail.
@@ -370,7 +370,9 @@ public class SourceBrowserInstrumentedTest {
         assertEquals(androidx.lifecycle.Lifecycle.State.DESTROYED, scenario.getState());
     }
 
-    private void tapFirstLink(ActivityScenario<SourceBrowserActivity> scenario) throws Exception {
+    private void tapFirstLink(ActivityScenario<SourceBrowserActivity> scenario, String pageTitle) throws Exception {
+        // loadUrl can expose the new URL with the previous progress=100 before HTML arrives.
+        awaitTitle(scenario, pageTitle);
         CountDownLatch painted = new CountDownLatch(1);
         scenario.onActivity(activity -> {
             WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
@@ -379,14 +381,14 @@ public class SourceBrowserInstrumentedTest {
             });
         });
         assertTrue("Fixture content must be ready to draw before its first touch", painted.await(3, TimeUnit.SECONDS));
-        // fixturePage puts its first link in the top 48 CSS-pixel row. Use a real
-        // touch gesture: keyboard activation does not reliably set hasGesture().
+        // fixturePage has zero body margin. Touch the visible first line of link text,
+        // rather than empty space in its block box. Keyboard activation lacks hasGesture().
         onView(withId(SourceBrowserActivity.BROWSER_ID))
             .perform(new GeneralClickAction(Tap.SINGLE, view -> {
                 int[] origin = new int[2];
                 view.getLocationOnScreen(origin);
                 float density = view.getResources().getDisplayMetrics().density;
-                return new float[] { origin[0] + view.getWidth() / 2f, origin[1] + 24f * density };
+                return new float[] { origin[0] + 12f * density, origin[1] + 8f * density };
             }, Press.FINGER));
     }
 
@@ -431,7 +433,7 @@ public class SourceBrowserInstrumentedTest {
         try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
             installFixture(scenario, fixtureLoader, search);
             awaitBrowserState(scenario, search, false);
-            tapFirstLink(scenario);
+            tapFirstLink(scenario, "Search fixture");
             awaitBrowserState(scenario, work, true);
             assertEquals(java.util.Arrays.asList(search, work), requests);
             scenario.onActivity(activity -> activity.findViewById(SourceBrowserActivity.BACK_ID).performClick());
@@ -462,16 +464,21 @@ public class SourceBrowserInstrumentedTest {
     private void awaitBrowserState(ActivityScenario<SourceBrowserActivity> scenario, String expectedUrl, boolean importEnabled) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         AtomicReference<Boolean> settled = new AtomicReference<>(false);
+        AtomicReference<String> observed = new AtomicReference<>();
         do {
             scenario.onActivity(activity -> {
                 WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
                 Button open = activity.findViewById(SourceBrowserActivity.OPEN_ID);
-                settled.set(expectedUrl.equals(view.getUrl()) && view.getProgress() == 100 && open.isEnabled() == importEnabled);
+                settled.set(expectedUrl.equals(view.getUrl()) && view.getProgress() == 100
+                    && open.isEnabled() == importEnabled && view.hasWindowFocus());
+                observed.set("url=" + view.getUrl() + ", progress=" + view.getProgress()
+                    + ", import=" + open.isEnabled() + ", focus=" + view.hasWindowFocus()
+                    + ", title=" + view.getTitle() + ", hit=" + view.getHitTestResult().getType());
             });
             if (settled.get()) return;
             Thread.sleep(20);
         } while (System.nanoTime() < deadline);
-        fail("Production browser did not settle at " + expectedUrl + " with expected native selection state");
+        fail("Production browser did not settle at " + expectedUrl + "; observed " + observed.get());
     }
 
     private void awaitTitle(ActivityScenario<SourceBrowserActivity> scenario, String wanted) throws Exception {
