@@ -116,7 +116,7 @@ public class SourceBrowserInstrumentedTest {
             try (ActivityScenario<SourceBrowserActivity> scenario = launchForResultWithoutNetwork()) {
                 installFixture(scenario, fixtureLoader, workUrl);
                 awaitBrowserState(scenario, workUrl, true);
-                tapFirstLink();
+                tapFirstLink(scenario);
                 if (destination.startsWith("https:")) {
                     cancelExternalDialog(destination);
                 }
@@ -171,7 +171,7 @@ public class SourceBrowserInstrumentedTest {
         try (ActivityScenario<SourceBrowserActivity> scenario = launchForResultWithoutNetwork()) {
             installFixture(scenario, fixtureLoader, workUrl);
             awaitBrowserState(scenario, workUrl, true);
-            tapFirstLink();
+            tapFirstLink(scenario);
             awaitBrowserState(scenario, unsupported, false);
             assertEquals(java.util.Arrays.asList(workUrl, unsupported), requests);
             scenario.onActivity(activity -> {
@@ -265,7 +265,7 @@ public class SourceBrowserInstrumentedTest {
             });
             installFixture(scenario, fixtureLoader, home);
             awaitBrowserState(scenario, home, false);
-            tapFirstLink();
+            tapFirstLink(scenario);
             awaitBrowserState(scenario, redirect, false);
             // A blocked redirect has no HTML icon declaration. This WebView may request its
             // exact same-origin favicon; every other extra destination must still fail.
@@ -370,7 +370,15 @@ public class SourceBrowserInstrumentedTest {
         assertEquals(androidx.lifecycle.Lifecycle.State.DESTROYED, scenario.getState());
     }
 
-    private void tapFirstLink() {
+    private void tapFirstLink(ActivityScenario<SourceBrowserActivity> scenario) throws Exception {
+        CountDownLatch painted = new CountDownLatch(1);
+        scenario.onActivity(activity -> {
+            WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
+            view.postVisualStateCallback(0, new WebView.VisualStateCallback() {
+                @Override public void onComplete(long requestId) { painted.countDown(); }
+            });
+        });
+        assertTrue("Fixture content must be ready to draw before its first touch", painted.await(3, TimeUnit.SECONDS));
         // fixturePage puts its first link in the top 48 CSS-pixel row. Use a real
         // touch gesture: keyboard activation does not reliably set hasGesture().
         onView(withId(SourceBrowserActivity.BROWSER_ID))
@@ -423,7 +431,7 @@ public class SourceBrowserInstrumentedTest {
         try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
             installFixture(scenario, fixtureLoader, search);
             awaitBrowserState(scenario, search, false);
-            tapFirstLink();
+            tapFirstLink(scenario);
             awaitBrowserState(scenario, work, true);
             assertEquals(java.util.Arrays.asList(search, work), requests);
             scenario.onActivity(activity -> activity.findViewById(SourceBrowserActivity.BACK_ID).performClick());
