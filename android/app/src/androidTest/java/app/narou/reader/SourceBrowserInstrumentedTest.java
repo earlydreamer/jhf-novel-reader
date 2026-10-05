@@ -242,6 +242,7 @@ public class SourceBrowserInstrumentedTest {
             target.positiveControl();
             String home = "https://syosetu.com/fixture/home";
             String redirect = "https://yomou.syosetu.com/fixture/main-redirect";
+            String deniedPageIcon = "https://yomou.syosetu.com/favicon.ico";
             String forbidden = "https://127.0.0.1:" + target.port() + "/model";
             List<String> requests = new CopyOnWriteArrayList<>();
             SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
@@ -250,6 +251,7 @@ public class SourceBrowserInstrumentedTest {
                     return fixturePage(uri, "Main redirect fixture", "<a href='" + redirect + "'>Redirected page</a>");
                 }
                 if (uri.toString().equals(redirect)) return fixtureRedirect(uri, forbidden);
+                if (uri.toString().equals(deniedPageIcon)) return SourceBrowserLoader.denied(uri);
                 connectForbiddenIfReached(uri, target);
                 throw new IOException("Unexpected fixture destination");
             });
@@ -257,7 +259,12 @@ public class SourceBrowserInstrumentedTest {
             awaitBrowserState(scenario, home, false);
             tapFirstLink();
             awaitBrowserState(scenario, redirect, false);
-            assertEquals(java.util.Arrays.asList(home, redirect), requests);
+            // A blocked redirect has no HTML icon declaration. This WebView may request its
+            // exact same-origin favicon; every other extra destination must still fail.
+            assertEquals("Observed fixture requests: " + requests,
+                java.util.Arrays.asList(home, redirect),
+                requests.stream().filter(url -> !url.equals(deniedPageIcon))
+                    .collect(java.util.stream.Collectors.toList()));
             target.assertNoConnectionsAfterControl();
             scenario.onActivity(activity -> {
                 Button open = activity.findViewById(SourceBrowserActivity.OPEN_ID);
