@@ -32,6 +32,7 @@ it('shows the fetched TOC ordinal range without suggesting the first chapter is 
       busy={false}
       savedChapterIds={[]}
       onSelect={() => {}}
+      onLoadMore={() => {}}
     />,
   );
   expect(screen.getByText('현재 확인한 범위: 101–102화 (2개 회차)')).toBeTruthy();
