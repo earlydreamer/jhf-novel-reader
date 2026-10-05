@@ -9,6 +9,9 @@ import android.content.Intent;
 import android.view.KeyEvent;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.pressKey;
+import androidx.test.espresso.action.GeneralClickAction;
+import androidx.test.espresso.action.Press;
+import androidx.test.espresso.action.Tap;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import android.webkit.WebView;
 import android.widget.Button;
@@ -335,7 +338,7 @@ public class SourceBrowserInstrumentedTest {
     private SourceBrowserLoader.Resource fixturePage(URI uri, String title, String body) {
         // Declare an inline icon so WebView does not add an unrelated /favicon.ico request.
         // Exact request-list and forbidden-target assertions remain unchanged.
-        byte[] html = ("<html><head><link rel='icon' href='data:,'><title>" + title + "</title></head><body>" + body + "</body></html>").getBytes(StandardCharsets.UTF_8);
+        byte[] html = ("<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><link rel='icon' href='data:,'><style>body{margin:0}a{display:block;min-height:48px}</style><title>" + title + "</title></head><body>" + body + "</body></html>").getBytes(StandardCharsets.UTF_8);
         return new SourceBrowserLoader.Resource(uri, 200, "text/html", "UTF-8", Collections.emptyMap(), html);
     }
 
@@ -354,8 +357,15 @@ public class SourceBrowserInstrumentedTest {
     }
 
     private void tapFirstLink() {
+        // fixturePage puts its first link in the top 48 CSS-pixel row. Use a real
+        // touch gesture: keyboard activation does not reliably set hasGesture().
         onView(withId(SourceBrowserActivity.BROWSER_ID))
-            .perform(pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_ENTER));
+            .perform(new GeneralClickAction(Tap.SINGLE, view -> {
+                int[] origin = new int[2];
+                view.getLocationOnScreen(origin);
+                float density = view.getResources().getDisplayMetrics().density;
+                return new float[] { origin[0] + view.getWidth() / 2f, origin[1] + 24f * density };
+            }, Press.FINGER));
     }
 
     private void awaitBrowserState(ActivityScenario<SourceBrowserActivity> scenario, String expectedUrl, boolean importEnabled) throws Exception {
