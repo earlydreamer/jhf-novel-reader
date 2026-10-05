@@ -139,23 +139,41 @@ try {
   };
   const expectedHash =
     args.get('expected-hash') ?? '728939898a852f0c93764a984fe043c5f73ea73010fd4bc5af66a418419d2132';
-  if (hash(input) !== expectedHash) throw new Error('source_changed_no_generation');
+  if (hash(normalizeChapterInput(source)) !== expectedHash)
+    throw new Error('source_changed_no_generation');
   const scope = args.get('scope') ?? 'whole';
-  if (!['whole', 'diagnostic-middle'].includes(scope)) throw new Error('Invalid diagnostic scope');
-  if (scope === 'diagnostic-middle') {
+  const rangeMatch = /^nonempty-(\d+)-(\d+)$/.exec(scope);
+  if (!['whole', 'diagnostic-middle'].includes(scope) && !rangeMatch)
+    throw new Error('Invalid diagnostic scope');
+  let nonemptyRange;
+  if (scope === 'diagnostic-middle') nonemptyRange = [59, 87];
+  else if (rangeMatch) nonemptyRange = [Number(rangeMatch[1]), Number(rangeMatch[2])];
+  if (nonemptyRange) {
+    const [start, end] = nonemptyRange;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start)
+      throw new Error('Invalid diagnostic range');
     const indices = source.paragraphs.map((p, i) => (p.text.trim() ? i : -1)).filter((i) => i >= 0);
-    if (indices[86] === undefined) throw new Error('Diagnostic source range unavailable');
+    if (indices[start - 1] === undefined || indices[end - 1] === undefined)
+      throw new Error('Diagnostic source range unavailable');
     generationSource = {
       ...source,
-      paragraphs: source.paragraphs.slice(indices[58], indices[86] + 1),
+      paragraphs: source.paragraphs.slice(indices[start - 1], indices[end - 1] + 1),
     };
     input = normalizeChapterInput(generationSource);
   }
+  if (args.has('drop-blank')) {
+    generationSource = {
+      ...generationSource,
+      paragraphs: generationSource.paragraphs.filter((p) => p.text.trim()),
+    };
+    input = normalizeChapterInput(generationSource);
+  }
+  if (args.has('collapse-blank')) input = input.replace(/\n{3,}/g, '\n\n');
   report.requestSource = {
     scope,
     inputChars: input.length,
     inputHash: hash(input),
-    ...(scope === 'diagnostic-middle' ? { nonemptyRange: [59, 87], acceptanceRun: false } : {}),
+    ...(nonemptyRange ? { nonemptyRange, acceptanceRun: false } : {}),
   };
   if (args.has('lms')) {
     report.serverInputObservations = [];
@@ -213,6 +231,7 @@ try {
       if (mode === 'no-repeat') body = { ...body, repeat_penalty: 1.0 };
       if (mode === 'recommended')
         body = { ...body, temperature: 0.7, top_p: 0.6, top_k: 20, repeat_penalty: 1.05 };
+      if (args.has('reasoning-off')) body = { ...body, reasoning_effort: 'none' };
       report.request = {
         roles: body.messages.map((m) => m.role),
         parameters: Object.fromEntries(
