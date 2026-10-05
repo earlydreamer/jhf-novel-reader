@@ -21,6 +21,7 @@ function RouteScreen({
           recent={state.recent}
           busy={state.busy}
           sourceAvailable={state.sourceAvailable}
+          onBrowse={() => void controller.browse()}
           onOpen={(url) => void controller.openWork(url)}
           onContinue={(id) => void controller.continueReading(id)}
         />
@@ -46,6 +47,11 @@ function RouteScreen({
           state={state.translation}
           available={state.translationAvailable}
           requestActive={state.translationActive}
+          catalogReady={state.catalogStatus === 'connected'}
+          onCancel={controller.cancelTranslation}
+          onRetry={() => void controller.retryTranslation()}
+          onRetrySave={() => void controller.retrySave()}
+          onOpenSaved={() => void controller.openSavedTranslation()}
           onTranslate={() => void controller.translate()}
           onSettings={() => controller.navigate({ kind: 'settings' })}
         />
@@ -61,6 +67,7 @@ function RouteScreen({
           position={state.position}
           fontSize={state.fontSize}
           showOriginal={state.showOriginal}
+          onDisplayed={controller.readerDisplayed}
           onFontSize={controller.changeFontSize}
           onPosition={(block, offset) => void controller.savePosition(block, offset)}
           onShowOriginal={controller.showOriginal}
@@ -104,6 +111,17 @@ export function Application({ controller }: { controller: RenewalController }): 
       </header>
       {state.error && <p role="alert">{state.error}</p>}
       <RouteScreen controller={controller} state={state} />
+      {state.translationTimings && (
+        <details>
+          <summary>최근 번역 단계별 시간</summary>
+          <p>
+            원문 준비 {Math.round(state.translationTimings.sourceMs)}ms · 모델 대기{' '}
+            {Math.round(state.translationTimings.modelMs)}ms · 결과 확인·저장{' '}
+            {Math.round(state.translationTimings.validationStorageMs)}ms · 리더 표시{' '}
+            {Math.round(state.translationTimings.readerDisplayMs)}ms
+          </p>
+        </details>
+      )}
     </main>
   );
 }

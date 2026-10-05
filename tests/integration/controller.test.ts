@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppLifecycle, ProviderConfig, ReaderStore, SecretStore } from '../../src/contracts';
-import { createReaderController } from '../../src/app/controller';
-import { createSettingsRepository } from '../../src/storage/settings';
-import type { EngineSnapshot, TranslationEngine } from '../../src/jobs/engine';
+import type { AppLifecycle, SecretStore } from '../../src/contracts';
+import type { ProviderConfig, ReaderStore } from '../../src/contracts/legacy';
+import { createReaderController } from '../../src/app/legacy/controller';
+import { createSettingsRepository } from '../../src/storage/legacy/settings';
+import type { EngineSnapshot, TranslationEngine } from '../../src/legacy/jobs/engine';
 import { reader } from '../ui/fixtures';
 
 const config: ProviderConfig = {provider:'openai-compatible',baseUrl:'http://192.0.2.1:1234/v1',model:'local',contextBudget:16384,outputBudget:4096,settingsRevision:2};

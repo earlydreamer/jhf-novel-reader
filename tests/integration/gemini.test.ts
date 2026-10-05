@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import type { AppLifecycle, ModelTransport, ProviderConfig, SecretStore, SourceTransport } from '../../src/contracts';
-import { createReaderApplication } from '../../src/app/compose';
-import { createSettingsRepository } from '../../src/storage/settings';
-import { planChunks } from '../../src/jobs/chunking';
+import type { AppLifecycle, ModelTransport, SecretStore, SourceTransport } from '../../src/contracts';
+import type { ProviderConfig } from '../../src/contracts/legacy';
+import { createReaderApplication } from '../../src/app/legacy/compose';
+import { createSettingsRepository } from '../../src/storage/legacy/settings';
+import { planChunks } from '../../src/legacy/jobs/chunking';
 import { createGeminiProvider, GEMINI_BASE_URL } from '../../src/providers/gemini';
 const url='https://ncode.syosetu.com/n1234ab/1/';
 const html='<h1 class="p-novel__title">합성 회차</h1><div class="p-novel__body"><div class="p-novel__text"><p>雨が降る。</p><p><br></p><p>空を見た。</p></div></div><div class="c-pager"><a class="c-pager__item--next" href="/n1234ab/2/">次へ</a></div>';

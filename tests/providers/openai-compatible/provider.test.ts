@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ChunkRequest, HttpResponse, ProviderConfig, SecretStore, ModelRequest } from '../../../src/contracts';
+import type { HttpResponse, SecretStore, ModelRequest } from '../../../src/contracts';
+import type { ChunkRequest, ProviderConfig } from '../../../src/contracts/legacy';
 import { ReaderError } from '../../../src/contracts';
 import { createOpenAICompatibleProvider, normalizeOpenAICompatibleBaseUrl, getLocalConnectionGuidance } from '../../../src/providers/openai-compatible';
 const config: ProviderConfig = { provider: 'openai-compatible', baseUrl: 'http://192.168.1.2:11434', model: 'local-model', contextBudget: 8192, outputBudget: 1024, settingsRevision: 0 };

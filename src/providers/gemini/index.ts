@@ -1,5 +1,6 @@
 import { ReaderError } from '../../contracts';
-import type { ChunkRequest, ChunkResult, ModelTransport, ProviderConfig, SecretStore, TranslationProvider, TranslatedParagraph } from '../../contracts';
+import type { ModelTransport, SecretStore } from '../../contracts';
+import type { ChunkRequest, ChunkResult, ProviderConfig, TranslationProvider, TranslatedParagraph } from '../../contracts/legacy';
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 /** Fixed Google endpoint only; never retarget a user's key to a custom proxy. */

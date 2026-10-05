@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Paragraph, ReaderActions, ReaderViewState } from '../../contracts';
+import type { Paragraph } from '../../contracts';
+import type { ReaderActions, ReaderViewState } from '../../contracts/legacy';
 import '../reader.css';
 
 const phases = { idle: '읽을 한 화를 골라주세요', preparing: '원문을 준비하고 있어요', translating: '한국어로 옮기고 있어요', validating: '번역을 확인하고 있어요', saving: '완성본을 저장하고 있어요', ready: '읽기 준비 완료', failed: '작업을 마치지 못했어요', unknown: '서버의 처리 결과를 알 수 없어요', paused: '번역이 잠시 멈췄어요' };

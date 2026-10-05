@@ -1,4 +1,4 @@
-import type { CompletedChapter, ProviderConfig } from '../contracts';
+import type { CompletedChapter, ProviderConfig } from '../../contracts/legacy';
 import type { TranslationEngine } from './engine';
 
 export interface PrefetchCoordinator {

@@ -1,6 +1,6 @@
 import { ReaderError } from '../contracts';
 import type { ConnectionConfig, ModelChoice, ModelTransport, SecretStore } from '../contracts';
-import { normalizeOpenAICompatibleBaseUrl } from './openai-compatible';
+import { normalizeOpenAICompatibleBaseUrl } from './endpoint';
 export function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

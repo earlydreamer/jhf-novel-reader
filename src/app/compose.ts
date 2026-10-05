@@ -1,21 +1,12 @@
 import { Capacitor } from '@capacitor/core';
-import type { AppLifecycle, ModelTransport, ProviderConfig, SecretStore, SourceTransport } from '../contracts';
-import { createPrefetchCoordinator } from '../jobs/prefetch';
-import { createRequestScheduler } from '../jobs/scheduler';
-import { createTranslationEngine } from '../jobs/engine';
 import { capacitorHttpClient } from '../platform/http/capacitor';
 import { createModelTransport, createSourceTransport } from '../platform/http';
 import { capacitorLifecycle } from '../platform/lifecycle';
-import { createOpenAICompatibleProvider } from '../providers/openai-compatible';
-import { createGeminiProvider } from '../providers/gemini';
-import { NarouSourceAdapter } from '../source';
 import { createNativePreferences, createNativePrivateFiles } from '../storage/native';
 import { createNativeSecretStore } from '../storage/secrets';
-import { createSettingsRepository, type PreferenceBackend } from '../storage/settings';
-import { createReaderStore, type PrivateFiles } from '../storage/store';
-import { createReaderController, type ReaderController } from './controller';
-import { createLastChapterRepository } from './lastChapter';
-
+import type { ModelTransport, SecretStore, SourceTransport, AppLifecycle } from '../contracts';
+import type { PrivateFiles } from '../storage/journal';
+import type { PreferenceBackend } from '../storage/settings';
 export interface ApplicationAdapters {
   readonly sourceTransport: SourceTransport;
   readonly modelTransport: ModelTransport;
@@ -24,35 +15,83 @@ export interface ApplicationAdapters {
   readonly secrets: SecretStore;
   readonly lifecycle: AppLifecycle;
 }
-/** Injection boundary for synthetic tests. Production adapters are constructed only below. */
-export function createReaderApplication(adapters: ApplicationAdapters): ReaderController {
-  const store = createReaderStore(adapters.files);
-  const settings = createSettingsRepository(adapters.preferences);
-  const pointer = createLastChapterRepository(adapters.preferences);
-  const shared = {
-    source: new NarouSourceAdapter(adapters.sourceTransport),
-    createProvider: (config: ProviderConfig) => config.provider === 'gemini'
-      ? createGeminiProvider(config, adapters.modelTransport, adapters.secrets)
-      : createOpenAICompatibleProvider(config, adapters.modelTransport, adapters.secrets),
-    store, scheduler: createRequestScheduler(),
-  };
-  const prefetch = createPrefetchCoordinator(createTranslationEngine({ ...shared, priority: 'prefetch' }));
-  const engine = createTranslationEngine({
-    ...shared,
-    // The engine owns session validity and exposes current write errors as
-    // retryable storage state; no obsolete job can set a global UI error.
-    onCacheKey: key => pointer.save(key),
+
+import { createRenewalController, type RenewalController } from './renewalController';
+import { createRenewalSource, normalizeSourceInput } from '../source/work';
+import { createLibraryStore } from '../storage/library';
+import { createReadingSettingsRepository } from '../storage/settings';
+import { createAttemptRepository } from '../translation/attempts';
+import { createWholeChapterFlow } from '../translation/wholeChapter';
+import { createProviderSession } from '../providers/plainText';
+import { listModels } from '../providers/catalog';
+import { openSourceBrowser } from '../platform/browse';
+import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
+import { ReaderError } from '../contracts';
+export function createRenewalApplication(
+  adapters: ApplicationAdapters & {
+    browse?: () => Promise<{ selectedUrl: string } | null>;
+    clock?: { now(): number };
+  },
+): RenewalController {
+  const source = createRenewalSource(adapters.sourceTransport),
+    library = createLibraryStore(adapters.files);
+  const flow = createWholeChapterFlow({
+    source,
+    store: library,
+    createProvider: (selection) =>
+      createProviderSession(selection, adapters.modelTransport, adapters.secrets),
+    attempts: createAttemptRepository(adapters.files),
+    clock: adapters.clock ?? { now: () => performance.now() },
   });
-  const controller = createReaderController({ engine, prefetch, store, settings, pointer, secrets: adapters.secrets, lifecycle: adapters.lifecycle });
-  return controller;
+  return createRenewalController({
+    source,
+    library,
+    flow,
+    clock: adapters.clock,
+    lifecycle: adapters.lifecycle,
+    settings: createReadingSettingsRepository(adapters.preferences),
+    browse: adapters.browse,
+    normalizeInput(input) {
+      const value = normalizeSourceInput(input);
+      return value.chapterUrl ?? value.workUrl;
+    },
+    async catalog(config, secret, signal) {
+      if (config.provider !== 'openai-compatible') throw new ReaderError('model_list');
+      const connection = { ...config, baseUrl: normalizeOpenAICompatibleBaseUrl(config.baseUrl) };
+      let newRef: string | null = null;
+      try {
+        if (secret) {
+          if (/[\u0000-\u0020\u007f]/.test(secret)) throw new ReaderError('auth');
+          newRef = `provider.${crypto.randomUUID()}`;
+          await adapters.secrets.set(newRef, secret);
+          connection.authRef = newRef;
+        }
+        if (signal.aborted) throw new ReaderError('cancelled');
+        const models = await listModels(
+          connection,
+          adapters.modelTransport,
+          adapters.secrets,
+          signal,
+        );
+        if (signal.aborted) throw new ReaderError('cancelled');
+        return { connection, models };
+      } catch (error) {
+        if (newRef) await adapters.secrets.remove(newRef);
+        throw error;
+      }
+    },
+  });
 }
-/** Never fall back to browser HTTP, browser preferences or plaintext web credential storage. */
-export function createNativeReaderApplication(): ReaderController | null {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
-  return createReaderApplication({
+export function createNativeRenewalApplication(): RenewalController {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
+    return createRenewalController();
+  return createRenewalApplication({
     sourceTransport: createSourceTransport(capacitorHttpClient),
     modelTransport: createModelTransport(capacitorHttpClient),
-    files: createNativePrivateFiles(), preferences: createNativePreferences(),
-    secrets: createNativeSecretStore(), lifecycle: capacitorLifecycle,
+    files: createNativePrivateFiles(),
+    preferences: createNativePreferences(),
+    secrets: createNativeSecretStore(),
+    lifecycle: capacitorLifecycle,
+    browse: () => openSourceBrowser('https://syosetu.com/'),
   });
 }

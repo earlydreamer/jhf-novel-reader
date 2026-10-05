@@ -1,5 +1,6 @@
-import { ReaderError } from '../contracts';
-import type { Chapter, ChunkRequest, ChunkResult, JobToken, Paragraph, ProviderConfig, Ruby, TranslatedParagraph, ValidatedChunk } from '../contracts';
+import { ReaderError } from '../../contracts/index';
+import type { Chapter, Paragraph, Ruby } from '../../contracts/index';
+import type { ChunkRequest, ChunkResult, JobToken, ProviderConfig, TranslatedParagraph, ValidatedChunk } from '../../contracts/legacy';
 
 /** Bump when translation instructions change; the cache identity includes this value. */
 export const PROMPT_VERSION = 'ja-ko-v1';

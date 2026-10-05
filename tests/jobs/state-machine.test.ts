@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTranslationEngine } from '../../src/jobs/engine';
-import { ReaderError, type Chapter, type ChunkRequest, type ChunkResult, type ProviderConfig, type ReaderStore, type StoredReaderData } from '../../src/contracts';
+import { createTranslationEngine } from '../../src/legacy/jobs/engine';
+import { ReaderError, type Chapter } from '../../src/contracts';
+import { type ChunkRequest, type ChunkResult, type ProviderConfig, type ReaderStore, type StoredReaderData } from '../../src/contracts/legacy';
 
 const config: ProviderConfig = {provider:'openai-compatible',baseUrl:'http://model.test/v1',model:'local',contextBudget:8192,outputBudget:1024,settingsRevision:1};
 const chapter = (id='1',long=false): Chapter => ({canonicalUrl:`https://ncode.syosetu.com/n1234ab/${id}/`,workId:'n1234ab',chapterId:`n1234ab/${id}`,sourceHash:`hash-${id}`,title:'合成',prevUrl:null,nextUrl:null,paragraphs:[{id:`p-${id}`,text:long?'合成本文。'.repeat(500):'合成本文。',ruby:[]}]});
