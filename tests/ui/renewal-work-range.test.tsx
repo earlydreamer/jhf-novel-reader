@@ -42,3 +42,39 @@ it('shows the fetched TOC ordinal range without suggesting the first chapter is 
   );
   cleanup();
 });
+it('shows the total chapter count once the whole TOC is loaded', () => {
+  render(
+    <WorkScreen
+      work={{
+        workId: 'n1234ab',
+        canonicalUrl: 'https://ncode.syosetu.com/n1234ab/',
+        title: '合成作品',
+        pageUrl: 'https://ncode.syosetu.com/n1234ab/?p=5',
+        nextPageUrl: null,
+        complete: true,
+        chapters: [
+          {
+            workId: 'n1234ab',
+            chapterId: 'n1234ab/1',
+            canonicalUrl: 'https://ncode.syosetu.com/n1234ab/1/',
+            ordinal: 1,
+            title: '一話',
+          },
+          {
+            workId: 'n1234ab',
+            chapterId: 'n1234ab/9',
+            canonicalUrl: 'https://ncode.syosetu.com/n1234ab/9/',
+            ordinal: 9,
+            title: '九話',
+          },
+        ],
+      }}
+      busy={false}
+      savedChapterIds={[]}
+      onSelect={() => {}}
+      onLoadMore={() => {}}
+    />,
+  );
+  expect(screen.getByText('확인된 전체 목차 (총 9화)')).toBeTruthy();
+  cleanup();
+});

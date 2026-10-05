@@ -34,7 +34,7 @@ export function WorkScreen({
       )}
       <p>
         {work.complete
-          ? '확인된 전체 목차'
+          ? `확인된 전체 목차 (총 ${work.chapters[work.chapters.length - 1]?.ordinal ?? 0}화)`
           : '일부 목차입니다. 전체 목록은 아직 확인하지 않았습니다.'}
       </p>
       <ol start={work.chapters[0]?.ordinal || 1}>
