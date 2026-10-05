@@ -326,7 +326,9 @@ public class SourceBrowserInstrumentedTest {
     }
 
     private SourceBrowserLoader.Resource fixturePage(URI uri, String title, String body) {
-        byte[] html = ("<html><head><title>" + title + "</title></head><body>" + body + "</body></html>").getBytes(StandardCharsets.UTF_8);
+        // Declare an inline icon so WebView does not add an unrelated /favicon.ico request.
+        // Exact request-list and forbidden-target assertions remain unchanged.
+        byte[] html = ("<html><head><link rel='icon' href='data:,'><title>" + title + "</title></head><body>" + body + "</body></html>").getBytes(StandardCharsets.UTF_8);
         return new SourceBrowserLoader.Resource(uri, 200, "text/html", "UTF-8", Collections.emptyMap(), html);
     }
 

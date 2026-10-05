@@ -279,6 +279,38 @@ it.each(['back', 'select'] as const)(
     h.app.dispose();
   },
 );
+it('back restores an earlier chapter without inheriting another chapter request state', async () => {
+  const h = harness();
+  await prepare(h);
+  const [chapterA, chapterB] = h.app.getSnapshot().work!.chapters;
+  await h.app.selectChapter(chapterA!);
+  h.app.navigate({ kind: 'home' });
+  await h.app.browse();
+  await h.app.selectChapter(chapterB!);
+  const translatingB = h.app.translate();
+  await dispatched(h);
+  h.app.back();
+  h.app.back();
+  h.app.back();
+  expect(h.app.getSnapshot().chapter?.chapterId).toBe(chapterA!.chapterId);
+  expect(h.app.getSnapshot().translation.phase).toBe('idle');
+  expect(h.app.getSnapshot().translationActive).toBe(true);
+  await h.app.translate();
+  expect(h.posts()).toHaveLength(1);
+  h.settle();
+  await translatingB;
+  expect(h.app.getSnapshot().route).toEqual({
+    kind: 'translation',
+    chapterId: chapterA!.chapterId,
+  });
+  expect(h.app.getSnapshot().translation.phase).toBe('idle');
+  expect(h.app.getSnapshot().translationActive).toBe(false);
+  expect(await h.store.listVersions(chapterB!.chapterId)).toHaveLength(1);
+  await h.app.translate();
+  expect(h.posts()).toHaveLength(2);
+  expect(h.app.getSnapshot().version?.source.chapterId).toBe(chapterA!.chapterId);
+  h.app.dispose();
+});
 it('cancel during durable save never opens the reader', async () => {
   const h = harness();
   await prepare(h);

@@ -240,7 +240,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
     if (route.kind === 'translation') {
       const chapter = chaptersById.get(route.chapterId) ?? null;
-      publish({ chapter, work: chapter ? (worksById.get(chapter.workId) ?? null) : null });
+      publish({
+        chapter,
+        work: chapter ? (worksById.get(chapter.workId) ?? null) : null,
+        translation: translationForChapter(route.chapterId),
+      });
     }
     if (route.kind === 'work') {
       publish({
@@ -378,6 +382,23 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         });
     }
   }
+  function translationForChapter(chapterId: string): TranslationState {
+    const flow = dependencies.flow;
+    const state = flow?.getSnapshot();
+    if (
+      state &&
+      (state.pendingSave?.source.chapterId === chapterId ||
+        activeTranslation?.chapterId === chapterId)
+    )
+      return state;
+    if (flow?.getUnfinished().some((token) => token.chapterId === chapterId))
+      return {
+        phase: 'unknown',
+        elapsedMs: 0,
+        error: new ReaderError('timeout_unknown', 'unknown'),
+      };
+    return { phase: 'idle', elapsedMs: 0 };
+  }
   async function selectChapter(chapter: ChapterRef): Promise<void> {
     const operation = ++selectionOperation;
     publish({ chapter, busy: true, error: null });
@@ -399,20 +420,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         version: version ?? null,
         position,
         busy: false,
-        translation:
-          dependencies.flow?.getSnapshot().pendingSave?.source.chapterId === chapter.chapterId
-            ? dependencies.flow.getSnapshot()
-            : activeTranslation?.chapterId === chapter.chapterId && dependencies.flow
-              ? dependencies.flow.getSnapshot()
-              : dependencies.flow
-                    ?.getUnfinished()
-                    .some((token) => token.chapterId === chapter.chapterId)
-                ? {
-                    phase: 'unknown',
-                    elapsedMs: 0,
-                    error: new ReaderError('timeout_unknown', 'unknown'),
-                  }
-                : { phase: 'idle', elapsedMs: 0 },
+        translation: translationForChapter(chapter.chapterId),
       });
       if (version) navigate({ kind: 'reader', versionId: version.versionId });
       else navigate({ kind: 'translation', chapterId: chapter.chapterId });
