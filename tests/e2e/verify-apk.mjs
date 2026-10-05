@@ -123,6 +123,16 @@ export function runToFile(program, args, destination) {
   }
 }
 
+export function toZipEntry(relative) {
+  return relative.replaceAll('\\', '/');
+}
+
+export function signerCommand(platform, buildTools) {
+  if (platform === 'win32')
+    return { file: 'java', args: ['-jar', path.win32.join(buildTools, 'lib', 'apksigner.jar')] };
+  return { file: path.posix.join(buildTools, 'apksigner'), args: [] };
+}
+
 export function main() {
   const run = (program, args) =>
     execFileSync(program, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
@@ -156,7 +166,7 @@ export function main() {
   for (const relative of readdirSync('dist', { recursive: true }).filter((name) =>
     statSync(path.join('dist', name)).isFile(),
   )) {
-    const name = `assets/public/${relative}`;
+    const name = `assets/public/${toZipEntry(relative)}`;
     assert(entries.has(name), `Missing packaged asset: ${relative}`);
     const packaged = execFileSync('unzip', ['-p', apk, name]);
     assert(
@@ -210,7 +220,9 @@ export function main() {
     for (const domain of ['sharedpref', 'file', 'database', 'root', 'external'])
       assert(xml.includes(`"${domain}"`));
   }
-  const signature = run(path.join(buildTools, 'apksigner'), [
+  const signer = signerCommand(process.platform, buildTools);
+  const signature = run(signer.file, [
+    ...signer.args,
     'verify',
     '--verbose',
     '--print-certs',

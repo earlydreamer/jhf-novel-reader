@@ -1,5 +1,19 @@
 import { expect, it } from 'vitest';
-import { auditAssets, auditProvenance } from './verify-apk.mjs';
+import { auditAssets, auditProvenance, signerCommand, toZipEntry } from './verify-apk.mjs';
+it('matches Windows asset paths to the same ZIP entry used for byte comparison', () => {
+  expect(toZipEntry('assets\\nested\\app.js')).toBe('assets/nested/app.js');
+  expect(toZipEntry('assets/nested/app.js')).toBe('assets/nested/app.js');
+});
+it('uses the same SDK signer JAR on Windows and the native signer on Linux', () => {
+  expect(signerCommand('win32', 'C:\\Android SDK\\build-tools\\35.0.0')).toEqual({
+    file: 'java',
+    args: ['-jar', 'C:\\Android SDK\\build-tools\\35.0.0\\lib\\apksigner.jar'],
+  });
+  expect(signerCommand('linux', '/opt/android-sdk/build-tools/35.0.0')).toEqual({
+    file: '/opt/android-sdk/build-tools/35.0.0/apksigner',
+    args: [],
+  });
+});
 const config = () => ({
   appId: 'app.narou.reader',
   loggingBehavior: 'none',
