@@ -13,7 +13,7 @@ function native(getPlatform: () => string) {
 }
 function privatePath(path: string): string {
   check(
-    /^(chapters|positions|library|versions|reading|works|attempts)\/[a-zA-Z0-9.-]+$/.test(path) &&
+    /^(chapters|positions|library|versions|reading|works|attempts|batches)\/[a-zA-Z0-9.-]+$/.test(path) &&
       !path.includes('..'),
   );
   return `narou-reader/${path}`;

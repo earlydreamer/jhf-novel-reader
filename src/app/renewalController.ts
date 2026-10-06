@@ -19,6 +19,7 @@ import type {
 } from '../contracts/reading';
 import type { Route } from './routes';
 import { limitsForModel } from '../translation/segments';
+import type { BatchState, BatchTranslation, ChapterRange } from '../translation/batch';
 
 export type CatalogStatus =
   | 'idle'
@@ -37,6 +38,7 @@ export interface RenewalDependencies {
   readonly migrateLegacy?: () => Promise<LegacyMigrationSummary>;
   readonly clock?: { now(): number };
   readonly flow?: WholeChapterFlow;
+  readonly batch?: BatchTranslation;
   readonly lifecycle?: AppLifecycle;
   readonly browse?: () => Promise<{ selectedUrl: string } | null>;
   readonly normalizeInput?: (url: string) => string;
@@ -93,6 +95,8 @@ export interface RenewalSnapshot {
   readonly translationAvailable: boolean;
   readonly translationActive: boolean;
   readonly pendingSaveChapter: ChapterRef | null;
+  readonly batch: BatchState | null;
+  readonly batchAvailable: boolean;
 }
 const DEFAULT_CONNECTION: ConnectionConfig = {
   provider: 'openai-compatible',
@@ -146,6 +150,11 @@ export interface RenewalController {
   changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
   checkConnection(secret?: string): Promise<void>;
   chooseModel(modelId: string): void;
+  prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void>;
+  runBatch(retryUncertain?: boolean): Promise<void>;
+  cancelBatch(): void;
+  retryBatchSave(): Promise<void>;
+  openBatch(): void;
   translate(): Promise<void>;
   refreshSource(): Promise<void>;
   showContents(): void;
@@ -187,6 +196,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     translationAvailable: Boolean(dependencies.startTranslation || dependencies.flow),
     translationActive: false,
     pendingSaveChapter: null,
+    batch: null,
+    batchAvailable: Boolean(dependencies.batch),
   };
   const listeners = new Set<() => void>();
   const history: Route[] = [];
@@ -299,6 +310,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             foreground = active;
             if (!active && activeTranslation) activeTranslation.cancelled = true;
             dependencies.flow?.setForeground(active);
+            dependencies.batch?.setForeground(active);
           });
           if (disposed) {
             await unsubscribe();
@@ -313,7 +325,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         if (migration && !disposed) publish({ legacyWarnings: migration.warnings });
         if (disposed) return;
         dependencies.flow?.setForeground(foreground);
+        dependencies.batch?.setForeground(foreground);
         await dependencies.flow?.initialize();
+        await dependencies.batch?.initialize();
         const saved = await dependencies.settings?.readReadingSettings();
         if (disposed) return;
         if (saved)
@@ -327,6 +341,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       } catch {
         foreground = false;
         dependencies.flow?.setForeground(false);
+        dependencies.batch?.setForeground(false);
         publish({
           error: '저장된 기록 또는 요청 상태를 확인하지 못했습니다. 새 번역을 차단했습니다.',
         });
@@ -585,7 +600,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   function changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void {
-    if (disposed) return;
+    if (disposed || dependencies.batch?.active) return;
     catalogOperation++;
     catalogAbort?.abort();
     session = null;
@@ -599,7 +614,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     persistSettings();
   }
   async function checkConnection(secret = ''): Promise<void> {
-    if ((!dependencies.connect && !dependencies.catalog) || disposed || !initialized) return;
+    if (
+      (!dependencies.connect && !dependencies.catalog) ||
+      disposed ||
+      !initialized ||
+      dependencies.batch?.active
+    )
+      return;
     const operation = ++catalogOperation;
     catalogAbort?.abort();
     catalogAbort = new AbortController();
@@ -663,7 +684,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       (choice) => choice.id === modelId && choice.supportsGeneration,
     );
     if (!model) return;
-    if (disposed) return;
+    if (disposed || dependencies.batch?.active) return;
     let localLimits: LocalTranslationLimits | undefined;
     if (snapshot.connection.provider === 'openai-compatible') {
       try {
@@ -700,6 +721,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       !foreground ||
       (dependencies.catalog && snapshot.catalogStatus !== 'connected') ||
       dependencies.flow?.active ||
+      dependencies.batch?.active ||
       dependencies.flow?.getSnapshot().pendingSave ||
       !snapshot.chapter ||
       !snapshot.selectedModelId ||
@@ -797,6 +819,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (activeTranslation) activeTranslation.cancelled = true;
   }
   function openPendingSave() {
+    const batchRecord = snapshot.batch?.record;
+    if (batchRecord?.phase === 'saving') {
+      publish({ work: batchRecord.work });
+      navigate({ kind: 'work', workId: batchRecord.work.workId });
+      return;
+    }
     const state = dependencies.flow?.getSnapshot();
     const chapter = state?.pendingSave
       ? chaptersById.get(state.pendingSave.source.chapterId)
@@ -814,6 +842,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     navigate({ kind: 'translation', chapterId: chapter.chapterId });
   }
   async function retrySave() {
+    if (snapshot.batch?.record?.phase === 'saving') {
+      await retryBatchSave();
+      return;
+    }
     const token = dependencies.flow?.getSnapshot().token;
     if (!token || dependencies.flow?.active || activeTranslation || !foreground || disposed) return;
     const request: ActiveTranslation = {
@@ -841,7 +873,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   async function retryTranslation() {
-    if (activeTranslation || dependencies.flow?.active || snapshot.translation.pendingSave) return;
+    if (
+      activeTranslation ||
+      dependencies.flow?.active ||
+      dependencies.batch?.active ||
+      snapshot.translation.pendingSave
+    )
+      return;
     if (!['unknown', 'failed'].includes(snapshot.translation.phase)) return;
     publish({ translation: { phase: 'idle', elapsedMs: 0 } });
     await translate();
@@ -894,6 +932,86 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ error: '읽던 위치를 저장하지 못했습니다.' });
     }
   }
+  async function prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void> {
+    if (
+      !dependencies.batch ||
+      !snapshot.work ||
+      !snapshot.selectedModelId ||
+      snapshot.catalogStatus !== 'connected' ||
+      activeTranslation ||
+      !initialized ||
+      !foreground ||
+      disposed
+    )
+      return;
+    await dependencies.batch.prepare(
+      snapshot.work,
+      {
+        connection: snapshot.connection,
+        modelId: snapshot.selectedModelId,
+        ...(snapshot.localLimits ? { limits: snapshot.localLimits } : {}),
+      },
+      range,
+      retranslate,
+    );
+  }
+  function batchSelectionIsCurrent(): boolean {
+    const selection = snapshot.batch?.record?.selection;
+    return Boolean(
+      selection &&
+      selection.modelId === snapshot.selectedModelId &&
+      selection.connection.provider === snapshot.connection.provider &&
+      selection.connection.baseUrl === snapshot.connection.baseUrl &&
+      selection.connection.authRef === snapshot.connection.authRef &&
+      JSON.stringify(selection.limits) === JSON.stringify(snapshot.localLimits),
+    );
+  }
+  async function runBatch(retryUncertain: boolean = false): Promise<void> {
+    if (
+      !dependencies.batch ||
+      disposed ||
+      !initialized ||
+      !foreground ||
+      activeTranslation ||
+      snapshot.catalogStatus !== 'connected'
+    )
+      return;
+    if (!batchSelectionIsCurrent()) {
+      publish({
+        error: '확인한 대상의 연결·모델 설정이 바뀌었습니다. 번역 범위를 다시 확인하세요.',
+      });
+      return;
+    }
+    await dependencies.batch.run(retryUncertain);
+    if (!disposed && dependencies.library)
+      publish({ recent: await dependencies.library.listRecent() });
+  }
+  async function retryBatchSave(): Promise<void> {
+    if (!dependencies.batch || disposed || !initialized || !foreground || activeTranslation) return;
+    await dependencies.batch.retrySave();
+    if (!disposed && dependencies.library)
+      publish({ recent: await dependencies.library.listRecent() });
+  }
+  function openBatch(): void {
+    const record = snapshot.batch?.record;
+    if (!record || disposed) return;
+    publish({
+      work: record.work,
+      savedChapterIds: savedChaptersByWork.get(record.work.workId) ?? [],
+    });
+    navigate({ kind: 'work', workId: record.work.workId });
+  }
+  const unsubscribeBatch = dependencies.batch?.subscribe((batch) => {
+    const record = batch.record;
+    if (record) {
+      worksById.set(record.work.workId, record.work);
+      record.work.chapters.forEach((chapter) => chaptersById.set(chapter.chapterId, chapter));
+      if (snapshot.work?.workId === record.work.workId) publish({ work: record.work });
+      const completed = dependencies.flow?.getCompleted();
+      if (completed) updateSavedMetadata(completed);
+    }
+    publish({ batch, translationActive: batch.active || activeTranslation !== null });
+  });
   function dispose(): void {
     disposed = true;
     sourceOperation++;
@@ -901,8 +1019,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     catalogOperation++;
     sourceAbort?.abort();
     catalogAbort?.abort();
+    dependencies.batch?.dispose();
     dependencies.flow?.dispose();
     unsubscribeFlow?.();
+    unsubscribeBatch?.();
     if (unsubscribeLifecycle) void unsubscribeLifecycle().catch(() => {});
     listeners.clear();
   }
@@ -944,6 +1064,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     changeConnection,
     checkConnection,
     chooseModel,
+    prepareBatch,
+    runBatch,
+    cancelBatch: () => dependencies.batch?.cancel(),
+    retryBatchSave,
+    openBatch,
     translate,
     refreshSource,
     showContents,

@@ -4,7 +4,13 @@ import { createModelTransport, createSourceTransport } from '../platform/http';
 import { capacitorLifecycle } from '../platform/lifecycle';
 import { createNativePreferences, createNativePrivateFiles } from '../storage/native';
 import { createNativeSecretStore } from '../storage/secrets';
-import type { AppLifecycle, ModelChoice, ModelTransport, SecretStore, SourceTransport } from '../contracts';
+import type {
+  AppLifecycle,
+  ModelChoice,
+  ModelTransport,
+  SecretStore,
+  SourceTransport,
+} from '../contracts';
 import type { PrivateFiles } from '../storage/journal';
 import type { PreferenceBackend } from '../storage/settings';
 export interface ApplicationAdapters {
@@ -23,6 +29,7 @@ import { createV1Migration } from '../storage/migration';
 import { createReadingSettingsRepository } from '../storage/settings';
 import { createAttemptRepository } from '../translation/attempts';
 import { createWholeChapterFlow } from '../translation/wholeChapter';
+import { createBatchRepository, createBatchTranslation } from '../translation/batch';
 import { createProviderSession } from '../providers/plainText';
 import { listModels } from '../providers/catalog';
 import { createGeminiProviderSession, listGeminiModels } from '../providers/gemini/wholeChapter';
@@ -60,6 +67,12 @@ export function createRenewalApplication(
     library,
     migrateLegacy: migrateV1,
     flow,
+    batch: createBatchTranslation({
+      source,
+      library,
+      flow,
+      repository: createBatchRepository(adapters.files),
+    }),
     clock: adapters.clock,
     lifecycle: adapters.lifecycle,
     settings: createReadingSettingsRepository(adapters.preferences),
@@ -93,7 +106,12 @@ export function createRenewalApplication(
         let models: readonly ModelChoice[];
         switch (connection.provider) {
           case 'openai-compatible':
-            models = await listModels(connection, adapters.modelTransport, adapters.secrets, signal);
+            models = await listModels(
+              connection,
+              adapters.modelTransport,
+              adapters.secrets,
+              signal,
+            );
             break;
           case 'gemini':
             models = await listGeminiModels(

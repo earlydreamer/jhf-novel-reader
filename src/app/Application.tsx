@@ -35,6 +35,18 @@ function RouteScreen({
           busy={state.busy}
           onSelect={(chapter) => void controller.selectChapter(chapter)}
           onLoadMore={() => void controller.loadMoreWorkPage()}
+          batch={state.batch}
+          batchAvailable={
+            state.batchAvailable &&
+            state.catalogStatus === 'connected' &&
+            !!state.selectedModelId &&
+            !state.translationActive
+          }
+          onPrepareBatch={(range, retranslate) => void controller.prepareBatch(range, retranslate)}
+          onRunBatch={(retryUncertain) => void controller.runBatch(retryUncertain)}
+          onCancelBatch={controller.cancelBatch}
+          onRetryBatchSave={() => void controller.retryBatchSave()}
+          onSettings={() => controller.navigate({ kind: 'settings' })}
         />
       ) : (
         <p>작품 목차를 찾지 못했습니다.</p>
@@ -117,6 +129,17 @@ export function Application({ controller }: { controller: RenewalController }): 
         </nav>
       </header>
       {state.error && <p role="alert">{state.error}</p>}
+      {state.batch?.record &&
+        state.batch.record.phase !== 'complete' &&
+        (state.route.kind !== 'work' || state.route.workId !== state.batch.record.work.workId) && (
+          <aside aria-label="일괄 번역 상태">
+            <p>
+              {state.batch.record.work.title}의 일괄 번역 상태가 저장되어 있습니다. 자동으로 다시
+              전송하지 않습니다.
+            </p>
+            <button onClick={controller.openBatch}>일괄 번역 상태 보기</button>
+          </aside>
+        )}
       {state.legacyWarnings.length > 0 && (
         <aside aria-label="이전 읽기 데이터 확인" role="status">
           <p>이전 읽기 데이터 일부를 가져오지 못했습니다. 원본 파일은 그대로 보존했습니다.</p>
