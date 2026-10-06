@@ -23,6 +23,7 @@ test('v2 settings are separate and contain references only', async () => {
         revision: 1,
       },
       modelId: 'actual',
+      limits: { contextTokens: 8192, inputBudgetTokens: 2048, maxOutputTokens: 4096 },
     },
     fontSize: 20,
   };

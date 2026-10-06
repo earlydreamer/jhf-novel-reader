@@ -8,6 +8,7 @@ import type {
   CompletedTranslation,
   ConnectionConfig,
   LibraryStore,
+  LocalTranslationLimits,
   ModelChoice,
   ProviderSession,
   ReadingPosition,
@@ -17,6 +18,7 @@ import type {
   WorkPage,
 } from '../contracts/reading';
 import type { Route } from './routes';
+import { validLocalLimits } from '../translation/segments';
 
 export type CatalogStatus =
   | 'idle'
@@ -80,6 +82,7 @@ export interface RenewalSnapshot {
   readonly connection: ConnectionConfig;
   readonly models: readonly ModelChoice[];
   readonly selectedModelId: string | null;
+  readonly localLimits?: LocalTranslationLimits;
   readonly catalogStatus: CatalogStatus;
   readonly fontSize: number;
   readonly showOriginal: boolean;
@@ -143,6 +146,7 @@ export interface RenewalController {
   changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
   checkConnection(secret?: string): Promise<void>;
   chooseModel(modelId: string): void;
+  changeLocalLimits(limits?: LocalTranslationLimits): void;
   translate(): Promise<void>;
   refreshSource(): Promise<void>;
   showContents(): void;
@@ -211,7 +215,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       schemaVersion: 2,
       fontSize: snapshot.fontSize,
       selection: snapshot.selectedModelId
-        ? { connection: { ...snapshot.connection }, modelId: snapshot.selectedModelId }
+        ? {
+            connection: { ...snapshot.connection },
+            modelId: snapshot.selectedModelId,
+            ...(snapshot.localLimits ? { limits: { ...snapshot.localLimits } } : {}),
+          }
         : null,
     };
     settingsQueue = settingsQueue
@@ -313,6 +321,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           publish({
             connection: saved.selection?.connection ?? DEFAULT_CONNECTION,
             selectedModelId: saved.selection?.modelId ?? null,
+            localLimits: saved.selection?.limits,
             fontSize: saved.fontSize,
           });
         initialized = true;
@@ -586,6 +595,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       models: [],
       selectedModelId: null,
       catalogStatus: dependencies.connect || dependencies.catalog ? 'idle' : 'unavailable',
+      localLimits: undefined,
     });
     persistSettings();
   }
@@ -678,6 +688,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const selectedModel: SelectedModel = {
       connection: snapshot.connection,
       modelId: snapshot.selectedModelId,
+      ...(snapshot.connection.provider === 'openai-compatible' && snapshot.localLimits
+        ? { limits: { ...snapshot.localLimits } }
+        : {}),
     };
     const request: ActiveTranslation = {
       chapterId: chapter.chapterId,
@@ -907,6 +920,25 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     changeConnection,
     checkConnection,
     chooseModel,
+    changeLocalLimits(limits) {
+      if (
+        disposed ||
+        activeTranslation ||
+        dependencies.flow?.active ||
+        snapshot.connection.provider !== 'openai-compatible'
+      )
+        return;
+      if (limits && !validLocalLimits(limits)) {
+        publish({ error: '입력·출력 예산과 여유 512토큰이 컨텍스트 안에 들어오도록 설정하세요.' });
+        return;
+      }
+      publish({
+        localLimits: limits ? { ...limits } : undefined,
+        error: null,
+        connection: { ...snapshot.connection, revision: snapshot.connection.revision + 1 },
+      });
+      persistSettings();
+    },
     translate,
     refreshSource,
     showContents,

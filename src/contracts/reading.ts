@@ -29,18 +29,33 @@ export type ConnectionConfig = {
   revision: number;
 };
 export type ModelChoice = { id: string; displayName: string; supportsGeneration: boolean };
-export type SelectedModel = { connection: ConnectionConfig; modelId: string };
+export type LocalTranslationLimits = {
+  contextTokens: number;
+  inputBudgetTokens: number;
+  maxOutputTokens: number;
+};
+export type SegmentedGeneration = LocalTranslationLimits & {
+  mode: 'segments-v1';
+  segments: number;
+};
+export type SelectedModel = {
+  connection: ConnectionConfig;
+  modelId: string;
+  limits?: LocalTranslationLimits;
+};
 export type TranslationToken = { requestId: string; chapterId: string; settingsRevision: number };
 export type WholeChapterRequest = {
   token: TranslationToken;
   source: SourceSnapshot;
   languageDirection: 'ja-ko';
   contractVersion: 'plain-v1';
-  promptVersion: 'hymt2-ko-v1';
+  promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1';
+  onProgress?: (completed: number, total: number) => void;
 };
 export type WholeChapterResult = {
   text: string;
   finishReason: 'complete' | 'length' | 'blocked' | 'unknown';
+  generation?: SegmentedGeneration;
 };
 export type TranslationBlock = { id: string; text: string }; // translated IDs, never source paragraph IDs
 export type CompletedTranslation = {
@@ -57,6 +72,7 @@ export type CompletedTranslation = {
     contractVersion: string;
     promptVersion: string;
     languageDirection: 'ja-ko';
+    generation?: SegmentedGeneration;
   };
 };
 export type ReadingPosition = {
@@ -75,6 +91,7 @@ export type TranslationState = {
   elapsedMs: number;
   error?: ReaderError;
   pendingSave?: CompletedTranslation;
+  progress?: { completed: number; total: number };
 };
 export interface RenewalSource {
   getWorkPage(url: string, signal: AbortSignal): Promise<WorkPage>;
