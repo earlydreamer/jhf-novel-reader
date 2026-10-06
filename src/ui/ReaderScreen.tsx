@@ -28,7 +28,11 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   );
   useEffect(() => {
     const position = translationPosition.current;
-    if (props.showOriginal || !position || !body.current) return;
+    if (props.showOriginal || !body.current) return;
+    if (!position) {
+      body.current.scrollTop = 0;
+      return;
+    }
     const element = Array.from(body.current.querySelectorAll<HTMLElement>('[data-block-id]')).find(
       (value) => value.dataset.blockId === position.blockId,
     );
