@@ -311,7 +311,7 @@ it('browse_select_translate_save_read uses actual parser, native transport, cata
   const body = h.posts()[0]!.data!;
   expect(body.model).toBe('hymt2-7b');
   expect(body.stream).toBe(false);
-  expect(body).not.toHaveProperty('max_tokens');
+  expect(body.max_tokens).toBe(2560);
   expect(body).not.toHaveProperty('response_format');
   expect(JSON.stringify(body.messages)).toContain('漢字《かんじ》');
   h.settle();

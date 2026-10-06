@@ -1,14 +1,12 @@
 import type { JSX } from 'react';
 import { useRef } from 'react';
 import type { CatalogStatus, RenewalSnapshot } from '../app/renewalController';
-import type { ConnectionConfig, LocalTranslationLimits } from '../contracts/reading';
-import { DEFAULT_LOCAL_LIMITS } from '../translation/segments';
+import type { ConnectionConfig } from '../contracts/reading';
 export interface SettingsScreenProps {
   state: RenewalSnapshot;
   onChange(value: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
   onCheck(secret: string): Promise<void>;
   onSelect(modelId: string): void;
-  onLimits?(limits?: LocalTranslationLimits): void;
 }
 const catalogLabels: Record<CatalogStatus, string> = {
   idle: '연결 확인 전',
@@ -28,12 +26,8 @@ export function SettingsScreen({
   onChange,
   onCheck,
   onSelect,
-  onLimits,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
-  const context = useRef<HTMLInputElement>(null);
-  const input = useRef<HTMLInputElement>(null);
-  const output = useRef<HTMLInputElement>(null);
   function update(value: Partial<Pick<ConnectionConfig, 'provider' | 'baseUrl'>>): void {
     if (secret.current) secret.current.value = '';
     onChange({ provider: state.connection.provider, baseUrl: state.connection.baseUrl, ...value });
@@ -115,78 +109,7 @@ export function SettingsScreen({
           ))}
         </select>
       </label>
-      {state.connection.provider === 'openai-compatible' && (
-        <fieldset disabled={state.translationActive || !state.selectedModelId}>
-          <legend>한 화 번역 방식</legend>
-          <label>
-            <input
-              type="checkbox"
-              checked={!!state.localLimits}
-              onChange={(event) =>
-                onLimits?.(event.target.checked ? DEFAULT_LOCAL_LIMITS : undefined)
-              }
-            />
-            컨텍스트에 맞춰 나누어 번역
-          </label>
-          <p>나눈 구간을 순서대로 번역하고, 한 화가 전부 완성되면 저장합니다.</p>
-          {state.localLimits && (
-            <form
-              key={JSON.stringify(state.localLimits)}
-              onSubmit={(event) => {
-                event.preventDefault();
-                onLimits?.({
-                  contextTokens: Number(context.current?.value),
-                  inputBudgetTokens: Number(input.current?.value),
-                  maxOutputTokens: Number(output.current?.value),
-                });
-              }}
-            >
-              <label>
-                컨텍스트 크기 (토큰)
-                <input
-                  ref={context}
-                  type="number"
-                  min={1024}
-                  max={262144}
-                  step={1}
-                  required
-                  defaultValue={state.localLimits.contextTokens}
-                />
-              </label>
-              <label>
-                구간 입력 예산 (추정 토큰)
-                <input
-                  ref={input}
-                  type="number"
-                  min={512}
-                  max={32768}
-                  step={1}
-                  required
-                  defaultValue={state.localLimits.inputBudgetTokens}
-                />
-              </label>
-              <label>
-                구간 출력 상한 (토큰)
-                <input
-                  ref={output}
-                  type="number"
-                  min={256}
-                  max={65536}
-                  step={1}
-                  required
-                  defaultValue={state.localLimits.maxOutputTokens}
-                />
-              </label>
-              <p>
-                서버에 로드한 크기와 모델의 지원 크기 중 작은 값을 쓰세요. Hy-MT2는 8192입니다.
-                입력은 보수적으로 추정하며 정확한 모델 토큰 수와 다를 수 있습니다. 출력과 별도로
-                여유 512토큰을 확보합니다.
-              </p>
-              <button type="submit">번역 크기 설정 저장</button>
-            </form>
-          )}
-        </fieldset>
-      )}
+      <p>원문은 모델에 맞는 분량으로 순서대로 번역하고, 한 화가 전부 완성되면 저장합니다.</p>
     </section>
   );
 }

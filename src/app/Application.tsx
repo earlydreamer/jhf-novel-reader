@@ -91,7 +91,6 @@ function RouteScreen({
           onChange={controller.changeConnection}
           onCheck={controller.checkConnection}
           onSelect={controller.chooseModel}
-          onLimits={controller.changeLocalLimits}
         />
       );
   }

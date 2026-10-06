@@ -18,7 +18,7 @@ import type {
   WorkPage,
 } from '../contracts/reading';
 import type { Route } from './routes';
-import { validLocalLimits } from '../translation/segments';
+import { limitsForModel } from '../translation/segments';
 
 export type CatalogStatus =
   | 'idle'
@@ -146,7 +146,6 @@ export interface RenewalController {
   changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
   checkConnection(secret?: string): Promise<void>;
   chooseModel(modelId: string): void;
-  changeLocalLimits(limits?: LocalTranslationLimits): void;
   translate(): Promise<void>;
   refreshSource(): Promise<void>;
   showContents(): void;
@@ -321,7 +320,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           publish({
             connection: saved.selection?.connection ?? DEFAULT_CONNECTION,
             selectedModelId: saved.selection?.modelId ?? null,
-            localLimits: saved.selection?.limits,
+            localLimits: undefined,
             fontSize: saved.fontSize,
           });
         initialized = true;
@@ -629,9 +628,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }
       if (operation !== catalogOperation || disposed) return;
       session = nextSession;
-      const selectedExists = models.some(
+      const selectedChoice = models.find(
         (model) => model.id === previousModelId && model.supportsGeneration,
       );
+      const selectedExists = selectedChoice !== undefined;
       let catalogStatus: CatalogStatus = 'connected';
       if (!models.some((model) => model.supportsGeneration)) catalogStatus = 'empty';
       else if (previousModelId && !selectedExists) catalogStatus = 'model_missing';
@@ -639,21 +639,45 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         connection,
         models,
         selectedModelId: selectedExists ? previousModelId : null,
+        localLimits:
+          connection.provider === 'openai-compatible' && selectedChoice
+            ? limitsForModel(selectedChoice.id, selectedChoice.contextTokens)
+            : undefined,
         catalogStatus,
       });
       persistSettings();
     } catch (error) {
       if (operation === catalogOperation) {
         session = null;
-        publish({ catalogStatus: errorLabel(error), models: [], selectedModelId: null });
+        publish({
+          catalogStatus: errorLabel(error),
+          models: [],
+          selectedModelId: null,
+          localLimits: undefined,
+        });
       }
     }
   }
   function chooseModel(modelId: string): void {
-    if (!snapshot.models.some((model) => model.id === modelId && model.supportsGeneration)) return;
+    const model = snapshot.models.find(
+      (choice) => choice.id === modelId && choice.supportsGeneration,
+    );
+    if (!model) return;
     if (disposed) return;
+    let localLimits: LocalTranslationLimits | undefined;
+    if (snapshot.connection.provider === 'openai-compatible') {
+      try {
+        localLimits = limitsForModel(model.id, model.contextTokens);
+      } catch {
+        publish({
+          error: '이 모델의 입력 한도로 번역을 준비할 수 없습니다. 다른 모델을 선택하세요.',
+        });
+        return;
+      }
+    }
     publish({
       selectedModelId: modelId,
+      localLimits,
       catalogStatus: 'connected',
       connection: {
         ...snapshot.connection,
@@ -920,25 +944,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     changeConnection,
     checkConnection,
     chooseModel,
-    changeLocalLimits(limits) {
-      if (
-        disposed ||
-        activeTranslation ||
-        dependencies.flow?.active ||
-        snapshot.connection.provider !== 'openai-compatible'
-      )
-        return;
-      if (limits && !validLocalLimits(limits)) {
-        publish({ error: '입력·출력 예산과 여유 512토큰이 컨텍스트 안에 들어오도록 설정하세요.' });
-        return;
-      }
-      publish({
-        localLimits: limits ? { ...limits } : undefined,
-        error: null,
-        connection: { ...snapshot.connection, revision: snapshot.connection.revision + 1 },
-      });
-      persistSettings();
-    },
     translate,
     refreshSource,
     showContents,

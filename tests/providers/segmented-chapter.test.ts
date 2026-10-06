@@ -2,6 +2,7 @@ import { expect, test, vi } from 'vitest';
 import { createProviderSession, normalizeChapterInput } from '../../src/providers/plainText';
 import {
   DEFAULT_LOCAL_LIMITS,
+  limitsForModel,
   estimatedInputTokens,
   planSegments,
   SEGMENT_INSTRUCTION,
@@ -44,6 +45,36 @@ const selection = {
   limits,
 };
 const secrets = { get: async () => null, set: async () => {}, remove: async () => {} };
+test('catalog capacity and model capability bound internal budgets; unreported capacity is conservative', async () => {
+  const transport: ModelTransport = {
+    post: vi.fn(),
+    get: async (input) => ({
+      status: 200,
+      url: input.url,
+      headers: {},
+      data: {
+        data: [
+          { id: 'hy-mt2', meta: { n_ctx: 16384, n_ctx_train: 8192 } },
+          { id: 'gemma', meta: { n_ctx: 4096, n_ctx_train: 131072 } },
+          { id: 'unreported' },
+        ],
+      },
+    }),
+  };
+  const models = await createProviderSession(selection, transport, secrets).listModels(
+    new AbortController().signal,
+  );
+  expect(models.map((model) => model.contextTokens)).toEqual([8192, 4096, undefined]);
+  expect(limitsForModel(models[0]!.id, models[0]!.contextTokens)).toEqual(DEFAULT_LOCAL_LIMITS);
+  expect(limitsForModel(models[1]!.id, models[1]!.contextTokens)).toEqual({
+    contextTokens: 4096,
+    inputBudgetTokens: 1024,
+    maxOutputTokens: 2560,
+  });
+  expect(limitsForModel('unreported').contextTokens).toBe(4096);
+  expect(() => limitsForModel('too-small', 1024)).toThrow();
+  expect(limitsForModel('hy-mt2', 16384).contextTokens).toBe(8192);
+});
 const response = (content: string, finish = 'stop') => ({
   choices: [{ finish_reason: finish, message: { content } }],
 });

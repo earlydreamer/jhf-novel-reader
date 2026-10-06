@@ -41,11 +41,7 @@ export function selected(value: unknown): asserts value is SelectedModel {
   if (value.limits !== undefined) {
     object(value.limits, ['contextTokens', 'inputBudgetTokens', 'maxOutputTokens']);
     check(c.provider === 'openai-compatible');
-    check(
-      validLocalLimits(
-        value.limits as unknown as import('../contracts/reading').LocalTranslationLimits,
-      ),
-    );
+    check(validLocalLimits(value.limits));
   }
 }
 export async function completedTranslation(value: unknown): Promise<CompletedTranslation> {
@@ -151,8 +147,8 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
         p.promptVersion === 'hymt2-segments-v1' &&
         g.mode === 'segments-v1',
     );
-    check(validLocalLimits(g as unknown as import('../contracts/reading').LocalTranslationLimits));
     integer(g.segments, 1);
+    check(validLocalLimits(g));
   }
   return value as unknown as CompletedTranslation;
 }

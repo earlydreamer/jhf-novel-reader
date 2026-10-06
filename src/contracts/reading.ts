@@ -28,7 +28,12 @@ export type ConnectionConfig = {
   authRef?: string;
   revision: number;
 };
-export type ModelChoice = { id: string; displayName: string; supportsGeneration: boolean };
+export type ModelChoice = {
+  id: string;
+  displayName: string;
+  supportsGeneration: boolean;
+  contextTokens?: number;
+};
 export type LocalTranslationLimits = {
   contextTokens: number;
   inputBudgetTokens: number;
