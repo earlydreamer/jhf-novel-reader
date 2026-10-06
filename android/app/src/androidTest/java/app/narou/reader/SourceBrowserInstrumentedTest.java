@@ -226,10 +226,11 @@ public class SourceBrowserInstrumentedTest {
                 view.requestFocus();
             });
             awaitTitle(scenario, "Home fixture");
-            onView(withId(SourceBrowserActivity.BROWSER_ID)).perform(pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_ENTER));
+            tapFirstLink(scenario, "Home fixture");
             awaitTitle(scenario, "Ranking fixture");
-            onView(withId(SourceBrowserActivity.BROWSER_ID)).perform(pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_ENTER));
+            tapFirstLink(scenario, "Ranking fixture");
             awaitTitle(scenario, "Work fixture");
+            awaitBrowserState(scenario, "https://ncode.syosetu.com/n1234ab/2/", true);
             scenario.onActivity(activity -> {
                 assertTrue(((Button) activity.findViewById(SourceBrowserActivity.OPEN_ID)).isEnabled());
                 activity.findViewById(SourceBrowserActivity.BACK_ID).performClick();
