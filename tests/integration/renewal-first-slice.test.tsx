@@ -433,7 +433,7 @@ it('source_and_catalog_not_generation and saved reading independent of server', 
   expect(h.posts()).toHaveLength(1);
   h.app.dispose();
 });
-it('reopening detects a changed source without generation and refresh creates a new version', async () => {
+it('source refresh requires a separate explicit translation before creating a new version', async () => {
   const h = harness();
   await prepare(h);
   const first = h.app.translate();
@@ -449,6 +449,11 @@ it('reopening detects a changed source without generation and refresh creates a 
   await expect.poll(() => h.app.getSnapshot().sourceChange).toBe('changed');
   expect(h.posts()).toHaveLength(postCount);
   await h.app.refreshSource();
+  expect(h.app.getSnapshot().route.kind).toBe('translation');
+  expect(h.app.getSnapshot().translation.phase).toBe('idle');
+  expect(h.posts()).toHaveLength(postCount);
+  expect(await h.store.listVersions('n1234ab/2')).toHaveLength(1);
+  await h.app.translate();
   const next = h.app.getSnapshot().version!.versionId;
   expect(next).not.toBe(previous);
   expect(h.posts()).toHaveLength(postCount + 1);
@@ -575,6 +580,8 @@ it('selecting a chapter with an unsaved new result offers recovery before its ol
   const old = h.app.getSnapshot().version!;
   h.setFailSave(true);
   await h.app.refreshSource();
+  expect(h.posts()).toHaveLength(1);
+  await h.app.translate();
   const pending = h.app.getSnapshot().translation.pendingSave!;
   expect(pending.versionId).not.toBe(old.versionId);
   h.app.showContents();

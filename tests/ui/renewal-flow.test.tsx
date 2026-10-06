@@ -275,7 +275,7 @@ describe('renewal reading affordances', () => {
     await controller.selectChapter(chapters[0]!);
 
     expect(await screen.findByText('원문이 변경되었습니다.')).toBeVisible();
-    expect(screen.getByRole('button', { name: '원문 새로 고침' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '새 원문으로 번역 준비' })).toBeVisible();
     expect(value.generate).not.toHaveBeenCalled();
   });
   it('shows saved status in the work contents before choosing a chapter', async () => {

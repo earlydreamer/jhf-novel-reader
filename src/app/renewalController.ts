@@ -657,7 +657,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (snapshot.route.kind !== 'reader' || !chapter) return;
     publish({ sourceChange: 'idle', translation: { phase: 'idle', elapsedMs: 0 } });
     navigate({ kind: 'translation', chapterId: chapter.chapterId });
-    await translate();
   }
   async function translate(): Promise<void> {
     if (
