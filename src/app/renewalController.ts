@@ -1,7 +1,7 @@
 import type { AppLifecycle } from '../contracts';
 import type { PhaseDurations, WholeChapterFlow } from '../translation/wholeChapter';
 import type { ReadingSettings } from '../storage/settings';
-import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/legacyMigration';
+import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
 import { ReaderError } from '../contracts';
 import type {
   ChapterRef,

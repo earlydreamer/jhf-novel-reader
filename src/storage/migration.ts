@@ -24,3 +24,5 @@ export function createV1Migration(
     });
   };
 }
+
+export type { LegacyMigrationSummary, LegacyMigrationWarning } from './legacyMigration';
