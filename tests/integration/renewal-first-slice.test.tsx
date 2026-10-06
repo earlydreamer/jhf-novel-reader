@@ -431,6 +431,68 @@ it('pendingSave remains available after leaving and returning without another ge
   expect(h.posts()).toHaveLength(1);
   h.app.dispose();
 });
+it('selecting a chapter with an unsaved new result offers recovery before its older saved version', async () => {
+  const h = harness();
+  await prepare(h);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.settle();
+  await first;
+  const old = h.app.getSnapshot().version!;
+  h.setFailSave(true);
+  await h.app.refreshSource();
+  const pending = h.app.getSnapshot().translation.pendingSave!;
+  expect(pending.versionId).not.toBe(old.versionId);
+  h.app.showContents();
+
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[1]!);
+
+  expect(h.app.getSnapshot().route).toEqual({ kind: 'translation', chapterId: 'n1234ab/2' });
+  expect(h.app.getSnapshot().translation.pendingSave).toEqual(pending);
+  expect(await h.store.readVersion(old.versionId)).toEqual(old);
+  h.setFailSave(false);
+  await h.app.retrySave();
+  expect(h.app.getSnapshot().version?.versionId).toBe(pending.versionId);
+  expect(await h.store.listVersions('n1234ab/2')).toHaveLength(2);
+  expect(h.posts()).toHaveLength(2);
+  h.app.dispose();
+});
+it('another chapter exposes a route back to save recovery and blocks generation until saved', async () => {
+  const { render, screen, fireEvent, cleanup } = await import('@testing-library/react');
+  const { Application } = await import('../../src/app/Application');
+  const h = harness();
+  await prepare(h);
+  h.setFailSave(true);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.settle();
+  await first;
+  const pending = h.app.getSnapshot().translation.pendingSave!;
+  h.app.showContents();
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
+  render(<Application controller={h.app} />);
+
+  expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(true);
+  expect(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' })).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: '홈' }));
+  expect(h.app.getSnapshot().route.kind).toBe('home');
+  fireEvent.click(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' }));
+  expect(h.app.getSnapshot().chapter?.chapterId).toBe(pending.source.chapterId);
+  expect(h.app.getSnapshot().translation.pendingSave).toEqual(pending);
+  h.setFailSave(false);
+  fireEvent.click(screen.getByRole('button', { name: '모델 요청 없이 저장 다시 시도' }));
+  await expect.poll(() => h.app.getSnapshot().route.kind).toBe('reader');
+  expect(await h.store.readVersion(pending.versionId)).toEqual(pending);
+  expect(h.posts()).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '목차' }));
+  fireEvent.click(screen.getByRole('button', { name: '第一話' }));
+  await expect.poll(() => h.app.getSnapshot().route.kind).toBe('translation');
+  expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(false);
+  expect(h.posts()).toHaveLength(1);
+  cleanup();
+  h.app.dispose();
+});
 it('credential storage and model headers never leak into source or preferences', async () => {
   const h = harness();
   await h.app.initialize();

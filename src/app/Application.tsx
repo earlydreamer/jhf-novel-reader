@@ -48,6 +48,10 @@ function RouteScreen({
           state={state.translation}
           available={state.translationAvailable}
           requestActive={state.translationActive}
+          pendingSaveElsewhere={
+            !!state.pendingSaveChapter &&
+            state.pendingSaveChapter.chapterId !== state.chapter.chapterId
+          }
           catalogReady={state.catalogStatus === 'connected'}
           onCancel={controller.cancelTranslation}
           onRetry={() => void controller.retryTranslation()}
@@ -113,6 +117,17 @@ export function Application({ controller }: { controller: RenewalController }): 
         </nav>
       </header>
       {state.error && <p role="alert">{state.error}</p>}
+      {state.pendingSaveChapter &&
+        (state.route.kind !== 'translation' ||
+          state.route.chapterId !== state.pendingSaveChapter.chapterId) && (
+          <aside aria-label="저장 대기 중인 번역">
+            <p>
+              {state.pendingSaveChapter.title}의 번역 결과가 아직 저장을 완료하지 못했습니다. 저장을
+              마친 뒤 새 번역을 요청할 수 있습니다.
+            </p>
+            <button onClick={controller.openPendingSave}>저장 대기 중인 번역으로 돌아가기</button>
+          </aside>
+        )}
       <RouteScreen controller={controller} state={state} />
       {state.translationTimings && (
         <details>
