@@ -22,7 +22,8 @@ export async function authorization(
   let secret;
   try {
     secret = await secrets.get(connection.authRef);
-  } catch {
+  } catch (error) {
+    if (error instanceof ReaderError && error.code === 'storage') throw new ReaderError('storage');
     throw new ReaderError('auth');
   }
   if (signal.aborted) throw new ReaderError('cancelled');

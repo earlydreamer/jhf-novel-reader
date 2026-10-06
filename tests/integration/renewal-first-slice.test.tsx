@@ -6,6 +6,7 @@ import { createLibraryStore } from '../../src/storage/library';
 import { createLastChapterRepository } from '../../src/app/lastChapter';
 import { createReaderStore } from '../../src/storage/store';
 import { createAttemptRepository } from '../../src/translation/attempts';
+import { StorageError } from '../../src/storage/errors';
 import type { NativeHttpRequest, HttpResponse, AppLifecycle } from '../../src/contracts';
 import { createCacheKey, type CompletedChapter } from '../../src/contracts/legacy';
 
@@ -136,6 +137,84 @@ async function prepare(h: ReturnType<typeof harness>) {
   await h.app.checkConnection();
   h.app.chooseModel('hymt2-7b');
 }
+it.each(['set', 'get'] as const)(
+  'secure-store %s failure stops catalog HTTP and preserves the existing credential reference',
+  async (method) => {
+    const h = harness();
+    await prepare(h);
+    await h.app.checkConnection('original-synthetic-secret');
+    const originalRef = h.app.getSnapshot().connection.authRef;
+    const count = h.requests.length;
+    const originalGet = h.adapters.secrets.get;
+    const originalSet = h.adapters.secrets.set;
+    const originalRemove = h.adapters.secrets.remove;
+    const removed: string[] = [];
+    h.adapters.secrets[method] = async () => {
+      throw new StorageError('secure');
+    };
+    h.adapters.secrets.remove = async (ref) => {
+      removed.push(ref);
+      throw new StorageError('secure');
+    };
+    await h.app.checkConnection(method === 'set' ? 'new-synthetic-secret' : '');
+    expect(h.app.getSnapshot().catalogStatus).toBe('storage');
+    expect(h.app.getSnapshot().connection.authRef).toBe(originalRef);
+    expect(h.requests).toHaveLength(count);
+    expect(removed).not.toContain(originalRef);
+    expect(JSON.stringify(h.app.getSnapshot())).not.toContain('new-synthetic-secret');
+    expect(
+      await h.adapters.preferences.get({ key: 'narou-reader.reading-settings.v2' }),
+    ).not.toMatchObject({
+      value: expect.stringContaining('new-synthetic-secret'),
+    });
+    h.adapters.secrets.get = originalGet;
+    h.adapters.secrets.set = originalSet;
+    h.adapters.secrets.remove = originalRemove;
+    await h.app.checkConnection();
+    expect(h.app.getSnapshot().catalogStatus).toBe('connected');
+    expect(h.posts()).toHaveLength(0);
+    h.app.dispose();
+  },
+);
+it('secure-store read failure during generation is storage failure without a model POST', async () => {
+  const h = harness();
+  await prepare(h);
+  await h.app.checkConnection('synthetic-secret');
+  h.adapters.secrets.get = async () => {
+    throw new StorageError('secure');
+  };
+  await h.app.translate();
+  expect(h.app.getSnapshot().translation).toMatchObject({
+    phase: 'failed',
+    error: { code: 'storage', outcome: 'not_sent' },
+  });
+  expect(h.app.getSnapshot().translation.pendingSave).toBeUndefined();
+  expect(h.posts()).toHaveLength(0);
+  expect(await h.store.listVersions('n1234ab/2')).toHaveLength(0);
+  h.app.dispose();
+});
+it('native catalog TLS rejection is a connection failure without exposing its error', async () => {
+  const h = harness();
+  const app = createRenewalApplication({
+    ...h.adapters,
+    modelTransport: createModelTransport({
+      async request() {
+        throw new Error('SSLHandshakeException private-TLS-error-canary');
+      },
+    }),
+  });
+  await app.initialize();
+  app.changeConnection({
+    provider: 'openai-compatible',
+    baseUrl: 'https://chosen.example.test/v1',
+  });
+  await app.checkConnection();
+  expect(app.getSnapshot().catalogStatus).toBe('connection');
+  expect(JSON.stringify(app.getSnapshot())).not.toContain('private-TLS-error-canary');
+  expect(h.posts()).toHaveLength(0);
+  app.dispose();
+  h.app.dispose();
+});
 async function legacyCompleted(): Promise<CompletedChapter> {
   const identity = {
     canonicalUrl: 'https://ncode.syosetu.com/n9999ab/1/',
