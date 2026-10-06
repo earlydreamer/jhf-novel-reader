@@ -6,10 +6,8 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
-import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import static androidx.test.espresso.Espresso.onView;
-import static androidx.test.espresso.action.ViewActions.pressKey;
 import androidx.test.espresso.action.GeneralClickAction;
 import androidx.test.espresso.action.Press;
 import androidx.test.espresso.action.Tap;
@@ -230,7 +228,7 @@ public class SourceBrowserInstrumentedTest {
             awaitTitle(scenario, "Ranking fixture");
             tapFirstLink(scenario, "Ranking fixture");
             awaitTitle(scenario, "Work fixture");
-            awaitBrowserState(scenario, "https://ncode.syosetu.com/n1234ab/2/", true);
+            awaitBrowserState(scenario, "https://ncode.syosetu.com/n1234ab/", true);
             scenario.onActivity(activity -> {
                 assertTrue(((Button) activity.findViewById(SourceBrowserActivity.OPEN_ID)).isEnabled());
                 activity.findViewById(SourceBrowserActivity.BACK_ID).performClick();
