@@ -82,7 +82,8 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
       {props.sourceChange === 'unchanged' && <p role="status">원문이 변경되지 않았습니다.</p>}
       {props.sourceChange === 'changed' && (
         <p role="status">
-          원문이 변경되었습니다. <button onClick={props.onRefreshSource}>새 원문으로 번역 준비</button>
+          원문이 변경되었습니다.{' '}
+          <button onClick={props.onRefreshSource}>새 원문으로 번역 준비</button>
         </p>
       )}
       {props.sourceChange === 'unavailable' && <p role="status">원문 변경을 확인할 수 없습니다.</p>}
