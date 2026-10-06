@@ -270,3 +270,27 @@ it('retains pointer-based import when an adapter cannot enumerate files', async 
   await createV1Migration(files, settings, library)();
   expect(await library.listVersions(legacy.source.chapterId)).toHaveLength(1);
 });
+
+it('keeps every imported chapter reachable through a partial TOC, including already imported versions', async () => {
+  const files = Object.assign(new Files(), {
+    async list() {
+      return [...files.data.keys()]
+        .filter((path) => path.startsWith('chapters/'))
+        .map((path) => path.slice(9));
+    },
+  });
+  const first = await fixture(),
+    second = await fixture({ canonicalUrl: 'https://ncode.syosetu.com/n1234ab/2/' });
+  const legacy = createReaderStore(files),
+    library = createLibraryStore(files);
+  await legacy.commitChapter(first);
+  await legacy.commitChapter(second);
+  await migrateLegacyData({ cacheKeys: [second.cacheKey], legacy, library });
+  await createV1Migration(files, preferences(), library)();
+  const pages = await library.readWork('n1234ab');
+  expect(pages[0]?.chapters.map((ref) => ref.chapterId)).toEqual(['n1234ab/1', 'n1234ab/2']);
+  expect(pages[0]?.complete).toBe(false);
+  await createV1Migration(files, preferences(), library)();
+  expect(await library.readWork('n1234ab')).toEqual(pages);
+  expect(await library.listVersions(second.source.chapterId)).toHaveLength(1);
+});
