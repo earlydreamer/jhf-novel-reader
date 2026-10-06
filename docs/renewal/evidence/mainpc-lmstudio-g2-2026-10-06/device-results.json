@@ -1,0 +1,106 @@
+{
+  "sourceHead": "ac1abd557d2ca3f0931b83ce54a964d01a6e7cbc",
+  "device": "SM-F966N",
+  "android": 16,
+  "server": "Windows MAINPC LM Studio",
+  "rows": {
+    "cancel": {
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/v1/chat/completions",
+          "startedAt": 1791295938435,
+          "model": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+          "requestKeys": [
+            "model",
+            "messages",
+            "stream"
+          ],
+          "elapsedMs": 34165,
+          "failed": true
+        }
+      ],
+      "unknownWarning": true,
+      "retryDisabledUntilSettle": true,
+      "noPartialReader": true,
+      "versionCountUnchanged": true
+    },
+    "processDeath": {
+      "call": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "startedAt": 1791296136049,
+        "model": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+        "requestKeys": [
+          "model",
+          "messages",
+          "stream"
+        ]
+      },
+      "phaseAfterRestart": "unknown",
+      "displayedUnknown": true,
+      "duplicateWarning": true,
+      "automaticPostCount": 0,
+      "versionCountUnchanged": true
+    },
+    "storageFailure": {
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/v1/chat/completions",
+          "startedAt": 1791296139811,
+          "model": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+          "requestKeys": [
+            "model",
+            "messages",
+            "stream"
+          ],
+          "status": 200,
+          "elapsedMs": 49734,
+          "finishReason": "stop",
+          "usage": {
+            "prompt_tokens": 4349,
+            "completion_tokens": 4422,
+            "total_tokens": 8771,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            }
+          },
+          "hasError": false
+        }
+      ],
+      "syntheticBridgeWriteFault": true,
+      "injectedWriteCount": 1,
+      "noReader": true,
+      "versionCountUnchanged": true,
+      "storageMessage": true
+    },
+    "saveRetry": {
+      "generationPosts": 1,
+      "newVersionCount": 1,
+      "originalVersionFilesUnchanged": true,
+      "savedTextMatchesReceivedText": true
+    },
+    "offlineReopen": {
+      "syntheticNativeTransportUnavailable": true,
+      "renderedTextUnchanged": true,
+      "modelPosts": 0
+    }
+  },
+  "startedAt": "2026-10-06T14:15:28.902Z",
+  "modelId": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+  "originalVersionCount": 6,
+  "chapterIds": [
+    "n6517bw/5",
+    "n6517bw/6",
+    "n6517bw/7"
+  ],
+  "cancelEvidenceFrom": "2026-10-06T14:12:10.924Z",
+  "quarantinedTaskFiles": 1,
+  "originalFilesRestoredExactly": true,
+  "preferenceDiskRestoredExactly": true,
+  "preferenceRestartReadback": true,
+  "restoredVersionCount": 6,
+  "appStopped": true,
+  "finishedAt": "2026-10-06T14:16:33.482Z"
+}

@@ -1,0 +1,17 @@
+{
+  "sourceHead": "ac1abd557d2ca3f0931b83ce54a964d01a6e7cbc",
+  "startedAt": "2026-10-06T14:23:13.621Z",
+  "originalVersionCount": 6,
+  "chapterId": "n6517bw/4",
+  "renderedTextMatchesStoredVersion": true,
+  "nativeHttpAttempts": [
+    {
+      "method": "GET",
+      "path": "/n6517bw/4/"
+    }
+  ],
+  "modelPostAttempts": 0,
+  "onlyBackgroundSourceCheck": true,
+  "originalFilesRestoredExactly": true,
+  "finishedAt": "2026-10-06T14:23:18.550Z"
+}

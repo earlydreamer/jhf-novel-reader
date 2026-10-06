@@ -1,6 +1,6 @@
 # Android debug packaging and validation
 
-Issue [#8](https://github.com/earlydreamer/narou-reader/issues/8) stays open until the physical-device gates below have evidence. A signed debug APK, mocked application tests, and compiled instrumentation tests are different results. None establishes that the app works with a user's phone and existing model.
+Renewal acceptance is tracked by [#25](https://github.com/earlydreamer/narou-reader/issues/25) and [#28](https://github.com/earlydreamer/narou-reader/issues/28); the earlier #8 was superseded. Current partial physical-device evidence is recorded in the [Windows MAINPC LM Studio G2 follow-up](renewal/mainpc-lmstudio-g2-2026-10-06.md). That report distinguishes real cancellation/process death from injected storage/network faults. A signed debug APK, mocked application tests and compiled instrumentation tests remain separate evidence; the historical manual matrix below is not a current result for the renewal APK.
 
 ## Rebuild the same source
 
