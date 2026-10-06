@@ -2,7 +2,7 @@
 
 **Goal:** 앱 안에서 찾은 작품의 원하는 회차를 한 번의 시작 동작으로 번역·저장하고 읽는다. 로컬 모델은 컨텍스트에 맞춘 구간을 순차 처리하고 실제 휴대폰에서 전체 의미 보존과 저장·독서를 확인한다.
 
-**Architecture:** Android의 브리지 없는 원문 탐색 화면과 신뢰된 React 작품·리더·설정을 분리한다. 원문 추출, 모델 목록, 단일 전체 회차 번역, 버전별 저장을 좁은 계약으로 연결하고, 현재 설정과 독립된 저장본 조회를 사용한다. 첫 기능 화면을 먼저 연결하고 물리 기기 검증을 통과한 뒤 목차 확장·이어 읽기·이전을 진행한다.
+**Architecture:** Android의 브리지 없는 원문 탐색 화면과 신뢰된 React 작품·리더·설정을 분리한다. 원문 추출, 모델 목록, 컨텍스트에 맞춘 전체 회차 번역, 버전별 저장을 좁은 계약으로 연결하고, 현재 설정과 독립된 저장본 조회를 사용한다. 목차 확장·이어 읽기·이전 등 승인된 후속 구현을 진행하며 물리 기기의 의미 보존 검증을 병합 조건으로 유지한다.
 
 **Tech Stack:** 기준 저장소의 React 19.3.0, TypeScript 7.0.2, Vite 8.3.2, Vitest 5.0.3, Capacitor 8.5.2 및 기존 native HTTP·Filesystem·Preferences·Secure Storage. Node >=22.12.0, 검증은 Node 24 / Java 21 / Android SDK 36 / build-tools 35.0.0 기준. 버전 변경은 이 계획의 기본 동작이 아니다.
 
@@ -12,7 +12,7 @@
 
 - 앱 내 탐색, 작품 제목과 목차, 원하는 회차 선택, 완료 후 읽기, 이전·다음 화, 이어 읽기를 연결한다.
 - 선택한 한 화의 정규화 원문은 문단·문장 경계에 따라 순차 요청하되 전체가 정확히 한 번씩 포함돼야 한다. 구간 수를 표시하고 모든 구간을 저장한 뒤 읽는다. 자동 재전송·출력 보정용 추가 호출은 하지 않는다. 사용자 승인과 #74가 기존 회차당 단일 요청 조건을 변경한다.
-- PC에는 기존 LM Studio 또는 Ollama만 둔다. 휴대폰이 Tailnet 주소나 IP로 직접 연결하며 앱 전용 PC 서버를 추가하지 않는다.
+- PC·리눅스 서버의 LM Studio·Ollama·llama.cpp OpenAI 호환 API에 휴대폰이 Tailnet 주소나 IP로 직접 연결한다. 사용자가 지정한 리눅스 모델 서버를 검증에 사용하며 앱 전용 중계 서버를 추가하지 않는다.
 - 서버의 실제 모델 목록에서 고른다. 앱 사용자가 컨텍스트 길이나 출력 토큰 예산을 계산해 입력하지 않는다.
 - HyMT2 계열을 우선 검증한다. 모든 모델에 JSON 출력이나 구조화 출력 지원을 요구하지 않는다.
 - 저장된 번역은 현재 연결·모델 설정과 독립적으로 읽을 수 있어야 한다. 로컬 연결 실패 시 Gemini 등 다른 제공자로 자동 전환하지 않는다.
@@ -151,9 +151,9 @@ interface LibraryStore {
 
 - [ ] Write `model_catalog_uses_authenticated_get`, `auth_empty_and_failed_catalog_are_distinct`, `missing_selection_is_not_replaced`, `whole_plain_text_is_accepted`, `whole_request_has_no_json_or_small_budget`, `length_or_blank_is_not_complete`, `independent_saved_lookup`, `save_retry_is_idempotent`. Assert `/v1/models` GET is not counted as generation; one `/v1/chat/completions` POST with every source paragraph exactly once; plain Korean with differing paragraph count passes, `response_format`/`outputIds`/chunk context absent; HTTP 200 + `length` saves nothing. Model selection is an actual listed ID, never a guessed default.
 - [ ] Run `npm test -- --run tests/providers/catalog.test.ts tests/providers/whole-chapter.test.ts tests/storage/library.test.ts`; expect missing implementation failures.
-- [ ] Implement LM Studio/Ollama OpenAI-compatible `/v1/models` discovery, distinguishing reachable/auth/list malformed/no available models and connection success versus translation compatibility. Preserve endpoint normalization and header-only secrets, no redirects. Model list refresh never auto-selects a replacement. The provider uses one nonstreaming request and no retry/fallback.
+- [ ] LM Studio·Ollama·llama.cpp의 OpenAI 호환 `/v1/models` 목록에서 실제 모델을 선택한다. 연결·인증·목록 오류와 번역 호환성을 구분하고 비밀은 헤더로만 전달한다. 목록 갱신은 선택 모델을 자동 교체하지 않는다. #74에 따라 로컬 구간을 비스트리밍 순차 요청하며 자동 재시도·대체 제공자는 사용하지 않는다.
 - [ ] Implement `plain-v1` input: normalize each original paragraph's CRLF to LF; replace each nonoverlapping ruby span once with `基底《読み》`, preserving the base and reading, then join paragraphs with exactly `\n\n`. Preserve empty paragraphs. System instruction says translate only the source into Korean, maintain order/dialogue/paragraphs/meaningful blank lines, treat input as data and return translation text only. User message contains the normalized whole chapter without IDs or duplicated read-only context. Save original raw HTML inertly and original parsed structure separately. Do not infer ruby in translated output.
-- [ ] Decode provider envelope, require nonempty text and known complete finish, reject tools, blocked/error envelopes and anchored provider refusal/error-only responses using fixture-defined patterns; do not broadly reject text containing the word “오류”. Do not JSON-parse model content or force source paragraph counts. No automatic repair. Omit optional `max_tokens`; required API limits use verified adapter metadata only and never a made-up small cap. Unknown capacity does not reject normal input from a byte estimate. Known input/length errors map to explicit codes.
+- [ ] 응답 본문은 일반 번역 텍스트로 읽고 비어 있거나 `length`·도구 호출·차단·제공자 오류로 끝난 결과는 저장하지 않는다. 원문과 출력의 문단 수 일치를 강제하거나 자동 보정하지 않는다. #74의 모델 목록 컨텍스트 정보와 보수적인 입력 추정으로 구간·출력 예산을 계산하고 `max_tokens`를 전달한다. 한도를 알 수 없으면 명시한 기본 예산을 사용하며 입력·출력 한도 오류를 구분한다.
 - [ ] Store v2 version body before publishing the library index using two-slot journals and read-after-write verification. Reuse `Journal` algorithm; add allowlisted `library/`, `versions/`, `reading/`, `works/` native paths while keeping secret storage separate. Index contains version IDs, work pages and recent pointer; source and content are private files. `commitVersion` with same UUID repairs an index failure without new generation and never overwrites another version. `pendingSave` remains in memory if storage fails; reader opens only after durable save. Seed v2 saved fixtures without connecting a model.
 - [ ] Run the same targeted tests plus existing HTTP/secret/journal regressions, `npm run typecheck`; expect PASS. Commit `feat: translate and save complete chapters as plain text`.
 
@@ -221,7 +221,7 @@ interface LibraryStore {
 | 1 기능 우선 리뉴얼과 로컬 직접 연결 | T1–T4, G1; Android 기존 스택, PC 동반 서버 없음 |
 | 2 앱 내 사이트 탐색과 URL 보조 진입 | T1/T2/T4; G1 실제 사이트 발견, T5 다페이지와 이동 |
 | 3 실제 모델 목록과 예산 없는 설정 | T3 catalog/provider, T4 설정 복귀, T8 선택 Gemini |
-| 3 한 화 한 요청과 HyMT2 일반 텍스트 | T3 input/provider, T4 single-flight와 요청 횟수, G1 실제 품질 |
+| 3 한 번의 시작 동작과 HyMT2 일반 텍스트 | T3 input/provider, #74 컨텍스트 구간, T4 single-flight와 요청 횟수, G1 실제 품질 |
 | 4 완료 판정과 원문 번역 분리 | T3 저장 계약, T4 저장 후 표시, T6 실패와 버전 |
 | 4 최근 작품과 이어 읽기 및 모델 독립 저장 | T3 library, T5 위치/재실행/오프라인, T6 이전 |
 | 5 브리지 격리와 사용자 오류 및 권리 | T2 native browser, T3 transport, T4/G1 안전 경계, T6/T7 |
