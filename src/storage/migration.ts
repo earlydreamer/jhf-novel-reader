@@ -12,8 +12,13 @@ export function createV1Migration(
 ): () => Promise<void> {
   return async () => {
     const cacheKey = await createLastChapterRepository(preferences).read();
+    const cacheKeys = cacheKey ? [cacheKey] : [];
+    for (const name of (await files.list?.('chapters')) ?? []) {
+      const match = /^(v1-[a-f0-9]{64})\.[01]\.json$/.exec(name);
+      if (match) cacheKeys.push(match[1]!);
+    }
     await migrateLegacyData({
-      cacheKeys: cacheKey ? [cacheKey] : [],
+      cacheKeys,
       legacy: createReaderStore(files),
       library,
     });

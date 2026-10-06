@@ -4,6 +4,8 @@ import { createLibraryStore } from '../../src/storage/library';
 import { digest } from '../../src/storage/journal';
 import type { PrivateFiles } from '../../src/storage/journal';
 import { createReaderStore } from '../../src/storage/store';
+import { createV1Migration } from '../../src/storage/migration';
+import { createLastChapterRepository } from '../../src/app/lastChapter';
 import {
   createCacheKey,
   type CacheIdentity,
@@ -41,7 +43,7 @@ async function fixture(overrides: Partial<CacheIdentity> = {}): Promise<Complete
       canonicalUrl: identity.canonicalUrl,
       sourceHash: identity.sourceHash,
       workId: 'n1234ab',
-      chapterId: 'n1234ab/1',
+      chapterId: new URL(identity.canonicalUrl).pathname.split('/').filter(Boolean).join('/'),
       title: 'test',
       prevUrl: null,
       nextUrl: null,
@@ -165,4 +167,130 @@ it('preserves corrupt and unfinished v1 records while reporting migration warnin
     { cacheKey: unsupported.cacheKey, reason: 'unreadable' },
   ]);
   expect(files.data).toEqual(before);
+});
+
+function preferences() {
+  const data = new Map<string, string>();
+  return {
+    async get({ key }: { key: string }) {
+      return { value: data.get(key) ?? null };
+    },
+    async set({ key, value }: { key: string; value: string }) {
+      data.set(key, value);
+    },
+  };
+}
+
+it('imports all private v1 journals, deduplicates slots and preserves v1 bytes and the cached TOC', async () => {
+  const files = Object.assign(new Files(), {
+    async list() {
+      return [...files.data.keys()]
+        .filter((path) => path.startsWith('chapters/'))
+        .map((path) => path.slice(9));
+    },
+  });
+  const old = createReaderStore(files),
+    settings = preferences(),
+    library = createLibraryStore(files);
+  const first = await fixture(),
+    second = await fixture({ canonicalUrl: 'https://ncode.syosetu.com/n1234ab/2/' });
+  await old.commitChapter(first);
+  await old.commitChapter(second);
+  await old.savePosition({ chapterId: first.source.chapterId, paragraphId: 'p2', offset: 19 });
+  files.data.set(
+    `chapters/${first.cacheKey}.1.json`,
+    files.data.get(`chapters/${first.cacheKey}.0.json`)!,
+  );
+  files.data.set('chapters/../../outside.0.json', 'must not be read');
+  files.data.set(`chapters/${first.cacheKey}.2.json`, 'must not be read');
+  await createLastChapterRepository(settings).save(second.cacheKey);
+  const original = new Map(files.data);
+  const toc = {
+    workId: 'n1234ab',
+    canonicalUrl: 'https://ncode.syosetu.com/n1234ab/',
+    title: 'original work title',
+    chapters: [first, second].map((v, index) => ({
+      workId: v.source.workId,
+      chapterId: v.source.chapterId,
+      canonicalUrl: v.source.canonicalUrl,
+      title: v.source.title,
+      ordinal: index + 1,
+    })),
+    pageUrl: 'https://ncode.syosetu.com/n1234ab/',
+    nextPageUrl: null,
+    complete: true,
+  };
+  await library.saveWorkPage(toc);
+  await createV1Migration(files, settings, library)();
+  const importedFirst = (await library.listVersions(first.source.chapterId))[0]!;
+  expect(importedFirst.text).toBe('번역 하나\n\n번역 둘');
+  expect(await library.readPosition(importedFirst.versionId)).toMatchObject({ offset: 19 });
+  expect(await library.listVersions(second.source.chapterId)).toHaveLength(1);
+  expect(await library.readWork('n1234ab')).toEqual([toc]);
+  for (const [path, content] of original) expect(files.data.get(path)).toBe(content);
+  await createV1Migration(files, settings, library)();
+  expect(await library.listVersions(first.source.chapterId)).toHaveLength(1);
+  expect(await library.listVersions(second.source.chapterId)).toHaveLength(1);
+});
+
+it('discovers completed journals without a last-chapter pointer and leaves unfinished/corrupt records intact', async () => {
+  const files = Object.assign(new Files(), {
+    async list() {
+      return [...files.data.keys()].map((path) => path.slice(9));
+    },
+  });
+  const complete = await fixture(),
+    unfinished = await fixture({ sourceHash: 'unfinished' });
+  const corrupt = await fixture({ sourceHash: 'corrupt' });
+  const old = createReaderStore(files),
+    library = createLibraryStore(files);
+  await old.commitChapter(complete);
+  await old.saveCheckpoint({
+    schemaVersion: 1,
+    cacheKey: unfinished.cacheKey,
+    identity: unfinished.identity,
+    chapter: unfinished.source,
+    token: { jobId: 'job', chapterId: unfinished.source.chapterId, settingsRevision: 1 },
+    chunks: [],
+  });
+  files.data.set(`chapters/${corrupt.cacheKey}.0.json`, '{');
+  const before = new Map(files.data);
+  await createV1Migration(files, preferences(), library)();
+  expect(await library.listVersions(complete.source.chapterId)).toHaveLength(1);
+  for (const [path, content] of before) expect(files.data.get(path)).toBe(content);
+});
+
+it('retains pointer-based import when an adapter cannot enumerate files', async () => {
+  const files = new Files(),
+    settings = preferences(),
+    legacy = await fixture();
+  await createReaderStore(files).commitChapter(legacy);
+  await createLastChapterRepository(settings).save(legacy.cacheKey);
+  const library = createLibraryStore(files);
+  await createV1Migration(files, settings, library)();
+  expect(await library.listVersions(legacy.source.chapterId)).toHaveLength(1);
+});
+
+it('keeps every imported chapter reachable through a partial TOC, including already imported versions', async () => {
+  const files = Object.assign(new Files(), {
+    async list() {
+      return [...files.data.keys()]
+        .filter((path) => path.startsWith('chapters/'))
+        .map((path) => path.slice(9));
+    },
+  });
+  const first = await fixture(),
+    second = await fixture({ canonicalUrl: 'https://ncode.syosetu.com/n1234ab/2/' });
+  const legacy = createReaderStore(files),
+    library = createLibraryStore(files);
+  await legacy.commitChapter(first);
+  await legacy.commitChapter(second);
+  await migrateLegacyData({ cacheKeys: [second.cacheKey], legacy, library });
+  await createV1Migration(files, preferences(), library)();
+  const pages = await library.readWork('n1234ab');
+  expect(pages[0]?.chapters.map((ref) => ref.chapterId)).toEqual(['n1234ab/1', 'n1234ab/2']);
+  expect(pages[0]?.complete).toBe(false);
+  await createV1Migration(files, preferences(), library)();
+  expect(await library.readWork('n1234ab')).toEqual(pages);
+  expect(await library.listVersions(second.source.chapterId)).toHaveLength(1);
 });

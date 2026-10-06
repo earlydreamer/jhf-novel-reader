@@ -11,7 +11,10 @@ import {
 function backend() {
   const writes: unknown[] = [],
     reads: unknown[] = [];
-  const api: Pick<FilesystemPlugin, "readFile" | "writeFile"> = {
+  const api: Pick<FilesystemPlugin, "readFile" | "writeFile" | "readdir"> = {
+    async readdir() {
+      return { files: [] };
+    },
     async readFile(options) {
       reads.push(options);
       return { data: "private body" };
@@ -24,6 +27,44 @@ function backend() {
   return { api, writes, reads };
 }
 describe("native-only private adapters", () => {
+  it('lists only files in the private legacy directory without requesting public permissions', async () => {
+    const b = backend(),
+      calls: unknown[] = [];
+    b.api.readdir = async (options) => {
+      calls.push(options);
+      return {
+        files: [
+          { name: 'v1-test.0.json', type: 'file', size: 1, mtime: 0, ctime: 0, uri: 'private' },
+          { name: 'nested', type: 'directory', size: 0, mtime: 0, ctime: 0, uri: 'private' },
+        ],
+      };
+    };
+    const files = createNativePrivateFiles(b.api, () => 'android');
+    expect(await files.list!('chapters')).toEqual(['v1-test.0.json']);
+    expect(calls).toEqual([{ path: 'narou-reader/chapters', directory: Directory.LibraryNoCloud }]);
+    await expect(files.list!('../secrets' as 'chapters')).rejects.toMatchObject({
+      reason: 'invalid',
+    });
+    await expect(
+      createNativePrivateFiles(b.api, () => 'web').list!('chapters'),
+    ).rejects.toMatchObject({ reason: 'unsupported_platform' });
+    expect(calls).toHaveLength(1);
+  });
+  it('treats only the explicit missing-directory code as an empty legacy library', async () => {
+    const b = backend(),
+      files = createNativePrivateFiles(b.api, () => 'android');
+    b.api.readdir = async () => {
+      throw { code: 'OS-PLUG-FILE-0008' };
+    };
+    expect(await files.list!('chapters')).toEqual([]);
+    b.api.readdir = async () => {
+      throw { code: 'OS-PLUG-FILE-0013', message: 'private detail' };
+    };
+    await expect(files.list!('chapters')).rejects.toMatchObject({
+      reason: 'io',
+      message: 'storage',
+    });
+  });
   it("uses app-private non-cloud Library files and utf8 without requesting public permissions", async () => {
     const b = backend(),
       files = createNativePrivateFiles(b.api, () => "android");

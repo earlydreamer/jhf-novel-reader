@@ -15,8 +15,8 @@ export type LegacyMigrationSummary = {
 
 export type LegacyMigrationInput = {
   /**
-   * v1 has no chapter index and PrivateFiles cannot list directories. Callers may
-   * only provide cache keys reached from an explicit durable pointer.
+   * Callers provide keys from the durable last-chapter pointer or validated
+   * v1 journal filenames in the app-private chapters directory.
    */
   readonly cacheKeys: readonly string[];
   readonly legacy: ReaderStore;
@@ -47,7 +47,7 @@ function workPage(completed: CompletedChapter): WorkPage {
     ],
     pageUrl: `https://ncode.syosetu.com/${source.workId}/`,
     nextPageUrl: null,
-    complete: true,
+    complete: false,
   };
 }
 
@@ -119,11 +119,24 @@ export async function migrateLegacyData(
       continue;
     }
     const prepared = await prepare(stored.chapter);
+    const candidate = workPage(stored.chapter);
+    const pages = await input.library.readWork(candidate.workId);
+    if (
+      !pages.some((page) =>
+        page.chapters.some((ref) => ref.chapterId === stored.chapter!.source.chapterId),
+      )
+    ) {
+      const page = pages[0] ?? { ...candidate, chapters: [] };
+      await input.library.saveWorkPage({
+        ...page,
+        chapters: [...page.chapters, ...candidate.chapters].sort((a, b) => a.ordinal - b.ordinal),
+        complete: false,
+      });
+    }
     if (await input.library.readVersion(prepared.version.versionId)) {
       skipped++;
       continue;
     }
-    await input.library.saveWorkPage(workPage(stored.chapter));
     await input.library.commitVersion(prepared.version);
     const position = stored.position;
     const blockIndex = position
