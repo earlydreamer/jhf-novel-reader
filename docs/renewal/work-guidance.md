@@ -20,6 +20,8 @@
 
 Black Shark 2 SKW-H0 / Android 10 / API 29에 설치한 로컬 app APK SHA-256은 `f36353ebaa8a04d2b60433c1e75d6d5bafc8ec8dd6aca13f72396719a9db7eb5`다. Android 조립·lint·전체 APK 감사도 통과했다. CI APK는 같은 소스의 별도 빌드이며 이 실기 APK와 바이트가 같다고 가정하지 않는다.
 
+같은 소스의 androidTest APK SHA-256은 `a717941bd95836f4a9fab5312e84663cc60a3b06d7f38eedf6708bffcc8d0677`다. 설치한 app APK 해시를 다시 확인한 뒤 네이티브 security 6개·격리 브라우저 9개·패키지 1개, 총 **16/16**을 실행해 통과했다. ADB runner 전체 관측 시간은 23,300ms다. 테스트 이후에도 원래 파일 10개·버전 2개를 바이트 단위로 복구하고 설정을 네이티브 재시작 readback으로 확인했다. 다른 APK의 과거 실행으로 대신하지 않았다.
+
 | 실제 기기 확인 | 결과와 범위 |
 | --- | --- |
 | 작품별 편집·저장·재시작 | PASS: 용어 2개·캐릭터 1개가 복원되고 다른 작품과 분리된다. 자동 모델 POST는 0이다. |
@@ -28,4 +30,6 @@ Black Shark 2 SKW-H0 / Android 10 / API 29에 설치한 로컬 app APK SHA-256�
 | 전체 항목 삭제·재시작 | PASS: 빈 항목 상태를 복원하고 저장한 세 번역 버전을 보존한다. 자동 POST는 0이다. |
 | 원래 사용자 데이터 복구 | PASS: 원래 활성 파일 10개·저장 버전 2개와 환경 설정을 바이트 단위로 복구하고 네이티브 재시작 readback을 확인했다. 앱을 종료하고 작업용 ADB 연결을 제거했다. |
 
-기기 UI·저장에는 실제 앱과 네이티브 파일 경로를 사용했다. 이 기능의 모델 적용 검증은 직접 만든 원문 fixture이며 원문 브라우저의 실제 사이트 발견 검증을 대신하지 않는다. 기존 소설의 [전체 회차 의미 보존](hy-mt2-segmented-g1-2026-10-07.md)은 FAIL이다. [PR #78](https://github.com/earlydreamer/narou-reader/pull/78)은 #74/#75 위의 Draft이며 이 결과를 G1 해결이나 병합 완료로 보고하지 않는다.
+기기 UI·저장에는 실제 앱과 네이티브 파일 경로를 사용했다. 모델 목록과 생성은 휴대폰의 native HTTP에서 Linux Tailnet 주소로 직접 요청했다. ADB forward는 UI 관찰에만 사용했으며 모델 요청에 중계 서버·ADB reverse를 사용하지 않았다. 기존 Windows MagicDNS 문제를 이번 Linux 경로의 실패로 취급하지 않는다.
+
+이 기능의 모델 적용 검증은 직접 만든 원문 fixture이며 원문 브라우저의 실제 사이트 발견 검증을 대신하지 않는다. 기존 소설의 [전체 회차 의미 보존](hy-mt2-segmented-g1-2026-10-07.md)은 FAIL이다. [PR #78](https://github.com/earlydreamer/narou-reader/pull/78)은 #74/#75 위의 Draft이며 이 결과를 G1 해결이나 병합 완료로 보고하지 않는다.

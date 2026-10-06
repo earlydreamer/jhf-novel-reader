@@ -16,7 +16,7 @@
 | [#75](https://github.com/earlydreamer/narou-reader/issues/75) | 범위·전체 회차 일괄 번역 | PR #77 Draft, #74 위에 쌓음. foreground 순차 실행·재시작·저장만 재시도 검증. |
 | [#21](https://github.com/earlydreamer/narou-reader/issues/21) | 작품 용어집·캐릭터 말투 | PR #78 Draft, #75 위에 쌓음. 직접 저장한 지침·해시·예산, Android와 Linux 자체 원문 적용 검증. |
 | [#72](https://github.com/earlydreamer/narou-reader/issues/72) | 모델의 기간·행동·루비 의미 변경 | Gemma와 Hy-MT2 모두 FAIL. 작은 입력에서도 남는 의미 오류를 유지한다. |
-| [#49](https://github.com/earlydreamer/narou-reader/issues/49) | Android Hy-MT2 1.8B 실행·품질 검토 | 모델·NDK 설치와 직접 CPU 실험. 앱 제공자 구현·전체 품질 성공과 구분한다. |
+| [#49](https://github.com/earlydreamer/narou-reader/issues/49) | Android Hy-MT2 1.8B 실행·품질 검토 | 모델·NDK 설치, 실제 CLI 중단과 전체 회차 14구간 완료. 의미 보존 FAIL이며 앱 제공자는 미구현이다. |
 | [#57](https://github.com/earlydreamer/narou-reader/issues/57) | Ollama 실사용 | NOT RUN. 현재 사용자가 지정한 Linux 서버 검증을 위해 새 Ollama 환경을 설치하지 않는다. |
 
 ## Legacy handoff
