@@ -16,10 +16,10 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const retranslate = useRef<HTMLInputElement>(null);
   const record = props.batch?.record?.work.workId === props.workId ? props.batch.record : null;
   const active = props.batch?.active ?? false;
-  const awaitingSave = record?.phase === 'saving';
+  const awaitingSave = props.batch?.record?.phase === 'saving';
   const canPrepare = props.batchAvailable && !active && !awaitingSave;
   return (
-    <section aria-label="일괄 번역">
+    <section className="nr-batch-panel" aria-label="일괄 번역">
       <h2>미리 번역하기</h2>
       <p>범위나 전체 회차를 확인한 뒤 시작하세요. 완료된 회차는 저장본으로 읽을 수 있습니다.</p>
       {!props.batchAvailable && !active && (
@@ -39,15 +39,17 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
       >
         <fieldset disabled={!canPrepare}>
           <legend>회차 선택</legend>
-          <label>
-            시작 회차
-            <input ref={first} type="number" min={1} step={1} required defaultValue={1} />
-          </label>
-          <label>
-            끝 회차
-            <input ref={last} type="number" min={1} step={1} required />
-          </label>
-          <label>
+          <div className="nr-batch-range">
+            <label>
+              시작 회차
+              <input ref={first} type="number" min={1} step={1} required defaultValue={1} />
+            </label>
+            <label>
+              끝 회차
+              <input ref={last} type="number" min={1} step={1} required />
+            </label>
+          </div>
+          <label className="nr-batch-retranslate">
             <input ref={retranslate} type="checkbox" />
             이미 번역한 회차도 다시 번역
           </label>
@@ -117,7 +119,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
               </button>
             </>
           )}
-          {awaitingSave && (
+          {record.phase === 'saving' && (
             <>
               <p>완료한 번역을 저장하지 못했습니다. 새 요청 전에 저장을 마쳐야 합니다.</p>
               <button disabled={active} onClick={props.onRetryBatchSave}>
