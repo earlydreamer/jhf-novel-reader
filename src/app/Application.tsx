@@ -117,6 +117,23 @@ export function Application({ controller }: { controller: RenewalController }): 
         </nav>
       </header>
       {state.error && <p role="alert">{state.error}</p>}
+      {state.legacyWarnings.length > 0 && (
+        <aside aria-label="이전 읽기 데이터 확인" role="status">
+          <p>이전 읽기 데이터 일부를 가져오지 못했습니다. 원본 파일은 그대로 보존했습니다.</p>
+          <ul>
+            {state.legacyWarnings.map((warning) => (
+              <li key={warning.cacheKey}>
+                기록 {warning.cacheKey.slice(3, 15)}:{' '}
+                {warning.reason === 'unfinished'
+                  ? '미완료 번역입니다. 자동으로 번역을 재개하지 않습니다.'
+                  : warning.reason === 'missing'
+                    ? '저장 파일을 찾을 수 없습니다.'
+                    : '손상되었거나 지원하지 않는 형식입니다.'}
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )}
       {state.pendingSaveChapter &&
         (state.route.kind !== 'translation' ||
           state.route.chapterId !== state.pendingSaveChapter.chapterId) && (

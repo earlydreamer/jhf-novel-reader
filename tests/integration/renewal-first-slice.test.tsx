@@ -4,6 +4,7 @@ import { createRenewalApplication } from '../../src/app/compose';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 import { createLibraryStore } from '../../src/storage/library';
 import { createLastChapterRepository } from '../../src/app/lastChapter';
+import { digest } from '../../src/storage/journal';
 import { createReaderStore } from '../../src/storage/store';
 import { createAttemptRepository } from '../../src/translation/attempts';
 import { StorageError } from '../../src/storage/errors';
@@ -243,6 +244,60 @@ async function legacyCompleted(): Promise<CompletedChapter> {
     completedAt: '2026-10-04T00:00:00.000Z',
   };
 }
+it('native composition exposes per-item v1 warnings while retaining saved reading without generation', async () => {
+  const h = harness();
+  const legacy = await legacyCompleted();
+  await createReaderStore(h.adapters.files).commitChapter(legacy);
+  const corrupt = 'v1-' + (await digest('corrupt-fixture'));
+  const unsupported = 'v1-' + (await digest('unsupported-fixture'));
+  h.bytes.set('chapters/' + corrupt + '.0.json', '{');
+  const envelope = (payload: unknown) => JSON.stringify({ format: 1, generation: 1, payload });
+  const checkpoint = {
+    schemaVersion: 1,
+    cacheKey: legacy.cacheKey,
+    identity: legacy.identity,
+    chapter: legacy.source,
+    token: { jobId: 'fixture', chapterId: legacy.source.chapterId, settingsRevision: 1 },
+    chunks: [],
+  };
+  // Use a valid distinct cache identity for the unfinished entry.
+  checkpoint.identity = { ...legacy.identity, model: 'unfinished' };
+  checkpoint.cacheKey = await createCacheKey(checkpoint.identity);
+  const payload = { chapter: null, checkpoint };
+  h.bytes.set(
+    'chapters/' + checkpoint.cacheKey + '.0.json',
+    JSON.stringify({
+      ...JSON.parse(envelope(payload)),
+      checksum: await digest([1, 1, payload]),
+    }),
+  );
+  h.bytes.set('chapters/' + unsupported + '.0.json', JSON.stringify({ format: 3 }));
+  const before = new Map(h.bytes);
+  const files = {
+    ...h.adapters.files,
+    async list() {
+      return [...h.bytes.keys()]
+        .filter((path) => path.startsWith('chapters/'))
+        .map((path) => path.slice(9));
+    },
+  };
+  const app = createRenewalApplication({ ...h.adapters, files });
+  await app.initialize();
+  expect(app.getSnapshot().legacyWarnings).toEqual(
+    expect.arrayContaining([
+      { cacheKey: corrupt, reason: 'unreadable' },
+      { cacheKey: unsupported, reason: 'unreadable' },
+      { cacheKey: checkpoint.cacheKey, reason: 'unfinished' },
+    ]),
+  );
+  expect(app.getSnapshot().legacyWarnings).toHaveLength(3);
+  for (const [path, content] of before) expect(h.bytes.get(path)).toBe(content);
+  await app.continueReading(app.getSnapshot().recent[0]!.versionId);
+  expect(app.getSnapshot().version?.text).toBe('저장된 번역');
+  expect(h.posts()).toHaveLength(0);
+  app.dispose();
+  h.app.dispose();
+});
 async function dispatched(h: ReturnType<typeof harness>) {
   await expect.poll(() => h.posts().length).toBe(1);
 }

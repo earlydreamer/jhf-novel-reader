@@ -551,6 +551,31 @@ describe('review P1: translation ownership survives navigation', () => {
   });
 });
 
+it('shows each skipped legacy record without blocking saved reading or exposing its endpoint', async () => {
+  const value = fixture(true);
+  const controller = controllers.createRenewalController({
+    ...value.dependencies,
+    migrateLegacy: async () => ({
+      migrated: 1,
+      skipped: 3,
+      warnings: [
+        { cacheKey: 'v1-' + 'a'.repeat(64), reason: 'unfinished' },
+        { cacheKey: 'v1-' + 'b'.repeat(64), reason: 'unreadable' },
+        { cacheKey: 'v1-' + 'c'.repeat(64), reason: 'missing' },
+      ],
+    }),
+  });
+  render(<Application controller={controller} />);
+  const notice = await screen.findByRole('status', { name: '이전 읽기 데이터 확인' });
+  expect(notice).toHaveTextContent('기록 aaaaaaaaaaaa: 미완료 번역');
+  expect(notice).toHaveTextContent('기록 bbbbbbbbbbbb: 손상되었거나 지원하지 않는 형식');
+  expect(notice).toHaveTextContent('기록 cccccccccccc: 저장 파일을 찾을 수 없습니다.');
+  await controller.continueReading(saved.versionId);
+  expect(await screen.findByText(saved.text)).toBeVisible();
+  expect(value.generate).not.toHaveBeenCalled();
+  controller.dispose();
+});
+
 describe('review P2: library-only continuation restores saved metadata', () => {
   it('shows the saved marker after cold-start offline continue reading and contents navigation', async () => {
     const value = fixture(true);
