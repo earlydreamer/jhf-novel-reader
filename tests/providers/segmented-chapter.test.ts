@@ -45,6 +45,36 @@ const selection = {
   limits,
 };
 const secrets = { get: async () => null, set: async () => {}, remove: async () => {} };
+test('reference context consumes input capacity while every source atom is still sent exactly once', async () => {
+  const referenceContext = 'Approved data: ' + 'reference '.repeat(22) + '\n\n';
+  const segments = planSegments(longSource, limits, referenceContext);
+  expect(segments.length).toBeGreaterThan(planSegments(longSource, limits).length);
+  expect(segments.map((segment) => segment.input).join('')).toBe(normalizeChapterInput(longSource));
+  for (const segment of segments)
+    expect(estimatedInputTokens(segment.input, referenceContext)).toBeLessThanOrEqual(
+      limits.inputBudgetTokens,
+    );
+  const post = vi.fn<ModelTransport['post']>(async (call) => ({
+    status: 200,
+    url: call.url,
+    headers: {},
+    data: {
+      choices: [{ finish_reason: 'stop', message: { content: '번역 본문' } }],
+    },
+  }));
+  const provider = createProviderSession(selection, { post, get: vi.fn() }, secrets);
+  await provider.translateChapter({ ...request, referenceContext }, new AbortController().signal);
+  expect(post).toHaveBeenCalledTimes(segments.length);
+  const inputs = post.mock.calls.map(
+    ([call]) => (call.body.messages as { content: string }[])[0]!.content,
+  );
+  expect(inputs.every((input) => input.startsWith(SEGMENT_INSTRUCTION + referenceContext))).toBe(
+    true,
+  );
+  expect(
+    inputs.map((input) => input.slice((SEGMENT_INSTRUCTION + referenceContext).length)).join(''),
+  ).toBe(normalizeChapterInput(longSource));
+});
 test('catalog capacity and model capability bound internal budgets; unreported capacity is conservative', async () => {
   const transport: ModelTransport = {
     post: vi.fn(),

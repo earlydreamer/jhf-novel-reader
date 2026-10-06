@@ -43,6 +43,7 @@ export const ERROR_CODES = [
   'input_limit',
   'output_limit',
   'blocked',
+  'guidance_unsupported',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 export type RequestOutcome = 'not_sent' | 'unknown' | 'received';

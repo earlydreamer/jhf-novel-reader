@@ -4,7 +4,7 @@ import type { ReaderActions, ReaderViewState } from '../../contracts/legacy';
 import '../reader.css';
 
 const phases = { idle: '읽을 한 화를 골라주세요', preparing: '원문을 준비하고 있어요', translating: '한국어로 옮기고 있어요', validating: '번역을 확인하고 있어요', saving: '완성본을 저장하고 있어요', ready: '읽기 준비 완료', failed: '작업을 마치지 못했어요', unknown: '서버의 처리 결과를 알 수 없어요', paused: '번역이 잠시 멈췄어요' };
-const errors = { model_list: '모델 목록 오류', model_missing: '모델을 다시 선택하세요.', input_limit: '입력 한도 초과', output_limit: '출력 한도 초과', blocked: '요청이 차단되었습니다.', source_access: '접근할 수 있는 회차 주소인지 확인해주세요.', source_parse: '페이지에서 본문을 찾지 못했어요.', connection: '휴대폰에서 모델 서버에 연결할 수 있는지 확인해주세요.', auth: '모델 인증 설정을 확인해주세요.', timeout_unknown: '서버에서 아직 처리 중일 수 있어요.', invalid_output: '번역이 잘리거나 일부 문단이 빠졌어요.', storage: '기기 저장 공간을 확인해주세요. 번역을 다시 요청하지 않고 저장을 다시 시도합니다.', cancelled: '저장된 진행 상황에서 이어갈 수 있어요.' };
+const errors = { guidance_unsupported: '이 모델의 용어집·말투 적용은 지원하지 않습니다.', model_list: '모델 목록 오류', model_missing: '모델을 다시 선택하세요.', input_limit: '입력 한도 초과', output_limit: '출력 한도 초과', blocked: '요청이 차단되었습니다.', source_access: '접근할 수 있는 회차 주소인지 확인해주세요.', source_parse: '페이지에서 본문을 찾지 못했어요.', connection: '휴대폰에서 모델 서버에 연결할 수 있는지 확인해주세요.', auth: '모델 인증 설정을 확인해주세요.', timeout_unknown: '서버에서 아직 처리 중일 수 있어요.', invalid_output: '번역이 잘리거나 일부 문단이 빠졌어요.', storage: '기기 저장 공간을 확인해주세요. 번역을 다시 요청하지 않고 저장을 다시 시도합니다.', cancelled: '저장된 진행 상황에서 이어갈 수 있어요.' };
 
 /** Text nodes only. Invalid or overlapping ruby annotations fall back to plain text. */
 function SafeParagraph({ paragraph }: { paragraph: Paragraph }) {

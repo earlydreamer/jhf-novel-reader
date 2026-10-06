@@ -126,6 +126,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'promptVersion',
     'languageDirection',
     'generation',
+    'guidanceHash',
   ]);
   const p = value.provenance;
   check(p.provider === 'openai-compatible' || p.provider === 'gemini');
@@ -133,6 +134,8 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
   text(p.modelId);
   check(p.contractVersion === 'plain-v1' && p.languageDirection === 'ja-ko');
   text(p.promptVersion);
+  if (p.guidanceHash !== undefined)
+    check(typeof p.guidanceHash === 'string' && /^[a-f0-9]{64}$/.test(p.guidanceHash));
   if (p.generation !== undefined) {
     object(p.generation, [
       'mode',

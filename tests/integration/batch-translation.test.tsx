@@ -8,6 +8,7 @@ import { createModelTransport, createSourceTransport } from '../../src/platform/
 import { createLibraryStore } from '../../src/storage/library';
 import { createBatchRepository } from '../../src/translation/batch';
 import type { NativeHttpRequest } from '../../src/contracts';
+import { createGuidanceRepository, guidanceContext } from '../../src/translation/guidance';
 
 afterEach(cleanup);
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
@@ -109,6 +110,7 @@ function fixture() {
     app,
     adapters,
     library,
+    guidance: createGuidanceRepository(files),
     bytes,
     requests,
     posts,
@@ -351,4 +353,102 @@ test('corrupt queue metadata blocks generation after restart', async () => {
   await restarted.runBatch(true);
   expect(harness.posts()).toHaveLength(0);
   restarted.dispose();
+});
+
+const approved = {
+  terms: [{ source: '合成', target: '가온', aliases: ['合成君'], category: '인명', note: '' }],
+  voices: [{ name: '合成', aliases: [], instruction: '화자가 합성일 때 존댓말을 유지한다.' }],
+};
+test('approved work context survives restart, is included in requests and changes cache identity without deleting versions', async () => {
+  const harness = fixture();
+  await harness.setup();
+  const first = await harness.app.saveGuidance('n1234ab', approved);
+  expect(await harness.app.readGuidance('n9999zz')).toBeNull();
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(1);
+  const body = harness.posts()[0]!.data as { messages: { content: string }[] };
+  expect(body.messages[0]!.content).toContain('가온');
+  expect(body.messages[0]!.content).toContain('never invent a speaker');
+  expect((await harness.library.listVersions('n1234ab/1'))[0]!.provenance.guidanceHash).toBe(
+    first.hash,
+  );
+  const second = await harness.app.saveGuidance('n1234ab', {
+    ...approved,
+    terms: [{ ...approved.terms[0]!, target: '다온' }],
+  });
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(0);
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(2);
+  expect(await harness.library.listVersions('n1234ab/1')).toHaveLength(2);
+  harness.app.dispose();
+  const restarted = createRenewalApplication(harness.adapters);
+  await restarted.initialize();
+  expect((await restarted.readGuidance('n1234ab'))?.hash).toBe(second.hash);
+  expect(harness.posts()).toHaveLength(2);
+  restarted.dispose();
+});
+test('editing context after a batch preview requires a fresh preview and makes no generation request', async () => {
+  const harness = fixture();
+  await harness.setup();
+  await harness.app.saveGuidance('n1234ab', approved);
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await harness.app.saveGuidance('n1234ab', { terms: [], voices: [] });
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(0);
+  expect(harness.app.getSnapshot().batch?.error).toContain('용어집·말투가 바뀌었습니다');
+  harness.app.dispose();
+});
+test('oversized approved context fails before generation without silently dropping terms', async () => {
+  const harness = fixture();
+  await harness.setup();
+  await harness.app.saveGuidance('n1234ab', {
+    terms: [{ ...approved.terms[0]!, note: '한'.repeat(300) }],
+    voices: [{ ...approved.voices[0]!, instruction: '한'.repeat(400) }],
+  });
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(0);
+  expect(harness.app.getSnapshot().batch?.error).toContain('입력 한도');
+  expect(await harness.library.listVersions('n1234ab/1')).toHaveLength(0);
+  harness.app.dispose();
+});
+test('the work editor only applies explicitly saved terms and supports multiple aliases and deletion', async () => {
+  const harness = fixture();
+  await harness.setup();
+  render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
+  await waitFor(() => expect(screen.getByRole('button', { name: '용어 추가' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '용어 추가' }));
+  fireEvent.change(screen.getByLabelText('용어 1 원문'), { target: { value: '合成' } });
+  fireEvent.change(screen.getByLabelText('용어 1 한국어 표기'), { target: { value: '가온' } });
+  fireEvent.change(screen.getByLabelText('용어 1 별칭'), { target: { value: '合成君, 先生' } });
+  expect(await harness.app.readGuidance('n1234ab')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '용어집·말투 저장' }));
+  await screen.findByText(/저장했습니다. 다음 번역에 적용/);
+  expect((await harness.app.readGuidance('n1234ab'))?.terms[0]?.aliases).toEqual([
+    '合成君',
+    '先生',
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: '용어 1 삭제' }));
+  fireEvent.click(screen.getByRole('button', { name: '용어집·말투 저장' }));
+  await waitFor(async () => expect((await harness.app.readGuidance('n1234ab'))?.terms).toEqual([]));
+  harness.app.dispose();
+});
+test('reference matching includes aliases and excludes unrelated entries and never changes source text', async () => {
+  const harness = fixture();
+  await harness.setup();
+  const value = await harness.app.saveGuidance('n1234ab', {
+    terms: [
+      ...approved.terms,
+      { source: '未登場', target: '스포일러', aliases: [], category: '', note: '' },
+    ],
+    voices: approved.voices,
+  });
+  const context = guidanceContext(value, 'n1234ab', '合成君は来なかった。');
+  expect(context).toContain('가온');
+  expect(context).not.toContain('스포일러');
+  expect(() => guidanceContext(value, 'n9999zz', '合成')).toThrow();
+  harness.app.dispose();
 });

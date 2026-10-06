@@ -14,12 +14,20 @@ import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import type { AttemptRepository } from './attempts';
 import { createSingleFlight } from './singleFlight';
+import {
+  guidanceContext,
+  guidanceHash,
+  type GuidanceRepository,
+  type WorkGuidance,
+} from './guidance';
+import { normalizeChapterInput } from '../providers/plainText';
 export interface FlowDependencies {
   source: RenewalSource;
   createProvider(selection: SelectedModel): ProviderSession;
   store: LibraryStore;
   attempts: AttemptRepository;
   clock: { now(): number };
+  guidance?: GuidanceRepository;
 }
 export type PhaseDurations = { sourceMs: number; modelMs: number; validationStorageMs: number };
 export function createWholeChapterFlow(deps: FlowDependencies) {
@@ -54,10 +62,15 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
       publish({ phase: 'failed', error: new ReaderError('storage'), pendingSave: value });
     }
   }
-  async function start(ref: ChapterRef, selection: SelectedModel): Promise<void> {
+  async function start(
+    ref: ChapterRef,
+    selection: SelectedModel,
+    approved?: WorkGuidance | null,
+  ): Promise<void> {
     if (!foreground || disposed || slot.occupied || state.pendingSave) return;
     const chapter = structuredClone(ref),
-      selected = structuredClone(selection);
+      selected = structuredClone(selection),
+      frozenGuidance = approved === undefined ? undefined : structuredClone(approved);
     await slot.run(async () => {
       const token: TranslationToken = {
         requestId: crypto.randomUUID(),
@@ -77,6 +90,20 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         const source = await deps.source.getChapter(chapter, control.signal);
         timings.sourceMs = deps.clock.now() - started;
         if (control.signal.aborted || !foreground || disposed) throw new ReaderError('cancelled');
+        const guidance =
+          frozenGuidance === undefined
+            ? ((await deps.guidance?.read(chapter.workId)) ?? null)
+            : frozenGuidance;
+        const referenceContext = guidanceContext(
+          guidance,
+          chapter.workId,
+          normalizeChapterInput(source),
+        );
+        if (
+          referenceContext &&
+          (selected.connection.provider !== 'openai-compatible' || !selected.limits)
+        )
+          throw new ReaderError('guidance_unsupported');
         const provider = deps.createProvider(selected);
         await deps.attempts.write({ token, phase: 'dispatching' });
         if (control.signal.aborted || !foreground || disposed) {
@@ -97,6 +124,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
                 ? 'hymt2-segments-v1'
                 : 'hymt2-ko-v1',
             onProgress: (completed, total) => publish({ progress: { completed, total } }),
+            ...(referenceContext ? { referenceContext } : {}),
           },
           control.signal,
         );
@@ -146,6 +174,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             promptVersion: result.generation ? 'hymt2-segments-v1' : 'hymt2-ko-v1',
             languageDirection: 'ja-ko',
             ...(result.generation ? { generation: result.generation } : {}),
+            ...(guidanceHash(guidance) ? { guidanceHash: guidanceHash(guidance) } : {}),
           },
         };
         if (control.signal.aborted || disposed) throw new ReaderError('cancelled', 'unknown');

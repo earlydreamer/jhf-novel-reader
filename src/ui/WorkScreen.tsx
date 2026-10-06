@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { ChapterRef, WorkPage } from '../contracts/reading';
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
+import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
 export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   work: WorkPage;
   selectedChapterId?: string;
@@ -9,6 +10,7 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   savedChapterIds: readonly string[];
   onSelect(chapter: ChapterRef): void;
   onLoadMore(): void;
+  guidance?: Omit<GuidancePanelProps, 'workId'>;
 }
 export function WorkScreen({
   work,
@@ -24,6 +26,7 @@ export function WorkScreen({
   onCancelBatch,
   onRetryBatchSave,
   onSettings,
+  guidance,
 }: WorkScreenProps): JSX.Element {
   return (
     <section aria-label="작품 목차">
@@ -32,6 +35,7 @@ export function WorkScreen({
         작품 원문
       </a>
       <h2>목차</h2>
+      {guidance && <GuidancePanel key={work.workId} workId={work.workId} {...guidance} />}
       <BatchPanel
         workId={work.workId}
         batch={batch}

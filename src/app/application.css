@@ -65,6 +65,7 @@
   margin-block: 1rem;
 }
 .nr-application input,
+.nr-application textarea,
 .nr-application select {
   max-width: 100%;
   box-sizing: border-box;
@@ -77,7 +78,8 @@
 .nr-application button:disabled {
   cursor: default;
 }
-.nr-batch-panel fieldset {
+.nr-batch-panel fieldset,
+.nr-guidance-panel fieldset {
   min-width: 0;
 }
 .nr-batch-range {
