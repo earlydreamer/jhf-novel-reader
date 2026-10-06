@@ -19,10 +19,30 @@ function privatePath(path: string): string {
   return `narou-reader/${path}`;
 }
 export function createNativePrivateFiles(
-  backend: Pick<FilesystemPlugin, 'readFile' | 'writeFile'> = Filesystem,
+  backend: Pick<FilesystemPlugin, 'readFile' | 'writeFile' | 'readdir'> = Filesystem,
   getPlatform: () => string = platform,
 ): PrivateFiles {
   return {
+    async list(directory) {
+      native(getPlatform);
+      check(directory === 'chapters');
+      try {
+        const result = await backend.readdir({
+          path: 'narou-reader/chapters',
+          directory: Directory.LibraryNoCloud,
+        });
+        return result.files.filter((file) => file.type === 'file').map((file) => file.name);
+      } catch (error) {
+        if (
+          error &&
+          typeof error === 'object' &&
+          'code' in error &&
+          error.code === 'OS-PLUG-FILE-0008'
+        )
+          return [];
+        throw storageError(error);
+      }
+    },
     async read(path) {
       native(getPlatform);
       const options = {

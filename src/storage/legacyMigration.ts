@@ -15,8 +15,8 @@ export type LegacyMigrationSummary = {
 
 export type LegacyMigrationInput = {
   /**
-   * v1 has no chapter index and PrivateFiles cannot list directories. Callers may
-   * only provide cache keys reached from an explicit durable pointer.
+   * Callers provide keys from the durable last-chapter pointer or validated
+   * v1 journal filenames in the app-private chapters directory.
    */
   readonly cacheKeys: readonly string[];
   readonly legacy: ReaderStore;
@@ -123,7 +123,8 @@ export async function migrateLegacyData(
       skipped++;
       continue;
     }
-    await input.library.saveWorkPage(workPage(stored.chapter));
+    if (!(await input.library.readWork(stored.chapter.source.workId)).length)
+      await input.library.saveWorkPage(workPage(stored.chapter));
     await input.library.commitVersion(prepared.version);
     const position = stored.position;
     const blockIndex = position

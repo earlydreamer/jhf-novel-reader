@@ -3,6 +3,7 @@ import { check, integer, object, record } from "./validation";
 export interface PrivateFiles {
   read(path: string): Promise<string | null>;
   write(path: string, text: string): Promise<void>;
+  list?(directory: "chapters"): Promise<readonly string[]>;
 }
 export async function digest(value: unknown): Promise<string> {
   const bytes = await crypto.subtle.digest(
