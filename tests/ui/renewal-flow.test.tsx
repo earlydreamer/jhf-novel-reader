@@ -344,6 +344,8 @@ describe('renewal connection failures', () => {
     ['auth', 'auth'],
     ['connection', 'connection'],
     ['model_list', 'model_list'],
+    ['storage', 'storage'],
+    ['timeout_unknown', 'connection'],
   ] as const)('distinguishes %s without exposing server errors', async (code, status) => {
     const { ReaderError } = await import('../../src/contracts');
     const value = fixture();
@@ -360,6 +362,28 @@ describe('renewal connection failures', () => {
     await controller.checkConnection('secret-not-in-snapshot');
     expect(controller.getSnapshot().catalogStatus).toBe(status);
     expect(JSON.stringify(controller.getSnapshot())).not.toContain('secret-not-in-snapshot');
+  });
+  it('shows an actionable secure-storage failure in connection settings', async () => {
+    const { StorageError } = await import('../../src/storage/errors');
+    const value = fixture();
+    const controller = controllers.createRenewalController({
+      ...value.dependencies,
+      connect: async () => {
+        throw new StorageError('secure');
+      },
+    });
+    controller.changeConnection({ provider: 'openai-compatible', baseUrl: 'http://192.0.2.1/v1' });
+    await controller.checkConnection('private-secret-canary');
+    controller.navigate({ kind: 'settings' });
+    render(<Application controller={controller} />);
+    expect(
+      screen.getByText(/인증값을 기기의 보안 저장소에 저장하거나 읽지 못했습니다/),
+    ).toBeVisible();
+    expect(screen.queryByText('모델 목록을 불러오지 못했습니다.')).toBeNull();
+    expect(screen.getByLabelText('인증값 (선택)')).toHaveValue('');
+    expect(document.body.textContent).not.toContain('private-secret-canary');
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
   });
   it('invalid endpoint is a connection error rather than a model catalog error', async () => {
     const value = fixture();

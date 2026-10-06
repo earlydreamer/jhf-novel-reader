@@ -22,6 +22,7 @@ export type CatalogStatus =
   | 'checking'
   | 'connected'
   | 'auth'
+  | 'storage'
   | 'connection'
   | 'model_list'
   | 'empty'
@@ -112,7 +113,12 @@ function safeEndpoint(input: string): string {
 }
 function errorLabel(error: unknown): CatalogStatus {
   if (error instanceof ReaderError && error.code === 'auth') return 'auth';
-  if (error instanceof ReaderError && error.code === 'connection') return 'connection';
+  if (error instanceof ReaderError && error.code === 'storage') return 'storage';
+  if (
+    error instanceof ReaderError &&
+    (error.code === 'connection' || error.code === 'timeout_unknown')
+  )
+    return 'connection';
   return 'model_list';
 }
 export interface RenewalController {

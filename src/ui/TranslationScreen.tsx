@@ -38,7 +38,7 @@ const errors: Partial<Record<ErrorCode, string>> = {
   blocked: '제공자가 응답을 차단했습니다. 다른 제공자로 자동 전환하지 않습니다.',
   invalid_output: '완료된 번역 응답을 확인하지 못했습니다.',
   model_missing: '현재 모델 목록에서 생성 모델을 선택하세요.',
-  storage: '기기 저장을 완료하지 못했습니다.',
+  storage: '기기 저장소를 읽거나 쓰지 못했습니다. 기기 상태를 확인하세요.',
 };
 export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
   const active = ['preparing', 'translating', 'validating', 'saving'].includes(props.state.phase);

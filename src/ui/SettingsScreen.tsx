@@ -13,6 +13,8 @@ const catalogLabels: Record<CatalogStatus, string> = {
   checking: '서버와 모델 목록 확인 중',
   connected: '모델 목록 확인됨. 번역 호환성은 아직 검증되지 않았습니다.',
   auth: '인증에 실패했습니다.',
+  storage:
+    '인증값을 기기의 보안 저장소에 저장하거나 읽지 못했습니다. 기기 상태를 확인한 뒤 다시 시도하세요.',
   connection: '서버에 연결하지 못했습니다. 주소를 확인하세요.',
   model_list: '모델 목록을 불러오지 못했습니다.',
   empty: '사용 가능한 생성 모델이 없습니다.',
