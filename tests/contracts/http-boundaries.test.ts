@@ -61,3 +61,22 @@ it('rejects authenticated model redirects in exactly one request', async () => {
  expect(request).toHaveBeenCalledTimes(1);
  expect(request.mock.calls[0]?.[0].disableRedirects).toBe(true);
 });
+
+it('waits beyond two minutes for one local whole-chapter response without redispatch', async () => {
+ vi.useFakeTimers();
+ try {
+  const request = vi.fn<NativeHttpClient['request']>(options => new Promise((resolve, reject) => {
+   const deadline = setTimeout(() => reject(new Error('native read timeout')), options.readTimeout);
+   setTimeout(() => { clearTimeout(deadline); resolve({ ...response, url: options.url }); }, 180000);
+  }));
+  const result = createModelTransport({ request }).post({ url: 'http://192.168.1.2/v1/chat/completions', body: { model: 'local' } }, signal());
+  let settled = false;
+  void result.then(() => { settled = true; }, () => { settled = true; });
+  await vi.advanceTimersByTimeAsync(120000);
+  expect(settled).toBe(false);
+  expect(request).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(60000);
+  await expect(result).resolves.toEqual({ ...response, url: 'http://192.168.1.2/v1/chat/completions' });
+  expect(request).toHaveBeenCalledTimes(1);
+ } finally { vi.useRealTimers(); }
+});

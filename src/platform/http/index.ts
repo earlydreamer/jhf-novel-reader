@@ -142,7 +142,8 @@ export function createModelTransport(client: NativeHttpClient): ModelTransport {
           responseType: 'text',
           disableRedirects: true,
           connectTimeout: 15000,
-          readTimeout: 120000,
+          // Local whole-chapter generation can outlast the two-minute cloud bound.
+          readTimeout: gemini ? 120000 : 600000,
         },
         signal,
         false,

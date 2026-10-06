@@ -6,10 +6,8 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
-import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import static androidx.test.espresso.Espresso.onView;
-import static androidx.test.espresso.action.ViewActions.pressKey;
 import androidx.test.espresso.action.GeneralClickAction;
 import androidx.test.espresso.action.Press;
 import androidx.test.espresso.action.Tap;
@@ -205,13 +203,12 @@ public class SourceBrowserInstrumentedTest {
                 body = "<a href='https://ncode.syosetu.com/n1234ab/2/'>検索結果</a>";
             } else if (uri.getPath().equals("/search.php")) {
                 title = "Search fixture";
-                body = "<form method='get' action='/search.php'><input name='word' value='syntheticword'><input type='submit' value='検索'></form>";
+                body = "<form method='get' action='/search.php'><input type='hidden' name='word' value='syntheticword'><button type='submit' style='min-height:48px'>検索</button></form>";
             } else {
                 title = "Home fixture";
                 body = "<a href='https://yomou.syosetu.com/fixture/rank'>ランキング</a>";
             }
-            byte[] html = ("<html><head><title>" + title + "</title></head><body>" + body + "</body></html>").getBytes(StandardCharsets.UTF_8);
-            return new SourceBrowserLoader.Resource(uri, 200, "text/html", "UTF-8", Collections.emptyMap(), html);
+            return fixturePage(uri, title, body);
         });
         try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
             scenario.onActivity(activity -> {
@@ -227,10 +224,11 @@ public class SourceBrowserInstrumentedTest {
                 view.requestFocus();
             });
             awaitTitle(scenario, "Home fixture");
-            onView(withId(SourceBrowserActivity.BROWSER_ID)).perform(pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_ENTER));
+            tapFirstLink(scenario, "Home fixture");
             awaitTitle(scenario, "Ranking fixture");
-            onView(withId(SourceBrowserActivity.BROWSER_ID)).perform(pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_ENTER));
+            tapFirstLink(scenario, "Ranking fixture");
             awaitTitle(scenario, "Work fixture");
+            awaitBrowserState(scenario, "https://ncode.syosetu.com/n1234ab/", true);
             scenario.onActivity(activity -> {
                 assertTrue(((Button) activity.findViewById(SourceBrowserActivity.OPEN_ID)).isEnabled());
                 activity.findViewById(SourceBrowserActivity.BACK_ID).performClick();
@@ -238,7 +236,7 @@ public class SourceBrowserInstrumentedTest {
             awaitTitle(scenario, "Ranking fixture");
             scenario.onActivity(activity -> ((WebView) activity.findViewById(SourceBrowserActivity.BROWSER_ID)).loadUrl("https://yomou.syosetu.com/search.php"));
             awaitTitle(scenario, "Search fixture");
-            onView(withId(SourceBrowserActivity.BROWSER_ID)).perform(pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_TAB), pressKey(KeyEvent.KEYCODE_ENTER));
+            tapFirstLink(scenario, "Search fixture");
             awaitTitle(scenario, "Search results fixture");
             assertTrue(requests.contains("https://yomou.syosetu.com/search.php?word=syntheticword"));
         }

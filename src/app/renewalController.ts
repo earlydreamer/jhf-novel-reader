@@ -1,6 +1,7 @@
 import type { AppLifecycle } from '../contracts';
 import type { PhaseDurations, WholeChapterFlow } from '../translation/wholeChapter';
 import type { ReadingSettings } from '../storage/settings';
+import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
 import { ReaderError } from '../contracts';
 import type {
   ChapterRef,
@@ -31,7 +32,7 @@ export type CatalogStatus =
 export type SourceChangeStatus = 'idle' | 'checking' | 'unchanged' | 'changed' | 'unavailable';
 export interface RenewalDependencies {
   readonly library?: LibraryStore;
-  readonly migrateLegacy?: () => Promise<void>;
+  readonly migrateLegacy?: () => Promise<LegacyMigrationSummary>;
   readonly clock?: { now(): number };
   readonly flow?: WholeChapterFlow;
   readonly lifecycle?: AppLifecycle;
@@ -60,6 +61,7 @@ export interface RenewalDependencies {
   ) => Promise<void>;
 }
 export interface RenewalSnapshot {
+  readonly legacyWarnings: readonly LegacyMigrationWarning[];
   readonly route: Route;
   readonly work: WorkPage | null;
   readonly savedChapterIds: readonly string[];
@@ -159,6 +161,7 @@ interface ActiveTranslation {
 export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
   let snapshot: RenewalSnapshot = {
     route: { kind: 'home' },
+    legacyWarnings: [],
     work: null,
     savedChapterIds: [],
     chapter: null,
@@ -299,7 +302,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           if (lifecycleEvents === eventAtStart) foreground = active;
         }
         if (disposed) return;
-        await dependencies.migrateLegacy?.();
+        const migration = await dependencies.migrateLegacy?.();
+        if (migration && !disposed) publish({ legacyWarnings: migration.warnings });
         if (disposed) return;
         dependencies.flow?.setForeground(foreground);
         await dependencies.flow?.initialize();
@@ -653,7 +657,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (snapshot.route.kind !== 'reader' || !chapter) return;
     publish({ sourceChange: 'idle', translation: { phase: 'idle', elapsedMs: 0 } });
     navigate({ kind: 'translation', chapterId: chapter.chapterId });
-    await translate();
   }
   async function translate(): Promise<void> {
     if (
