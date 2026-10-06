@@ -294,6 +294,27 @@ describe('renewal reading affordances', () => {
     fireEvent.change(screen.getByLabelText('글자 크기'), { target: { value: '24' } });
     expect(article).toHaveStyle({ fontSize: '24px' });
   });
+  it('returns to the latest translation position after scrolling the original', async () => {
+    const offsetTop = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(20);
+    const value = await setup(true);
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    const article = await screen.findByRole('article', { name: '번역 본문' });
+    article.scrollTop = 357;
+    fireEvent.scroll(article);
+    await waitFor(() =>
+      expect(value.dependencies.library!.savePosition).toHaveBeenCalledWith(
+        expect.objectContaining({ blockId: 'translated-1', offset: 337 }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '원문 확인' }));
+    article.scrollTop = 0;
+    fireEvent.scroll(article);
+    expect(value.dependencies.library!.savePosition).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '번역 보기' }));
+    offsetTop.mockRestore();
+    expect(article.scrollTop).toBe(357);
+  });
   it('next unsaved chapter enters a waiting screen without a model request', async () => {
     const value = await setup(true);
     fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));

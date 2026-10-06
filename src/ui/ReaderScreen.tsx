@@ -23,15 +23,17 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   useEffect(() => {
     reportDisplayed?.(displayedVersionId);
   }, [reportDisplayed, displayedVersionId]);
-  const initialPosition = useRef(props.position);
+  const translationPosition = useRef<Pick<ReadingPosition, 'blockId' | 'offset'> | null>(
+    props.position,
+  );
   useEffect(() => {
-    const position = initialPosition.current;
-    if (!position || !body.current) return;
+    const position = translationPosition.current;
+    if (props.showOriginal || !position || !body.current) return;
     const element = Array.from(body.current.querySelectorAll<HTMLElement>('[data-block-id]')).find(
       (value) => value.dataset.blockId === position.blockId,
     );
     if (element) body.current.scrollTop = element.offsetTop + position.offset;
-  }, []);
+  }, [props.showOriginal]);
   const chapters = props.work?.chapters ?? [];
   const index = chapters.findIndex(
     (chapter) => chapter.chapterId === props.version.source.chapterId,
@@ -43,11 +45,11 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
       [...elements]
         .reverse()
         .find((element) => element.offsetTop <= (body.current?.scrollTop ?? 0)) ?? elements[0];
-    if (block?.dataset.blockId)
-      props.onPosition(
-        block.dataset.blockId,
-        Math.max(0, body.current.scrollTop - block.offsetTop),
-      );
+    if (block?.dataset.blockId) {
+      const offset = Math.max(0, body.current.scrollTop - block.offsetTop);
+      translationPosition.current = { blockId: block.dataset.blockId, offset };
+      props.onPosition(block.dataset.blockId, offset);
+    }
   }
   return (
     <section aria-label="독서 화면">
