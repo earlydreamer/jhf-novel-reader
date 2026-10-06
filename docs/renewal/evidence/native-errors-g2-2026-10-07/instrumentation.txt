@@ -1,0 +1,7 @@
+app.narou.reader.NativeSecurityInstrumentedTest:......
+app.narou.reader.SourceBrowserInstrumentedTest:.........
+com.getcapacitor.myapp.ExampleInstrumentedTest:.
+
+Time: 15.325
+
+OK (16 tests)
