@@ -86,6 +86,7 @@ export interface RenewalSnapshot {
   readonly connectionAvailable: boolean;
   readonly translationAvailable: boolean;
   readonly translationActive: boolean;
+  readonly pendingSaveChapter: ChapterRef | null;
 }
 const DEFAULT_CONNECTION: ConnectionConfig = {
   provider: 'openai-compatible',
@@ -123,6 +124,7 @@ export interface RenewalController {
   browse(): Promise<void>;
   cancelTranslation(): void;
   retrySave(): Promise<void>;
+  openPendingSave(): void;
   openSavedTranslation(): Promise<void>;
   readerDisplayed(versionId: string): void;
   retryTranslation(): Promise<void>;
@@ -172,6 +174,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     connectionAvailable: Boolean(dependencies.connect || dependencies.catalog),
     translationAvailable: Boolean(dependencies.startTranslation || dependencies.flow),
     translationActive: false,
+    pendingSaveChapter: null,
   };
   const listeners = new Set<() => void>();
   const history: Route[] = [];
@@ -218,7 +221,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let sourceAbort: AbortController | null = null;
   function publish(update: Partial<RenewalSnapshot>): void {
     if (disposed) return;
-    snapshot = { ...snapshot, ...update };
+    const pending = dependencies.flow?.getSnapshot().pendingSave;
+    snapshot = {
+      ...snapshot,
+      ...update,
+      pendingSaveChapter: pending ? (chaptersById.get(pending.source.chapterId) ?? null) : null,
+    };
     listeners.forEach((listener) => listener());
   }
   function navigate(route: Route): void {
@@ -489,6 +497,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     return { phase: 'idle', elapsedMs: 0 };
   }
   async function selectChapter(chapter: ChapterRef): Promise<void> {
+    if (dependencies.flow?.getSnapshot().pendingSave?.source.chapterId === chapter.chapterId) {
+      openPendingSave();
+      return;
+    }
     const operation = ++selectionOperation;
     publish({ chapter, busy: true, error: null });
     try {
@@ -738,6 +750,23 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     dependencies.flow?.cancel();
     if (activeTranslation) activeTranslation.cancelled = true;
   }
+  function openPendingSave() {
+    const state = dependencies.flow?.getSnapshot();
+    const chapter = state?.pendingSave
+      ? chaptersById.get(state.pendingSave.source.chapterId)
+      : null;
+    if (!state || !chapter || disposed) return;
+    const work = worksById.get(chapter.workId) ?? null;
+    publish({
+      chapter,
+      work,
+      savedChapterIds: savedChaptersByWork.get(chapter.workId) ?? [],
+      translation: state,
+      version: null,
+      position: null,
+    });
+    navigate({ kind: 'translation', chapterId: chapter.chapterId });
+  }
   async function retrySave() {
     const token = dependencies.flow?.getSnapshot().token;
     if (!token || dependencies.flow?.active || activeTranslation || !foreground || disposed) return;
@@ -845,6 +874,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     browse,
     cancelTranslation,
     retrySave,
+    openPendingSave,
     retryTranslation,
     readerDisplayed(versionId: string) {
       if (versionId !== measuredVersionId || !snapshot.translationTimings) return;

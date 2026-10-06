@@ -8,6 +8,7 @@ export interface TranslationScreenProps {
   state: TranslationState;
   available: boolean;
   requestActive: boolean;
+  pendingSaveElsewhere?: boolean;
   catalogReady?: boolean;
   onCancel?(): void;
   onRetry?(): void;
@@ -69,6 +70,7 @@ export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
           props.catalogReady === false ||
           active ||
           props.requestActive ||
+          props.pendingSaveElsewhere ||
           props.state.phase !== 'idle'
         }
         onClick={props.onTranslate}
@@ -83,7 +85,12 @@ export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
       )}
       {!props.state.pendingSave && ['failed', 'unknown'].includes(props.state.phase) && (
         <button
-          disabled={props.requestActive || !props.modelId || props.catalogReady === false}
+          disabled={
+            props.requestActive ||
+            props.pendingSaveElsewhere ||
+            !props.modelId ||
+            props.catalogReady === false
+          }
           onClick={props.onRetry}
         >
           중복 처리 가능성을 확인하고 다시 번역
