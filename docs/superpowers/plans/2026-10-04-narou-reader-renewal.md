@@ -1,6 +1,6 @@
 # Narou Reader Renewal Implementation Plan
 
-**Goal:** 앱 안에서 찾은 작품의 원하는 회차를 한 번의 전체 번역 요청으로 저장하고 읽은 뒤, 실제 휴대폰에서 이 경로를 먼저 확인한다.
+**Goal:** 앱 안에서 찾은 작품의 원하는 회차를 한 번의 시작 동작으로 번역·저장하고 읽는다. 로컬 모델은 컨텍스트에 맞춘 구간을 순차 처리하고 실제 휴대폰에서 전체 의미 보존과 저장·독서를 확인한다.
 
 **Architecture:** Android의 브리지 없는 원문 탐색 화면과 신뢰된 React 작품·리더·설정을 분리한다. 원문 추출, 모델 목록, 단일 전체 회차 번역, 버전별 저장을 좁은 계약으로 연결하고, 현재 설정과 독립된 저장본 조회를 사용한다. 첫 기능 화면을 먼저 연결하고 물리 기기 검증을 통과한 뒤 목차 확장·이어 읽기·이전을 진행한다.
 
@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 앱 내 탐색, 작품 제목과 목차, 원하는 회차 선택, 완료 후 읽기, 이전·다음 화, 이어 읽기를 연결한다.
-- 선택한 한 화의 번역은 전체 본문을 담은 모델 요청 한 번으로 처리한다. 숨은 청크 분할, 자동 재전송, 출력 보정용 추가 호출은 하지 않는다.
+- 선택한 한 화의 정규화 원문은 문단·문장 경계에 따라 순차 요청하되 전체가 정확히 한 번씩 포함돼야 한다. 구간 수를 표시하고 모든 구간을 저장한 뒤 읽는다. 자동 재전송·출력 보정용 추가 호출은 하지 않는다. 사용자 승인과 #74가 기존 회차당 단일 요청 조건을 변경한다.
 - PC에는 기존 LM Studio 또는 Ollama만 둔다. 휴대폰이 Tailnet 주소나 IP로 직접 연결하며 앱 전용 PC 서버를 추가하지 않는다.
 - 서버의 실제 모델 목록에서 고른다. 앱 사용자가 컨텍스트 길이나 출력 토큰 예산을 계산해 입력하지 않는다.
 - HyMT2 계열을 우선 검증한다. 모든 모델에 JSON 출력이나 구조화 출력 지원을 요구하지 않는다.
@@ -42,8 +42,8 @@
 
 - T0 실행 준비와 레거시 기록 → T1 최소 기능 화면과 계약.
 - T1 후 T2 탐색·소스와 T3 모델·저장 경로를 독립 worktree에서 병렬 진행할 수 있다. `src/contracts/**`, package/lock, 공통 native 설정은 T1 소유이며 중간 변경은 먼저 합의한 작은 선행 변경으로 반영한다.
-- T2 + T3 → T4 실제 어댑터 통합 → **G1 실제 휴대폰에서 한 화 읽기 확인 후 중단 보고**.
-- G1 통과 → T5 이어 읽기 → T6 복구·데이터 이전 → T7 배포 검사와 G2 전체 회귀.
+- T2 + T3 → T4 실제 어댑터 통합 → G1 실제 휴대폰에서 전체 원문 의미 보존과 완성본 읽기 확인.
+- 후속 구현은 사용자의 계속 진행 승인에 따라 T5 이어 읽기 → T6 복구·데이터 이전 → T7 배포 검사와 G2 전체 회귀로 진행한다. G1 실패는 병합·품질 완료 조건으로 계속 남긴다.
 - T8 Gemini는 G1 이후의 선택 작업이다. 로컬 경로의 G1/G2 통과를 막지 않는다. UI/compose 소유권을 넘겨받은 뒤 순차 반영한다.
 
 새 파일은 역할별로 둔다. `src/contracts/reading.ts`는 새 독서 계약, `src/source/work.ts`는 작품·목차, `src/providers/catalog.ts`는 모델 목록, `src/translation/wholeChapter.ts`는 전체 회차 상태 전이, `src/storage/library.ts`는 완성본 색인과 버전, `src/app/controller.ts`는 화면 전환을 맡는다. 기존 파일의 재사용 여부는 아래 작업에 명시한다. 별도 legacy 화면이나 구형 번역 토글은 새 앱에 남기지 않는다.
@@ -167,8 +167,8 @@ interface LibraryStore {
 - [ ] Run `npm test -- --run tests/integration/renewal-first-slice.test.tsx`; expect fail before replacing composition.
 - [ ] Wire T1–T3 without legacy runtime imports. Persist dispatching marker before POST; interrupted markers become unknown on startup with explicit retry and remote-execution warning. App backgrounding stops new dispatch; no timer or startup path retries. A late or canceled result never becomes the selected chapter; completed older saved versions remain. Retry save uses captured result/token, not current settings. Allow browse, TOC and saved reading with missing settings; ask for connection only on new translation. Preserve useful existing safe transport tests; replace obsolete chunk/prefetch tests with absence-of-generation assertions rather than weakening them.
 - [ ] Run full `npm run typecheck && npm test -- --run && npm run build`; commit `feat: connect the first full chapter reading flow`. From clean committed source run `npm run android:sync`, `./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest` in android, then `node tests/e2e/verify-apk.mjs`. Extend APK audit to require the local browse plugin/activity without removing CSP, signature, byte equality or provenance checks.
-- [ ] **G1 STOP:** Deliver exact-commit debug APK + SHA-256 + short device checklist. Request the user's real phone check; do not claim VM/emulator success establishes it. On the priority phone (prior evidence: SM-F966N Android 16), find an allowed work through actual in-app site search/ranking/category, choose a non-first desired chapter, confirm title/model from the real catalog, translate using HyMT2 7B through LM Studio, count exactly one generation, save and read the whole Korean result. URL-only or synthetic-only flow does not pass discovery. Also reopen this saved result with connection unavailable and run native browser boundary checks. For an unapproved/restricted real source, pause the affected live call and report it as unverified rather than replacing the criterion.
-- [ ] Record source preparation/model wait/validation-storage/reader-display durations separately, model/build/phone/server setting metadata and qualitative omissions/order/ruby observations; no novel text, secrets or private endpoints in logs. Report PASS/FAIL/NOT RUN per check, then wait for actual evidence. **Do not begin T5–T8 until G1's complete readable translation and safe native discovery have passed.** Fix G1 failures within T1–T4 and repeat only affected checks. LM Studio first-path success is not a claim that Ollama was tested; the remaining local path belongs to G2.
+- [ ] **G1 실기 검증:** 정확한 소스·APK 해시·기기를 기록한다. 실제 인앱 탐색으로 작품을 찾고 비첫회차를 선택하여 실제 목록의 Hy-MT2 7B로 전체 원문을 순차 번역·저장·읽는다. 2026-10-07 사용자가 지정한 리눅스 서버를 사용하며, 로컬 구간 수와 실제 토큰·서버 한도를 확인한다. URL·합성 데이터만으로 탐색 통과를 대신하지 않는다. 저장본의 실제 오프라인 재열기와 원문 브라우저 경계도 확인한다.
+- [ ] 원문 준비·모델 대기·검증과 저장·리더 표시 시간 및 모델·서버 설정을 구분해 기록한다. 공개 기록에는 원문·원시 응답·비밀·사설 엔드포인트를 올리지 않는다. 누락·순서·숫자·대사·루비 의미를 처음부터 끝까지 대조하고, HTTP 200/stop이나 문단 수만으로 품질 통과를 선언하지 않는다. 후속 구현은 계속 진행 승인 범위에서 수행하되 G1 실패를 해결이나 병합 가능으로 보고하지 않는다. 실패가 발생하면 해당 원인과 영향 경로를 수정하고 필요한 검증만 반복한다.
 
 ### T5 목차 확장과 이어 읽기
 
