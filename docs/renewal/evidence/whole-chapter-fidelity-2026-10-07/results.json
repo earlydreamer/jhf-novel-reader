@@ -1,0 +1,177 @@
+{
+  "candidate": {
+    "kind": "debug-packaging-only",
+    "commit": "9153c39602be2b16a9fabf8268daf20e948315ae",
+    "tree": "48151b8ec2151f51c448afb09db73e2c16300ec7",
+    "lockfileSha256": "37c193a3fdfaf291aad0021f419262d42570a73033479213db17b7b9db382fef",
+    "apkSha256": "6f2c71d23960a10ad000d6f7b5e2c0ad6565cc00dcfd1186c533b1634dfc5698",
+    "applicationId": "app.narou.reader",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "node": "v24.19.0",
+    "nativePluginClasses": [
+      "com.aparajita.capacitor.securestorage.SecureStorage",
+      "com.capacitorjs.plugins.app.AppPlugin",
+      "com.capacitorjs.plugins.filesystem.FilesystemPlugin",
+      "com.capacitorjs.plugins.preferences.PreferencesPlugin",
+      "app.narou.reader.SourceBrowserPlugin"
+    ],
+    "isolatedBrowserActivity": "app.narou.reader.SourceBrowserActivity",
+    "deviceExecution": "NOT RUN by this audit; see docs/android-validation.md"
+  },
+  "rows": [
+    {
+      "sourceHead": "9153c39602be2b16a9fabf8268daf20e948315ae",
+      "status": "FAIL",
+      "modelId": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+      "modelPosts": 1,
+      "requestKeys": [
+        "model",
+        "messages",
+        "stream"
+      ],
+      "wholeInputEqual": true,
+      "inputChars": 7258,
+      "httpStatus": 200,
+      "elapsedMs": 61716,
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 4786,
+        "completion_tokens": 7446,
+        "total_tokens": 12232,
+        "completion_tokens_details": {
+          "reasoning_tokens": 2525
+        }
+      },
+      "sourceNonblankParagraphs": 103,
+      "translatedNonblankBlocks": 103,
+      "storedEqualsReceived": true,
+      "savedVersions": 3,
+      "fidelity": "FAIL",
+      "promptVersion": "plain-ja-ko-v2",
+      "replacementCharacters": 0,
+      "preservation": {
+        "status": "PASS",
+        "originalFiles": 10,
+        "originalVersions": 2,
+        "originalFilesByteExact": true,
+        "preferenceDiskExact": true,
+        "nativePreferenceRestartReadback": true,
+        "appStopped": true,
+        "ownForwardRemoved": true,
+        "ownReverseAndRelayRemoved": true
+      },
+      "finding": "Duration and tool errors persisted; Japanese ruby remained; a character name was omitted."
+    },
+    {
+      "sourceHead": "9153c39602be2b16a9fabf8268daf20e948315ae",
+      "status": "FAIL",
+      "modelId": "ja-ko-vn-12b-v2",
+      "modelPosts": 1,
+      "requestKeys": [
+        "model",
+        "messages",
+        "stream"
+      ],
+      "wholeInputEqual": true,
+      "inputChars": 7258,
+      "httpStatus": 200,
+      "elapsedMs": 24027,
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 4810,
+        "completion_tokens": 812,
+        "total_tokens": 5622,
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "sourceNonblankParagraphs": 103,
+      "translatedNonblankBlocks": 25,
+      "storedEqualsReceived": true,
+      "savedVersions": 3,
+      "fidelity": "FAIL",
+      "promptVersion": "plain-ja-ko-v2",
+      "replacementCharacters": 0,
+      "preservation": {
+        "status": "PASS",
+        "originalFiles": 10,
+        "originalVersions": 2,
+        "originalFilesByteExact": true,
+        "preferenceDiskExact": true,
+        "nativePreferenceRestartReadback": true,
+        "appStopped": true,
+        "ownForwardRemoved": true,
+        "ownReverseAndRelayRemoved": true
+      },
+      "finding": "Most source content omitted; invented scenes and dialogue replaced the chapter."
+    },
+    {
+      "sourceHead": "9153c39602be2b16a9fabf8268daf20e948315ae",
+      "status": "FAIL",
+      "modelId": "google/gemma-4-26b-a4b",
+      "modelPosts": 1,
+      "requestKeys": [
+        "model",
+        "messages",
+        "stream"
+      ],
+      "wholeInputEqual": true,
+      "inputChars": 7258,
+      "httpStatus": 200,
+      "elapsedMs": 88961,
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 4787,
+        "completion_tokens": 6944,
+        "total_tokens": 11731,
+        "completion_tokens_details": {
+          "reasoning_tokens": 1737
+        }
+      },
+      "sourceNonblankParagraphs": 103,
+      "translatedNonblankBlocks": 70,
+      "storedEqualsReceived": true,
+      "savedVersions": 3,
+      "fidelity": "FAIL",
+      "promptVersion": "plain-ja-ko-v2",
+      "replacementCharacters": 2,
+      "preservation": {
+        "status": "PASS",
+        "originalFiles": 10,
+        "originalVersions": 2,
+        "originalFilesByteExact": true,
+        "preferenceDiskExact": true,
+        "nativePreferenceRestartReadback": true,
+        "appStopped": true,
+        "ownForwardRemoved": true,
+        "ownReverseAndRelayRemoved": true
+      },
+      "finding": "Month/tool meaning improved, but another numeral was corrupted, a quantity changed and additional meaning errors remained."
+    }
+  ],
+  "directNativeCatalog": {
+    "status": 200,
+    "models": 18
+  },
+  "wholeNormalizedInputChars": 7258,
+  "postAccounting": {
+    "total": 6,
+    "baselineBug69": 1,
+    "baselineTimeout": 1,
+    "baselineCompletedGemma": 1,
+    "candidateExplicitRuns": 3,
+    "automaticRetries": 0
+  },
+  "reasoning": "Semantic review covered first through last; translated block counts were not an acceptance condition.",
+  "persistenceBoundary": "Stored text equals the content observed in the native response. This excludes later storage/reader substitution but does not isolate server generation from native transport decoding.",
+  "serverRestoration": {
+    "originalModel": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+    "contextLength": 98304,
+    "parallel": 4,
+    "ttlMs": 3600000,
+    "temporarySelectedModelsUnloaded": true
+  },
+  "nextGate": "#72 remains open. No candidate merge or #25–#28 completion claim.",
+  "rawMaterials": "Private input/output/payloads/backups/addresses remain outside Git."
+}
