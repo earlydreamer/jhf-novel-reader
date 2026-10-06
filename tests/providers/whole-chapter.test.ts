@@ -7,7 +7,7 @@ const request: WholeChapterRequest = {
   token: { requestId: 'r', chapterId: source.chapterId, settingsRevision: 0 },
   languageDirection: 'ja-ko',
   contractVersion: 'plain-v1',
-  promptVersion: 'hymt2-ko-v1',
+  promptVersion: 'plain-ja-ko-v2',
 };
 const secrets: SecretStore = { get: async () => null, set: async () => {}, remove: async () => {} };
 function session(content: string, finish = 'stop', calls: unknown[] = []) {
@@ -82,4 +82,15 @@ test('missing_selection_is_not_replaced', () => {
       secrets,
     ),
   ).toThrow();
+});
+
+test('outdated local prompt identity is rejected before dispatch', async () => {
+  const calls: unknown[] = [];
+  await expect(
+    session('번역', 'stop', calls).translateChapter(
+      { ...request, promptVersion: 'hymt2-ko-v1' },
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'invalid_output' });
+  expect(calls).toHaveLength(0);
 });

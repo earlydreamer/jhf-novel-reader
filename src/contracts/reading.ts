@@ -36,7 +36,7 @@ export type WholeChapterRequest = {
   source: SourceSnapshot;
   languageDirection: 'ja-ko';
   contractVersion: 'plain-v1';
-  promptVersion: 'hymt2-ko-v1';
+  promptVersion: 'hymt2-ko-v1' | 'plain-ja-ko-v2';
 };
 export type WholeChapterResult = {
   text: string;

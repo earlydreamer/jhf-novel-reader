@@ -7,7 +7,7 @@ const request: WholeChapterRequest = {
   token: { requestId: 'r', chapterId: source.chapterId, settingsRevision: 0 },
   languageDirection: 'ja-ko',
   contractVersion: 'plain-v1',
-  promptVersion: 'hymt2-ko-v1',
+  promptVersion: 'plain-ja-ko-v2',
 };
 function run(data: unknown, status = 200) {
   let calls = 0;

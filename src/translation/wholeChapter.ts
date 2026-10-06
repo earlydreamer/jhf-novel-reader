@@ -78,6 +78,8 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         timings.sourceMs = deps.clock.now() - started;
         if (control.signal.aborted || !foreground || disposed) throw new ReaderError('cancelled');
         const provider = deps.createProvider(selected);
+        const promptVersion =
+          selected.connection.provider === 'gemini' ? 'hymt2-ko-v1' : 'plain-ja-ko-v2';
         await deps.attempts.write({ token, phase: 'dispatching' });
         if (control.signal.aborted || !foreground || disposed) {
           await deps.attempts.write({ token, phase: 'complete' });
@@ -92,7 +94,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             source,
             languageDirection: 'ja-ko',
             contractVersion: 'plain-v1',
-            promptVersion: 'hymt2-ko-v1',
+            promptVersion,
           },
           control.signal,
         );
@@ -136,13 +138,10 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           createdAt: new Date().toISOString(),
           provenance: {
             provider: selected.connection.provider,
-            connectionId: await digest([
-              selected.connection.provider,
-              normalizedBaseUrl,
-            ]),
+            connectionId: await digest([selected.connection.provider, normalizedBaseUrl]),
             modelId: selected.modelId,
             contractVersion: 'plain-v1',
-            promptVersion: 'hymt2-ko-v1',
+            promptVersion,
             languageDirection: 'ja-ko',
           },
         };

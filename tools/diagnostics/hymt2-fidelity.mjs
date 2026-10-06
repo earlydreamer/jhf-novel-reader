@@ -276,7 +276,7 @@ try {
       token: { requestId: report.runId, chapterId: source.chapterId, settingsRevision: 0 },
       languageDirection: 'ja-ko',
       contractVersion: 'plain-v1',
-      promptVersion: 'hymt2-ko-v1',
+      promptVersion: 'plain-ja-ko-v2',
     },
     new AbortController().signal,
   );

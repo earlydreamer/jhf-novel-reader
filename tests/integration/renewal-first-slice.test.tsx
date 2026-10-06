@@ -324,6 +324,7 @@ it('browse_select_translate_save_read uses actual parser, native transport, cata
   expect(state.version!.text).toBe('처음\n\n\n\n끝');
   expect(state.version!.blocks.map((b) => b.text).join('\n\n')).toBe(state.version!.text);
   expect(state.version!.source.rawHtml).toBe(html);
+  expect(state.version!.provenance.promptVersion).toBe('plain-ja-ko-v2');
   expect(await h.store.readVersion(state.version!.versionId)).toEqual(state.version);
   expect(h.posts()).toHaveLength(1);
   h.app.dispose();
