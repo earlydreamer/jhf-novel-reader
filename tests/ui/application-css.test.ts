@@ -75,6 +75,14 @@ describe('application.css screen defaults', () => {
     }
   });
 
+  it('gives unclassed legacy buttons the 48px touch target', () => {
+    // 하위 이슈(#93~#97)가 버튼을 바꾸기 전까지 남는 기존 버튼도 최소 터치 영역을 지킨다.
+    const legacy = rules(css).find(
+      (rule) => rule.selector === ':where(.nr-screen) :where(button:not([class]))',
+    );
+    expect(legacy?.body).toMatch(/min-block-size:\s*var\(--touch-target\);/);
+  });
+
   it('lays out checkbox and radio labels as a row inside a low-specificity :where scope', () => {
     const selector =
       ":where(.nr-screen) label:where(:has(> input[type='checkbox'], > input[type='radio']))";

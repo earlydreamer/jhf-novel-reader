@@ -55,7 +55,7 @@
 }
 /* 클래스 없는 기존 버튼: 토널 S 버튼 모양 */
 :where(.nr-screen) :where(button:not([class])) {
-  min-block-size: var(--button-s);
+  min-block-size: var(--touch-target);
   margin: 4px 8px 4px 0;
   padding: 0 20px;
   border: 0;
