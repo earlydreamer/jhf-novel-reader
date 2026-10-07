@@ -188,6 +188,8 @@ export interface RenewalController {
   initialize(): Promise<void>;
   navigate(route: Route): void;
   back(): void;
+  goHome(): void;
+  canGoBack(): boolean;
   browse(): Promise<void>;
   cancelTranslation(): void;
   retrySave(): Promise<void>;
@@ -599,13 +601,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     };
     listeners.forEach((listener) => listener());
   }
+  const chapterLevel = (route: Route) => route.kind === 'translation' || route.kind === 'reader';
   function navigate(route: Route): void {
     titleAbort?.abort();
     automaticRequest = null;
     sourceOperation++;
     selectionOperation++;
     sourceAbort?.abort();
-    history.push(snapshot.route);
+    // 회차끼리의 이동(번역→리더, 이전·다음 화)은 쌓지 않는다. 뒤로 가기 한 번이면 회차에 들어오기 전 화면으로 간다.
+    if (!(chapterLevel(snapshot.route) && chapterLevel(route))) history.push(snapshot.route);
     publish({ route, showOriginal: false, error: null, busy: false });
   }
   function back(): void {
@@ -648,6 +652,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     requestAutomaticTranslation();
     if (snapshot.work) publish({ titles: titlesByWork.get(snapshot.work.workId) ?? [] });
     requestTitleTranslation();
+  }
+  function goHome(): void {
+    navigate({ kind: 'home' });
+    history.length = 0;
+  }
+  function canGoBack(): boolean {
+    return history.length > 0;
   }
   async function initialize(): Promise<void> {
     if (initialization || disposed) return initialization ?? undefined;
@@ -1402,11 +1413,16 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   function showContents(): void {
     if (!snapshot.work) return;
-    navigate({
-      kind: 'work',
-      workId: snapshot.work.workId,
-      ...(snapshot.chapter ? { selectedChapterId: snapshot.chapter.chapterId } : {}),
-    });
+    const workId = snapshot.work.workId;
+    const selected = snapshot.chapter ? { selectedChapterId: snapshot.chapter.chapterId } : {};
+    const previous = history[history.length - 1];
+    if (previous?.kind === 'work' && previous.workId === workId) {
+      // 이미 쌓인 같은 작품 목차로 돌아간다. 목차-리더 왕복으로 스택이 자라지 않게 한다.
+      history[history.length - 1] = { kind: 'work', workId, ...selected };
+      back();
+      return;
+    }
+    navigate({ kind: 'work', workId, ...selected });
     requestTitleTranslation();
   }
   function adjacentChapter(direction: -1 | 1): void {
@@ -1657,6 +1673,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     initialize,
     navigate,
     back,
+    goHome,
+    canGoBack,
     browse,
     cancelTranslation,
     retrySave,

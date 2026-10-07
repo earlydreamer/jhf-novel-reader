@@ -593,7 +593,8 @@ describe('renewal reading affordances', () => {
     expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
     expect(value.generate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
-    expect(screen.getByText('저장된 한국어 본문')).toBeVisible();
+    expect(screen.getByRole('heading', { name: page.title })).toBeVisible();
+    expect(screen.queryByText('저장된 한국어 본문')).toBeNull();
   });
 });
 
