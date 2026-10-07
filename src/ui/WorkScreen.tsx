@@ -1,6 +1,8 @@
 import type { JSX } from 'react';
 import type { ChapterRef, WorkPage } from '../contracts/reading';
-export interface WorkScreenProps {
+import { BatchPanel } from './BatchPanel';
+import type { BatchPanelProps } from './BatchPanel';
+export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   work: WorkPage;
   selectedChapterId?: string;
   busy: boolean;
@@ -15,6 +17,13 @@ export function WorkScreen({
   busy,
   onSelect,
   onLoadMore,
+  batch,
+  batchAvailable,
+  onPrepareBatch,
+  onRunBatch,
+  onCancelBatch,
+  onRetryBatchSave,
+  onSettings,
 }: WorkScreenProps): JSX.Element {
   return (
     <section aria-label="작품 목차">
@@ -23,6 +32,16 @@ export function WorkScreen({
         작품 원문
       </a>
       <h2>목차</h2>
+      <BatchPanel
+        workId={work.workId}
+        batch={batch}
+        batchAvailable={batchAvailable}
+        onPrepareBatch={onPrepareBatch}
+        onRunBatch={onRunBatch}
+        onCancelBatch={onCancelBatch}
+        onRetryBatchSave={onRetryBatchSave}
+        onSettings={onSettings}
+      />
       <a href={work.pageUrl} target="_blank" rel="noreferrer">
         현재 목차 원문
       </a>
