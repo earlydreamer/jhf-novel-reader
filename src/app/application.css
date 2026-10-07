@@ -33,15 +33,13 @@
 :where(.nr-screen) a {
   color: var(--primary);
 }
-:where(.nr-screen) [role='alert'] {
+/* 클래스가 있는 요소(StatusPill, Card 등)는 컴포넌트 스타일을 그대로 쓴다. */
+:where(.nr-screen) :where([role='alert']:not([class])) {
   color: var(--error);
 }
-:where(.nr-screen) [role='status'] {
+:where(.nr-screen) :where([role='status']:not([class])) {
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
-}
-.nr-screen .nr-card[role='alert'] {
-  color: var(--on-error-container);
 }
 .nr-notice {
   padding: 16px;
@@ -56,7 +54,7 @@
   color: var(--on-error-container);
 }
 /* 클래스 없는 기존 버튼: 토널 S 버튼 모양 */
-:where(.nr-screen) button:not([class]) {
+:where(.nr-screen) :where(button:not([class])) {
   min-block-size: var(--button-s);
   margin: 4px 8px 4px 0;
   padding: 0 20px;
@@ -67,7 +65,7 @@
   font: var(--type-label-large);
   cursor: pointer;
 }
-:where(.nr-screen) button:not([class]):disabled {
+:where(.nr-screen) :where(button:not([class])):disabled {
   cursor: default;
   background: color-mix(in srgb, var(--on-surface) 12%, transparent);
   color: color-mix(in srgb, var(--on-surface) 38%, transparent);
@@ -88,9 +86,8 @@
   color: var(--on-surface);
   font: var(--type-body-large);
 }
-:where(.nr-screen) input:not([type='checkbox']):not([type='radio']):not([type='range']),
-:where(.nr-screen) select,
-:where(.nr-screen) textarea {
+:where(.nr-screen)
+  :where(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
   box-sizing: border-box;
   inline-size: 100%;
   min-block-size: var(--touch-target);
@@ -105,9 +102,7 @@
 :where(.nr-screen) textarea {
   padding-block: 12px;
 }
-:where(.nr-screen) input[type='checkbox'],
-:where(.nr-screen) input[type='radio'],
-:where(.nr-screen) input[type='range'] {
+:where(.nr-screen) :where(input[type='checkbox'], input[type='radio'], input[type='range']) {
   accent-color: var(--primary-fill);
 }
 :where(.nr-screen) fieldset {
