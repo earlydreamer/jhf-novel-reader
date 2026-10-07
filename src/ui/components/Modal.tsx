@@ -41,6 +41,7 @@ function ModalSurface({ open, title, onClose, className, children, header }: Sur
       aria-modal="true"
       onCancel={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
       }}
       onKeyDown={(event) => {

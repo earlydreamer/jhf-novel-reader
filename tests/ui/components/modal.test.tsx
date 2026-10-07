@@ -133,3 +133,19 @@ it('Escape in a nested dialog closes only the inner dialog', () => {
   expect(inner).toHaveBeenCalledTimes(1);
   expect(outer).not.toHaveBeenCalled();
 });
+
+it('native cancel in a nested dialog closes only the inner dialog', () => {
+  const outer = vi.fn();
+  const inner = vi.fn();
+  render(
+    <Dialog open title="바깥 대화상자" onClose={outer}>
+      <Dialog open title="안쪽 대화상자" onClose={inner}>
+        <p>안쪽 본문</p>
+      </Dialog>
+    </Dialog>,
+  );
+  const nestedDialog = screen.getByRole('dialog', { name: '안쪽 대화상자' });
+  fireEvent(nestedDialog, new Event('cancel', { bubbles: false, cancelable: true }));
+  expect(inner).toHaveBeenCalledTimes(1);
+  expect(outer).not.toHaveBeenCalled();
+});
