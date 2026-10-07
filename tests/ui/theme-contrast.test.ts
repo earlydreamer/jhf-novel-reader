@@ -111,6 +111,12 @@ const reading = [
 ].map((value) => ({ ...value, gate: READ }));
 
 describe('design token contrast', () => {
+  it('gives every light color token a dark override so no value silently falls back to light', () => {
+    // themes.dark는 라이트 값을 밑에 깔고 덮어쓰므로, 다크 블록에 없는 토큰은 조용히 라이트 값으로 감사된다.
+    const dark = block(":root[data-theme='dark']");
+    expect(Object.keys(block(':root')).filter((name) => !(name in dark))).toEqual([]);
+  });
+
   it.each([...cases, ...reading])('$name', ({ fg, bg, gate }) => {
     expect(fg, '전경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
     expect(bg, '배경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
