@@ -195,6 +195,38 @@ test('retries a defective chunk once, then keeps only defective rows as marked s
   expect(result.text).toContain('정상 문단');
   expect(result.text).toContain('[번역 실패 · 원문]');
   expect(result.generation?.continuations).toBe(1);
+  const retryInput = (f.calls[1]!.body.messages as { content: string }[]).at(-1)!.content;
+  expect(retryInput).toContain('<p id="B">');
+  expect(retryInput).not.toContain('<p id="A">');
+});
+test('automatic paragraph retry off makes one request and marks the failed paragraph', async () => {
+  const f = fixture(() => '<main><p id="A">정상</p><p id="B">まだ日本語</p></main>');
+  const provider = createProviderSession(
+    { ...selection, autoRetryFailed: false },
+    f.transport,
+    secrets,
+  );
+  const result = await provider.translateChapter(
+    { ...request, source: { ...chapter, paragraphs: chapter.paragraphs.slice(0, 2) } },
+    new AbortController().signal,
+  );
+  expect(f.calls).toHaveLength(1);
+  expect(result.failedParagraphs).toEqual([1]);
+  expect(result.generation?.continuations).toBe(0);
+});
+test('automatic retry only regenerates failed rows and retains the accepted first result', async () => {
+  const f = fixture((_body, call) =>
+    call === 1
+      ? '<main><p id="A">처음 정상</p><p id="B">まだ</p></main>'
+      : '<main><p id="B">복구 번역</p></main>',
+  );
+  const result = await f.provider.translateChapter(
+    { ...request, source: { ...chapter, paragraphs: chapter.paragraphs.slice(0, 2) } },
+    new AbortController().signal,
+  );
+  expect(result.text).toBe('처음 정상\n\n복구 번역');
+  expect(result.failedParagraphs).toBeUndefined();
+  expect(f.calls).toHaveLength(2);
 });
 test('rejects merged, duplicate or reordered IDs after one retry', async () => {
   for (const output of [

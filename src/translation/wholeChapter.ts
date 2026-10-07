@@ -36,6 +36,7 @@ export interface FlowDependencies {
   guidance?: GuidanceRepository;
 }
 export type PhaseDurations = { sourceMs: number; modelMs: number; validationStorageMs: number };
+export type ParagraphRepair = { base: CompletedTranslation; indexes: readonly number[] };
 export function createWholeChapterFlow(deps: FlowDependencies) {
   const slot = createSingleFlight(),
     listeners = new Set<(state: TranslationState) => void>();
@@ -73,11 +74,13 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
     selection: SelectedModel,
     approved?: WorkGuidance | null,
     scannedSource?: SourceSnapshot,
+    repair?: ParagraphRepair,
   ): Promise<void> {
     if (!foreground || disposed || slot.occupied || state.pendingSave) return;
     const chapter = structuredClone(ref),
       selected = structuredClone(selection),
       frozenGuidance = approved === undefined ? undefined : structuredClone(approved);
+    const frozenRepair = repair ? structuredClone(repair) : undefined;
     await slot.run(async () => {
       const token: TranslationToken = {
         requestId: crypto.randomUUID(),
@@ -90,7 +93,12 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
       completed = null;
       started = deps.clock.now();
       timings = { sourceMs: 0, modelMs: 0, validationStorageMs: 0 };
-      state = { phase: 'preparing', token, elapsedMs: 0 };
+      state = {
+        phase: 'preparing',
+        token,
+        elapsedMs: 0,
+        ...(frozenRepair ? { preview: frozenRepair.base.text } : {}),
+      };
       publish({});
       const timer = setInterval(() => publish({}), 250);
       try {
@@ -103,6 +111,44 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           source.canonicalUrl !== chapter.canonicalUrl
         )
           throw new ReaderError('source_parse');
+        const repairIndexes = new Set(frozenRepair?.indexes);
+        if (
+          frozenRepair &&
+          (frozenRepair.base.source.chapterId !== source.chapterId ||
+            frozenRepair.base.source.sourceHash !== source.sourceHash ||
+            frozenRepair.base.blocks.length !== source.paragraphs.length ||
+            selected.translationMode !== 'stream' ||
+            selected.connection.provider !== 'openai-compatible' ||
+            !repairIndexes.size ||
+            [...repairIndexes].some(
+              (index) =>
+                !Number.isSafeInteger(index) ||
+                index < 0 ||
+                index >= source.paragraphs.length ||
+                !source.paragraphs[index]!.text.trim(),
+            ))
+        )
+          throw new ReaderError('invalid_output', 'not_sent');
+        const requestSource = frozenRepair
+          ? {
+              ...source,
+              paragraphs: source.paragraphs.map((paragraph, index) =>
+                repairIndexes.has(index) ? paragraph : { ...paragraph, text: '', ruby: [] },
+              ),
+            }
+          : source;
+        const mergePreview = (preview: string) =>
+          frozenRepair
+            ? (() => {
+                const rows = preview.split('\n\n');
+                return frozenRepair.base.blocks
+                  .map((block, index) =>
+                    repairIndexes.has(index) && rows[index]?.trim() ? rows[index]! : block.text,
+                  )
+                  .join('\n\n');
+              })()
+            : preview;
+        if (frozenRepair) publish({ preview: frozenRepair.base.text });
         timings.sourceMs = deps.clock.now() - started;
         if (control.signal.aborted || !foreground || disposed) throw new ReaderError('cancelled');
         const guidance =
@@ -122,7 +168,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             : guidanceContext(guidance, chapter.workId, input, preset);
           return hints ? hints + (terms || '\n') : terms;
         };
-        const chapterReference = reference(normalizeChapterInput(source));
+        const chapterReference = reference(normalizeChapterInput(requestSource));
         if (
           chapterReference &&
           (selected.connection.provider !== 'openai-compatible' || (!selected.limits && !streaming))
@@ -140,12 +186,12 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         const result = await provider.translateChapter(
           {
             token,
-            source,
+            source: requestSource,
             languageDirection: 'ja-ko',
             contractVersion: 'plain-v1',
             promptVersion: streaming ? 'colomo-local-v1' : segmented ? 'lines-v1' : 'hymt2-ko-v1',
             onProgress: (completed, total) => publish({ progress: { completed, total } }),
-            onPreview: (preview) => publish({ preview }),
+            onPreview: (preview) => publish({ preview: mergePreview(preview) }),
             ...(chapterReference ? { reference } : {}),
             ...(streaming
               ? {
@@ -172,8 +218,29 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
                 : 'invalid_output',
             'received',
           );
-        const text = result.text.replace(/\r\n/g, '\n');
+        let text = result.text.replace(/\r\n/g, '\n');
         if (!text.trim()) throw new ReaderError('invalid_output', 'received');
+        let failures = result.failedParagraphs ?? [];
+        if (frozenRepair) {
+          const repairedRows = text.split('\n\n');
+          if (repairedRows.length !== source.paragraphs.length)
+            throw new ReaderError('invalid_output', 'received');
+          const failed = new Set(failures);
+          text = frozenRepair.base.blocks
+            .map((block, index) =>
+              repairIndexes.has(index) && !failed.has(index) ? repairedRows[index]! : block.text,
+            )
+            .join('\n\n');
+          failures = [
+            ...new Set([
+              ...(frozenRepair.base.failedParagraphs ?? []).filter(
+                (index) => !repairIndexes.has(index),
+              ),
+              ...failures,
+            ]),
+          ].sort((a, b) => a - b);
+          publish({ preview: text });
+        }
         let normalizedBaseUrl: string;
         switch (selected.connection.provider) {
           case 'openai-compatible':
@@ -188,7 +255,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         const appliedHash = await appliedGuidanceHash(
           guidance,
           chapter.workId,
-          normalizeChapterInput(source),
+          normalizeChapterInput(requestSource),
           preset,
         );
         const versionId = crypto.randomUUID();
@@ -198,7 +265,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             .map(async (text, index) => ({ id: await digest([versionId, index]), text })),
         );
         const value: CompletedTranslation = {
-          ...(result.failedParagraphs?.length ? { failedParagraphs: result.failedParagraphs } : {}),
+          ...(failures.length ? { failedParagraphs: failures } : {}),
           schemaVersion: 2,
           versionId,
           source,
@@ -226,6 +293,14 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             languageDirection: 'ja-ko',
             ...(result.generation ? { generation: result.generation } : {}),
             ...(appliedHash ? { guidanceHash: appliedHash } : {}),
+            ...(frozenRepair
+              ? {
+                  repair: {
+                    baseVersionId: frozenRepair.base.versionId,
+                    paragraphIndexes: [...repairIndexes].sort((a, b) => a - b),
+                  },
+                }
+              : {}),
           },
         };
         if (control.signal.aborted || disposed) throw new ReaderError('cancelled', 'unknown');

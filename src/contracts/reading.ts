@@ -53,6 +53,7 @@ export type SelectedModel = {
   modelId: string;
   limits?: LocalTranslationLimits;
   translationMode?: 'stream' | 'legacy';
+  autoRetryFailed?: boolean;
 };
 export type TranslationToken = { requestId: string; chapterId: string; settingsRevision: number };
 export type WholeChapterRequest = {
@@ -99,6 +100,7 @@ export type CompletedTranslation = {
     languageDirection: 'ja-ko';
     generation?: SegmentedGeneration;
     guidanceHash?: string;
+    repair?: { baseVersionId: string; paragraphIndexes: readonly number[] };
   };
 };
 export type ReadingPosition = {

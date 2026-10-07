@@ -1,5 +1,9 @@
 import type { AppLifecycle } from '../contracts';
-import type { PhaseDurations, WholeChapterFlow } from '../translation/wholeChapter';
+import type {
+  ParagraphRepair,
+  PhaseDurations,
+  WholeChapterFlow,
+} from '../translation/wholeChapter';
 import type { ReadingSettings } from '../storage/settings';
 import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
 import { ReaderError } from '../contracts';
@@ -74,6 +78,9 @@ export interface RenewalDependencies {
   ) => Promise<void>;
 }
 export interface RenewalSnapshot {
+  readonly autoTranslate: boolean;
+  readonly autoRetryFailed: boolean;
+  readonly paragraphRepair: boolean;
   readonly translationMode: 'stream' | 'legacy';
   readonly streamingAvailable: boolean;
   readonly legacyWarnings: readonly LegacyMigrationWarning[];
@@ -143,6 +150,9 @@ function errorLabel(error: unknown): CatalogStatus {
   return 'model_list';
 }
 export interface RenewalController {
+  changeAutoTranslate(enabled: boolean): void;
+  changeAutoRetryFailed(enabled: boolean): void;
+  retryParagraphs(indexes?: readonly number[]): Promise<void>;
   previewPosition(index: number, offset: number): void;
   changeTranslationMode(mode: 'stream' | 'legacy'): void;
   getSnapshot(): RenewalSnapshot;
@@ -190,6 +200,9 @@ interface ActiveTranslation {
 }
 export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
   let snapshot: RenewalSnapshot = {
+    autoTranslate: true,
+    autoRetryFailed: true,
+    paragraphRepair: false,
     translationMode: dependencies.defaultTranslationMode ?? 'legacy',
     streamingAvailable: Boolean(dependencies.streamingAvailable),
     route: { kind: 'home' },
@@ -245,6 +258,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const value: ReadingSettings = {
       schemaVersion: 2,
       fontSize: snapshot.fontSize,
+      ...(snapshot.autoTranslate ? {} : { autoTranslate: false }),
+      ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
       selection: snapshot.selectedModelId
         ? {
             connection: { ...snapshot.connection },
@@ -269,6 +284,50 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let livePosition: { chapterId: string; index: number; offset: number } | null = null;
   let catalogAbort: AbortController | null = null;
   let sourceAbort: AbortController | null = null;
+  let automaticRequest: { chapterId: string; operation: number } | null = null;
+  let retryableRepair: ParagraphRepair | null = null;
+  const pendingPositions = new Map<string, ReadingPosition>();
+  let positionDrain: Promise<void> | null = null;
+  function requestAutomaticTranslation() {
+    if (
+      !snapshot.autoTranslate ||
+      snapshot.route.kind !== 'translation' ||
+      !snapshot.chapter ||
+      snapshot.translation.phase !== 'idle'
+    )
+      return;
+    automaticRequest = { chapterId: snapshot.chapter.chapterId, operation: selectionOperation };
+    runAutomaticTranslation();
+  }
+  function runAutomaticTranslation() {
+    const request = automaticRequest;
+    if (!request) return;
+    if (
+      disposed ||
+      !snapshot.autoTranslate ||
+      request.operation !== selectionOperation ||
+      snapshot.route.kind !== 'translation' ||
+      snapshot.chapter?.chapterId !== request.chapterId ||
+      snapshot.translation.phase !== 'idle'
+    ) {
+      automaticRequest = null;
+      return;
+    }
+    if (
+      !initialized ||
+      !foreground ||
+      snapshot.busy ||
+      activeTranslation ||
+      dependencies.flow?.active ||
+      dependencies.batch?.active ||
+      snapshot.pendingSaveChapter ||
+      snapshot.catalogStatus !== 'connected' ||
+      !snapshot.selectedModelId
+    )
+      return;
+    automaticRequest = null;
+    void translate();
+  }
   function publish(update: Partial<RenewalSnapshot>): void {
     if (disposed) return;
     const pending = dependencies.flow?.getSnapshot().pendingSave;
@@ -280,6 +339,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     listeners.forEach((listener) => listener());
   }
   function navigate(route: Route): void {
+    automaticRequest = null;
     sourceOperation++;
     selectionOperation++;
     sourceAbort?.abort();
@@ -287,6 +347,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     publish({ route, showOriginal: false, error: null, busy: false });
   }
   function back(): void {
+    automaticRequest = null;
     sourceOperation++;
     sourceAbort?.abort();
     selectionOperation++;
@@ -321,6 +382,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const settledToken = dependencies.flow?.getSnapshot().token;
     if (route.kind === 'translation' && settledToken?.chapterId === route.chapterId)
       showNonAdoptingOutcome(settledToken);
+    requestAutomaticTranslation();
   }
   async function initialize(): Promise<void> {
     if (initialization || disposed) return initialization ?? undefined;
@@ -334,6 +396,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             if (!active && activeTranslation) activeTranslation.cancelled = true;
             dependencies.flow?.setForeground(active);
             dependencies.batch?.setForeground(active);
+            if (active) runAutomaticTranslation();
           });
           if (disposed) {
             await unsubscribe();
@@ -361,8 +424,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
               saved.selection?.translationMode ?? dependencies.defaultTranslationMode ?? 'legacy',
             localLimits: undefined,
             fontSize: saved.fontSize,
+            autoTranslate: saved.autoTranslate ?? true,
+            autoRetryFailed: saved.autoRetryFailed ?? saved.selection?.autoRetryFailed ?? true,
           });
         initialized = true;
+        runAutomaticTranslation();
       } catch {
         foreground = false;
         dependencies.flow?.setForeground(false);
@@ -578,6 +644,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }
       publish({
         version: version ?? null,
+        paragraphRepair: false,
         position,
         busy: false,
         translation: translationForChapter(chapter.chapterId),
@@ -587,6 +654,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         void checkSourceChange(version, chapter);
       } else {
         navigate({ kind: 'translation', chapterId: chapter.chapterId });
+        const routedOperation = selectionOperation;
         // Restore connectivity on demand; cached reading and startup stay offline.
         if (
           initialized &&
@@ -595,6 +663,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           snapshot.catalogStatus === 'idle'
         )
           await checkConnection();
+        if (routedOperation === selectionOperation) requestAutomaticTranslation();
       }
     } catch {
       if (operation === selectionOperation)
@@ -703,6 +772,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         catalogStatus,
       });
       persistSettings();
+      runAutomaticTranslation();
     } catch (error) {
       if (operation === catalogOperation) {
         session = null;
@@ -742,14 +812,19 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       },
     });
     persistSettings();
+    runAutomaticTranslation();
   }
   async function refreshSource(): Promise<void> {
     const chapter = snapshot.chapter;
     if (snapshot.route.kind !== 'reader' || !chapter) return;
-    publish({ sourceChange: 'idle', translation: { phase: 'idle', elapsedMs: 0 } });
+    publish({
+      sourceChange: 'idle',
+      paragraphRepair: false,
+      translation: { phase: 'idle', elapsedMs: 0 },
+    });
     navigate({ kind: 'translation', chapterId: chapter.chapterId });
   }
-  async function translate(): Promise<void> {
+  async function translate(repair?: ParagraphRepair): Promise<void> {
     if (
       (!dependencies.startTranslation && !dependencies.flow) ||
       (!session && !dependencies.catalog) ||
@@ -767,10 +842,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     )
       return;
     const chapter = snapshot.chapter;
+    retryableRepair = repair ? structuredClone(repair) : null;
     const selectedModel: SelectedModel = {
       connection: snapshot.connection,
       modelId: snapshot.selectedModelId,
-      translationMode: snapshot.translationMode,
+      translationMode: repair ? 'stream' : snapshot.translationMode,
+      ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
       ...(snapshot.connection.provider === 'openai-compatible' && snapshot.localLimits
         ? { limits: { ...snapshot.localLimits } }
         : {}),
@@ -781,10 +858,24 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       selectionOperation,
     };
     activeTranslation = request;
-    publish({ translation: { phase: 'preparing', elapsedMs: 0 }, translationActive: true });
+    publish({
+      paragraphRepair: Boolean(repair),
+      translation: {
+        phase: 'preparing',
+        elapsedMs: 0,
+        ...(repair ? { preview: repair.base.text } : {}),
+      },
+      translationActive: true,
+    });
     try {
       if (dependencies.flow) {
-        await dependencies.flow.start(chapter, selectedModel);
+        await dependencies.flow.start(
+          chapter,
+          selectedModel,
+          undefined,
+          repair?.base.source,
+          repair,
+        );
         publish({ translationTimings: { ...dependencies.flow.getTimings(), readerDisplayMs: 0 } });
         const completed = dependencies.flow.getCompleted();
         if (completed) updateSavedMetadata(completed);
@@ -801,6 +892,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         if (!ownsVisibleTranslation(request)) showNonAdoptingOutcome(request);
         activeTranslation = null;
         publish({ translationActive: false });
+        runAutomaticTranslation();
       }
     }
   }
@@ -857,11 +949,73 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     // Saving must not replace the live reading surface or reset its scroll position.
     const recent = (await dependencies.library?.listRecent()) ?? [];
     if (!ownsVisibleTranslation(request)) return;
+    versionsById.set(value.versionId, value);
+    positionsByVersion.set(value.versionId, null);
     publish({ version: value, recent });
     if (livePosition?.chapterId === value.source.chapterId) {
       const block = value.blocks[livePosition.index];
       if (block) await savePosition(block.id, livePosition.offset);
     }
+  }
+  async function retryParagraphs(indexes?: readonly number[]): Promise<void> {
+    const base = snapshot.version;
+    if (
+      !base ||
+      !dependencies.flow ||
+      disposed ||
+      activeTranslation ||
+      dependencies.batch?.active ||
+      dependencies.flow.active ||
+      snapshot.pendingSaveChapter ||
+      !initialized ||
+      !foreground
+    )
+      return;
+    if (
+      base.blocks.length !== base.source.paragraphs.length ||
+      !dependencies.streamingAvailable ||
+      snapshot.connection.provider !== 'openai-compatible'
+    ) {
+      publish({
+        error: '문단별 재번역은 원문과 문단이 대응되는 로컬 번역본에서 사용할 수 있습니다.',
+      });
+      return;
+    }
+    const wanted = [
+      ...new Set(indexes ?? base.failedParagraphs ?? base.quality?.japaneseBlocks ?? []),
+    ].sort((a, b) => a - b);
+    if (
+      !wanted.length ||
+      wanted.some(
+        (index) =>
+          !Number.isSafeInteger(index) ||
+          index < 0 ||
+          index >= base.blocks.length ||
+          !base.source.paragraphs[index]!.text.trim(),
+      )
+    )
+      return;
+    const operation = selectionOperation;
+    if (snapshot.catalogStatus === 'idle' && snapshot.selectedModelId) await checkConnection();
+    if (operation !== selectionOperation || snapshot.version?.versionId !== base.versionId) return;
+    if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
+      publish({ error: '문단을 재번역하려면 연결 설정에서 서버와 생성 모델을 먼저 확인하세요.' });
+      return;
+    }
+    const chapter = chaptersById.get(base.source.chapterId);
+    if (!chapter) return;
+    const blockIndex = base.blocks.findIndex((block) => block.id === snapshot.position?.blockId);
+    livePosition = {
+      chapterId: chapter.chapterId,
+      index: Math.max(0, blockIndex),
+      offset: snapshot.position?.offset ?? 0,
+    };
+    publish({
+      chapter,
+      translation: { phase: 'idle', elapsedMs: 0, preview: base.text },
+    });
+    navigate({ kind: 'translation', chapterId: chapter.chapterId });
+    await translate({ base, indexes: wanted });
   }
   function cancelTranslation() {
     dependencies.flow?.cancel();
@@ -930,8 +1084,17 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     )
       return;
     if (!['unknown', 'failed'].includes(snapshot.translation.phase)) return;
+    const repair =
+      snapshot.paragraphRepair &&
+      retryableRepair?.base.source.chapterId === snapshot.chapter?.chapterId
+        ? (retryableRepair ?? undefined)
+        : undefined;
+    if (repair && snapshot.connection.provider !== 'openai-compatible') {
+      publish({ error: '문단 재번역 재시도는 로컬 모델 연결을 확인한 뒤 사용할 수 있습니다.' });
+      return;
+    }
     publish({ translation: { phase: 'idle', elapsedMs: 0 } });
-    await translate();
+    await translate(repair);
   }
   function showContents(): void {
     if (!snapshot.work) return;
@@ -942,12 +1105,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     });
   }
   function adjacentChapter(direction: -1 | 1): void {
-    if (!snapshot.work || !snapshot.chapter) return;
+    if (!snapshot.work || !snapshot.chapter || snapshot.busy) return;
     const index = snapshot.work.chapters.findIndex(
       (value) => value.chapterId === snapshot.chapter?.chapterId,
     );
     const target = snapshot.work.chapters[index + direction];
-    if (target) void selectChapter(target);
+    if (target && index >= 0) void selectChapter(target);
   }
   function changeFontSize(fontSize: number): void {
     if (Number.isInteger(fontSize) && fontSize >= 10 && fontSize <= 48) {
@@ -975,11 +1138,22 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     };
     positionsByVersion.set(version.versionId, position);
     publish({ position });
-    try {
-      await dependencies.library.savePosition(position);
-    } catch {
-      publish({ error: '읽던 위치를 저장하지 못했습니다.' });
-    }
+    pendingPositions.set(position.versionId, position);
+    if (!positionDrain)
+      positionDrain = (async () => {
+        while (pendingPositions.size) {
+          const next = pendingPositions.values().next().value!;
+          pendingPositions.delete(next.versionId);
+          try {
+            await dependencies.library!.savePosition(next);
+          } catch {
+            publish({ error: '읽던 위치를 저장하지 못했습니다.' });
+          }
+        }
+      })().finally(() => {
+        positionDrain = null;
+      });
+    await positionDrain;
   }
   async function prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void> {
     if (
@@ -999,6 +1173,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         connection: snapshot.connection,
         modelId: snapshot.selectedModelId,
         translationMode: snapshot.translationMode,
+        ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
         ...(snapshot.localLimits ? { limits: snapshot.localLimits } : {}),
       },
       range,
@@ -1014,6 +1189,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       selection.connection.baseUrl === snapshot.connection.baseUrl &&
       selection.connection.authRef === snapshot.connection.authRef &&
       (selection.translationMode ?? 'legacy') === snapshot.translationMode &&
+      (selection.autoRetryFailed ?? true) === snapshot.autoRetryFailed &&
       JSON.stringify(selection.limits) === JSON.stringify(snapshot.localLimits),
     );
   }
@@ -1098,6 +1274,17 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     listeners.clear();
   }
   return {
+    changeAutoTranslate(enabled) {
+      publish({ autoTranslate: enabled });
+      if (!enabled) automaticRequest = null;
+      persistSettings();
+      if (enabled) requestAutomaticTranslation();
+    },
+    changeAutoRetryFailed(enabled) {
+      publish({ autoRetryFailed: enabled });
+      persistSettings();
+    },
+    retryParagraphs,
     previewPosition(index, offset) {
       if (
         snapshot.route.kind !== 'translation' ||

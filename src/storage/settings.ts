@@ -8,9 +8,13 @@ export type ReadingSettings = {
   schemaVersion: 2;
   selection: import('../contracts').SelectedModel | null;
   fontSize: number;
+  autoTranslate?: boolean;
+  autoRetryFailed?: boolean;
 };
 function readingSettings(value: unknown): ReadingSettings {
-  object(value, ['schemaVersion', 'selection', 'fontSize']);
+  object(value, ['schemaVersion', 'selection', 'fontSize', 'autoTranslate', 'autoRetryFailed']);
+  check(value.autoTranslate === undefined || typeof value.autoTranslate === 'boolean');
+  check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
   if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 2)
     throw new StorageError('unsupported_schema');
   check(value.schemaVersion === 2);

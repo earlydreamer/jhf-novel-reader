@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { useEffect, useRef } from 'react';
 import type { CompletedTranslation, ReadingPosition, WorkPage } from '../contracts/reading';
 import { japaneseBlockIndexes } from '../translation/quality';
+import { ParagraphRetryPanel } from './ParagraphRetryPanel';
 export interface ReaderScreenProps {
   version: CompletedTranslation;
   work: WorkPage | null;
@@ -16,6 +17,8 @@ export interface ReaderScreenProps {
   onRefreshSource(): void;
   onContents(): void;
   onAdjacent(direction: -1 | 1): void;
+  busy?: boolean;
+  onRetryParagraphs?(indexes?: readonly number[]): void;
 }
 export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   const quality = props.version.quality;
@@ -92,16 +95,17 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
         <a href={props.version.source.canonicalUrl} target="_blank" rel="noreferrer">
           원문 사이트
         </a>
-        <button disabled={index <= 0} onClick={() => props.onAdjacent(-1)}>
+        <button disabled={index <= 0 || props.busy} onClick={() => props.onAdjacent(-1)}>
           이전 화
         </button>
         <button
-          disabled={index < 0 || index >= chapters.length - 1}
+          disabled={index < 0 || index >= chapters.length - 1 || props.busy}
           onClick={() => props.onAdjacent(1)}
         >
           다음 화
         </button>
       </nav>
+      {props.busy && <p role="status">회차를 불러오는 중…</p>}
       {props.sourceChange === 'checking' && <p role="status">원문 변경을 확인하고 있습니다.</p>}
       {props.sourceChange === 'unchanged' && <p role="status">원문이 변경되지 않았습니다.</p>}
       {props.sourceChange === 'changed' && (
@@ -174,6 +178,13 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
               </p>
             ))}
       </article>
+      {props.onRetryParagraphs && (
+        <ParagraphRetryPanel
+          version={props.version}
+          onRetry={props.onRetryParagraphs}
+          disabled={props.busy}
+        />
+      )}
     </section>
   );
 }

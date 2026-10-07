@@ -1,11 +1,35 @@
-import { useRef, type JSX } from 'react';
+import { useEffect, useRef, type JSX } from 'react';
 import type { TranslationScreenProps } from './TranslationScreen';
+import { ParagraphRetryPanel } from './ParagraphRetryPanel';
 export function StreamingReader(props: TranslationScreenProps): JSX.Element {
   const body = useRef<HTMLElement>(null);
   const phase = props.state.phase,
     active = props.requestActive;
   const ready = phase === 'ready';
-  const texts = (props.state.preview ?? '').split('\n\n');
+  const version = props.completedVersion;
+  const texts =
+    props.showOriginal && version
+      ? version.source.paragraphs.map((p) => p.text)
+      : (props.state.preview ?? '').split('\n\n');
+  const chapters = props.work?.chapters ?? [];
+  const chapterIndex = chapters.findIndex(
+    (chapter) => chapter.chapterId === props.chapter.chapterId,
+  );
+  const translatedScroll = useRef(0);
+  const initialAnchor = useRef({
+    position: props.position,
+    blocks: props.completedVersion?.blocks,
+  });
+  useEffect(() => {
+    const { position: anchor, blocks } = initialAnchor.current;
+    if (!anchor || !body.current || !blocks) return;
+    const index = blocks.findIndex((block) => block.id === anchor.blockId);
+    const row = body.current.querySelector<HTMLElement>(`[data-preview-index="${index}"]`);
+    if (row) body.current.scrollTop = translatedScroll.current = row.offsetTop + anchor.offset;
+  }, []);
+  useEffect(() => {
+    if (!props.showOriginal && body.current) body.current.scrollTop = translatedScroll.current;
+  }, [props.showOriginal]);
   const status = ready
     ? '저장 완료'
     : phase === 'saving'
@@ -21,7 +45,8 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
               : '번역 준비';
   function position() {
     const element = body.current;
-    if (!element) return;
+    if (!element || props.showOriginal) return;
+    translatedScroll.current = element.scrollTop;
     const rows = [...element.querySelectorAll<HTMLElement>('[data-preview-index]')];
     const row = [...rows].reverse().find((row) => row.offsetTop <= element.scrollTop) ?? rows[0];
     if (row)
@@ -31,7 +56,7 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
       );
   }
   return (
-    <section aria-label="회차 번역" className="nr-stream-reader">
+    <section aria-label={ready ? '독서 화면' : '회차 번역'} className="nr-stream-reader">
       <h1>{props.chapter.title}</h1>
       <div className="nr-stream-toolbar">
         <p role="status" aria-live="polite">
@@ -41,16 +66,7 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
             : ''}
         </p>
         {active && <button onClick={props.onCancel}>중단</button>}
-        {ready && (
-          <button
-            onClick={() => {
-              position();
-              props.onOpenSaved?.();
-            }}
-          >
-            저장본으로 읽기
-          </button>
-        )}
+        {ready && !version && <button onClick={props.onOpenSaved}>저장된 번역 열기</button>}
         {phase === 'idle' && (
           <button
             disabled={
@@ -66,13 +82,48 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
           </button>
         )}
       </div>
-      {props.catalogStatus === 'checking' && (
+      {props.busy && <p role="status">회차를 불러오는 중…</p>}
+      {ready && version && (
+        <nav aria-label="독서 이동">
+          <button disabled={!props.work} onClick={props.onContents}>
+            목차
+          </button>
+          <button
+            onClick={() => {
+              position();
+              props.onShowOriginal?.(!props.showOriginal);
+            }}
+          >
+            {props.showOriginal ? '번역 보기' : '원문 확인'}
+          </button>
+          <button disabled={chapterIndex <= 0 || props.busy} onClick={() => props.onAdjacent?.(-1)}>
+            이전 화
+          </button>
+          <button
+            disabled={chapterIndex < 0 || chapterIndex >= chapters.length - 1 || props.busy}
+            onClick={() => props.onAdjacent?.(1)}
+          >
+            다음 화
+          </button>
+          <label>
+            글자 크기
+            <input
+              type="range"
+              min="10"
+              max="48"
+              value={props.fontSize ?? 18}
+              onChange={(event) => props.onFontSize?.(Number(event.target.value))}
+            />
+          </label>
+        </nav>
+      )}
+      {!ready && props.catalogStatus === 'checking' && (
         <p role="status">저장된 서버와 모델을 확인하고 있습니다.</p>
       )}
-      {props.catalogReady === false && props.catalogStatus !== 'checking' && (
+      {!ready && props.catalogReady === false && props.catalogStatus !== 'checking' && (
         <p>서버 연결을 확인한 뒤 번역할 수 있습니다.</p>
       )}
-      {props.catalogReady === false && props.connection.baseUrl && (
+      {!ready && props.catalogReady === false && props.connection.baseUrl && (
         <button
           disabled={props.catalogStatus === 'checking' || active}
           onClick={props.onCheckConnection}
@@ -80,7 +131,7 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
           연결 다시 확인
         </button>
       )}
-      {(!props.modelId || props.catalogReady === false) && (
+      {!ready && (!props.modelId || props.catalogReady === false) && (
         <button onClick={props.onSettings}>연결 설정</button>
       )}
       {props.state.preview && (
@@ -91,7 +142,7 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
       <article
         ref={body}
         tabIndex={0}
-        aria-label="번역 미리보기"
+        aria-label={props.showOriginal ? '원문 본문' : ready ? '번역 본문' : '번역 미리보기'}
         className="nr-reading-body nr-stream-body"
         style={{ fontSize: `${props.fontSize ?? 18}px` }}
         onScroll={position}
@@ -110,6 +161,13 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
           </p>
         )}
       </article>
+      {ready && version && props.onRetryParagraphs && (
+        <ParagraphRetryPanel
+          version={version}
+          onRetry={props.onRetryParagraphs}
+          disabled={active || props.busy}
+        />
+      )}
       {phase === 'unknown' && (
         <p role="alert">
           연결이 끊겼거나 기기에서 기다리기를 중단했습니다. 서버가 이미 처리했을 수 있어 자동으로
