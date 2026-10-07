@@ -11,6 +11,12 @@ import { createTitleRepository } from '../../src/translation/titles';
 import { StorageError } from '../../src/storage/errors';
 import type { NativeHttpRequest, HttpResponse, AppLifecycle } from '../../src/contracts';
 import { createCacheKey, type CompletedChapter } from '../../src/contracts/legacy';
+import { fireEvent, screen } from '@testing-library/react';
+
+function chooseShellMenu(item: string) {
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: item }));
+}
 
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
 const chapterUrl = workUrl + '2/';
@@ -643,7 +649,7 @@ it('another chapter exposes a route back to save recovery and blocks generation 
 
   expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(true);
   expect(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' })).toBeDefined();
-  fireEvent.click(screen.getByRole('button', { name: '홈' }));
+  chooseShellMenu('서재로 가기');
   expect(h.app.getSnapshot().route.kind).toBe('home');
   fireEvent.click(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' }));
   expect(h.app.getSnapshot().chapter?.chapterId).toBe(pending.source.chapterId);
