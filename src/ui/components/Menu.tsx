@@ -34,6 +34,8 @@ export function Menu({
   const list = useRef<HTMLDivElement>(null);
   const close = useCallback((restoreFocus = true) => {
     setOpen(false);
+    // 다음에 열 때 아래로 먼저 펼쳐 실제 넘침을 다시 재도록 위치 상태를 되돌린다.
+    setUpward(false);
     if (restoreFocus) trigger.current?.focus();
   }, []);
   useBackHandler(open, () => close());

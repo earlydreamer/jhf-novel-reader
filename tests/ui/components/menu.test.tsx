@@ -79,3 +79,27 @@ it('marks destructive items', () => {
     'nr-menu__item--danger',
   );
 });
+
+it('flips upward on every open near the bottom edge', () => {
+  // jsdom에는 레이아웃이 없어서 메뉴 위치를 흉내 낸다. 아래로 열면 화면 밖으로 넘치고, 위로 열면 트리거 위에 붙는다.
+  const bottom = window.innerHeight;
+  const height = 200;
+  const spy = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(function (this: HTMLElement): DOMRect {
+      if (!this.classList.contains('nr-menu')) return { top: 0, bottom: 0, height: 0 } as DOMRect;
+      const top = this.classList.contains('nr-menu--up') ? bottom - 40 - height : bottom;
+      return { top, bottom: top + height, height } as DOMRect;
+    });
+  try {
+    render(<Menu label="더보기" items={[{ label: '서재로 가기', onSelect: () => {} }]} />);
+    const trigger = screen.getByRole('button', { name: '더보기' });
+    for (let round = 0; round < 2; round += 1) {
+      fireEvent.click(trigger);
+      expect(screen.getByRole('menu')).toHaveClass('nr-menu--up');
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    }
+  } finally {
+    spy.mockRestore();
+  }
+});
