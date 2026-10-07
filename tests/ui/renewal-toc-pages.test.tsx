@@ -44,6 +44,7 @@ it('loads another TOC page and navigates chapters across its boundary', async ()
     source: { getWorkPage, getChapter: vi.fn() },
     library: {
       saveWorkPage: vi.fn(async () => {}),
+      listWorkIds: vi.fn(async () => [firstPage.workId]),
       readWork: vi.fn(async () => [firstPage, secondPage]),
       listRecent: vi.fn(async () => []),
       listVersions: vi.fn(async () => []),

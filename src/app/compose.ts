@@ -42,7 +42,7 @@ import { createGuidanceRepository } from '../translation/guidance';
 import { createTitleRepository, createTitleTranslation } from '../translation/titles';
 export function createRenewalApplication(
   adapters: ApplicationAdapters & {
-    browse?: () => Promise<{ selectedUrl: string } | null>;
+    browse?: (startUrl?: string) => Promise<{ selectedUrl: string } | null>;
     clock?: { now(): number };
   },
 ): RenewalController {
@@ -159,6 +159,6 @@ export function createNativeRenewalApplication(): RenewalController {
     preferences: createNativePreferences(),
     secrets: createNativeSecretStore(),
     lifecycle: capacitorLifecycle,
-    browse: () => openSourceBrowser('https://syosetu.com/'),
+    browse: (startUrl = 'https://syosetu.com/') => openSourceBrowser(startUrl),
   });
 }

@@ -1,0 +1,74 @@
+.nr-library {
+  min-block-size: calc(100dvh - var(--app-bar));
+  overflow: visible;
+  padding-block-end: calc(88px + var(--inset-bottom));
+}
+.nr-library__empty {
+  display: grid;
+  min-block-size: 45dvh;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+.nr-library__empty h1 {
+  margin-block-end: 4px;
+}
+.nr-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.nr-library__continue-label {
+  display: block;
+  font: var(--type-label-large);
+}
+.nr-library .nr-card--interactive {
+  display: grid;
+  gap: 4px;
+  min-block-size: 112px;
+}
+.nr-library__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: visible;
+}
+.nr-library__list > li {
+  position: relative;
+  overflow: visible;
+  border-block-end: 1px solid var(--outline-variant);
+}
+.nr-library__list .nr-menu {
+  inset-inline-end: 0;
+  max-inline-size: min(17.5rem, calc(100vw - 24px));
+}
+.nr-library__url-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--on-surface-variant);
+  font: var(--type-body-large);
+}
+.nr-library__url-form input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: var(--touch-target);
+  padding-inline: 12px;
+  border: 1px solid var(--outline);
+  border-radius: var(--shape-sm);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font: var(--type-body-large);
+}
+.nr-library__url-form input:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+.nr-library .nr-notice {
+  margin-block-end: 16px;
+}

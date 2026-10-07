@@ -40,7 +40,9 @@ export function normalizeBrowseStartUrl(input: string): string {
 }
 
 /** Trusted UI entry only. The native activity exposes no page-to-app bridge. */
-export async function openSourceBrowser(startUrl: string): Promise<{ selectedUrl: string } | null> {
+export async function openSourceBrowser(
+  startUrl = 'https://syosetu.com/',
+): Promise<{ selectedUrl: string } | null> {
   const url = normalizeBrowseStartUrl(startUrl);
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
     throw new ReaderError('source_access');

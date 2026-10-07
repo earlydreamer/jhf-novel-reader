@@ -582,7 +582,7 @@ it('trusted Home opens the native discovery action and exposes explicit cancella
   const h = harness();
   render(<Application controller={h.app} />);
   await expect.poll(() => h.app.getSnapshot().recent.length).toBe(0);
-  const browse = screen.getByRole('button', { name: '나로우에서 작품 찾기' });
+  const browse = screen.getByRole('button', { name: '작품 찾기' });
   expect(browse.hasAttribute('disabled')).toBe(false);
   fireEvent.click(browse);
   await expect.poll(() => h.app.getSnapshot().work?.title).toBe('合成作品');
@@ -736,10 +736,9 @@ it('another chapter exposes a route back to save recovery and blocks generation 
   render(<Application controller={h.app} />);
 
   expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(true);
-  expect(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' })).toBeDefined();
   chooseShellMenu('서재로 가기');
   expect(h.app.getSnapshot().route.kind).toBe('home');
-  fireEvent.click(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' }));
+  fireEvent.click(screen.getByRole('button', { name: '저장 화면으로 가기' }));
   expect(h.app.getSnapshot().chapter?.chapterId).toBe(pending.source.chapterId);
   expect(h.app.getSnapshot().translation.pendingSave).toEqual(pending);
   h.setFailSave(false);
@@ -747,7 +746,7 @@ it('another chapter exposes a route back to save recovery and blocks generation 
   await expect.poll(() => h.app.getSnapshot().route.kind).toBe('reader');
   expect(await h.store.readVersion(pending.versionId)).toEqual(pending);
   expect(h.posts()).toHaveLength(1);
-  expect(screen.queryByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '저장 화면으로 가기' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '목차' }));
   fireEvent.click(screen.getByRole('button', { name: '1화' }));
   await expect.poll(() => h.app.getSnapshot().route.kind).toBe('translation');

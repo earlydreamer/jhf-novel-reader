@@ -74,6 +74,7 @@ export function createLibraryStore(files: PrivateFiles): LibraryStore {
     return (await journal.load(`versions/${versionId}`, completedTranslation))?.value ?? null;
   };
   return {
+    listWorkIds: () => serial(files, async () => [...(await readIndex()).workIds]),
     readVersion: (versionId) => serial(files, () => readVersion(versionId)),
     readWork: (workId) =>
       serial(files, async () => {

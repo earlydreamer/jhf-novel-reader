@@ -69,6 +69,7 @@ function controller() {
   const app = createRenewalController({
     library: {
       saveWorkPage: vi.fn(async () => {}),
+      listWorkIds: vi.fn(async () => [page.workId]),
       readWork: vi.fn(async () => [page]),
       listRecent: vi.fn(async () => []),
       listVersions: vi.fn(async (chapterId: string) =>

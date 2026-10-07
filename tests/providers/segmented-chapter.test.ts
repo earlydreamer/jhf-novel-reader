@@ -369,6 +369,7 @@ function makeFlow(
     store: {
       commitVersion,
       saveWorkPage: vi.fn(),
+      listWorkIds: vi.fn(async () => []),
       readWork: vi.fn(),
       listRecent: vi.fn(),
       listVersions: vi.fn(),

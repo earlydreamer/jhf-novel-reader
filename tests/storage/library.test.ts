@@ -30,6 +30,57 @@ test('independent_saved_lookup', async () => {
   expect(await store.readVersion(value.versionId)).toEqual(value);
   expect(await store.listVersions(source.chapterId)).toEqual([value]);
 });
+test('작품 ID 조회는 전체 등록 순서를 복사본으로 반환한다', async () => {
+  const memory = new Map<string, string>();
+  const files = {
+    read: async (p: string) => memory.get(p) ?? null,
+    write: async (p: string, t: string) => {
+      memory.set(p, t);
+    },
+  };
+  const store = createLibraryStore(files);
+  expect(await store.listWorkIds()).toEqual([]);
+  const first = {
+    workId: 'n1234aa',
+    canonicalUrl: 'https://ncode.syosetu.com/n1234aa/',
+    title: '첫 작품',
+    chapters: [
+      {
+        workId: 'n1234aa',
+        chapterId: 'n1234aa/1',
+        canonicalUrl: 'https://ncode.syosetu.com/n1234aa/1/',
+        title: '1화',
+        ordinal: 1,
+      },
+    ],
+    pageUrl: 'https://ncode.syosetu.com/n1234aa/',
+    nextPageUrl: null,
+    complete: true,
+  };
+  const second = {
+    ...first,
+    workId: 'n5678bb',
+    canonicalUrl: 'https://ncode.syosetu.com/n5678bb/',
+    title: '둘째 작품',
+    chapters: [
+      {
+        workId: 'n5678bb',
+        chapterId: 'n5678bb/1',
+        canonicalUrl: 'https://ncode.syosetu.com/n5678bb/1/',
+        title: '1화',
+        ordinal: 1,
+      },
+    ],
+    pageUrl: 'https://ncode.syosetu.com/n5678bb/',
+  };
+  await store.saveWorkPage(first);
+  await store.saveWorkPage(second);
+  expect(await store.listWorkIds()).toEqual(['n1234aa', 'n5678bb']);
+  const ids = await store.listWorkIds();
+  (ids as string[]).reverse();
+  expect(await store.listWorkIds()).toEqual(['n1234aa', 'n5678bb']);
+  expect(await createLibraryStore(files).listWorkIds()).toEqual(['n1234aa', 'n5678bb']);
+});
 test('quality survives reopening; legacy versions remain readable and invalid block references are rejected', async () => {
   const memory = new Map<string, string>();
   const files = {

@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { HomeScreen } from '../ui/HomeScreen';
 import { WorkScreen } from '../ui/WorkScreen';
 import { TranslationScreen } from '../ui/TranslationScreen';
@@ -8,9 +8,7 @@ import { SettingsScreen } from '../ui/SettingsScreen';
 import { TopAppBar } from '../ui/components/TopAppBar';
 import { IconButton } from '../ui/components/IconButton';
 import { Menu } from '../ui/components/Menu';
-import { Card } from '../ui/components/Card';
-import { Button } from '../ui/components/Button';
-import { SnackbarProvider } from '../ui/components/Snackbar';
+import { SnackbarProvider, useSnackbar } from '../ui/components/Snackbar';
 import { runTopBackHandler } from '../ui/shell/backStack';
 import { useResolvedTheme } from '../ui/theme/theme';
 import { capacitorShell, type ShellPlatform } from '../platform/shell';
@@ -21,9 +19,13 @@ import './application.css';
 function RouteScreen({
   controller,
   state,
+  urlDialogOpen,
+  onCloseUrlDialog,
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
+  urlDialogOpen: boolean;
+  onCloseUrlDialog(): void;
 }): JSX.Element {
   const titles = state.titlesAvailable
     ? {
@@ -37,13 +39,16 @@ function RouteScreen({
     case 'home':
       return (
         <HomeScreen
-          recentTitles={state.recentTitles}
-          recent={state.recent}
-          busy={state.busy}
-          sourceAvailable={state.sourceAvailable}
-          onBrowse={() => void controller.browse()}
+          state={state}
+          urlDialogOpen={urlDialogOpen}
+          onCloseUrlDialog={onCloseUrlDialog}
+          onBrowse={(startUrl) => void controller.browse(startUrl)}
           onOpen={(url) => void controller.openWork(url)}
+          onOpenLibraryWork={(workId) => void controller.openLibraryWork(workId)}
           onContinue={(id) => void controller.continueReading(id)}
+          onOpenPendingSave={controller.openPendingSave}
+          onOpenBatch={controller.openBatch}
+          legacyWarnings={state.legacyWarnings}
         />
       );
     case 'work':
@@ -184,9 +189,11 @@ const routeTitles = {
 function ShellAppBar({
   controller,
   state,
+  onOpenUrlDialog,
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
+  onOpenUrlDialog(): void;
 }): JSX.Element {
   if (state.route.kind === 'home')
     return (
@@ -194,11 +201,14 @@ function ShellAppBar({
         title="서재"
         titleAs="span"
         actions={
-          <IconButton
-            icon="settings"
-            label="설정"
-            onClick={() => controller.navigate({ kind: 'settings' })}
-          />
+          <>
+            <IconButton icon="link" label="URL로 열기" onClick={onOpenUrlDialog} />
+            <IconButton
+              icon="settings"
+              label="설정"
+              onClick={() => controller.navigate({ kind: 'settings' })}
+            />
+          </>
         }
       />
     );
@@ -227,6 +237,7 @@ export function Application({
     controller.getSnapshot,
     controller.getSnapshot,
   );
+  const [urlDialogOpen, setUrlDialogOpen] = useState(false);
   useEffect(() => {
     void controller.initialize();
   }, [controller]);
@@ -260,63 +271,21 @@ export function Application({
     heading.focus({ preventScroll: true });
   }, [routeKey]);
   return (
-    <SnackbarProvider>
+    <SnackbarProvider offset={state.route.kind === 'home' ? 64 : 0}>
+      <SnackbarBridge state={state} holdErrors={urlDialogOpen && state.route.kind === 'home'} />
       <div className="nr-application" lang="ko">
-        <ShellAppBar controller={controller} state={state} />
+        <ShellAppBar
+          controller={controller}
+          state={state}
+          onOpenUrlDialog={() => setUrlDialogOpen(true)}
+        />
         <main ref={main} className="nr-screen">
-          {state.error && (
-            <Card variant="error" role="alert">
-              {state.error}
-            </Card>
-          )}
-          {/* 아래 알림 카드들은 #93(서재)에서 서재 화면으로 옮긴다. 문구는 그 이슈에서 바꾼다. */}
-          {state.batch?.record &&
-            state.batch.record.phase !== 'complete' &&
-            (state.route.kind !== 'work' ||
-              state.route.workId !== state.batch.record.work.workId) && (
-              <aside aria-label="일괄 번역 상태" className="nr-notice">
-                <p>
-                  {state.batch.record.work.title}의 일괄 번역 상태가 저장되어 있습니다. 자동으로
-                  다시 전송하지 않습니다.
-                </p>
-                <Button variant="text" onClick={controller.openBatch}>
-                  일괄 번역 상태 보기
-                </Button>
-              </aside>
-            )}
-          {state.legacyWarnings.length > 0 && (
-            <aside aria-label="이전 읽기 데이터 확인" role="status" className="nr-notice">
-              <p>이전 읽기 데이터 일부를 가져오지 못했습니다. 원본 파일은 그대로 보존했습니다.</p>
-              <ul>
-                {state.legacyWarnings.map((warning) => (
-                  <li key={warning.cacheKey}>
-                    기록 {warning.cacheKey.slice(3, 15)}:{' '}
-                    {warning.reason === 'unfinished'
-                      ? '미완료 번역입니다. 자동으로 번역을 재개하지 않습니다.'
-                      : warning.reason === 'missing'
-                        ? '저장 파일을 찾을 수 없습니다.'
-                        : '손상되었거나 지원하지 않는 형식입니다.'}
-                  </li>
-                ))}
-              </ul>
-            </aside>
-          )}
-          {state.pendingSaveChapter &&
-            (state.route.kind !== 'translation' ||
-              state.route.chapterId !== state.pendingSaveChapter.chapterId) && (
-              <aside aria-label="저장 대기 중인 번역" className="nr-notice nr-notice--error">
-                <p>
-                  {state.pendingSaveChapter.title}의 번역 결과가 아직 저장을 완료하지 못했습니다.
-                  저장을 마친 뒤 새 번역을 요청할 수 있습니다.
-                </p>
-                <Button variant="text" onClick={controller.openPendingSave}>
-                  저장 대기 중인 번역으로 돌아가기
-                </Button>
-              </aside>
-            )}
-          {state.titlesBusy && <p role="status">제목 번역 중… 완료된 제목부터 표시합니다.</p>}
-          {state.titlesError && <p role="alert">{state.titlesError}</p>}
-          <RouteScreen controller={controller} state={state} />
+          <RouteScreen
+            controller={controller}
+            state={state}
+            urlDialogOpen={urlDialogOpen}
+            onCloseUrlDialog={() => setUrlDialogOpen(false)}
+          />
           {state.translationTimings && (
             <details>
               <summary>최근 번역 단계별 시간</summary>
@@ -332,4 +301,32 @@ export function Application({
       </div>
     </SnackbarProvider>
   );
+}
+
+function SnackbarBridge({
+  state,
+  holdErrors,
+}: {
+  state: RenewalSnapshot;
+  holdErrors: boolean;
+}): null {
+  const show = useSnackbar();
+  const last = useRef({
+    errorRevision: -1,
+    titlesError: null as string | null,
+    titlesBusy: false,
+  });
+  useEffect(() => {
+    if (holdErrors) return;
+    if (state.error && state.errorRevision !== last.current.errorRevision) show(state.error);
+    if (state.titlesError && state.titlesError !== last.current.titlesError)
+      show(state.titlesError);
+    if (state.titlesBusy && !last.current.titlesBusy) show('제목을 번역하고 있어요.');
+    last.current = {
+      errorRevision: state.errorRevision,
+      titlesError: state.titlesError,
+      titlesBusy: state.titlesBusy,
+    };
+  }, [holdErrors, show, state.error, state.errorRevision, state.titlesBusy, state.titlesError]);
+  return null;
 }

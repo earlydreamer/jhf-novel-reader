@@ -70,6 +70,7 @@ function fixture(hasSaved = false) {
   const dependencies: RenewalDependencies = {
     library: {
       saveWorkPage: vi.fn(async () => {}),
+      listWorkIds: vi.fn(async () => [page.workId]),
       readWork: vi.fn(async () => [page]),
       listRecent: vi.fn(async () => []),
       listVersions: vi.fn(async (chapterId) =>
@@ -119,11 +120,12 @@ async function setup(hasSaved = false, translationAvailable = false) {
   }
   const controller = manualController(value.dependencies);
   render(<Application controller={controller} />);
-  await screen.findByRole('heading', { name: '이어 읽기' });
+  await screen.findByRole('heading', { name: '서재' });
+  fireEvent.click(screen.getByRole('button', { name: 'URL로 열기' }));
   fireEvent.change(screen.getByLabelText('작품 또는 회차 URL'), {
     target: { value: page.canonicalUrl },
   });
-  fireEvent.click(screen.getByRole('button', { name: '작품 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '열기' }));
   await screen.findByRole('heading', { name: page.title });
   return { ...value, controller };
 }
@@ -249,6 +251,31 @@ describe('automatic chapter dispatch and position writes', () => {
     await Promise.all(pending);
     expect(write).toHaveBeenCalledTimes(2);
     expect(write.mock.calls[1]![0].offset).toBe(49);
+    controller.dispose();
+  });
+  it('keeps a successful position write successful when refreshing recent reads fails', async () => {
+    const value = fixture(true);
+    const recent = [
+      {
+        workId: page.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        updatedAt: saved.createdAt,
+      },
+    ];
+    const listRecent = vi.fn(async () => recent);
+    Object.assign(value.dependencies.library!, { listRecent });
+    const controller = manualController(value.dependencies);
+    await controller.initialize();
+    await controller.continueReading(saved.versionId);
+    listRecent.mockRejectedValueOnce(new Error('recent read failure'));
+
+    await expect(controller.savePosition(saved.blocks[0]!.id, 23)).resolves.toBeUndefined();
+
+    expect(value.dependencies.library!.savePosition).toHaveBeenCalledOnce();
+    expect(controller.getSnapshot().position?.offset).toBe(23);
+    expect(controller.getSnapshot().recent).toEqual(recent);
+    expect(controller.getSnapshot().error).toBe('최근 읽은 목록을 새로 고치지 못했어요.');
     controller.dispose();
   });
 });
@@ -509,7 +536,11 @@ describe('renewal controller boundaries', () => {
   it('production is unavailable rather than fabricated source or catalog data', async () => {
     const controller = manualController();
     render(<Application controller={controller} />);
-    expect(screen.getByRole('button', { name: '작품 열기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '작품 찾기' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '작품 찾기' }));
+    expect(
+      await screen.findByText('작품 찾기를 아직 사용할 수 없어요. URL로 열어 주세요.'),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '설정' }));
     expect(screen.getByRole('button', { name: '연결 확인' })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('아직 사용할 수 없습니다');
@@ -830,10 +861,12 @@ it('shows each skipped legacy record without blocking saved reading or exposing 
     }),
   });
   render(<Application controller={controller} />);
-  const notice = await screen.findByRole('status', { name: '이전 읽기 데이터 확인' });
-  expect(notice).toHaveTextContent('기록 aaaaaaaaaaaa: 미완료 번역');
-  expect(notice).toHaveTextContent('기록 bbbbbbbbbbbb: 손상되었거나 지원하지 않는 형식');
-  expect(notice).toHaveTextContent('기록 cccccccccccc: 저장 파일을 찾을 수 없습니다.');
+  const summary = await screen.findByText('이전 데이터 일부를 찾지 못했어요');
+  const notice = summary.closest('details')!;
+  fireEvent.click(summary);
+  expect(notice).toHaveTextContent('기록 aaaaaaaaaaaa: 완료되지 않은 번역이에요.');
+  expect(notice).toHaveTextContent('기록 bbbbbbbbbbbb: 손상되었거나 지원하지 않는 형식이에요.');
+  expect(notice).toHaveTextContent('기록 cccccccccccc: 저장 파일을 찾을 수 없어요.');
   await controller.continueReading(saved.versionId);
   expect(await screen.findByText(saved.text)).toBeVisible();
   expect(value.generate).not.toHaveBeenCalled();
