@@ -37,33 +37,36 @@
 
 ### 4.1 색 (M3 역할 이름)
 
-Very Peri `#6667AB`는 시드이자 라이트 테마의 채움 면 색이다. 바탕 위 글자로 쓰면 APCA Lc 72.4로 본문 기준(75)에 못 미치므로 글자·아이콘에는 한 단계 짙은 `--primary` 를 쓴다. 다크 테마는 M3 관례대로 밝은 primary와 어두운 라벨을 쓴다.
+Very Peri `#6667AB`는 시드이자 라이트 테마의 채움 면 색이다. 바탕 위 글자로 쓰면 APCA Lc 72.4로 본문 기준(75)에 못 미치므로 글자·아이콘에는 짙은 `--primary`(`#3F4199`)를 쓴다. 대화상자 면 위 텍스트 버튼까지 Lc 75를 넘기기 위한 값이다. 다크 테마는 M3 관례대로 밝은 primary와 어두운 라벨을 쓴다.
 
 | 토큰 | 라이트 | 다크 | 용도 |
 |---|---|---|---|
 | `--surface` | `#FAFAFD` | `#13131B` | 화면 바탕 |
-| `--surface-container-lowest` | `#FFFFFF` | `#0E0E15` | 메뉴 |
+| `--surface-container-lowest` | `#FFFFFF` | `#0E0E15` | 예비(가장 밝은/어두운 면) |
 | `--surface-container-low` | `#F4F4FA` | `#1A1A24` | 카드 |
-| `--surface-container` | `#EEEEF6` | `#1F1F2A` | 앱바(스크롤 시), 플로팅 툴바 바탕 |
+| `--surface-container` | `#EEEEF6` | `#1F1F2A` | 앱바(스크롤 시), 메뉴 |
 | `--surface-container-high` | `#E8E8F2` | `#262633` | 바텀시트, 대화상자 |
 | `--surface-container-highest` | `#E2E2EE` | `#30303F` | 입력칸 채움 |
 | `--on-surface` | `#1A1A28` | `#EEEEF6` | 본문 |
 | `--on-surface-variant` | `#45465C` | `#C9C9DC` | 보조 텍스트 |
 | `--outline` | `#6E6F86` | `#A3A4BF` | 아이콘, 입력 테두리, 3차 텍스트 |
 | `--outline-variant` | `#C9C9DA` | `#464659` | 구분선(장식) |
-| `--primary` | `#5254AE` | `#D2D3FF` | 텍스트 버튼, 링크, 포커스 링, 선택 표시 |
+| `--primary` | `#3F4199` | `#D2D3FF` | 텍스트 버튼, 링크, 포커스 링, 선택 표시 |
 | `--primary-fill` | `#6667AB` | `#D2D3FF` | 채움 버튼, FAB, 진행 막대 |
 | `--on-primary` | `#FFFFFF` | `#1A1B55` | 채움 면 위 라벨 |
 | `--primary-container` | `#E3E3FA` | `#3B3C8F` | 토널 버튼, 이어서 읽기 카드, 읽는 중 행 |
 | `--on-primary-container` | `#2C2D78` | `#E6E5FF` | 위 면의 글자 |
 | `--secondary-container` | `#E6E6F2` | `#383850` | 선택된 칩, 세그먼트 |
 | `--on-secondary-container` | `#2E2F45` | `#E6E5FA` | 위 면의 글자 |
-| `--error` | `#B3261E` | `#FFC4BC` | 오류 글자, 파괴적 메뉴 항목 |
+| `--error` | `#901C16` | `#FFC4BC` | 오류 글자, 파괴적 메뉴 항목 |
 | `--on-error` | `#FFFFFF` | `#4A0002` | 삭제 버튼 라벨 |
 | `--error-container` | `#FCE4E2` | `#8C0009` | 오류 카드 |
 | `--on-error-container` | `#7A1712` | `#FFE1DD` | 오류 카드 글자 |
 | `--success` | `#1F6B45` | `#8BE0B0` | 완료 글자 |
 | `--warning` | `#7A5A12` | `#EFCB7C` | 주의 글자 |
+| `--inverse-surface` | `#2C2C3A` | `#E4E4EE` | 스낵바 |
+| `--inverse-on-surface` | `#F2F2FA` | `#1A1A28` | 스낵바 글자 |
+| `--inverse-primary` | `#D2D3FF` | `#36388F` | 스낵바 행동 |
 | `--scrim` | `rgb(0 0 0 / 0.32)` | `rgb(0 0 0 / 0.5)` | 시트·대화상자 뒤 |
 
 독서 배경(`data-reading-background`):
@@ -84,7 +87,7 @@ Very Peri `#6667AB`는 시드이자 라이트 테마의 채움 면 색이다. �
 | 아이콘·3차·포커스 | 3:1 | 45 | `outline`, 포커스 링 |
 | 그래픽 | 3:1 | 30 | 입력 테두리, 스위치 트랙, 진행 막대 |
 
-설계 시점 계산 결과 두 테마 20개 조합과 독서 배경 4개 모두 통과했다(대표값: 라이트 본문 16.49:1 / Lc 101.2, 다크 본문 16.01:1 / Lc 96.4, 다크 보조 11.32:1 / Lc 74.0, 세피아 13.30:1 / Lc 91.2, 검정 16.63:1 / Lc 90.9). APCA 계산은 sora `tools/contrast-audit.mjs`와 같은 0.0.98G-4g 상수를 쓴다.
+설계 시점 계산 결과 두 테마 64개 조합과 독서 배경 4개, 총 68개 모두 통과했다(대표값: 라이트 본문 16.49:1 / Lc 101.2, 다크 본문 16.01:1 / Lc 96.4, 다크 보조 11.32:1 / Lc 74.0, 세피아 13.30:1 / Lc 91.2, 검정 16.63:1 / Lc 90.9). APCA 계산은 sora `tools/contrast-audit.mjs`와 같은 0.0.98G-4g 상수를 쓴다.
 
 ### 4.3 타이포
 
@@ -123,8 +126,8 @@ Pretendard Variable을 `src/ui/theme/fonts/`에 woff2로 번들하고 `@font-fac
 | `Chip` | 32px, `shape-sm`. `assist\|filter`. | 필터 칩은 `aria-pressed`. |
 | `Dialog` | 기본 대화상자(`shape-xl`, 최대 폭 560px) / 전체 화면 대화상자(앱바 + 닫기 아이콘 + 저장 버튼). 네이티브 `<dialog>` + `showModal()`(미지원 시 `open` 속성과 수동 포커스 트랩). | `aria-labelledby` 제목. 열면 제목으로 포커스, 닫으면 연 요소로 복귀. Esc·스크림 탭·뒤로 가기로 닫힘. 왼쪽 버튼은 `닫기`. |
 | `BottomSheet` | 모달 바텀시트. 위 모서리 `shape-xl`, 손잡이, 최대 높이 90dvh, 내부 스크롤, 하단 인셋. `<dialog>` 기반. | `Dialog`와 같다. |
-| `Menu` | 앵커 아래(공간 없으면 위)로 열림. `shape-sm`, `surface-container-lowest`, 항목 48px. 파괴적 항목 `tone="danger"`. Popover API를 쓰지 않고 React 상태로 제어한다. | 트리거 `aria-haspopup="menu"`·`aria-expanded`. `role="menu"`·`menuitem`. 화살표 이동, Enter·Space 선택, Esc·바깥 탭으로 닫고 트리거로 복귀. |
-| `Snackbar` | 하단(툴바·FAB 위) 한 개만 표시, 4초(행동 있으면 8초), 행동 1개. 큐로 관리. | `role="status"`·`aria-live="polite"`. |
+| `Menu` | 앵커 아래(공간 없으면 위)로 열림. `shape-sm`, `surface-container`, 항목 48px. 파괴적 항목 `tone="danger"`. Popover API를 쓰지 않고 React 상태로 제어한다. | 트리거 `aria-haspopup="menu"`·`aria-expanded`. `role="menu"`·`menuitem`. 화살표 이동, Enter·Space 선택, Esc·바깥 탭으로 닫고 트리거로 복귀. |
+| `Snackbar` | 하단(툴바·FAB 위) 한 개만 표시, 4초(행동 있으면 8초), 행동 1개. 큐로 관리. `inverse-*` 면. | 항상 존재하는 `aria-live="polite"` 영역(역할 없음, 화면의 `status` 질의와 겹치지 않게). |
 | `ExtendedFab` | 56px, `shape-lg`, 아이콘 + 라벨, 하단 오른쪽 + 인셋. 스크롤 다운 시 아이콘만으로 축소. | 라벨이 접근성 이름. |
 | `FloatingToolbar` | 64px 알약, 가운데 하단 + 인셋, 아이콘 버튼 4개, `primary-container` 톤. | `role="toolbar"`, 좌우 화살표 이동. |
 | `Switch` | M3 스위치 52×32. | `<input type="checkbox" role="switch">` + 라벨. |

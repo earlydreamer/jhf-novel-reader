@@ -16,7 +16,7 @@
 
 ### 2.1 색
 
-Very Peri `#6667AB`는 라이트 테마의 채움 면(`--primary-fill`)이다. 바탕 위 글자로 쓰면 Lc 72.4라 본문 기준에 못 미치므로 글자와 아이콘은 `--primary`(`#5254AE`)를 쓴다.
+Very Peri `#6667AB`는 라이트 테마의 채움 면(`--primary-fill`)이다. 메뉴는 `--surface-container`, 바텀시트는 `--surface-container-low`, 대화상자는 `--surface-container-high`, 스낵바는 `--inverse-*` 면을 쓴다. 바탕 위 글자로 쓰면 Lc 72.4라 본문 기준에 못 미치므로 글자와 아이콘은 `--primary`(`#3F4199`)를 쓴다. 대화상자(`surface-container-high`) 위 텍스트 버튼까지 Lc 75를 넘기려면 이 깊이가 필요하다.
 
 | 토큰 | 라이트 | 다크 |
 |---|---|---|
@@ -30,19 +30,22 @@ Very Peri `#6667AB`는 라이트 테마의 채움 면(`--primary-fill`)이다. �
 | `--on-surface-variant` | `#45465C` | `#C9C9DC` |
 | `--outline` | `#6E6F86` | `#A3A4BF` |
 | `--outline-variant` | `#C9C9DA` | `#464659` |
-| `--primary` | `#5254AE` | `#D2D3FF` |
+| `--primary` | `#3F4199` | `#D2D3FF` |
 | `--primary-fill` | `#6667AB` | `#D2D3FF` |
 | `--on-primary` | `#FFFFFF` | `#1A1B55` |
 | `--primary-container` | `#E3E3FA` | `#3B3C8F` |
 | `--on-primary-container` | `#2C2D78` | `#E6E5FF` |
 | `--secondary-container` | `#E6E6F2` | `#383850` |
 | `--on-secondary-container` | `#2E2F45` | `#E6E5FA` |
-| `--error` | `#B3261E` | `#FFC4BC` |
+| `--error` | `#901C16` | `#FFC4BC` |
 | `--on-error` | `#FFFFFF` | `#4A0002` |
 | `--error-container` | `#FCE4E2` | `#8C0009` |
 | `--on-error-container` | `#7A1712` | `#FFE1DD` |
 | `--success` | `#1F6B45` | `#8BE0B0` |
 | `--warning` | `#7A5A12` | `#EFCB7C` |
+| `--inverse-surface` | `#2C2C3A` | `#E4E4EE` |
+| `--inverse-on-surface` | `#F2F2FA` | `#1A1A28` |
+| `--inverse-primary` | `#D2D3FF` | `#36388F` |
 
 독서 배경(`[data-reading-background]`, 리더 본문 영역에만 적용):
 
