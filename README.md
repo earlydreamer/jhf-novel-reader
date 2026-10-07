@@ -33,6 +33,8 @@
 
 ## 개발
 
+작업을 시작하기 전에 [프로젝트 작업 컨벤션](CONTRIBUTING.md)을 읽습니다. 이슈별 작업 분할, 전용 워크트리·브랜치, 한국어 커밋, GitHub 이슈·PR 형식, 검증과 병합 후 정리의 기준을 담고 있습니다. Codex·OpenCode의 프로젝트 진입점은 [AGENTS.md](AGENTS.md), Claude의 진입점은 [CLAUDE.md](CLAUDE.md)이며 같은 문서를 사용합니다.
+
 Node.js ^22.18.0 또는 >=24.11.0을 사용합니다. 고정 의존성과 TypeScript strict/noUncheckedIndexedAccess를 유지합니다.
 
 ```sh
