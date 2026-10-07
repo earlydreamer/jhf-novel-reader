@@ -14,10 +14,19 @@ function RouteScreen({
   controller: RenewalController;
   state: RenewalSnapshot;
 }): JSX.Element {
+  const titles = state.titlesAvailable
+    ? {
+        entries: state.titles,
+        busy: state.busy || state.titlesBusy || state.translationActive,
+        onTranslate: controller.translateTitles,
+        onSave: controller.saveTitle,
+      }
+    : undefined;
   switch (state.route.kind) {
     case 'home':
       return (
         <HomeScreen
+          recentTitles={state.recentTitles}
           recent={state.recent}
           busy={state.busy}
           sourceAvailable={state.sourceAvailable}
@@ -29,6 +38,7 @@ function RouteScreen({
     case 'work':
       return state.work ? (
         <WorkScreen
+          titles={titles}
           work={state.work}
           savedChapterIds={state.savedChapterIds}
           selectedChapterId={state.route.selectedChapterId}
@@ -65,6 +75,7 @@ function RouteScreen({
     case 'translation':
       return state.chapter ? (
         <TranslationScreen
+          titles={titles}
           key={state.chapter.chapterId}
           completedVersion={
             state.version?.source.chapterId === state.chapter.chapterId ? state.version : null
@@ -111,6 +122,7 @@ function RouteScreen({
     case 'reader':
       return state.version ? (
         <ReaderScreen
+          titles={titles}
           busy={state.busy || state.translationActive}
           onRetryParagraphs={
             state.streamingAvailable && state.connection.provider === 'openai-compatible'
@@ -210,6 +222,8 @@ export function Application({ controller }: { controller: RenewalController }): 
             <button onClick={controller.openPendingSave}>저장 대기 중인 번역으로 돌아가기</button>
           </aside>
         )}
+      {state.titlesBusy && <p role="status">제목 번역 중… 완료된 제목부터 표시합니다.</p>}
+      {state.titlesError && <p role="alert">{state.titlesError}</p>}
       <RouteScreen controller={controller} state={state} />
       {state.translationTimings && (
         <details>

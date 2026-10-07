@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { CatalogStatus } from '../app/renewalController';
 import { StreamingReader } from './StreamingReader';
+import { TitleHeading, type TitleControls } from './TitleHeading';
 import type { ErrorCode } from '../contracts';
 import type {
   ChapterRef,
@@ -11,6 +12,7 @@ import type {
   ReadingPosition,
 } from '../contracts/reading';
 export interface TranslationScreenProps {
+  titles?: TitleControls;
   completedVersion?: CompletedTranslation | null;
   work?: WorkPage | null;
   position?: ReadingPosition | null;
@@ -71,7 +73,12 @@ export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
   const active = ['preparing', 'translating', 'validating', 'saving'].includes(props.state.phase);
   return (
     <section aria-label="회차 번역">
-      <h1>{props.chapter.title}</h1>
+      <TitleHeading
+        titleKey={props.chapter.chapterId}
+        source={props.chapter.title}
+        label="회차 제목"
+        controls={props.titles}
+      />
       <a href={props.chapter.canonicalUrl} target="_blank" rel="noreferrer">
         회차 원문
       </a>

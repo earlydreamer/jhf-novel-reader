@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { CompletedTranslation, ReadingPosition, WorkPage } from '../contracts/reading';
 import { japaneseBlockIndexes } from '../translation/quality';
 import { ParagraphRetryPanel } from './ParagraphRetryPanel';
+import { TitleHeading, type TitleControls } from './TitleHeading';
 export interface ReaderScreenProps {
   version: CompletedTranslation;
   work: WorkPage | null;
@@ -19,6 +20,7 @@ export interface ReaderScreenProps {
   onAdjacent(direction: -1 | 1): void;
   busy?: boolean;
   onRetryParagraphs?(indexes?: readonly number[]): void;
+  titles?: TitleControls;
 }
 export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   const quality = props.version.quality;
@@ -78,7 +80,13 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   }
   return (
     <section aria-label="독서 화면">
-      <h1>{props.version.source.title}</h1>
+      <TitleHeading
+        titleKey={props.version.source.chapterId}
+        source={props.version.source.title}
+        label="회차 제목"
+        controls={props.titles}
+        original={props.showOriginal}
+      />
       {!!props.version.failedParagraphs?.length && (
         <p role="status">
           번역하지 못한 {props.version.failedParagraphs.length}개 문단은 원문으로 남겼습니다. 본문의

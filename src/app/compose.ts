@@ -39,6 +39,7 @@ import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import { ReaderError } from '../contracts';
 import { createGuidanceRepository } from '../translation/guidance';
+import { createTitleRepository, createTitleTranslation } from '../translation/titles';
 export function createRenewalApplication(
   adapters: ApplicationAdapters & {
     browse?: () => Promise<{ selectedUrl: string } | null>;
@@ -49,20 +50,21 @@ export function createRenewalApplication(
     library = createLibraryStore(adapters.files);
   const migrateV1 = createV1Migration(adapters.files, adapters.preferences, library);
   const guidance = createGuidanceRepository(adapters.files);
+  const createProvider = (selection: import('../contracts').SelectedModel) => {
+    switch (selection.connection.provider) {
+      case 'openai-compatible':
+        return createProviderSession(selection, adapters.modelTransport, adapters.secrets);
+      case 'gemini':
+        return createGeminiProviderSession(selection, adapters.modelTransport, adapters.secrets);
+      default:
+        throw new ReaderError('model_missing');
+    }
+  };
   const flow = createWholeChapterFlow({
     source,
     store: library,
     guidance,
-    createProvider: (selection) => {
-      switch (selection.connection.provider) {
-        case 'openai-compatible':
-          return createProviderSession(selection, adapters.modelTransport, adapters.secrets);
-        case 'gemini':
-          return createGeminiProviderSession(selection, adapters.modelTransport, adapters.secrets);
-        default:
-          throw new ReaderError('model_missing');
-      }
-    },
+    createProvider,
     attempts: createAttemptRepository(adapters.files),
     clock: adapters.clock ?? { now: () => performance.now() },
   });
@@ -72,6 +74,12 @@ export function createRenewalApplication(
     source,
     library,
     guidance,
+    titles: createTitleRepository(adapters.files),
+    translateTitles: createTitleTranslation(
+      createProvider,
+      guidance,
+      Boolean(adapters.modelTransport.streamPost),
+    ),
     migrateLegacy: migrateV1,
     flow,
     batch: createBatchTranslation({

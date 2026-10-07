@@ -163,6 +163,26 @@
 .nr-paragraph-retry {
   margin-block: 1rem;
 }
+.nr-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nr-title h1 {
+  margin-bottom: 0.5rem;
+}
+.nr-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+  font-size: 0.9rem;
+}
+.nr-title form {
+  padding: 0.75rem;
+  border: 1px solid #8886;
+  margin-bottom: 1rem;
+}
 .nr-stream-toolbar p {
   flex: 1;
 }
