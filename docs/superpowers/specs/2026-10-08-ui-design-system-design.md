@@ -43,9 +43,9 @@ Very Peri `#6667AB`는 시드이자 라이트 테마의 채움 면 색이다. �
 |---|---|---|---|
 | `--surface` | `#FAFAFD` | `#13131B` | 화면 바탕 |
 | `--surface-container-lowest` | `#FFFFFF` | `#0E0E15` | 예비(가장 밝은/어두운 면) |
-| `--surface-container-low` | `#F4F4FA` | `#1A1A24` | 카드 |
+| `--surface-container-low` | `#F4F4FA` | `#1A1A24` | 카드, 바텀시트 |
 | `--surface-container` | `#EEEEF6` | `#1F1F2A` | 앱바(스크롤 시), 메뉴 |
-| `--surface-container-high` | `#E8E8F2` | `#262633` | 바텀시트, 대화상자 |
+| `--surface-container-high` | `#E8E8F2` | `#262633` | 대화상자 |
 | `--surface-container-highest` | `#E2E2EE` | `#30303F` | 입력칸 채움 |
 | `--on-surface` | `#1A1A28` | `#EEEEF6` | 본문 |
 | `--on-surface-variant` | `#45465C` | `#C9C9DC` | 보조 텍스트 |
@@ -145,11 +145,11 @@ Pretendard Variable을 `src/ui/theme/fonts/`에 woff2로 번들하고 `@font-fac
   - `showContents()`(목차): 바로 아래 항목이 같은 작품의 `work`면 새로 쌓지 않고 그 항목으로 돌아간다(`back()`과 같음). 이때 선택 회차는 현재 회차로 갱신한다.
   - `goHome()`(서재로 가기): 스택을 비우고 `home`으로 간다.
   - `canGoBack()`: 스택이 비어 있고 현재가 `home`이면 `false`.
-- 시스템 뒤로 가기(`@capacitor/app` `backButton`): ① 열린 메뉴·시트·대화상자 닫기 → ② 리더 바가 보이면 숨기기 → ③ `canGoBack()`이면 `back()` → ④ 아니면 `App.exitApp()`. 오버레이와 리더 바는 셸의 작은 LIFO 레지스트리(`pushBackHandler`)에 등록한다.
-- Manifest `application`에 `android:enableOnBackInvokedCallback="true"`를 둔다(앱 종료 시 predictive back 애니메이션).
+- 시스템 뒤로 가기(`@capacitor/app` `backButton`): ① 열린 메뉴·시트·대화상자 닫기 → ② 리더 바가 보이면 숨기기 → ③ `canGoBack()`이면 `back()` → ④ 아니면 앱을 백그라운드로 보낸다(`App.minimizeApp()`, Android 12+ 루트 뒤로 가기 관례). 오버레이와 리더 바는 셸의 작은 LIFO 레지스트리(`pushBackHandler`)에 등록한다.
+- Manifest에 `android:enableOnBackInvokedCallback="true"`를 둔다. 다만 `@capacitor/app` 뒤로 가기 리스너가 켜져 있는 동안 시스템의 홈 복귀 예측 애니메이션은 나오지 않는다. 루트에서 리스너를 끄는(`toggleBackButtonHandler`) 연동은 후속 과제다.
 - edge-to-edge: `viewport-fit=cover`와 `env(safe-area-inset-*)`. WebView가 인셋을 주지 않는 기기에서는 Capacitor 8의 시스템 바 기능 또는 네이티브 `WindowInsets`로 받은 값을 `--inset-top/bottom/left/right`에 넣는다. 구현 시 Black Shark 2(Android 10)와 Fold7(Android 16)에서 실제 값을 확인한다. 상태바 아이콘 밝기는 테마를 따른다.
 - 화면 이동 시 새 화면 `h1`으로 포커스를 옮긴다.
-- #92의 셸 앱바(하위 이슈가 화면별 앱바로 넘겨받기 전까지): 서재는 제목 `서재` + `설정` 아이콘 버튼, 나머지 화면은 `뒤로 가기` 아이콘 버튼 + 화면 이름(`목차`·`읽기`·`설정`) + `더보기` 메뉴(`서재로 가기`). 화면 본문이 이미 `h1`을 가지므로 셸 앱바 제목은 제목 요소가 아닌 텍스트로 둔다.
+- #92의 셸 앱바(하위 이슈가 화면별 앱바로 넘겨받기 전까지): 서재는 제목 `서재` + `설정` 아이콘 버튼, 나머지 화면은 `뒤로 가기` 아이콘 버튼 + 화면 이름(`목차`·`읽기`·`설정`) + `더보기` 메뉴(`서재로 가기`, 설정 화면이 아니면 `설정`). 화면 본문이 이미 `h1`을 가지므로 셸 앱바 제목은 제목 요소가 아닌 텍스트로 둔다.
 - 기존 `Application.tsx`의 상단 `뒤로/홈/설정` 버튼, 전역 배너 4종, 하단 `최근 번역 단계별 시간`은 셸에서 제거한다. 전역 배너는 서재의 알림 카드로(이슈 2), 단계별 시간은 설정의 정보로(이슈 6) 옮긴다. 이슈 1에서는 하위 이슈가 옮기기 전까지 셸의 알림 영역에 새 `Card` 컴포넌트로 임시 유지한다.
 - 앱 테마: 설정 스키마 v2에 선택 필드 `theme?: 'system'|'light'|'dark'`(기본 `system`), `readingBackground?: 'theme'|'sepia'|'black'`(기본 `theme`), `lineHeight?: 1.6|1.8|2.0`(기본 1.8)를 추가한다. 키가 없는 기존 파일은 그대로 읽힌다. `html[data-theme]`로 적용하고 `system`이면 `prefers-color-scheme`을 따른다.
 
