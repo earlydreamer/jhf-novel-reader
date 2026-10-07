@@ -37,6 +37,7 @@ import { openSourceBrowser } from '../platform/browse';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import { ReaderError } from '../contracts';
+import { createGuidanceRepository } from '../translation/guidance';
 export function createRenewalApplication(
   adapters: ApplicationAdapters & {
     browse?: () => Promise<{ selectedUrl: string } | null>;
@@ -46,9 +47,11 @@ export function createRenewalApplication(
   const source = createRenewalSource(adapters.sourceTransport),
     library = createLibraryStore(adapters.files);
   const migrateV1 = createV1Migration(adapters.files, adapters.preferences, library);
+  const guidance = createGuidanceRepository(adapters.files);
   const flow = createWholeChapterFlow({
     source,
     store: library,
+    guidance,
     createProvider: (selection) => {
       switch (selection.connection.provider) {
         case 'openai-compatible':
@@ -65,6 +68,7 @@ export function createRenewalApplication(
   return createRenewalController({
     source,
     library,
+    guidance,
     migrateLegacy: migrateV1,
     flow,
     batch: createBatchTranslation({
@@ -72,6 +76,7 @@ export function createRenewalApplication(
       library,
       flow,
       repository: createBatchRepository(adapters.files),
+      guidance,
     }),
     clock: adapters.clock,
     lifecycle: adapters.lifecycle,

@@ -20,6 +20,7 @@ import type {
 import type { Route } from './routes';
 import { limitsForModel } from '../translation/segments';
 import type { BatchState, BatchTranslation, ChapterRange } from '../translation/batch';
+import type { GuidanceDraft, GuidanceRepository, WorkGuidance } from '../translation/guidance';
 
 export type CatalogStatus =
   | 'idle'
@@ -39,6 +40,7 @@ export interface RenewalDependencies {
   readonly clock?: { now(): number };
   readonly flow?: WholeChapterFlow;
   readonly batch?: BatchTranslation;
+  readonly guidance?: GuidanceRepository;
   readonly lifecycle?: AppLifecycle;
   readonly browse?: () => Promise<{ selectedUrl: string } | null>;
   readonly normalizeInput?: (url: string) => string;
@@ -97,6 +99,7 @@ export interface RenewalSnapshot {
   readonly pendingSaveChapter: ChapterRef | null;
   readonly batch: BatchState | null;
   readonly batchAvailable: boolean;
+  readonly guidanceAvailable: boolean;
 }
 const DEFAULT_CONNECTION: ConnectionConfig = {
   provider: 'openai-compatible',
@@ -155,6 +158,8 @@ export interface RenewalController {
   cancelBatch(): void;
   retryBatchSave(): Promise<void>;
   openBatch(): void;
+  readGuidance(workId: string): Promise<WorkGuidance | null>;
+  saveGuidance(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
   translate(): Promise<void>;
   refreshSource(): Promise<void>;
   showContents(): void;
@@ -198,6 +203,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     pendingSaveChapter: null,
     batch: null,
     batchAvailable: Boolean(dependencies.batch),
+    guidanceAvailable: Boolean(dependencies.guidance),
   };
   const listeners = new Set<() => void>();
   const history: Route[] = [];
@@ -1069,6 +1075,21 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     cancelBatch: () => dependencies.batch?.cancel(),
     retryBatchSave,
     openBatch,
+    readGuidance: async (workId) => (await dependencies.guidance?.read(workId)) ?? null,
+    async saveGuidance(workId, draft) {
+      if (
+        !dependencies.guidance ||
+        disposed ||
+        !initialized ||
+        !foreground ||
+        snapshot.work?.workId !== workId ||
+        activeTranslation ||
+        dependencies.batch?.active ||
+        dependencies.flow?.active
+      )
+        throw new ReaderError('storage');
+      return dependencies.guidance.save(workId, draft);
+    },
     translate,
     refreshSource,
     showContents,

@@ -88,8 +88,9 @@ export function createProviderSession(
         throw new ReaderError('invalid_output');
       if (limits && request.promptVersion !== 'hymt2-segments-v1')
         throw new ReaderError('invalid_output');
+      if (request.referenceContext && !limits) throw new ReaderError('input_limit');
       const segments = limits
-        ? planSegments(request.source, limits)
+        ? planSegments(request.source, limits, request.referenceContext)
         : [{ input: normalizeChapterInput(request.source), separator: '' }];
       if (!segments[0]?.input.trim()) throw new ReaderError('source_parse');
       const auth = await authorization(connection, secrets, signal);
@@ -105,7 +106,13 @@ export function createProviderSession(
               body: {
                 model,
                 messages: limits
-                  ? [{ role: 'user', content: SEGMENT_INSTRUCTION + segment.input }]
+                  ? [
+                      {
+                        role: 'user',
+                        content:
+                          SEGMENT_INSTRUCTION + (request.referenceContext ?? '') + segment.input,
+                      },
+                    ]
                   : [
                       { role: 'system', content: instruction },
                       { role: 'user', content: segment.input },

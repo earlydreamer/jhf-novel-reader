@@ -56,6 +56,7 @@ export type WholeChapterRequest = {
   contractVersion: 'plain-v1';
   promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1';
   onProgress?: (completed: number, total: number) => void;
+  referenceContext?: string;
 };
 export type WholeChapterResult = {
   text: string;
@@ -78,6 +79,7 @@ export type CompletedTranslation = {
     promptVersion: string;
     languageDirection: 'ja-ko';
     generation?: SegmentedGeneration;
+    guidanceHash?: string;
   };
 };
 export type ReadingPosition = {

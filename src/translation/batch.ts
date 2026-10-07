@@ -12,6 +12,12 @@ import { check, integer, object, text } from '../storage/validation';
 import { StorageError } from '../storage/errors';
 import { identifier, selected, workPage } from '../storage/readingValidation';
 import type { WholeChapterFlow } from './wholeChapter';
+import {
+  guidanceHash,
+  validateGuidance,
+  type GuidanceRepository,
+  type WorkGuidance,
+} from './guidance';
 
 type BatchPhase = 'prepared' | 'running' | 'paused' | 'unknown' | 'saving' | 'complete';
 export type ChapterRange = { first: number; last: number };
@@ -29,6 +35,7 @@ export type BatchRecord = {
   skipped: number;
   phase: BatchPhase;
   currentVersionIds?: readonly string[];
+  guidance?: WorkGuidance;
 };
 export type BatchState = {
   record: BatchRecord | null;
@@ -82,6 +89,7 @@ async function validateBatch(value: unknown): Promise<BatchRecord> {
     'skipped',
     'phase',
     'currentVersionIds',
+    'guidance',
   ]);
   check(value.schemaVersion === 1);
   identifier(value.id);
@@ -89,6 +97,10 @@ async function validateBatch(value: unknown): Promise<BatchRecord> {
   check(Number.isFinite(Date.parse(value.createdAt)));
   selected(value.selection);
   const work = await workPage(value.work);
+  if (value.guidance !== undefined) {
+    const guidance = await validateGuidance(value.guidance);
+    check(guidance.workId === work.workId);
+  }
   check(work.complete && work.nextPageUrl === null);
   check(
     Array.isArray(value.chapters) &&
@@ -140,6 +152,7 @@ export function createBatchTranslation(dependencies: {
   library: LibraryStore;
   flow: WholeChapterFlow;
   repository: BatchRepository;
+  guidance?: GuidanceRepository;
 }): BatchTranslation {
   let state: BatchState = { record: null, active: false, preparing: false, error: null };
   let foreground = false;
@@ -158,10 +171,12 @@ export function createBatchTranslation(dependencies: {
   function matchesSelection(
     version: Awaited<ReturnType<LibraryStore['listVersions']>>[number],
     selection: SelectedModel,
+    guidance?: WorkGuidance | null,
   ): boolean {
     return (
       version.provenance.provider === selection.connection.provider &&
-      version.provenance.modelId === selection.modelId
+      version.provenance.modelId === selection.modelId &&
+      version.provenance.guidanceHash === guidanceHash(guidance)
     );
   }
   async function initialize(): Promise<void> {
@@ -240,6 +255,7 @@ export function createBatchTranslation(dependencies: {
     publish({ active: true, preparing: true, error: null });
     try {
       const completeWork = await collectWork(work, control.signal);
+      const guidance = (await dependencies.guidance?.read(work.workId)) ?? null;
       const first = range?.first ?? 1;
       const last = range?.last ?? completeWork.chapters.length;
       if (last > completeWork.chapters.length) throw new ReaderError('source_parse');
@@ -251,7 +267,7 @@ export function createBatchTranslation(dependencies: {
       if (!retranslate) {
         for (const chapter of chapters) {
           const versions = await dependencies.library.listVersions(chapter.chapterId);
-          if (versions.some((version) => matchesSelection(version, frozenSelection)))
+          if (versions.some((version) => matchesSelection(version, frozenSelection, guidance)))
             alreadySaved++;
         }
       }
@@ -263,6 +279,7 @@ export function createBatchTranslation(dependencies: {
         createdAt: new Date().toISOString(),
         work: completeWork,
         selection: frozenSelection,
+        ...(guidanceHash(guidance) ? { guidance: structuredClone(guidance!) } : {}),
         chapters,
         retranslate,
         alreadySaved,
@@ -311,11 +328,18 @@ export function createBatchTranslation(dependencies: {
     cancelled = false;
     publish({ active: true, error: null });
     try {
+      const currentGuidance = (await dependencies.guidance?.read(record.work.workId)) ?? null;
+      if (guidanceHash(currentGuidance) !== guidanceHash(record.guidance)) {
+        publish({ error: '작품의 용어집·말투가 바뀌었습니다. 번역 범위를 다시 확인하세요.' });
+        return;
+      }
       while (record.cursor < record.chapters.length && !cancelled && foreground && !disposed) {
         const chapter = record.chapters[record.cursor]!;
         const versions = await dependencies.library.listVersions(chapter.chapterId);
         const selection = record.selection;
-        const sameModel = versions.filter((version) => matchesSelection(version, selection));
+        const sameModel = versions.filter((version) =>
+          matchesSelection(version, selection, record!.guidance),
+        );
         const beforeRequest = record.currentVersionIds;
         const completedDuringBatch =
           beforeRequest !== undefined &&
@@ -343,7 +367,7 @@ export function createBatchTranslation(dependencies: {
         };
         await persist(record);
         if (cancelled || !foreground || disposed) break;
-        await dependencies.flow.start(chapter, record.selection);
+        await dependencies.flow.start(chapter, record.selection, record.guidance ?? null);
         const result = dependencies.flow.getCompleted();
         if (result && result.source.chapterId === chapter.chapterId) {
           record = await advance(record, false);
@@ -360,9 +384,12 @@ export function createBatchTranslation(dependencies: {
           if (chapterState.error?.code === 'output_limit')
             error =
               '현재 회차의 출력이 길이 제한으로 잘렸습니다. 완료본으로 저장하거나 이후 회차를 요청하지 않았습니다.';
+          else if (chapterState.error?.code === 'guidance_unsupported')
+            error =
+              '용어집·말투 적용은 로컬 모델의 구간 번역에서 사용할 수 있습니다. 로컬 모델을 선택하거나 이 작품의 항목을 비운 뒤 저장하세요.';
           else if (chapterState.error?.code === 'input_limit')
             error =
-              '현재 회차가 선택한 모델의 입력 한도를 넘었습니다. 연결 설정에서 모델 목록을 확인하세요.';
+              '현재 회차가 선택한 모델의 입력 한도를 넘었습니다. 용어집·말투가 길면 항목을 줄이고 번역 범위를 다시 확인하세요. 연결 설정에서 모델 목록도 확인할 수 있습니다.';
           else if (['source_access', 'source_parse'].includes(chapterState.error?.code ?? ''))
             error = '현재 회차의 원문을 읽지 못했습니다. 원문을 확인한 뒤 재개하세요.';
           publish({ error });

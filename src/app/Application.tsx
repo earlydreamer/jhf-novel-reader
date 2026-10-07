@@ -34,6 +34,15 @@ function RouteScreen({
           selectedChapterId={state.route.selectedChapterId}
           busy={state.busy}
           onSelect={(chapter) => void controller.selectChapter(chapter)}
+          guidance={
+            state.guidanceAvailable
+              ? {
+                  locked: state.busy || state.translationActive,
+                  onRead: controller.readGuidance,
+                  onSave: controller.saveGuidance,
+                }
+              : undefined
+          }
           onLoadMore={() => void controller.loadMoreWorkPage()}
           batch={state.batch}
           batchAvailable={

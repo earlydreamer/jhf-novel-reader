@@ -44,8 +44,8 @@ export function limitsForModel(
   return limits;
 }
 /** A conservative UTF-8-byte estimate, not the server's exact tokenizer count. */
-export function estimatedInputTokens(input: string): number {
-  return new TextEncoder().encode(SEGMENT_INSTRUCTION + input).length + 128;
+export function estimatedInputTokens(input: string, referenceContext = ''): number {
+  return new TextEncoder().encode(SEGMENT_INSTRUCTION + referenceContext + input).length + 128;
 }
 export function chapterAtoms(source: SourceSnapshot): string[] {
   const atoms: string[] = [];
@@ -74,12 +74,13 @@ export type TranslationSegment = { input: string; separator: string };
 export function planSegments(
   source: SourceSnapshot,
   limits: LocalTranslationLimits,
+  referenceContext = '',
 ): TranslationSegment[] {
   if (!validLocalLimits(limits)) throw new ReaderError('input_limit');
   const atoms = chapterAtoms(source);
   if (!atoms.join('').trim()) throw new ReaderError('source_parse');
   const encoder = new TextEncoder();
-  const available = limits.inputBudgetTokens - estimatedInputTokens('');
+  const available = limits.inputBudgetTokens - estimatedInputTokens('', referenceContext);
   const sizes = atoms.map((atom) => encoder.encode(atom).length);
   const segments: TranslationSegment[] = [];
   let start = 0;
