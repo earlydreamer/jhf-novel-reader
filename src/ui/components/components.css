@@ -394,3 +394,48 @@
     transform: translateY(100%);
   }
 }
+
+/* Menu */
+.nr-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.nr-menu {
+  position: absolute;
+  z-index: 30;
+  inset-block-start: 100%;
+  inset-inline-end: 4px;
+  min-inline-size: 12rem;
+  max-inline-size: min(17.5rem, calc(100vw - 16px));
+  padding: 8px 0;
+  border-radius: var(--shape-sm);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  box-shadow: var(--elevation-2);
+}
+.nr-menu--up {
+  inset-block-start: auto;
+  inset-block-end: 100%;
+}
+.nr-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: var(--touch-target);
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: var(--type-body-large);
+  text-align: start;
+  cursor: pointer;
+}
+.nr-menu__item .nr-icon {
+  color: var(--on-surface-variant);
+}
+.nr-menu__item--danger,
+.nr-menu__item--danger .nr-icon {
+  color: var(--error);
+}
