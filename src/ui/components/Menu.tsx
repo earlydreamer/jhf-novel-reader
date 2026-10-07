@@ -55,9 +55,7 @@ export function Menu({
     return () => document.removeEventListener('pointerdown', outside);
   }, [open, close]);
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const entries = [
-      ...(list.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []),
-    ];
+    const entries = [...(list.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
     const index = entries.indexOf(document.activeElement as HTMLElement);
     const move = (next: number) => {
       event.preventDefault();

@@ -1,8 +1,10 @@
 import type { ButtonHTMLAttributes, JSX, Ref } from 'react';
 import { Icon, type IconName } from './Icon';
 
-export interface IconButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label' | 'children'> {
+export interface IconButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'aria-label' | 'children'
+> {
   icon: IconName;
   label: string;
   variant?: 'standard' | 'tonal';

@@ -75,7 +75,14 @@ export interface DialogProps {
   actions?: ReactNode;
   fullScreen?: { confirmLabel: string; onConfirm(): void; confirmDisabled?: boolean };
 }
-export function Dialog({ open, title, onClose, children, actions, fullScreen }: DialogProps): JSX.Element | null {
+export function Dialog({
+  open,
+  title,
+  onClose,
+  children,
+  actions,
+  fullScreen,
+}: DialogProps): JSX.Element | null {
   if (fullScreen)
     return (
       <ModalSurface

@@ -83,15 +83,31 @@ const pairs: readonly (readonly [string, string, string, Gate])[] = [
   ['primary', 'surface-container-high', '포커스 링(대화상자)', ICON],
 ];
 
-const themes = { light: block(':root'), dark: { ...block(':root'), ...block(":root[data-theme='dark']") } };
+const themes = {
+  light: block(':root'),
+  dark: { ...block(':root'), ...block(":root[data-theme='dark']") },
+};
 const cases = Object.entries(themes).flatMap(([theme, tokens]) =>
-  pairs.map(([fg, bg, use, gate]) => ({ name: `${theme} ${use} (${fg} / ${bg})`, fg: tokens[fg], bg: tokens[bg], gate })),
+  pairs.map(([fg, bg, use, gate]) => ({
+    name: `${theme} ${use} (${fg} / ${bg})`,
+    fg: tokens[fg],
+    bg: tokens[bg],
+    gate,
+  })),
 );
 const reading = [
   { name: 'light 독서 기본', fg: themes.light['on-surface'], bg: themes.light.surface },
   { name: 'dark 독서 기본', fg: themes.dark['on-surface'], bg: themes.dark.surface },
-  { name: '독서 세피아', fg: block("[data-reading-background='sepia']")['reading-on-surface'], bg: block("[data-reading-background='sepia']")['reading-surface'] },
-  { name: '독서 검정', fg: block("[data-reading-background='black']")['reading-on-surface'], bg: block("[data-reading-background='black']")['reading-surface'] },
+  {
+    name: '독서 세피아',
+    fg: block("[data-reading-background='sepia']")['reading-on-surface'],
+    bg: block("[data-reading-background='sepia']")['reading-surface'],
+  },
+  {
+    name: '독서 검정',
+    fg: block("[data-reading-background='black']")['reading-on-surface'],
+    bg: block("[data-reading-background='black']")['reading-surface'],
+  },
 ].map((value) => ({ ...value, gate: READ }));
 
 describe('design token contrast', () => {

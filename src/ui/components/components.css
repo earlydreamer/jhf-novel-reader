@@ -40,13 +40,40 @@
   pointer-events: none;
   transition: opacity var(--duration-short) var(--ease-standard);
 }
-:is(.nr-button, .nr-icon-button, .nr-chip, .nr-card--interactive, .nr-list-item__main, .nr-menu__item, .nr-fab, .nr-snackbar__action):hover::before {
+:is(
+    .nr-button,
+    .nr-icon-button,
+    .nr-chip,
+    .nr-card--interactive,
+    .nr-list-item__main,
+    .nr-menu__item,
+    .nr-fab,
+    .nr-snackbar__action
+  ):hover::before {
   opacity: var(--state-hover);
 }
-:is(.nr-button, .nr-icon-button, .nr-chip, .nr-card--interactive, .nr-list-item__main, .nr-menu__item, .nr-fab, .nr-snackbar__action):focus-visible::before {
+:is(
+    .nr-button,
+    .nr-icon-button,
+    .nr-chip,
+    .nr-card--interactive,
+    .nr-list-item__main,
+    .nr-menu__item,
+    .nr-fab,
+    .nr-snackbar__action
+  ):focus-visible::before {
   opacity: var(--state-focus);
 }
-:is(.nr-button, .nr-icon-button, .nr-chip, .nr-card--interactive, .nr-list-item__main, .nr-menu__item, .nr-fab, .nr-snackbar__action):active::before {
+:is(
+    .nr-button,
+    .nr-icon-button,
+    .nr-chip,
+    .nr-card--interactive,
+    .nr-list-item__main,
+    .nr-menu__item,
+    .nr-fab,
+    .nr-snackbar__action
+  ):active::before {
   opacity: var(--state-pressed);
 }
 
@@ -342,7 +369,8 @@
 .nr-dialog--fullscreen .nr-dialog__body {
   flex: 1;
   overflow: auto;
-  padding: 0 max(24px, var(--inset-right)) calc(24px + var(--inset-bottom)) max(24px, var(--inset-left));
+  padding: 0 max(24px, var(--inset-right)) calc(24px + var(--inset-bottom))
+    max(24px, var(--inset-left));
   color: var(--on-surface);
   font: var(--type-body-large);
 }

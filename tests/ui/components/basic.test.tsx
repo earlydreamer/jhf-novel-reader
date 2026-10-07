@@ -40,7 +40,9 @@ describe('Button', () => {
         </Button>
       </>,
     );
-    expect(screen.getByRole('button', { name: '12화부터 이어서 읽기' })).toHaveClass('nr-button--m');
+    expect(screen.getByRole('button', { name: '12화부터 이어서 읽기' })).toHaveClass(
+      'nr-button--m',
+    );
     expect(screen.getByRole('button', { name: '제거하기' })).toHaveClass('nr-button--danger');
   });
 });
