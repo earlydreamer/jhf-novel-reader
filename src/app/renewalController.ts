@@ -572,7 +572,17 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (version) {
         navigate({ kind: 'reader', versionId: version.versionId });
         void checkSourceChange(version, chapter);
-      } else navigate({ kind: 'translation', chapterId: chapter.chapterId });
+      } else {
+        navigate({ kind: 'translation', chapterId: chapter.chapterId });
+        // Restore connectivity on demand; cached reading and startup stay offline.
+        if (
+          initialized &&
+          foreground &&
+          snapshot.selectedModelId &&
+          snapshot.catalogStatus === 'idle'
+        )
+          await checkConnection();
+      }
     } catch {
       if (operation === selectionOperation)
         publish({
@@ -686,7 +696,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         publish({
           catalogStatus: errorLabel(error),
           models: [],
-          selectedModelId: null,
+          selectedModelId: previousModelId,
           localLimits: undefined,
         });
       }

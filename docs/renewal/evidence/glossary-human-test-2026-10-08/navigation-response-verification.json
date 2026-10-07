@@ -1,0 +1,14 @@
+{
+  "sourceHead": "eda478d",
+  "actualSourceAndModel": true,
+  "responseAlteration": false,
+  "storedModelMatchesRequests": true,
+  "sourceNonblank": 132,
+  "inputIds": 132,
+  "outputIds": 132,
+  "storedEqualsNativeResponses": true,
+  "storedQualityMatchesAppliedPreset": true,
+  "modelPosts": 3,
+  "modelElapsedMs": 59780,
+  "humanSemanticReview": "PENDING"
+}

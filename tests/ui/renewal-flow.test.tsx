@@ -112,6 +112,128 @@ async function setup(hasSaved = false, translationAvailable = false) {
 }
 afterEach(cleanup);
 describe('renewal first reading screens', () => {
+  function restoredFixture(hasSaved = false) {
+    const value = fixture(hasSaved);
+    Object.assign(value.dependencies, {
+      settings: {
+        readReadingSettings: async () => ({
+          schemaVersion: 2,
+          fontSize: 18,
+          selection: {
+            connection: {
+              provider: 'openai-compatible',
+              baseUrl: 'http://192.0.2.1:1234',
+              revision: 1,
+            },
+            modelId: 'fixture-hymt2',
+          },
+        }),
+        saveReadingSettings: vi.fn(async () => {}),
+      },
+      startTranslation: vi.fn(async () => {}),
+    });
+    return value;
+  }
+  it('checks the restored model on selecting an unsaved chapter, without generation', async () => {
+    const value = restoredFixture();
+    const controller = controllers.createRenewalController(value.dependencies);
+    await controller.initialize();
+    expect(value.dependencies.connect).not.toHaveBeenCalled();
+    render(<Application controller={controller} />);
+    await controller.openWork(page.canonicalUrl);
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '이 화 번역' })).toBeEnabled());
+    expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
+    expect(value.dependencies.connect).toHaveBeenCalledTimes(1);
+    expect(value.dependencies.startTranslation).not.toHaveBeenCalled();
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+  it('keeps saved chapter reading offline and checks only when moving to an unsaved chapter', async () => {
+    const value = restoredFixture(true);
+    const controller = controllers.createRenewalController(value.dependencies);
+    await controller.initialize();
+    render(<Application controller={controller} />);
+    await controller.openWork(page.canonicalUrl);
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    await screen.findByText('저장된 한국어 본문');
+    expect(value.dependencies.connect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '다음 화' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '이 화 번역' })).toBeEnabled());
+    expect(value.dependencies.connect).toHaveBeenCalledTimes(1);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+  it('retains the restored model on connection failure and retries from the chapter screen', async () => {
+    const { ReaderError } = await import('../../src/contracts');
+    const value = restoredFixture();
+    const connect = value.dependencies.connect as ReturnType<typeof vi.fn>;
+    connect.mockRejectedValueOnce(new ReaderError('connection'));
+    const controller = controllers.createRenewalController(value.dependencies);
+    await controller.initialize();
+    render(<Application controller={controller} />);
+    await controller.openWork(page.canonicalUrl);
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connection'));
+    expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
+    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '연결 다시 확인' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '이 화 번역' })).toBeEnabled());
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+  it('shows connection progress without allowing duplicate checks or reopening a departed chapter', async () => {
+    const value = restoredFixture();
+    let release!: () => void;
+    const listing = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const connect = value.dependencies.connect as ReturnType<typeof vi.fn>;
+    connect.mockImplementation(async () => {
+      await listing;
+      return {
+        listModels: async () => [
+          { id: 'fixture-hymt2', displayName: 'HyMT2 synthetic', supportsGeneration: true },
+        ],
+        translateChapter: value.generate,
+      };
+    });
+    const controller = controllers.createRenewalController(value.dependencies);
+    await controller.initialize();
+    render(<Application controller={controller} />);
+    await controller.openWork(page.canonicalUrl);
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    await screen.findByText('저장된 연결의 서버와 모델 목록을 확인하고 있습니다.');
+    expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '홈' }));
+    release();
+    await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connected'));
+    expect(controller.getSnapshot().route.kind).toBe('home');
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+  it('does not replace a restored missing model with another available model', async () => {
+    const value = restoredFixture();
+    (value.dependencies.connect as ReturnType<typeof vi.fn>).mockResolvedValue({
+      listModels: async () => [
+        { id: 'different-model', displayName: 'Other model', supportsGeneration: true },
+      ],
+      translateChapter: value.generate,
+    });
+    const controller = controllers.createRenewalController(value.dependencies);
+    await controller.initialize();
+    render(<Application controller={controller} />);
+    await controller.openWork(page.canonicalUrl);
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('model_missing'));
+    expect(controller.getSnapshot().selectedModelId).toBeNull();
+    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
   it('open_work_does_not_translate', async () => {
     const value = await setup();
     expect(value.generate).not.toHaveBeenCalled();

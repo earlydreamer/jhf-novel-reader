@@ -76,6 +76,8 @@ function RouteScreen({
             state.pendingSaveChapter.chapterId !== state.chapter.chapterId
           }
           catalogReady={state.catalogStatus === 'connected'}
+          catalogStatus={state.catalogStatus}
+          onCheckConnection={() => void controller.checkConnection()}
           onCancel={controller.cancelTranslation}
           onRetry={() => void controller.retryTranslation()}
           onRetrySave={() => void controller.retrySave()}
