@@ -1,0 +1,10 @@
+/* 공통 컴포넌트 스타일. 토큰만 참조한다(DESIGN.md 2·4절). */
+.nr-icon {
+  display: inline-block;
+  flex: none;
+  inline-size: var(--nr-icon-size, 24px);
+  block-size: var(--nr-icon-size, 24px);
+  background-color: currentColor;
+  -webkit-mask: var(--nr-icon) center / contain no-repeat;
+  mask: var(--nr-icon) center / contain no-repeat;
+}
