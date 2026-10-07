@@ -4,39 +4,39 @@
   background: var(--surface);
   color: var(--on-surface);
 }
-.nr-screen {
+:where(.nr-screen) {
   box-sizing: border-box;
   max-inline-size: var(--content-max);
   margin: 0 auto;
   padding: 8px max(16px, var(--inset-right)) calc(32px + var(--inset-bottom))
     max(16px, var(--inset-left));
 }
-.nr-screen > * + * {
+:where(.nr-screen) > * + * {
   margin-block-start: 16px;
 }
-.nr-screen h1 {
+:where(.nr-screen) h1 {
   margin: 8px 0 16px;
   font: var(--type-headline-small);
   text-wrap: balance;
 }
-.nr-screen h1:focus {
+:where(.nr-screen) h1:focus {
   outline: none;
 }
-.nr-screen h2,
-.nr-screen h3 {
+:where(.nr-screen) h2,
+:where(.nr-screen) h3 {
   margin: 24px 0 8px;
   font: var(--type-title-medium);
 }
-.nr-screen p {
+:where(.nr-screen) p {
   margin: 8px 0;
 }
-.nr-screen a {
+:where(.nr-screen) a {
   color: var(--primary);
 }
-.nr-screen [role='alert'] {
+:where(.nr-screen) [role='alert'] {
   color: var(--error);
 }
-.nr-screen [role='status'] {
+:where(.nr-screen) [role='status'] {
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
 }
@@ -56,7 +56,7 @@
   color: var(--on-error-container);
 }
 /* 클래스 없는 기존 버튼: 토널 S 버튼 모양 */
-.nr-screen button:not([class]) {
+:where(.nr-screen) button:not([class]) {
   min-block-size: var(--button-s);
   margin: 4px 8px 4px 0;
   padding: 0 20px;
@@ -67,12 +67,12 @@
   font: var(--type-label-large);
   cursor: pointer;
 }
-.nr-screen button:not([class]):disabled {
+:where(.nr-screen) button:not([class]):disabled {
   cursor: default;
   background: color-mix(in srgb, var(--on-surface) 12%, transparent);
   color: color-mix(in srgb, var(--on-surface) 38%, transparent);
 }
-.nr-screen label {
+:where(.nr-screen) label {
   display: grid;
   gap: 4px;
   min-inline-size: 0;
@@ -80,9 +80,17 @@
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
 }
-.nr-screen input:not([type='checkbox']):not([type='radio']):not([type='range']),
-.nr-screen select,
-.nr-screen textarea {
+/* 체크박스·라디오 라벨은 한 행으로 둔다. :where로 특이도를 0으로 맞춰 컴포넌트 클래스를 이긴다. */
+:where(.nr-screen) label:where(:has(> input[type='checkbox'], > input[type='radio'])) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--on-surface);
+  font: var(--type-body-large);
+}
+:where(.nr-screen) input:not([type='checkbox']):not([type='radio']):not([type='range']),
+:where(.nr-screen) select,
+:where(.nr-screen) textarea {
   box-sizing: border-box;
   inline-size: 100%;
   min-block-size: var(--touch-target);
@@ -94,38 +102,38 @@
   color: var(--on-surface);
   font: var(--type-body-large);
 }
-.nr-screen textarea {
+:where(.nr-screen) textarea {
   padding-block: 12px;
 }
-.nr-screen input[type='checkbox'],
-.nr-screen input[type='radio'],
-.nr-screen input[type='range'] {
+:where(.nr-screen) input[type='checkbox'],
+:where(.nr-screen) input[type='radio'],
+:where(.nr-screen) input[type='range'] {
   accent-color: var(--primary-fill);
 }
-.nr-screen fieldset {
+:where(.nr-screen) fieldset {
   min-inline-size: 0;
   margin: 16px 0;
   padding: 8px 16px 16px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--shape-md);
 }
-.nr-screen legend {
+:where(.nr-screen) legend {
   padding: 0 4px;
   font: var(--type-title-medium);
 }
-.nr-screen details {
+:where(.nr-screen) details {
   padding: 8px 16px;
   border-radius: var(--shape-md);
   background: var(--surface-container-low);
 }
-.nr-screen summary {
+:where(.nr-screen) summary {
   min-block-size: var(--touch-target);
   display: flex;
   align-items: center;
   cursor: pointer;
 }
-.nr-screen ol,
-.nr-screen ul {
+:where(.nr-screen) ol,
+:where(.nr-screen) ul {
   padding-inline-start: 24px;
 }
 .nr-theme-choice [role='radiogroup'] {
