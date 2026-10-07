@@ -14,6 +14,13 @@ import {
   guidanceContext,
 } from '../../src/translation/guidance';
 import { normalizeChapterInput } from '../../src/providers/plainText';
+import type { RenewalController } from '../../src/app/renewalController';
+
+async function finishScan(app: RenewalController): Promise<void> {
+  if (app.getSnapshot().batch?.record?.scan?.status === 'pending') await app.scanBatch();
+  if (app.getSnapshot().batch?.record?.scan?.status === 'review')
+    await app.confirmBatchCandidates([]);
+}
 
 afterEach(cleanup);
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
@@ -26,6 +33,9 @@ function fixture() {
   let holdFirst = false;
   let badPage = false;
   let failQueueAdvance = false;
+  let chapterExtra = '';
+  let failScanChapter = 0;
+  let holdSource = false;
   let active = 0;
   let maximumActive = 0;
   let release: () => void = () => {};
@@ -56,7 +66,13 @@ function fixture() {
           choices: [
             {
               finish_reason: failSecond && ordinal === 2 ? 'length' : 'stop',
-              message: { content: `번역 ${ordinal}` },
+              // 줄 ID 응답. 출력 한도 시나리오는 닫는 태그 없이 잘린 응답이다.
+              message: {
+                content:
+                  failSecond && ordinal === 2
+                    ? `<p id="A">번역 ${ordinal}`
+                    : `<p id="A">번역 ${ordinal}</p>`,
+              },
             },
           ],
         });
@@ -73,10 +89,14 @@ function fixture() {
                 `<div class="p-eplist__sublist"><a href="/n1234ab/${ordinal}/">합성 ${ordinal}화</a></div>`,
             )
             .join('') +
-          (request.url === workUrl ? '<a rel="next" href="?p=2">다음</a>' : '');
+          (request.url === workUrl
+            ? '<a rel="next" href="?p=2">다음</a>'
+            : '<span class="c-pager__item c-pager__item--next">다음</span>');
       } else {
         const ordinal = Number(new URL(request.url).pathname.split('/')[2]);
-        data = `<h1 class="p-novel__title">합성 ${ordinal}화</h1><div class="p-novel__body"><div class="p-novel__text"><p>合成${ordinal}。</p></div></div>`;
+        if (holdSource) await gate;
+        if (ordinal === failScanChapter) throw Error('synthetic source failure');
+        data = `<h1 class="p-novel__title">합성 ${ordinal}화</h1><div class="p-novel__body"><div class="p-novel__text"><p>合成${ordinal}。${chapterExtra}</p></div></div>`;
       }
       return { status: 200, url: request.url, headers: { 'Content-Type': 'text/html' }, data };
     },
@@ -139,6 +159,15 @@ function fixture() {
     set failQueueAdvance(value: boolean) {
       failQueueAdvance = value;
     },
+    set chapterExtra(value: string) {
+      chapterExtra = value;
+    },
+    set failScanChapter(value: number) {
+      failScanChapter = value;
+    },
+    set holdSource(value: boolean) {
+      holdSource = value;
+    },
     background: () => activeListener(false),
   };
 }
@@ -152,6 +181,7 @@ test('range preview resolves every TOC page without generation; explicit start s
   expect(
     harness.app.getSnapshot().batch?.record?.chapters.map((chapter) => chapter.ordinal),
   ).toEqual([2, 3, 4]);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(
     harness.posts().map((request) => JSON.stringify(request.data).match(/合成(\d+)/)?.[1]),
@@ -170,10 +200,12 @@ test('all chapters share the queue, skip same-model completion and require expli
   const harness = fixture();
   await harness.setup();
   await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   const original = (await harness.library.listVersions('n1234ab/1'))[0]!;
   await harness.app.prepareBatch(null, false);
   expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(1);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(4);
   expect(harness.app.getSnapshot().batch?.record).toMatchObject({
@@ -182,6 +214,7 @@ test('all chapters share the queue, skip same-model completion and require expli
     skipped: 1,
   });
   await harness.app.prepareBatch({ first: 1, last: 1 }, true);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(5);
   const versions = await harness.library.listVersions('n1234ab/1');
@@ -206,6 +239,7 @@ test('a later output failure preserves earlier completion and explicit resume ha
   await harness.setup();
   harness.failSecond = true;
   await harness.app.prepareBatch(null, false);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(2);
   expect(harness.app.getSnapshot().batch?.record).toMatchObject({
@@ -217,6 +251,7 @@ test('a later output failure preserves earlier completion and explicit resume ha
   expect(await harness.library.listVersions('n1234ab/2')).toHaveLength(0);
   expect(harness.app.getSnapshot().batch?.error).toContain('길이 제한');
   harness.failSecond = false;
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(5);
   expect(harness.app.getSnapshot().batch?.record?.phase).toBe('complete');
@@ -227,6 +262,7 @@ test('batch storage retry sends no generation and pauses before later chapters',
   await harness.setup();
   harness.failSave = true;
   await harness.app.prepareBatch({ first: 1, last: 2 }, false);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(1);
   expect(harness.app.getSnapshot().batch?.record?.phase).toBe('saving');
@@ -238,6 +274,7 @@ test('batch storage retry sends no generation and pauses before later chapters',
     cursor: 1,
     completed: 1,
   });
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(2);
   harness.app.dispose();
@@ -247,8 +284,10 @@ test('cancel blocks duplicate starts, individual requests and later dispatch; re
   await harness.setup();
   harness.holdFirst = true;
   await harness.app.prepareBatch(null, false);
+  await finishScan(harness.app);
   const running = harness.app.runBatch();
   await waitFor(() => expect(harness.posts()).toHaveLength(1));
+  await finishScan(harness.app);
   await harness.app.runBatch();
   await harness.app.selectChapter(harness.app.getSnapshot().work!.chapters[1]!);
   await harness.app.translate();
@@ -280,6 +319,10 @@ test('UI offers range and all preview with a separate explicit start action', as
   fireEvent.click(screen.getByRole('button', { name: '전체 회차 확인' }));
   await screen.findByText('확정 범위: 1–4화 · 총 4화');
   expect(harness.posts()).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: '범위 고유명사 후보 스캔' }));
+  await screen.findByRole('button', { name: '후보 확인 완료' });
+  fireEvent.click(screen.getByRole('button', { name: '후보 확인 완료' }));
+  await screen.findByRole('button', { name: '확인한 회차 번역 시작' });
   fireEvent.click(screen.getByRole('button', { name: '확인한 회차 번역 시작' }));
   await screen.findByText('일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.');
   expect(harness.posts()).toHaveLength(4);
@@ -305,6 +348,7 @@ test('background interruption stops later dispatch and connection settings remai
   await harness.setup();
   harness.holdFirst = true;
   await harness.app.prepareBatch(null, false);
+  await finishScan(harness.app);
   const running = harness.app.runBatch();
   await waitFor(() => expect(harness.posts()).toHaveLength(1));
   const connection = harness.app.getSnapshot().connection;
@@ -327,6 +371,7 @@ test('a saved chapter survives queue metadata failure and explicit restart recov
   await harness.setup();
   await harness.app.prepareBatch({ first: 1, last: 1 }, true);
   harness.failQueueAdvance = true;
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(await harness.library.listVersions('n1234ab/1')).toHaveLength(1);
   expect(harness.app.getSnapshot().batch?.record?.phase).toBe('unknown');
@@ -370,6 +415,7 @@ test('approved work context survives restart, is included in requests and change
   const first = await harness.app.saveGuidance('n1234ab', approved);
   expect(await harness.app.readGuidance('n9999zz')).toBeNull();
   await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(1);
   const body = harness.posts()[0]!.data as { messages: { content: string }[] };
@@ -395,6 +441,7 @@ test('approved work context survives restart, is included in requests and change
   });
   await harness.app.prepareBatch({ first: 1, last: 1 }, false);
   expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(1);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(1);
   const second = await harness.app.saveGuidance('n1234ab', {
@@ -403,6 +450,7 @@ test('approved work context survives restart, is included in requests and change
   });
   await harness.app.prepareBatch({ first: 1, last: 1 }, false);
   expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(0);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(2);
   expect(await harness.library.listVersions('n1234ab/1')).toHaveLength(2);
@@ -441,7 +489,9 @@ test('editing context after a batch preview requires a fresh preview and makes n
   await harness.setup();
   await harness.app.saveGuidance('n1234ab', approved);
   await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await finishScan(harness.app);
   await harness.app.saveGuidance('n1234ab', { terms: [], voices: [] });
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(0);
   expect(harness.app.getSnapshot().batch?.error).toContain('용어집·말투가 바뀌었습니다');
@@ -455,6 +505,7 @@ test('oversized approved context fails before generation without silently droppi
     voices: [{ ...approved.voices[0]!, instruction: '한'.repeat(400) }],
   });
   await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(0);
   expect(harness.app.getSnapshot().batch?.error).toContain('입력 한도');
@@ -497,5 +548,173 @@ test('reference matching includes aliases and excludes unrelated entries and nev
   expect(context).toContain('가온');
   expect(context).not.toContain('스포일러');
   expect(() => guidanceContext(value, 'n9999zz', '合成')).toThrow();
+  harness.app.dispose();
+});
+
+test('scope scanning and explicit confirmation make no POST; selected targets are frozen once and cached source is reused', async () => {
+  const harness = fixture();
+  await harness.setup();
+  harness.chapterExtra = 'アルベルトとアルベルト。ミカエルとミカエル。';
+  await harness.app.prepareBatch({ first: 2, last: 3 }, false);
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(0);
+  expect(harness.app.getSnapshot().batch?.error).toContain('후보');
+  await harness.app.scanBatch();
+  expect(harness.app.getSnapshot().batch?.record?.scan).toMatchObject({
+    status: 'review',
+    candidates: [
+      { source: 'アルベルト', count: 4, chapterIds: ['n1234ab/2', 'n1234ab/3'] },
+      { source: 'ミカエル', count: 4 },
+    ],
+  });
+  const gets = harness.requests.filter((request) =>
+    /^https:\/\/ncode\.syosetu\.com\/n1234ab\/\d+\/$/.test(request.url),
+  );
+  expect(gets.map((request) => request.url)).toEqual([workUrl + '2/', workUrl + '3/']);
+  expect(await harness.app.readGuidance('n1234ab')).toBeNull();
+  await harness.app.confirmBatchCandidates([{ source: 'アルベルト', target: '알베르트' }]);
+  expect(harness.posts()).toHaveLength(0);
+  expect((await harness.app.readGuidance('n1234ab'))?.terms).toEqual([
+    { source: 'アルベルト', target: '알베르트', aliases: [], category: '고유명사', note: '' },
+  ]);
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(2);
+  expect(
+    harness.requests.filter((request) => gets.some((get) => get.url === request.url)),
+  ).toHaveLength(2);
+  const request = harness.posts()[0]!.data as { messages: { content: string }[] };
+  expect(request.messages[0]!.content).toContain('アルベルト translates to 알베르트');
+  expect(request.messages[0]!.content).not.toContain('ミカエル translates to');
+  expect((await harness.library.listVersions('n1234ab/2'))[0]?.quality?.missingTerms).toEqual([
+    { source: 'アルベルト', target: '알베르트' },
+  ]);
+  harness.app.dispose();
+});
+test('a partial failed scan cannot be confirmed; retry scans the full scope and rejected choices keep review pending', async () => {
+  const harness = fixture();
+  await harness.setup();
+  harness.chapterExtra = 'アルベルトとアルベルト。';
+  harness.failScanChapter = 2;
+  await harness.app.prepareBatch({ first: 1, last: 2 }, false);
+  await harness.app.scanBatch();
+  expect(harness.app.getSnapshot().batch?.record?.scan).toEqual({
+    status: 'pending',
+    candidates: [],
+  });
+  await harness.app.confirmBatchCandidates([{ source: 'アルベルト', target: '알베르트' }]);
+  expect(await harness.app.readGuidance('n1234ab')).toBeNull();
+  harness.failScanChapter = 0;
+  await harness.app.scanBatch();
+  await harness.app.confirmBatchCandidates([{ source: '없는 후보', target: '표기' }]);
+  expect(harness.app.getSnapshot().batch?.record?.scan?.status).toBe('review');
+  expect(harness.posts()).toHaveLength(0);
+  await harness.app.confirmBatchCandidates([{ source: 'アルベルト', target: ' ' }]);
+  expect(harness.app.getSnapshot().batch?.record?.scan?.status).toBe('review');
+  await harness.app.confirmBatchCandidates([]);
+  expect(harness.app.getSnapshot().batch?.record?.scan?.status).toBe('confirmed');
+  expect(await harness.app.readGuidance('n1234ab')).toBeNull();
+  harness.app.dispose();
+});
+test('review candidates survive restart, do not auto-confirm and preserve a manual target saved after scanning', async () => {
+  const harness = fixture();
+  await harness.setup();
+  harness.chapterExtra = 'アルベルトとアルベルト。';
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await harness.app.scanBatch();
+  harness.app.dispose();
+  const restarted = createRenewalApplication(harness.adapters);
+  await restarted.initialize();
+  await restarted.checkConnection();
+  expect(restarted.getSnapshot().batch?.record?.scan?.status).toBe('review');
+  await restarted.runBatch();
+  expect(harness.posts()).toHaveLength(0);
+  restarted.openBatch();
+  await restarted.saveGuidance('n1234ab', {
+    terms: [{ source: 'アルベルト', target: '알버트', aliases: [], category: '', note: '' }],
+    voices: [],
+  });
+  await restarted.confirmBatchCandidates([{ source: 'アルベルト', target: '알베르트' }]);
+  expect((await restarted.readGuidance('n1234ab'))?.terms[0]?.target).toBe('알버트');
+  await restarted.runBatch();
+  expect(harness.posts()).toHaveLength(1);
+  restarted.dispose();
+});
+test('candidate UI requires a checked item and spelling, refreshes the editor after confirmation and shows saved QA', async () => {
+  const harness = fixture();
+  await harness.setup();
+  harness.chapterExtra = 'アルベルトとアルベルト。';
+  render(<Application controller={harness.app} />);
+  fireEvent.change(screen.getByLabelText('끝 회차'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: '범위 확인' }));
+  fireEvent.click(await screen.findByRole('button', { name: '범위 고유명사 후보 스캔' }));
+  await screen.findByRole('heading', { name: '고유명사 후보 1개' });
+  expect(screen.queryByRole('button', { name: '확인한 회차 번역 시작' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('アルベルト 사용'));
+  expect(screen.getByRole('button', { name: '선택한 1개 표기 확정' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('アルベルト 한국어 표기'), {
+    target: { value: '알베르트' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '선택한 1개 표기 확정' }));
+  const start = await screen.findByRole('button', { name: '확인한 회차 번역 시작' });
+  await waitFor(() => expect(screen.getByLabelText('용어 1 한국어 표기')).toHaveValue('알베르트'));
+  expect(harness.posts()).toHaveLength(0);
+  fireEvent.click(start);
+  await screen.findByText('일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.');
+  await harness.app.continueReading(
+    (await harness.library.listVersions('n1234ab/1'))[0]!.versionId,
+  );
+  await screen.findByText('번역 확인 · 가나가 남은 문단 0개 · 확정 표기 미발견 1개');
+  expect(screen.getByRole('article', { name: '번역 본문' }).textContent).toBe('번역 1');
+  expect(harness.posts()).toHaveLength(1);
+  harness.app.dispose();
+});
+test('canceling a running scan discards partial candidates and cannot start any generation', async () => {
+  const harness = fixture();
+  await harness.setup();
+  await harness.app.prepareBatch({ first: 1, last: 2 }, false);
+  harness.holdSource = true;
+  const scanning = harness.app.scanBatch();
+  await waitFor(() =>
+    expect(harness.requests.some((request) => request.url === workUrl + '1/')).toBe(true),
+  );
+  await harness.app.scanBatch();
+  expect(harness.requests.filter((request) => request.url === workUrl + '1/')).toHaveLength(1);
+  harness.app.cancelBatch();
+  harness.release();
+  await scanning;
+  expect(harness.app.getSnapshot().batch?.record?.scan).toEqual({
+    status: 'pending',
+    candidates: [],
+  });
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(0);
+  harness.app.dispose();
+});
+test('confirming a newly found term updates saved-skip counts and old queues remain compatible', async () => {
+  const harness = fixture();
+  await harness.setup();
+  harness.chapterExtra = 'アルベルトとアルベルト。';
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  await finishScan(harness.app);
+  await harness.app.runBatch();
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(1);
+  await harness.app.scanBatch();
+  await harness.app.confirmBatchCandidates([{ source: 'アルベルト', target: '알베르트' }]);
+  expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(0);
+  const repository = createBatchRepository(harness.adapters.files);
+  const record = (await repository.read())!;
+  await expect(
+    repository.write({
+      ...record,
+      scan: {
+        status: 'review',
+        candidates: [{ source: '候補', kind: 'ruby', count: 1, chapterIds: ['n1234ab/4'] }],
+      },
+    }),
+  ).rejects.toThrow();
+  const { scan: _scan, ...legacy } = record;
+  await repository.write(legacy);
+  expect((await repository.read())?.scan).toBeUndefined();
   harness.app.dispose();
 });

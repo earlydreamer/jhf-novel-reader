@@ -107,7 +107,7 @@ type AppliedGuidance = {
   voices: GuidanceVoice[];
 };
 /** 입력에 실제로 등장한 용어(등장한 이름 포함)와 말투만 고른다. 주입 형식과 적용 해시가 같은 매칭을 쓴다. */
-function appliedGuidance(
+export function appliedGuidance(
   value: WorkGuidance | null,
   workId: string,
   input: string,

@@ -9,13 +9,20 @@ import type {
 } from '../contracts';
 import { authorization, envelope, listModels, object } from './catalog';
 import { normalizeOpenAICompatibleBaseUrl } from './endpoint';
+import { chapterAtoms, validLocalLimits } from '../translation/segments';
 import {
-  chapterAtoms,
-  estimatedInputTokens,
-  planSegments,
-  SEGMENT_INSTRUCTION,
-  validLocalLimits,
-} from '../translation/segments';
+  assembleLines,
+  estimatedLineTokens,
+  LINE_INSTRUCTION,
+  lineUnits,
+  parseLines,
+  planLineBatches,
+  taggedLines,
+  type LineUnit,
+} from '../translation/lines';
+import { hasCalibratedEstimator } from '../translation/tokenEstimate';
+/** 회차당 이어 보내기 상한(사용자 승인, 2026-10-07). 출력 보정·재번역 호출은 하지 않는다. */
+const MAX_CONTINUATIONS = 8;
 export function normalizeChapterInput(source: SourceSnapshot): string {
   return chapterAtoms(source).join('');
 }
@@ -33,7 +40,8 @@ function decodeFinishReason(value: unknown): WholeChapterResult['finishReason'] 
       return 'unknown';
   }
 }
-function decode(data: unknown): WholeChapterResult {
+/** keepPartial이면 출력 한도로 잘린 응답의 본문도 돌려준다(줄 ID 방식이 완료된 줄을 건진다). */
+function decode(data: unknown, keepPartial = false): WholeChapterResult {
   const value = envelope(data);
   if (
     !object(value) ||
@@ -45,7 +53,11 @@ function decode(data: unknown): WholeChapterResult {
     throw new ReaderError('invalid_output', 'received');
   const choice = value.choices[0];
   const finishReason = decodeFinishReason(choice.finish_reason);
-  if (finishReason !== 'complete') return { text: '', finishReason };
+  if (finishReason !== 'complete') {
+    if (!keepPartial || finishReason !== 'length') return { text: '', finishReason };
+    const partial = object(choice.message) ? choice.message.content : undefined;
+    return { text: typeof partial === 'string' ? partial : '', finishReason };
+  }
   if (
     !object(choice.message) ||
     typeof choice.message.content !== 'string' ||
@@ -87,29 +99,14 @@ export function createProviderSession(
         request.token.chapterId !== request.source.chapterId
       )
         throw new ReaderError('invalid_output');
-      if (limits && request.promptVersion !== 'hymt2-segments-v1')
-        throw new ReaderError('invalid_output');
+      if (limits && request.promptVersion !== 'lines-v1') throw new ReaderError('invalid_output');
       const chapterReference = request.reference?.(normalizeChapterInput(request.source)) ?? '';
       if (chapterReference && !limits) throw new ReaderError('input_limit');
-      const segments = limits
-        ? planSegments(request.source, limits, chapterReference)
-        : [{ input: normalizeChapterInput(request.source), separator: '' }];
-      if (!segments[0]?.input.trim()) throw new ReaderError('source_parse');
-      const references = segments.map((segment) =>
-        limits ? (request.reference?.(segment.input) ?? '') : '',
-      );
-      if (
-        limits &&
-        segments.some(
-          (segment, index) =>
-            estimatedInputTokens(segment.input, references[index]) > limits.inputBudgetTokens,
-        )
-      )
-        throw new ReaderError('input_limit');
       const auth = await authorization(connection, secrets, signal);
-      const outputs: string[] = [];
-      if (limits) request.onProgress?.(0, segments.length);
-      for (const [index, segment] of segments.entries()) {
+      async function send(
+        messages: { role: string; content: string }[],
+        maxTokens?: number,
+      ): Promise<unknown> {
         if (signal.aborted) throw new ReaderError('cancelled', 'not_sent');
         let response;
         try {
@@ -118,19 +115,9 @@ export function createProviderSession(
               url: `${base}/chat/completions`,
               body: {
                 model,
-                messages: limits
-                  ? [
-                      {
-                        role: 'user',
-                        content: references[index] + SEGMENT_INSTRUCTION + segment.input,
-                      },
-                    ]
-                  : [
-                      { role: 'system', content: instruction },
-                      { role: 'user', content: segment.input },
-                    ],
+                messages,
                 stream: false,
-                ...(limits ? { max_tokens: limits.maxOutputTokens } : {}),
+                ...(maxTokens ? { max_tokens: maxTokens } : {}),
               },
               ...(auth === undefined ? {} : { authorization: auth }),
             },
@@ -159,21 +146,76 @@ export function createProviderSession(
             throw new ReaderError('output_limit', 'received', response.status);
           throw new ReaderError('connection', 'received', response.status);
         }
-        const result = decode(response.data);
-        if (result.finishReason !== 'complete') return result;
-        outputs.push(limits ? result.text.replace(/\r\n/g, '\n').trim() : result.text);
-        if (limits) request.onProgress?.(index + 1, segments.length);
+        return response.data;
+      }
+      if (!limits) {
+        const input = normalizeChapterInput(request.source);
+        if (!input.trim()) throw new ReaderError('source_parse');
+        return decode(
+          await send([
+            { role: 'system', content: instruction },
+            { role: 'user', content: input },
+          ]),
+        );
+      }
+      const units = lineUnits(request.source, limits, chapterReference, model);
+      if (!units.length) throw new ReaderError('source_parse');
+      const batches = planLineBatches(units, limits, chapterReference, model);
+      const referenceFor = (pending: readonly LineUnit[]) =>
+        request.reference?.(pending.map((unit) => unit.text).join('\n\n')) ?? '';
+      // 첫 요청 전에 모든 묶음의 실제 참고 데이터 크기를 확인한다(보낸 뒤 한도 실패를 막는다).
+      if (
+        batches.some(
+          (batch) =>
+            estimatedLineTokens(batch, referenceFor(batch), model) > limits.inputBudgetTokens,
+        )
+      )
+        throw new ReaderError('input_limit');
+      const done = new Map<string, string>();
+      let continuations = 0;
+      request.onProgress?.(0, batches.length);
+      for (const [index, batch] of batches.entries()) {
+        let pending = batch;
+        while (pending.length) {
+          const result = decode(
+            await send(
+              [
+                {
+                  role: 'user',
+                  content: referenceFor(pending) + LINE_INSTRUCTION + taggedLines(pending),
+                },
+              ],
+              limits.maxOutputTokens,
+            ),
+            true,
+          );
+          if (result.finishReason !== 'complete' && result.finishReason !== 'length') return result;
+          const parsed = parseLines(result.text, new Set(pending.map((unit) => unit.id)));
+          parsed.forEach((text, id) => done.set(id, text));
+          if (parsed.size)
+            request.onPreview?.(assembleLines(request.source, units, done).replace(/\n+$/, ''));
+          const rest = pending.filter((unit) => !parsed.has(unit.id));
+          if (!rest.length) break;
+          // 완료되지 않은 줄만 같은 작업 안에서 이어 보낸다. 진전이 없거나 상한을 넘으면 멈춘다.
+          if (!parsed.size || ++continuations > MAX_CONTINUATIONS)
+            return {
+              text: '',
+              finishReason: result.finishReason === 'length' ? 'length' : 'unknown',
+            };
+          pending = rest;
+        }
+        request.onProgress?.(index + 1, batches.length);
       }
       return {
-        text: outputs
-          .map(
-            (text, index) => text + (index < outputs.length - 1 ? segments[index]!.separator : ''),
-          )
-          .join(''),
+        text: assembleLines(request.source, units, done),
         finishReason: 'complete',
-        ...(limits
-          ? { generation: { mode: 'segments-v1' as const, ...limits, segments: segments.length } }
-          : {}),
+        generation: {
+          mode: 'lines-v1',
+          ...limits,
+          segments: batches.length,
+          continuations,
+          estimator: hasCalibratedEstimator(model) ? 'gemma-e4b-v1' : 'utf8-v1',
+        },
       };
     },
   };

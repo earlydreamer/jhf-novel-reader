@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { useEffect, useRef } from 'react';
 import type { CompletedTranslation, ReadingPosition, WorkPage } from '../contracts/reading';
+import { japaneseBlockIndexes } from '../translation/quality';
 export interface ReaderScreenProps {
   version: CompletedTranslation;
   work: WorkPage | null;
@@ -17,6 +18,9 @@ export interface ReaderScreenProps {
   onAdjacent(direction: -1 | 1): void;
 }
 export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
+  const quality = props.version.quality;
+  const japaneseBlocks = quality?.japaneseBlocks ?? japaneseBlockIndexes(props.version.blocks);
+  const missingTerms = quality?.missingTerms ?? [];
   const body = useRef<HTMLElement>(null);
   const reportDisplayed = props.onDisplayed,
     displayedVersionId = props.version.versionId;
@@ -54,6 +58,20 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
       translationPosition.current = { blockId: block.dataset.blockId, offset };
       props.onPosition(block.dataset.blockId, offset);
     }
+  }
+  function jumpToBlock(index: number): void {
+    const block = props.version.blocks[index];
+    if (!block) return;
+    translationPosition.current = { blockId: block.id, offset: 0 };
+    props.onPosition(block.id, 0);
+    if (props.showOriginal) props.onShowOriginal(false);
+    else {
+      const element = Array.from(
+        body.current?.querySelectorAll<HTMLElement>('[data-block-id]') ?? [],
+      ).find((element) => element.dataset.blockId === block.id);
+      if (element && body.current) body.current.scrollTop = element.offsetTop;
+    }
+    body.current?.focus();
   }
   return (
     <section aria-label="독서 화면">
@@ -97,6 +115,41 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
           onChange={(event) => props.onFontSize(Number(event.target.value))}
         />
       </label>
+      <details className="nr-quality" aria-label="번역 확인 표시">
+        <summary>
+          번역 확인 · 가나가 남은 문단 {japaneseBlocks.length}개 · 확정 표기 미발견{' '}
+          {missingTerms.length}개
+        </summary>
+        <p>
+          가나 잔존과 확정 표기의 전체 부재만 확인합니다. 한자만 남은 일본어, 일부 등장분의 다른
+          표기, 의미·말투는 원문과 직접 비교해 주세요. 번역 본문은 자동으로 고치거나 다시 요청하지
+          않습니다.
+        </p>
+        {!quality && <p>이 저장본은 용어 확인 기록이 없어 가나 잔존만 확인했습니다.</p>}
+        {!japaneseBlocks.length && !missingTerms.length && (
+          <p>이 확인 규칙에서 발견한 항목이 없습니다. 번역 품질의 합격 판정은 아닙니다.</p>
+        )}
+        {japaneseBlocks.length > 0 && (
+          <ul>
+            {japaneseBlocks.map((index) => (
+              <li key={index}>
+                <button onClick={() => jumpToBlock(index)}>
+                  가나가 남은 {index + 1}번째 문단 보기
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {missingTerms.length > 0 && (
+          <ul>
+            {missingTerms.map((term) => (
+              <li key={term.source}>
+                {term.source} → {term.target}: 번역 전체에서 확정 표기를 찾지 못했습니다.
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
       <article
         ref={body}
         className="nr-reading-body"

@@ -106,6 +106,25 @@
 .nr-batch-panel p {
   overflow-wrap: anywhere;
 }
+.nr-candidate {
+  border-bottom: 1px solid #8886;
+  padding-block: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.nr-candidate label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nr-candidate input[type='checkbox'] {
+  flex-shrink: 0;
+}
+.nr-quality {
+  margin-block: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #8886;
+  overflow-wrap: anywhere;
+}
 .nr-reading-body {
   position: relative;
   line-height: 1.8;

@@ -19,7 +19,12 @@ import type {
 } from '../contracts/reading';
 import type { Route } from './routes';
 import { limitsForModel } from '../translation/segments';
-import type { BatchState, BatchTranslation, ChapterRange } from '../translation/batch';
+import type {
+  BatchState,
+  BatchTranslation,
+  ChapterRange,
+  CandidateChoice,
+} from '../translation/batch';
 import type { GuidanceDraft, GuidanceRepository, WorkGuidance } from '../translation/guidance';
 
 export type CatalogStatus =
@@ -155,6 +160,8 @@ export interface RenewalController {
   chooseModel(modelId: string): void;
   prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void>;
   runBatch(retryUncertain?: boolean): Promise<void>;
+  scanBatch(): Promise<void>;
+  confirmBatchCandidates(choices: readonly CandidateChoice[]): Promise<void>;
   cancelBatch(): void;
   retryBatchSave(): Promise<void>;
   openBatch(): void;
@@ -992,6 +999,26 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (!disposed && dependencies.library)
       publish({ recent: await dependencies.library.listRecent() });
   }
+  async function scanBatch(): Promise<void> {
+    if (!initialized || disposed || !foreground || activeTranslation) return;
+    if (!batchSelectionIsCurrent()) {
+      publish({
+        error: '확인한 대상의 연결·모델 설정이 바뀌었습니다. 번역 범위를 다시 확인하세요.',
+      });
+      return;
+    }
+    await dependencies.batch?.scan();
+  }
+  async function confirmBatchCandidates(choices: readonly CandidateChoice[]): Promise<void> {
+    if (!initialized || disposed || !foreground || activeTranslation) return;
+    if (!batchSelectionIsCurrent()) {
+      publish({
+        error: '확인한 대상의 연결·모델 설정이 바뀌었습니다. 번역 범위를 다시 확인하세요.',
+      });
+      return;
+    }
+    await dependencies.batch?.confirmCandidates(choices);
+  }
   async function retryBatchSave(): Promise<void> {
     if (!dependencies.batch || disposed || !initialized || !foreground || activeTranslation) return;
     await dependencies.batch.retrySave();
@@ -1071,6 +1098,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     checkConnection,
     chooseModel,
     prepareBatch,
+    scanBatch,
+    confirmBatchCandidates,
     runBatch,
     cancelBatch: () => dependencies.batch?.cancel(),
     retryBatchSave,

@@ -1,0 +1,14 @@
+{
+  "sourceHead": "fc195febbbdeded911e73b6285da7241fc354e6d",
+  "actualModelRequestMatchesStoredModel": true,
+  "responseAlteration": false,
+  "storedQualityMatchesAppliedPreset": true,
+  "actualKanaBlocks": 0,
+  "actualMissingTerms": 1,
+  "sourceParagraphs": 187,
+  "blankParagraphsPreserved": 84,
+  "modelElapsedMs": 56596,
+  "modelPosts": 3,
+  "humanSemanticReview": "PENDING",
+  "originalPreservation": "PASS"
+}

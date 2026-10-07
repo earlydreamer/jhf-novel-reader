@@ -105,7 +105,9 @@ function harness() {
       url: posts()[0]!.url,
       headers: {},
       data: JSON.stringify({
-        choices: [{ finish_reason: 'stop', message: { content: '처음\r\n\r\n\r\n\r\n끝' } }],
+        choices: [
+          { finish_reason: 'stop', message: { content: '<p id="A">처음</p>\r\n<p id="B">끝</p>' } },
+        ],
       }),
     });
   return {

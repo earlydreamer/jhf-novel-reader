@@ -106,6 +106,17 @@ export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
         {props.state.progress &&
           ` · 구간 ${props.state.progress.completed}/${props.state.progress.total} 완료`}
       </p>
+      {props.state.phase === 'translating' && props.state.preview && (
+        <section aria-label="미리보기 (저장 전)" className="nr-preview">
+          <h3>미리보기 (저장 전)</h3>
+          {props.state.preview
+            .split('\n\n')
+            .filter((paragraph) => paragraph.trim())
+            .map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
+        </section>
+      )}
       {props.state.error && errors[props.state.error.code] && (
         <p role="alert">{errors[props.state.error.code]}</p>
       )}

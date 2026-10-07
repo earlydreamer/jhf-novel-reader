@@ -1,0 +1,20 @@
+{
+  "kind": "debug-packaging-only",
+  "commit": "fc195febbbdeded911e73b6285da7241fc354e6d",
+  "tree": "0c964288cbeb53f61454f4c6cabe8f61f5fafd3c",
+  "lockfileSha256": "6bc84d0d7ef9e9f59e703a2b80adce1937d987f4bf35796923ef70b4b173bf01",
+  "apkSha256": "d58bdcff169a056f6d4879cceebc05530fc92114a6038ed4b2ca8546c5beaac4",
+  "applicationId": "app.narou.reader",
+  "minSdk": 24,
+  "targetSdk": 36,
+  "node": "v24.19.0",
+  "nativePluginClasses": [
+    "com.aparajita.capacitor.securestorage.SecureStorage",
+    "com.capacitorjs.plugins.app.AppPlugin",
+    "com.capacitorjs.plugins.filesystem.FilesystemPlugin",
+    "com.capacitorjs.plugins.preferences.PreferencesPlugin",
+    "app.narou.reader.SourceBrowserPlugin"
+  ],
+  "isolatedBrowserActivity": "app.narou.reader.SourceBrowserActivity",
+  "deviceExecution": "NOT RUN by this audit; see docs/android-validation.md"
+}

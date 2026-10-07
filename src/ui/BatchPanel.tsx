@@ -1,11 +1,14 @@
 import { useRef, type JSX } from 'react';
-import type { BatchState, ChapterRange } from '../translation/batch';
+import type { BatchState, ChapterRange, CandidateChoice } from '../translation/batch';
+import { CandidateReview } from './CandidateReview';
 export interface BatchPanelProps {
   workId: string;
   batch?: BatchState | null;
   batchAvailable?: boolean;
   onPrepareBatch?(range: ChapterRange | null, retranslate: boolean): void;
   onRunBatch?(retryUncertain?: boolean): void;
+  onScanBatch?(): void;
+  onConfirmBatchCandidates?(choices: readonly CandidateChoice[]): void;
   onCancelBatch?(): void;
   onRetryBatchSave?(): void;
   onSettings?(): void;
@@ -63,6 +66,12 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
         </fieldset>
       </form>
       {props.batch?.preparing && <p role="status">전체 목차와 번역할 회차를 확인하고 있습니다.</p>}
+      {props.batch?.scanProgress && (
+        <p role="status">
+          범위 후보 스캔 {props.batch.scanProgress.completed}/{props.batch.scanProgress.total}화 ·
+          모델 요청 없이 원문을 확인하고 있습니다.
+        </p>
+      )}
       {props.batch?.error && <p role="alert">{props.batch.error}</p>}
       {record && (
         <div aria-label="확정한 번역 대상">
@@ -80,7 +89,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             처리 {record.cursor}/{record.chapters.length}화 · 새로 저장 {record.completed}화 ·
             건너뜀 {record.skipped}화
           </p>
-          {active && !props.batch?.preparing && (
+          {active && !props.batch?.preparing && !props.batch?.scanProgress && (
             <p>현재 회차: {record.chapters[record.cursor]?.title ?? '마무리 중'}</p>
           )}
           {props.batch?.chapterProgress && active && (
@@ -89,7 +98,29 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
               {props.batch.chapterProgress.total}
             </p>
           )}
-          {record.phase === 'prepared' && (
+          {record.phase === 'prepared' && record.scan?.status === 'pending' && (
+            <>
+              <p>
+                선택한 범위 전체에서 후보를 한 번 확인합니다. 작품 용어집에서 편집한 항목은 먼저
+                저장하세요.
+              </p>
+              <button disabled={!canPrepare} onClick={props.onScanBatch}>
+                범위 고유명사 후보 스캔
+              </button>
+            </>
+          )}
+          {record.phase === 'prepared' && record.scan?.status === 'review' && (
+            <CandidateReview
+              key={record.id}
+              candidates={record.scan.candidates}
+              disabled={!canPrepare}
+              onConfirm={props.onConfirmBatchCandidates}
+            />
+          )}
+          {record.scan?.status === 'confirmed' && (
+            <p>후보 확인을 마쳤습니다. 확정한 작품 용어집으로 각 회차를 순서대로 번역합니다.</p>
+          )}
+          {record.phase === 'prepared' && (!record.scan || record.scan.status === 'confirmed') && (
             <button disabled={!canPrepare} onClick={() => props.onRunBatch?.()}>
               확인한 회차 번역 시작
             </button>

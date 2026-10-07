@@ -56,6 +56,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'blocks',
     'createdAt',
     'provenance',
+    'quality',
   ]);
   check(value.schemaVersion === 2);
   identifier(value.versionId);
@@ -118,6 +119,29 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     blocks.add(b.id);
   }
   check(value.blocks.map((b) => b.text).join('\n\n') === value.text);
+  if (value.quality !== undefined) {
+    object(value.quality, ['ruleVersion', 'japaneseBlocks', 'missingTerms']);
+    check(value.quality.ruleVersion === 'deterministic-v1');
+    check(Array.isArray(value.quality.japaneseBlocks));
+    let previous = -1;
+    for (const index of value.quality.japaneseBlocks) {
+      integer(index);
+      check(index > previous && index < value.blocks.length);
+      previous = index;
+    }
+    check(Array.isArray(value.quality.missingTerms));
+    for (const term of value.quality.missingTerms) {
+      object(term, ['source', 'target']);
+      text(term.source);
+      text(term.target);
+      check(
+        !!term.source.trim() &&
+          !!term.target.trim() &&
+          term.source.length <= 80 &&
+          term.target.length <= 80,
+      );
+    }
+  }
   object(value.provenance, [
     'provider',
     'connectionId',
@@ -143,14 +167,19 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
       'inputBudgetTokens',
       'maxOutputTokens',
       'segments',
+      'continuations',
+      'estimator',
     ]);
     const g = p.generation;
     check(
       p.provider === 'openai-compatible' &&
-        p.promptVersion === 'hymt2-segments-v1' &&
-        g.mode === 'segments-v1',
+        ((p.promptVersion === 'hymt2-segments-v1' && g.mode === 'segments-v1') ||
+          (p.promptVersion === 'lines-v1' && g.mode === 'lines-v1')),
     );
     integer(g.segments, 1);
+    if (g.continuations !== undefined) integer(g.continuations, 0);
+    if (g.estimator !== undefined)
+      check(g.estimator === 'utf8-v1' || g.estimator === 'gemma-e4b-v1');
     check(validLocalLimits(g));
   }
   return value as unknown as CompletedTranslation;

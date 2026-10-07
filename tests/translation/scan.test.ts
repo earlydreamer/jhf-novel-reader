@@ -45,3 +45,30 @@ test('names already in the glossary or preset are skipped, including width varia
   );
   expect(result).toEqual([]);
 });
+test('ruby text is counted once, promotes a previous katakana hit and auto candidates remain discoverable', () => {
+  const result = scanNameCandidates(
+    [
+      chapter('c1', ['アルベルト。']),
+      chapter('c2', ['アルベルト。'], [{ p: 0, start: 0, end: 5, reading: 'あるべると' }]),
+    ],
+    [
+      {
+        source: 'アルベルト',
+        target: '미확정',
+        aliases: [],
+        category: '',
+        note: '',
+        origin: 'auto',
+      },
+    ],
+  );
+  expect(result).toEqual([
+    {
+      source: 'アルベルト',
+      reading: 'あるべると',
+      kind: 'ruby',
+      count: 2,
+      chapterIds: ['c1', 'c2'],
+    },
+  ]);
+});

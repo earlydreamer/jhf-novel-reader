@@ -13,7 +13,7 @@ const entry = (source: string, target: string, category: string, note = ''): Gui
  * 나로우계 공통 관례 프리셋 v0. 일반 어휘가 아니라 모델이 실제로 틀린 항목만 담는다.
  * 근거: 2026-10-07 합성 예문 실측(Gemma 4 E4B·Index-Translate-9B, 프리셋 없이 번역)에서 한 모델 이상이
  * 틀린 고정 표기(#80). 한 글자 항목, 작가가 다른 뜻으로 쓰기 쉬운 어휘(姑息·役不足)는 넣지 않는다.
- * 표기는 사용자 검수 전 초안이다(docs/renewal/glossary-pipeline.md 3.4).
+ * 표기는 2026-10-08 사용자가 확정했다(転生은 이세계물 관례인 "전생" 유지).
  */
 export const UNIVERSAL_PRESET: readonly GuidanceTerm[] = [
   entry('乳母日傘', '응석받이로 귀하게 자람', '관용구', '유모·양산을 직역하지 않는다'),

@@ -40,8 +40,13 @@ export type LocalTranslationLimits = {
   maxOutputTokens: number;
 };
 export type SegmentedGeneration = LocalTranslationLimits & {
-  mode: 'segments-v1';
+  /** segments-v1은 이전 평문 구간 저장본, lines-v1은 줄 ID 방식이다. */
+  mode: 'segments-v1' | 'lines-v1';
   segments: number;
+  /** lines-v1에서 완료되지 않은 줄을 이어 보낸 횟수. */
+  continuations?: number;
+  /** 이전 저장본은 없을 수 있다. 실행에 실제 사용한 입력 추정 방식. */
+  estimator?: 'utf8-v1' | 'gemma-e4b-v1';
 };
 export type SelectedModel = {
   connection: ConnectionConfig;
@@ -54,8 +59,10 @@ export type WholeChapterRequest = {
   source: SourceSnapshot;
   languageDirection: 'ja-ko';
   contractVersion: 'plain-v1';
-  promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1';
+  promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1' | 'lines-v1';
   onProgress?: (completed: number, total: number) => void;
+  /** 저장 전 미리보기: 지금까지 완료된 문단을 원문 순서로 조립한 텍스트. */
+  onPreview?: (text: string) => void;
   /** 입력 하나에 대한 승인된 참고 데이터. 해당 입력의 지시문 앞에만 붙여 보낸다. */
   reference?: (input: string) => string;
 };
@@ -65,7 +72,13 @@ export type WholeChapterResult = {
   generation?: SegmentedGeneration;
 };
 export type TranslationBlock = { id: string; text: string }; // translated IDs, never source paragraph IDs
+export type TranslationQuality = {
+  readonly ruleVersion: 'deterministic-v1';
+  readonly japaneseBlocks: readonly number[];
+  readonly missingTerms: readonly { source: string; target: string }[];
+};
 export type CompletedTranslation = {
+  readonly quality?: TranslationQuality;
   schemaVersion: 2;
   versionId: string;
   source: SourceSnapshot;
@@ -100,6 +113,8 @@ export type TranslationState = {
   error?: ReaderError;
   pendingSave?: CompletedTranslation;
   progress?: { completed: number; total: number };
+  /** 번역 중에만 보여 주는 저장 전 미리보기. 저장 기준은 완성본이다. */
+  preview?: string;
 };
 export interface RenewalSource {
   getWorkPage(url: string, signal: AbortSignal): Promise<WorkPage>;
