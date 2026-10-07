@@ -1,0 +1,37 @@
+@import './tokens.css';
+
+@font-face {
+  font-family: 'Pretendard Variable';
+  src: url('./fonts/PretendardVariable.woff2') format('woff2-variations');
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+}
+html {
+  background: var(--surface);
+  color: var(--on-surface);
+  font: var(--type-body-large);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  min-block-size: 100dvh;
+  background: var(--surface);
+}
+:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+[lang='ja'] {
+  font-family: system-ui, 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
