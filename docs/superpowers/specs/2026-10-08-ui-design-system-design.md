@@ -162,7 +162,7 @@ Pretendard Variable을 `src/ui/theme/fonts/`에 woff2로 번들하고 `@font-fac
 - `작품 찾기` Extended FAB(화면의 유일한 강조 행동). 원문 연결을 쓸 수 없으면 누를 때 스낵바로 이유를 알린다.
 - 빈 상태: 제목 `읽고 싶은 작품을 찾아보세요`, 본문 `나로우에서 작품을 고르면 서재에 담겨요.`
 - `URL로 열기` 대화상자: 입력칸 하나, 버튼 `닫기` / `열기`.
-- 컨트롤러는 `LibraryStore`에 이미 있는 `workIds`와 `readWork`로 목록을 만든다. 새 저장소 API는 필요 없다.
+- 컨트롤러는 `LibraryStore`의 전체 작품 ID와 `readWork`로 목록을 만든다. 전체 ID를 읽는 계약이 없으면 최소 읽기 전용 `listWorkIds()` 접근자를 추가한다. 저장 포맷이나 다른 저장소 동작은 확장하지 않는다.
 
 ### 6.3 작품 제거 (이슈 3)
 

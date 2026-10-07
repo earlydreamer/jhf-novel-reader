@@ -133,6 +133,7 @@ export interface ProviderSession {
 }
 export interface LibraryStore {
   saveWorkPage(page: WorkPage): Promise<void>;
+  listWorkIds(): Promise<readonly string[]>;
   readWork(workId: string): Promise<readonly WorkPage[]>;
   listRecent(): Promise<
     readonly { workId: string; chapterId: string; versionId: string; updatedAt: string }[]

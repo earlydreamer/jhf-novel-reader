@@ -49,6 +49,7 @@ const controller = createRenewalController({
   source: { getWorkPage: async () => page, getChapter: async () => saved.source },
   library: {
     saveWorkPage: async () => {},
+    listWorkIds: async () => [page.workId],
     readWork: async () => [page],
     listRecent: async () => [
       {

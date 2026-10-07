@@ -25,6 +25,13 @@ describe('trusted native browse boundary', () => {
     native.open.mockResolvedValue({ selectedUrl: null });
     expect(await openSourceBrowser('https://syosetu.com/')).toBeNull();
   });
+  it('forwards a work canonical URL as the browser start URL', async () => {
+    native.open.mockResolvedValue({ selectedUrl: null });
+    await openSourceBrowser('https://ncode.syosetu.com/n1234ab/');
+    expect(native.open).toHaveBeenCalledExactlyOnceWith({
+      startUrl: 'https://ncode.syosetu.com/n1234ab/',
+    });
+  });
   it.each([
     'http://syosetu.com/',
     'https://127.0.0.1/',

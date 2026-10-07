@@ -71,7 +71,7 @@ export interface RenewalDependencies {
   readonly batch?: BatchTranslation;
   readonly guidance?: GuidanceRepository;
   readonly lifecycle?: AppLifecycle;
-  readonly browse?: () => Promise<{ selectedUrl: string } | null>;
+  readonly browse?: (startUrl?: string) => Promise<{ selectedUrl: string } | null>;
   readonly normalizeInput?: (url: string) => string;
   readonly catalog?: (
     config: ConnectionConfig,
@@ -122,6 +122,11 @@ export interface RenewalSnapshot {
     versionId: string;
     updatedAt: string;
   }[];
+  readonly libraryWorks: readonly {
+    work: WorkPage;
+    savedChapterIds: readonly string[];
+    recent: RenewalSnapshot['recent'][number] | null;
+  }[];
   readonly connection: ConnectionConfig;
   readonly models: readonly ModelChoice[];
   readonly selectedModelId: string | null;
@@ -133,6 +138,7 @@ export interface RenewalSnapshot {
   readonly lineHeight: LineHeight;
   readonly showOriginal: boolean;
   readonly error: string | null;
+  readonly errorRevision: number;
   readonly busy: boolean;
   readonly sourceAvailable: boolean;
   readonly connectionAvailable: boolean;
@@ -190,7 +196,7 @@ export interface RenewalController {
   back(): void;
   goHome(): void;
   canGoBack(): boolean;
-  browse(): Promise<void>;
+  browse(startUrl?: string): Promise<void>;
   cancelTranslation(): void;
   retrySave(): Promise<void>;
   openPendingSave(): void;
@@ -198,6 +204,7 @@ export interface RenewalController {
   readerDisplayed(versionId: string): void;
   retryTranslation(): Promise<void>;
   openWork(url: string): Promise<void>;
+  openLibraryWork(workId: string): Promise<void>;
   loadMoreWorkPage(): Promise<void>;
   selectChapter(chapter: ChapterRef): Promise<void>;
   continueReading(versionId: string): Promise<void>;
@@ -254,6 +261,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     translation: { phase: 'idle', elapsedMs: 0 },
     translationTimings: null,
     recent: [],
+    libraryWorks: [],
     connection: DEFAULT_CONNECTION,
     models: [],
     selectedModelId: null,
@@ -264,6 +272,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     lineHeight: 1.8,
     showOriginal: false,
     error: null,
+    errorRevision: 0,
     busy: false,
     sourceAvailable: Boolean(dependencies.source),
     connectionAvailable: Boolean(dependencies.connect || dependencies.catalog),
@@ -323,6 +332,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       });
   }
   let sourceOperation = 0;
+  let libraryRefreshOperation = 0;
   let selectionOperation = 0;
   let catalogOperation = 0;
   let session: ProviderSession | null = null;
@@ -333,6 +343,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let automaticRequest: { chapterId: string; operation: number } | null = null;
   let retryableRepair: ParagraphRepair | null = null;
   const titlesByWork = new Map<string, readonly SavedTitle[]>();
+  const observedSavedVersionIds = new Set<string>();
   const titleAttempts = new Set<string>();
   let titleAbort: AbortController | null = null;
   let titleJob: Promise<void> | null = null;
@@ -589,6 +600,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     snapshot = {
       ...snapshot,
       ...update,
+      errorRevision:
+        Object.hasOwn(update, 'error') && update.error
+          ? snapshot.errorRevision + 1
+          : snapshot.errorRevision,
       recentTitles: Object.fromEntries(
         [...worksById.values()].flatMap((work) =>
           workTitleInputs(work).map((input) => [
@@ -625,6 +640,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       currentWork === workIdOf(route);
     if (!sameWorkChapterMove) history.push(snapshot.route);
     publish({ route, showOriginal: false, error: null, busy: false });
+    if (route.kind === 'home') void refreshLibrary();
   }
   function back(): void {
     titleAbort?.abort();
@@ -659,6 +675,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         savedChapterIds: savedChaptersByWork.get(route.workId) ?? [],
       });
     }
+    if (route.kind === 'home') void refreshLibrary();
     publish({ route, showOriginal: false, error: null, busy: false });
     const settledToken = dependencies.flow?.getSnapshot().token;
     if (route.kind === 'translation' && settledToken?.chapterId === route.chapterId)
@@ -732,38 +749,34 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         });
       } finally {
         // Saved reading does not depend on lifecycle, settings or request recovery.
-        if (!disposed && dependencies.library) {
-          try {
-            const recent = await dependencies.library.listRecent();
-            publish({ recent });
-            if (dependencies.titles) {
-              for (const entry of recent) {
-                for (const page of await dependencies.library.readWork(entry.workId))
-                  rememberWorkPage(page);
-                await loadTitles(entry.workId);
-              }
-              publish({});
-            }
-          } catch {
-            publish({ error: '저장된 독서 목록을 불러오지 못했습니다.' });
-          }
-        }
+        if (!disposed && dependencies.library) await refreshLibrary();
       }
     })();
     return initialization;
   }
-  async function browse(): Promise<void> {
-    if (!dependencies.browse || snapshot.busy || disposed) return;
+
+  async function browse(startUrl?: string): Promise<void> {
+    if (snapshot.busy || disposed) return;
+    if (!dependencies.browse) {
+      publish({ error: '작품 찾기를 아직 사용할 수 없어요. URL로 열어 주세요.' });
+      return;
+    }
     const operation = ++sourceOperation;
     publish({ busy: true, error: null });
     try {
-      const result = await dependencies.browse();
+      const result = await dependencies.browse(startUrl);
       if (disposed || operation !== sourceOperation) return;
       publish({ busy: false });
       if (result) await openWork(result.selectedUrl);
-    } catch {
+    } catch (error) {
       if (operation === sourceOperation)
-        publish({ busy: false, error: '앱 내 원문 탐색을 열지 못했습니다.' });
+        publish({
+          busy: false,
+          error:
+            error instanceof ReaderError && error.code === 'source_access'
+              ? '원문 탐색을 사용할 수 없어요. URL로 열어 주세요.'
+              : '앱 내 원문 탐색을 열지 못했어요.',
+        });
     }
   }
   async function readSavedChapterIds(chapters: readonly ChapterRef[]): Promise<readonly string[]> {
@@ -776,6 +789,96 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }),
     );
     return savedEntries.filter((chapterId): chapterId is string => chapterId !== null);
+  }
+  async function refreshLibrary(): Promise<void> {
+    const library = dependencies.library;
+    if (!library || disposed) return;
+    const operation = ++libraryRefreshOperation;
+    let workIds: readonly string[];
+    let recent: Awaited<ReturnType<LibraryStore['listRecent']>>;
+    try {
+      [workIds, recent] = await Promise.all([library.listWorkIds(), library.listRecent()]);
+    } catch {
+      if (!disposed && operation === libraryRefreshOperation)
+        publish({ error: '서재 목록을 불러오지 못했어요. 다시 열어 주세요.' });
+      return;
+    }
+    if (disposed || operation !== libraryRefreshOperation) return;
+    publish({ recent });
+
+    const previous = new Map(snapshot.libraryWorks.map((entry) => [entry.work.workId, entry]));
+    const rows = new Map<string, RenewalSnapshot['libraryWorks'][number]>();
+    let hadWorkReadFailure = false;
+    for (const workId of workIds) {
+      try {
+        const pages = await library.readWork(workId);
+        if (!pages.length) throw new Error('Empty cached work');
+        let merged: WorkPage | null = null;
+        for (const page of pages) merged = rememberWorkPage(page);
+        if (!merged) continue;
+        const savedChapterIds = await readSavedChapterIds(merged.chapters);
+        savedChaptersByWork.set(workId, savedChapterIds);
+        await loadTitles(workId);
+        if (disposed || operation !== libraryRefreshOperation) return;
+        rows.set(workId, {
+          work: merged,
+          savedChapterIds,
+          recent: recent.find((entry) => entry.workId === workId) ?? null,
+        });
+      } catch {
+        hadWorkReadFailure = true;
+        const prior = previous.get(workId);
+        if (prior)
+          rows.set(workId, {
+            ...prior,
+            recent: recent.find((entry) => entry.workId === workId) ?? prior.recent,
+          });
+      }
+    }
+    if (disposed || operation !== libraryRefreshOperation) return;
+    const registrationRank = new Map(workIds.map((id, index) => [id, index]));
+    const recentRank = new Map(recent.map((entry, index) => [entry.workId, index]));
+    const libraryWorks = [...rows.values()].sort((left, right) => {
+      const leftRecent = recentRank.get(left.work.workId);
+      const rightRecent = recentRank.get(right.work.workId);
+      if (leftRecent !== undefined && rightRecent !== undefined) return leftRecent - rightRecent;
+      if (leftRecent !== undefined) return -1;
+      if (rightRecent !== undefined) return 1;
+      return (
+        (registrationRank.get(right.work.workId) ?? -1) -
+        (registrationRank.get(left.work.workId) ?? -1)
+      );
+    });
+    publish({ recent, libraryWorks });
+    if (hadWorkReadFailure) {
+      publish({ error: '일부 작품 정보를 불러오지 못했어요.' });
+    }
+  }
+  async function openCachedWork(workId: string): Promise<void> {
+    const library = dependencies.library;
+    if (!library || snapshot.busy || disposed) return;
+    const operation = ++sourceOperation;
+    sourceAbort?.abort();
+    sourceAbort = new AbortController();
+    publish({ busy: true, error: null });
+    try {
+      const pages = await library.readWork(workId);
+      if (disposed || operation !== sourceOperation) return;
+      if (!pages.length) throw new ReaderError('storage');
+      let work: WorkPage | null = null;
+      for (const page of pages) work = rememberWorkPage(page);
+      if (!work) throw new ReaderError('storage');
+      const savedChapterIds = await readSavedChapterIds(work.chapters);
+      if (disposed || operation !== sourceOperation) return;
+      savedChaptersByWork.set(workId, savedChapterIds);
+      publish({ work, savedChapterIds, busy: false });
+      navigate({ kind: 'work', workId });
+      await loadTitles(workId);
+      requestTitleTranslation();
+    } catch {
+      if (!disposed && operation === sourceOperation)
+        publish({ busy: false, error: '저장된 목차를 열지 못했어요.' });
+    }
   }
   function rememberWorkPage(page: WorkPage): WorkPage {
     let pages = pagesByWorkId.get(page.workId);
@@ -842,13 +945,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   async function openWork(url: string): Promise<void> {
     if (!dependencies.source) {
-      publish({ error: '원문 탐색 연결은 아직 사용할 수 없습니다.' });
+      publish({ error: '원문 탐색 연결이 없어요. URL로 작품을 열어 주세요.' });
       return;
     }
     try {
       url = dependencies.normalizeInput?.(url) ?? url;
     } catch {
-      publish({ error: '지원하는 작품 또는 회차 주소를 확인하세요.' });
+      publish({ error: '지원하는 작품 또는 회차 주소를 입력해 주세요.' });
       return;
     }
     const operation = ++sourceOperation;
@@ -1248,6 +1351,29 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const ids = [...new Set([...(savedChaptersByWork.get(workId) ?? []), value.source.chapterId])];
     savedChaptersByWork.set(workId, ids);
     if (snapshot.work?.workId === workId) publish({ savedChapterIds: ids });
+    const alreadyObserved = observedSavedVersionIds.has(value.versionId);
+    observedSavedVersionIds.add(value.versionId);
+    if (!alreadyObserved && snapshot.route.kind === 'home') {
+      const recentEntry = {
+        workId,
+        chapterId: value.source.chapterId,
+        versionId: value.versionId,
+        updatedAt: value.createdAt,
+      };
+      const recent = [
+        recentEntry,
+        ...snapshot.recent.filter((entry) => entry.versionId !== value.versionId),
+      ];
+      publish({
+        recent,
+        libraryWorks: snapshot.libraryWorks.map((entry) =>
+          entry.work.workId === workId
+            ? { ...entry, savedChapterIds: ids, recent: recentEntry }
+            : entry,
+        ),
+      });
+      void refreshLibrary();
+    }
   }
   async function openCompleted(value: CompletedTranslation, request: ActiveTranslation) {
     readerReadyAt = clock.now();
@@ -1497,13 +1623,21 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           try {
             await dependencies.library!.savePosition(next);
           } catch {
-            publish({ error: '읽던 위치를 저장하지 못했습니다.' });
+            publish({ error: '읽던 위치를 저장하지 못했어요.' });
           }
         }
       })().finally(() => {
         positionDrain = null;
       });
     await positionDrain;
+    if (dependencies.library && !disposed) {
+      try {
+        publish({ recent: await dependencies.library.listRecent() });
+      } catch {
+        // 읽기 위치 저장은 성공했으므로 보조 최근 목록 새로 고침 실패로 reject하지 않는다.
+        publish({ error: '최근 읽은 목록을 새로 고치지 못했어요.' });
+      }
+    }
   }
   async function prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void> {
     if (
@@ -1722,6 +1856,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }
     },
     openWork,
+    openLibraryWork: openCachedWork,
     loadMoreWorkPage,
     selectChapter,
     continueReading,
