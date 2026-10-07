@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { useRef } from 'react';
 import type { CatalogStatus, RenewalSnapshot } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
+import type { ThemePreference } from '../storage/settings';
 export interface SettingsScreenProps {
   state: RenewalSnapshot;
   onChange(value: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
@@ -10,6 +11,7 @@ export interface SettingsScreenProps {
   onMode?(mode: 'stream' | 'legacy'): void;
   onAutoTranslate?(enabled: boolean): void;
   onAutoRetryFailed?(enabled: boolean): void;
+  onTheme?(theme: ThemePreference): void;
 }
 const catalogLabels: Record<CatalogStatus, string> = {
   idle: '연결 확인 전',
@@ -32,6 +34,7 @@ export function SettingsScreen({
   onMode,
   onAutoTranslate,
   onAutoRetryFailed,
+  onTheme,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
   function update(value: Partial<Pick<ConnectionConfig, 'provider' | 'baseUrl'>>): void {
@@ -47,6 +50,31 @@ export function SettingsScreen({
   return (
     <section aria-label="연결 설정">
       <h1>연결 설정</h1>
+      {onTheme && (
+        <fieldset className="nr-theme-choice">
+          <legend id="nr-theme-legend">화면 테마</legend>
+          <div role="radiogroup" aria-labelledby="nr-theme-legend">
+            {(
+              [
+                ['system', '시스템 설정 따르기'],
+                ['light', '라이트'],
+                ['dark', '다크'],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={value}>
+                <input
+                  type="radio"
+                  name="nr-theme"
+                  value={value}
+                  checked={state.theme === value}
+                  onChange={() => onTheme(value)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
       {onAutoTranslate && (
         <label className="nr-setting-toggle">
           <input

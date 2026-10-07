@@ -7,6 +7,11 @@ import * as controllers from '../../src/app/controller';
 import type { RenewalDependencies } from '../../src/app/renewalController';
 import type { CompletedTranslation, WorkPage } from '../../src/contracts/reading';
 
+function chooseShellMenu(item: string) {
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: item }));
+}
+
 // 이 파일의 기존 생명주기 검증은 사용자가 자동 시작을 끈 수동 모드에서 실행한다.
 function manualController(dependencies?: RenewalDependencies) {
   const controller = controllers.createRenewalController(dependencies);
@@ -343,7 +348,7 @@ describe('renewal first reading screens', () => {
     await screen.findByText('저장된 연결의 서버와 모델 목록을 확인하고 있습니다.');
     expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: '홈' }));
+    chooseShellMenu('서재로 가기');
     release();
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connected'));
     expect(controller.getSnapshot().route.kind).toBe('home');
@@ -391,7 +396,7 @@ describe('renewal first reading screens', () => {
     await screen.findByRole('heading', { name: '2화 제목' });
     fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
     await screen.findByRole('heading', { name: '연결 설정' });
-    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+    fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
     expect(screen.getByRole('heading', { name: '2화 제목' })).toBeVisible();
   });
   it('reader_has_no_settings_panel', async () => {
@@ -403,7 +408,7 @@ describe('renewal first reading screens', () => {
   });
   it('no_budget_or_prefetch_controls', async () => {
     await setup();
-    fireEvent.click(screen.getByRole('button', { name: '설정' }));
+    chooseShellMenu('설정');
     expect(screen.queryByText(/예산|미리 번역/)).toBeNull();
     expect(screen.queryByLabelText('모델 이름')).toBeNull();
     expect(screen.getByLabelText('모델 선택')).toHaveValue('');
@@ -419,7 +424,7 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '연결 확인' }));
     await screen.findByRole('option', { name: 'HyMT2 synthetic' });
     fireEvent.change(screen.getByLabelText('모델 선택'), { target: { value: 'fixture-hymt2' } });
-    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+    fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
     fireEvent.click(screen.getByRole('button', { name: '이 화 번역' }));
     await waitFor(() => expect(value.generate).toHaveBeenCalledTimes(1));
   });
@@ -592,8 +597,9 @@ describe('renewal reading affordances', () => {
     await screen.findByRole('heading', { name: '2화 제목' });
     expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
     expect(value.generate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
-    expect(screen.getByText('저장된 한국어 본문')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
+    expect(screen.getByRole('heading', { name: page.title })).toBeVisible();
+    expect(screen.queryByText('저장된 한국어 본문')).toBeNull();
   });
 });
 

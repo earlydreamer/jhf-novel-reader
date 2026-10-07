@@ -4,7 +4,15 @@ import type {
   PhaseDurations,
   WholeChapterFlow,
 } from '../translation/wholeChapter';
-import type { ReadingSettings } from '../storage/settings';
+import {
+  LINE_HEIGHTS,
+  READING_BACKGROUNDS,
+  THEME_PREFERENCES,
+  type LineHeight,
+  type ReadingBackground,
+  type ReadingSettings,
+  type ThemePreference,
+} from '../storage/settings';
 import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
 import { ReaderError } from '../contracts';
 import type {
@@ -120,6 +128,9 @@ export interface RenewalSnapshot {
   readonly localLimits?: LocalTranslationLimits;
   readonly catalogStatus: CatalogStatus;
   readonly fontSize: number;
+  readonly theme: ThemePreference;
+  readonly readingBackground: ReadingBackground;
+  readonly lineHeight: LineHeight;
   readonly showOriginal: boolean;
   readonly error: string | null;
   readonly busy: boolean;
@@ -177,6 +188,8 @@ export interface RenewalController {
   initialize(): Promise<void>;
   navigate(route: Route): void;
   back(): void;
+  goHome(): void;
+  canGoBack(): boolean;
   browse(): Promise<void>;
   cancelTranslation(): void;
   retrySave(): Promise<void>;
@@ -205,6 +218,9 @@ export interface RenewalController {
   showContents(): void;
   adjacentChapter(direction: -1 | 1): void;
   changeFontSize(fontSize: number): void;
+  changeTheme(theme: ThemePreference): void;
+  changeReadingBackground(value: ReadingBackground): void;
+  changeLineHeight(value: LineHeight): void;
   savePosition(blockId: string, offset: number): Promise<void>;
   showOriginal(show: boolean): void;
   dispose(): void;
@@ -243,6 +259,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     selectedModelId: null,
     catalogStatus: dependencies.connect || dependencies.catalog ? 'idle' : 'unavailable',
     fontSize: 18,
+    theme: 'system',
+    readingBackground: 'theme',
+    lineHeight: 1.8,
     showOriginal: false,
     error: null,
     busy: false,
@@ -280,6 +299,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const value: ReadingSettings = {
       schemaVersion: 2,
       fontSize: snapshot.fontSize,
+      ...(snapshot.theme !== 'system' ? { theme: snapshot.theme } : {}),
+      ...(snapshot.readingBackground !== 'theme'
+        ? { readingBackground: snapshot.readingBackground }
+        : {}),
+      ...(snapshot.lineHeight !== 1.8 ? { lineHeight: snapshot.lineHeight } : {}),
       ...(snapshot.autoTranslate ? {} : { autoTranslate: false }),
       ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
       selection: snapshot.selectedModelId
@@ -577,13 +601,29 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     };
     listeners.forEach((listener) => listener());
   }
+  const chapterLevel = (route: Route) => route.kind === 'translation' || route.kind === 'reader';
+  // 회차 단위 경로가 속한 작품 id. 알 수 없으면 null이다.
+  const workIdOf = (route: Route): string | null =>
+    route.kind === 'translation'
+      ? (chaptersById.get(route.chapterId)?.workId ?? null)
+      : route.kind === 'reader'
+        ? (versionsById.get(route.versionId)?.source.workId ?? null)
+        : null;
   function navigate(route: Route): void {
     titleAbort?.abort();
     automaticRequest = null;
     sourceOperation++;
     selectionOperation++;
     sourceAbort?.abort();
-    history.push(snapshot.route);
+    // 같은 작품 안의 회차끼리 이동(번역→리더, 이전·다음 화)은 쌓지 않는다. 뒤로 가기 한 번이면 회차에 들어오기 전 화면으로 간다.
+    // 작품이 다르면 쌓아서 뒤로 가기가 원래 회차로 돌아오게 한다. 현재 작품은 스냅샷 대신 현재 경로로 판정한다(openPendingSave는 navigate 전에 chapter를 바꾼다).
+    const currentWork = workIdOf(snapshot.route);
+    const sameWorkChapterMove =
+      chapterLevel(snapshot.route) &&
+      chapterLevel(route) &&
+      currentWork !== null &&
+      currentWork === workIdOf(route);
+    if (!sameWorkChapterMove) history.push(snapshot.route);
     publish({ route, showOriginal: false, error: null, busy: false });
   }
   function back(): void {
@@ -627,6 +667,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (snapshot.work) publish({ titles: titlesByWork.get(snapshot.work.workId) ?? [] });
     requestTitleTranslation();
   }
+  function goHome(): void {
+    navigate({ kind: 'home' });
+    history.length = 0;
+  }
+  function canGoBack(): boolean {
+    return history.length > 0;
+  }
   async function initialize(): Promise<void> {
     if (initialization || disposed) return initialization ?? undefined;
     initialization = (async () => {
@@ -668,6 +715,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
               saved.selection?.translationMode ?? dependencies.defaultTranslationMode ?? 'legacy',
             localLimits: undefined,
             fontSize: saved.fontSize,
+            theme: saved.theme ?? 'system',
+            readingBackground: saved.readingBackground ?? 'theme',
+            lineHeight: saved.lineHeight ?? 1.8,
             autoTranslate: saved.autoTranslate ?? true,
             autoRetryFailed: saved.autoRetryFailed ?? saved.selection?.autoRetryFailed ?? true,
           });
@@ -1377,11 +1427,16 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   function showContents(): void {
     if (!snapshot.work) return;
-    navigate({
-      kind: 'work',
-      workId: snapshot.work.workId,
-      ...(snapshot.chapter ? { selectedChapterId: snapshot.chapter.chapterId } : {}),
-    });
+    const workId = snapshot.work.workId;
+    const selected = snapshot.chapter ? { selectedChapterId: snapshot.chapter.chapterId } : {};
+    const previous = history[history.length - 1];
+    if (previous?.kind === 'work' && previous.workId === workId) {
+      // 이미 쌓인 같은 작품 목차로 돌아간다. 목차-리더 왕복으로 스택이 자라지 않게 한다.
+      history[history.length - 1] = { kind: 'work', workId, ...selected };
+      back();
+      return;
+    }
+    navigate({ kind: 'work', workId, ...selected });
     requestTitleTranslation();
   }
   function adjacentChapter(direction: -1 | 1): void {
@@ -1397,6 +1452,21 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ fontSize });
       persistSettings();
     }
+  }
+  function changeTheme(theme: ThemePreference): void {
+    if (!THEME_PREFERENCES.includes(theme) || theme === snapshot.theme) return;
+    publish({ theme });
+    persistSettings();
+  }
+  function changeReadingBackground(value: ReadingBackground): void {
+    if (!READING_BACKGROUNDS.includes(value) || value === snapshot.readingBackground) return;
+    publish({ readingBackground: value });
+    persistSettings();
+  }
+  function changeLineHeight(value: LineHeight): void {
+    if (!LINE_HEIGHTS.includes(value) || value === snapshot.lineHeight) return;
+    publish({ lineHeight: value });
+    persistSettings();
   }
   async function savePosition(blockId: string, offset: number): Promise<void> {
     const version = snapshot.version;
@@ -1617,6 +1687,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     initialize,
     navigate,
     back,
+    goHome,
+    canGoBack,
     browse,
     cancelTranslation,
     retrySave,
@@ -1683,6 +1755,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     showContents,
     adjacentChapter,
     changeFontSize,
+    changeTheme,
+    changeReadingBackground,
+    changeLineHeight,
     savePosition,
     showOriginal(showOriginal: boolean): void {
       publish({ showOriginal });

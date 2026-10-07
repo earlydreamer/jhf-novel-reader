@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { Application } from '../../src/app/Application';
 import { createRenewalController } from '../../src/app/renewalController';
 import type { CompletedTranslation, WorkPage } from '../../src/contracts/reading';
+import { noopShell } from '../../src/platform/shell';
 const chapters = [1, 2].map((ordinal) => ({
   workId: 'n1234ab',
   chapterId: `n1234ab/${ordinal}`,
@@ -75,4 +76,4 @@ const controller = createRenewalController({
   }),
 });
 const root = document.getElementById('root');
-if (root) createRoot(root).render(<Application controller={controller} />);
+if (root) createRoot(root).render(<Application controller={controller} platform={noopShell} />);

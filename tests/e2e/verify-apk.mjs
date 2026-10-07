@@ -123,6 +123,13 @@ export function runToFile(program, args, destination) {
   }
 }
 
+/** Buffer command output only when its expected size is bounded by an input file. */
+export function runToBuffer(program, args, expectedBytes = 0) {
+  return execFileSync(program, args, {
+    maxBuffer: Math.max(16 * 1024 * 1024, expectedBytes + 1),
+  });
+}
+
 export function toZipEntry(relative) {
   return relative.replaceAll('\\', '/');
 }
@@ -168,9 +175,10 @@ export function main() {
   )) {
     const name = `assets/public/${toZipEntry(relative)}`;
     assert(entries.has(name), `Missing packaged asset: ${relative}`);
-    const packaged = execFileSync('unzip', ['-p', apk, name]);
+    const expected = readFileSync(path.join('dist', relative));
+    const packaged = runToBuffer('unzip', ['-p', apk, name], expected.length);
     assert(
-      packaged.equals(readFileSync(path.join('dist', relative))),
+      packaged.equals(expected),
       `Stale packaged asset: ${relative}`,
     );
   }

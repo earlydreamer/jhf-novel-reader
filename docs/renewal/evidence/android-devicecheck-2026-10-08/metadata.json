@@ -1,0 +1,82 @@
+{
+  "kind": "android-device-validation",
+  "issue": 92,
+  "date": "2026-10-08",
+  "source": {
+    "commit": "6ff31b8f817bd0be6b689818f6b1d62db445dbe8",
+    "tree": "6b6d3a191b53a64e1034c1b35fb0acbc077a4402",
+    "change": "android/app/src/main/java/app/narou/reader/MainActivity.java: WindowCompat.enableEdgeToEdge(getWindow()) after super.onCreate",
+    "ci": {
+      "checks": {"run": 37698455923, "job": 113055866754, "result": "success"},
+      "android": {"run": 37698456004, "job": 113055867281, "result": "success"}
+    }
+  },
+  "build": {
+    "node": "24.19.0",
+    "jdk": "Temurin 21.0.12.1+1",
+    "androidSdk": 36,
+    "buildTools": "35.0.0",
+    "gradle": "8.14.3"
+  },
+  "artifacts": {
+    "productionAuditOnly": {
+      "applicationId": "app.narou.reader",
+      "sourceDirty": false,
+      "sha256": "585e4a0d66e5d05d8eb8ed6f16222920a61a90815a5faa7091d5171e0abf38cd",
+      "verifyApk": "pass",
+      "installedOnDevices": false
+    },
+    "installedDeviceCheck": {
+      "applicationId": "app.narou.reader.devicecheck",
+      "sourceCommit": "6ff31b8f817bd0be6b689818f6b1d62db445dbe8",
+      "webAssetDirty": false,
+      "nativeProvenanceDirty": true,
+      "nativeProvenanceDirtyReason": "ephemeral Gradle applicationIdSuffix .devicecheck during build",
+      "gradleSuffixDiffSha256": "de672d105f516b8550d2dc223b46c9b71440e1c8cd15d6a3ea0c7fe506a1efed",
+      "applicationHook": false,
+      "sha256": "edfb6380100cc739b40a7c08f0d1e7b6d982a71e1e1051e8a11347e818b96fbc",
+      "signerCertificateSha256": "8c5d8712374dff61e93c2ecbcc240a17d2db4759c97ee4ab11275322aa5fe0a6",
+      "installedOn": ["Black Shark 2 / SKW-H0 / Android 10 API 29", "Galaxy Z Fold7 / SM-F966N / Android 16 API 36"]
+    },
+    "dialogProbe": {
+      "sourceCommit": "617275dbfda35c1c02f61777a8f1de9f15f3d0cf",
+      "temporaryApplicationHookDiffSha256": "c4aa75f62a15ec3f6e9a9a8a94e46eb5d77bee72852dfc8820d37bdc5ea29627",
+      "apkSha256": "9609cbf1abbb7dd21e9d3e436d153673ea7ec9d3a55fc1b0f2dcff3c65616384",
+      "usesProductionApplicationShellAndDialog": true,
+      "temporaryEntryButton": true,
+      "claimScope": "native system Back closes actual Dialog and preserves current route on both devices; temporary entry hook only"
+    }
+  },
+  "devices": [
+    {
+      "model": "Black Shark 2 / SKW-H0",
+      "android": "10 / API 29",
+      "webView": "153.0.8010.36",
+      "fontScaleBeforeAfter": [1.0, 1.0],
+      "nightModeBeforeAfter": ["no", "no"],
+      "rotationBeforeAfter": {"accelerometerRotation": [1, 1], "userRotation": [0, 0]},
+      "results": {"insetsPortrait": "pass", "insetsLandscape": "pass", "appDarkSystemLight": "pass after fix; pre-fix contrast failure reproduced", "appLightSystemLight": "pass", "dialogSystemBack": "pass on temporary hook build", "rootBackBackgroundsApp": "pass; process remains alive", "fontScale200": "pass on temporary hook build; values restored"}
+    },
+    {
+      "model": "Galaxy Z Fold7 / SM-F966N",
+      "android": "16 / API 36",
+      "webView": "154.0.8037.58",
+      "fontScaleBeforeAfter": [0.9, 0.9],
+      "nightModeBeforeAfter": ["yes", "yes"],
+      "windowRotationLockBeforeAfter": [0, 0],
+      "results": {"insetsPortrait": "pass", "insetsLandscape": "pass", "appLightSystemDark": "pass", "appDarkSystemDark": "pass", "dialogSystemBack": "pass on temporary hook build", "rootBackBackgroundsApp": "pass; process remains alive", "fontScale200": "pass on final no-hook build; 14.4px to 32px app font, 21.6px to 48px sample text; restored"}
+    }
+  ],
+  "preservation": {
+    "productionPackageListedBeforeAndAfter": true,
+    "productionApkInstalled": false,
+    "productionAppLaunchedByTest": false,
+    "productionDataWriteOrDeleteCommandIssued": false,
+    "beforeAfterFileHashOrListingCaptured": false,
+    "byteForByteDataIdentityClaim": false
+  },
+  "suite": {
+    "fullVitestParallel": {"passed": 919, "total": 920, "failed": 1, "failure": "batch-translation range-preview timeout; isolated run passes; tracked in issue 101"}
+  },
+  "localEvidenceDirectory": "D:/projects/narou-reader/.superpowers/verification-92-final/"
+}

@@ -11,10 +11,18 @@ import { createTitleRepository } from '../../src/translation/titles';
 import { StorageError } from '../../src/storage/errors';
 import type { NativeHttpRequest, HttpResponse, AppLifecycle } from '../../src/contracts';
 import { createCacheKey, type CompletedChapter } from '../../src/contracts/legacy';
+import { fireEvent, screen } from '@testing-library/react';
+
+function chooseShellMenu(item: string) {
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: item }));
+}
 
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
+const otherWorkUrl = 'https://ncode.syosetu.com/n5678cd/';
 const chapterUrl = workUrl + '2/';
 const toc = `<h1 class="p-novel__title">合成作品</h1><div class="p-eplist__sublist"><a href="/n1234ab/1/">第一話</a></div><div class="p-eplist__sublist"><a href="/n1234ab/2/">第二話</a></div>`;
+const otherToc = `<h1 class="p-novel__title">別の合成作品</h1><div class="p-eplist__sublist"><a href="/n5678cd/1/">第一話</a></div>`;
 const html =
   '<h1 class="p-novel__title">第二話</h1><div class="p-novel__body"><div class="p-novel__text"><p>開始<ruby>漢字<rt>かんじ</rt></ruby></p><p></p><p>終わり</p></div></div>';
 function deferred<T>() {
@@ -68,7 +76,9 @@ function harness() {
           ? JSON.stringify({ data: [{ id: 'hymt2-7b' }] })
           : options.url === workUrl
             ? toc
-            : chapterHtml,
+            : options.url === otherWorkUrl
+              ? otherToc
+              : chapterHtml,
       };
     },
   };
@@ -103,7 +113,7 @@ function harness() {
   const settle = () =>
     response.resolve({
       status: 200,
-      url: posts()[0]!.url,
+      url: posts().at(-1)!.url,
       headers: {},
       data: JSON.stringify({
         choices: [
@@ -326,8 +336,8 @@ it('native composition exposes per-item v1 warnings while retaining saved readin
   app.dispose();
   h.app.dispose();
 });
-async function dispatched(h: ReturnType<typeof harness>) {
-  await expect.poll(() => h.posts().length).toBe(1);
+async function dispatched(h: ReturnType<typeof harness>, expected = 1) {
+  await expect.poll(() => h.posts().length).toBe(expected);
 }
 it('browse_select_translate_save_read uses actual parser, native transport, catalog and library composition', async () => {
   const h = harness();
@@ -598,6 +608,90 @@ it('pendingSave remains available after leaving and returning without another ge
   expect(h.posts()).toHaveLength(1);
   h.app.dispose();
 });
+it('openPendingSave returns to the pending chapter without stacking a same-work route', async () => {
+  const h = harness();
+  await prepare(h);
+  h.setFailSave(true);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.settle();
+  await first;
+  const pending = h.app.getSnapshot().translation.pendingSave!;
+
+  h.app.showContents();
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
+  h.app.openPendingSave();
+
+  expect(h.app.getSnapshot().route).toEqual({ kind: 'translation', chapterId: 'n1234ab/2' });
+  expect(h.app.getSnapshot().chapter?.chapterId).toBe(pending.source.chapterId);
+  expect(h.app.getSnapshot().translation.pendingSave).toEqual(pending);
+  h.app.back();
+  expect(h.app.getSnapshot().route).toEqual({
+    kind: 'work',
+    workId: 'n1234ab',
+    selectedChapterId: 'n1234ab/2',
+  });
+  h.app.dispose();
+});
+it('openPendingSave restores the other work reader and position on back', async () => {
+  const h = harness();
+  await prepare(h);
+  const firstPostCount = h.posts().length + 1;
+  const initial = h.app.translate();
+  await dispatched(h, firstPostCount);
+  h.settle();
+  await initial;
+  expect(h.posts()).toHaveLength(1);
+  const originalVersion = h.app.getSnapshot().version!;
+  await h.app.savePosition(originalVersion.blocks[0]!.id, 47.5);
+
+  await h.store.commitVersion({
+    ...originalVersion,
+    versionId: 'saved-other-work',
+    source: {
+      ...originalVersion.source,
+      workId: 'n5678cd',
+      chapterId: 'n5678cd/1',
+      canonicalUrl: `${otherWorkUrl}1/`,
+      title: '別作品 第一話',
+      sourceHash: 'other-work-source',
+    },
+  });
+  await h.app.openWork(otherWorkUrl);
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
+  const otherVersion = h.app.getSnapshot().version!;
+  expect(otherVersion.versionId).toBe('saved-other-work');
+  await h.app.savePosition(otherVersion.blocks[0]!.id, 83.25);
+
+  await h.app.openWork(workUrl);
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[1]!);
+  h.setFailSave(true);
+  await h.app.refreshSource();
+  const pendingPostCount = h.posts().length + 1;
+  const pendingTranslation = h.app.translate();
+  await dispatched(h, pendingPostCount);
+  h.settle();
+  await pendingTranslation;
+  const pending = h.app.getSnapshot().translation.pendingSave!;
+
+  await h.app.openWork(otherWorkUrl);
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
+  expect(h.app.getSnapshot().route).toEqual({ kind: 'reader', versionId: otherVersion.versionId });
+  h.app.openPendingSave();
+  expect(h.app.getSnapshot().route).toEqual({ kind: 'translation', chapterId: 'n1234ab/2' });
+  expect(h.app.getSnapshot().chapter?.chapterId).toBe(pending.source.chapterId);
+
+  h.app.back();
+  expect(h.app.getSnapshot().route).toEqual({ kind: 'reader', versionId: otherVersion.versionId });
+  expect(h.app.getSnapshot().work?.workId).toBe('n5678cd');
+  expect(h.app.getSnapshot().chapter?.chapterId).toBe('n5678cd/1');
+  expect(h.app.getSnapshot().version?.versionId).toBe(otherVersion.versionId);
+  expect(h.app.getSnapshot().position).toMatchObject({
+    blockId: otherVersion.blocks[0]!.id,
+    offset: 83.25,
+  });
+  h.app.dispose();
+});
 it('selecting a chapter with an unsaved new result offers recovery before its older saved version', async () => {
   const h = harness();
   await prepare(h);
@@ -643,7 +737,7 @@ it('another chapter exposes a route back to save recovery and blocks generation 
 
   expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(true);
   expect(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' })).toBeDefined();
-  fireEvent.click(screen.getByRole('button', { name: '홈' }));
+  chooseShellMenu('서재로 가기');
   expect(h.app.getSnapshot().route.kind).toBe('home');
   fireEvent.click(screen.getByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' }));
   expect(h.app.getSnapshot().chapter?.chapterId).toBe(pending.source.chapterId);

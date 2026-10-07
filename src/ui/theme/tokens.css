@@ -1,0 +1,121 @@
+/* 디자인 토큰 정본. 근거는 DESIGN.md 2절이고, 색을 바꾸면 tests/ui/theme-contrast.test.ts가 판정한다. */
+:root {
+  color-scheme: light;
+  --surface: #fafafd;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f4f4fa;
+  --surface-container: #eeeef6;
+  --surface-container-high: #e8e8f2;
+  --surface-container-highest: #e2e2ee;
+  --on-surface: #1a1a28;
+  --on-surface-variant: #45465c;
+  --outline: #6e6f86;
+  --outline-variant: #c9c9da;
+  --primary: #3f4199;
+  --primary-fill: #6667ab;
+  --on-primary: #ffffff;
+  --primary-container: #e3e3fa;
+  --on-primary-container: #2c2d78;
+  --secondary-container: #e6e6f2;
+  --on-secondary-container: #2e2f45;
+  --error: #901c16;
+  --on-error: #ffffff;
+  --error-container: #fce4e2;
+  --on-error-container: #7a1712;
+  --success: #1f6b45;
+  --warning: #7a5a12;
+  --inverse-surface: #2c2c3a;
+  --inverse-on-surface: #f2f2fa;
+  --inverse-primary: #d2d3ff;
+  --scrim: rgb(0 0 0 / 0.32);
+  --shadow-color: rgb(26 26 40 / 0.16);
+  --reading-surface: var(--surface);
+  --reading-on-surface: var(--on-surface);
+
+  --font-sans:
+    'Pretendard Variable', Pretendard, system-ui, -apple-system, 'Noto Sans KR', sans-serif;
+  --type-headline-small: 600 1.5rem/2rem var(--font-sans);
+  --type-title-large: 600 1.375rem/1.75rem var(--font-sans);
+  --type-title-medium: 600 1rem/1.5rem var(--font-sans);
+  --type-body-large: 400 1rem/1.5rem var(--font-sans);
+  --type-body-medium: 400 0.875rem/1.25rem var(--font-sans);
+  --type-label-large: 600 0.875rem/1.25rem var(--font-sans);
+  --type-label-medium: 500 0.75rem/1rem var(--font-sans);
+
+  --shape-xs: 4px;
+  --shape-sm: 8px;
+  --shape-md: 12px;
+  --shape-lg: 16px;
+  --shape-xl: 28px;
+  --shape-full: 999px;
+
+  --touch-target: 48px;
+  --button-m: 56px;
+  --button-s: 40px;
+  --icon-button: 40px;
+  --app-bar: 64px;
+  --list-one-line: 56px;
+  --list-two-line: 72px;
+  --fab: 56px;
+  --toolbar: 64px;
+  --content-max: 840px;
+  --reading-max: 40em;
+
+  --elevation-2: 0 1px 2px var(--shadow-color), 0 2px 6px 2px var(--shadow-color);
+  --elevation-3: 0 1px 3px var(--shadow-color), 0 4px 8px 3px var(--shadow-color);
+  --state-hover: 0.08;
+  --state-focus: 0.1;
+  --state-pressed: 0.1;
+  --state-dragged: 0.16;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: linear(0, 0.2 6%, 0.6 16%, 0.92 28%, 1.04 40%, 1.02 55%, 1);
+  --duration-short: 150ms;
+  --duration-enter: 300ms;
+  --duration-exit: 200ms;
+
+  /* Capacitor SystemBars(insetsHandling: 'css')가 --safe-area-inset-*를 넣는다. 없으면 env()로 대체한다. */
+  --inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --inset-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --inset-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface: #13131b;
+  --surface-container-lowest: #0e0e15;
+  --surface-container-low: #1a1a24;
+  --surface-container: #1f1f2a;
+  --surface-container-high: #262633;
+  --surface-container-highest: #30303f;
+  --on-surface: #eeeef6;
+  --on-surface-variant: #c9c9dc;
+  --outline: #a3a4bf;
+  --outline-variant: #464659;
+  --primary: #d2d3ff;
+  --primary-fill: #d2d3ff;
+  --on-primary: #1a1b55;
+  --primary-container: #3b3c8f;
+  --on-primary-container: #e6e5ff;
+  --secondary-container: #383850;
+  --on-secondary-container: #e6e5fa;
+  --error: #ffc4bc;
+  --on-error: #4a0002;
+  --error-container: #8c0009;
+  --on-error-container: #ffe1dd;
+  --success: #8be0b0;
+  --warning: #efcb7c;
+  --inverse-surface: #e4e4ee;
+  --inverse-on-surface: #1a1a28;
+  --inverse-primary: #36388f;
+  --scrim: rgb(0 0 0 / 0.5);
+  --shadow-color: rgb(0 0 0 / 0.4);
+}
+[data-reading-background='sepia'] {
+  --reading-surface: #f4ebd7;
+  --reading-on-surface: #2b2116;
+}
+[data-reading-background='black'] {
+  --reading-surface: #000000;
+  --reading-on-surface: #e4e4ee;
+}

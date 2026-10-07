@@ -1,205 +1,203 @@
+/* 앱 셸과, 하위 이슈(#93~#97)가 화면을 재작성하기 전 기존 마크업의 기본 스타일. 토큰만 참조한다. */
 .nr-application {
-  background: #faf9f5;
-  color: #28372f;
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
-  min-height: 100vh;
-  padding: 16px 0;
+  min-block-size: 100dvh;
+  background: var(--surface);
+  color: var(--on-surface);
 }
-.nr-app-notice,
-.nr-app-error {
+:where(.nr-screen) {
   box-sizing: border-box;
-  max-width: 712px;
-  margin: 16px auto;
-  padding: 0 22px;
-  font-size: 13px;
-  line-height: 1.7;
-}
-.nr-app-error {
-  border: 1px solid #cba990;
-  border-radius: 10px;
-  padding: 14px 22px;
-  background: #fff7ed;
-}
-.nr-app-controls {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-.nr-application .nr-reader {
-  min-height: 0;
-}
-@media (max-width: 420px) {
-  .nr-app-notice,
-  .nr-app-error {
-    margin: 16px;
-    padding: 0;
-  }
-  .nr-app-error {
-    padding: 12px;
-  }
-}
-/* Renewal screen shell. Controls stay outside the scrolling chapter body. */
-.nr-application {
-  max-width: 52rem;
+  max-inline-size: var(--content-max);
   margin: 0 auto;
-  padding: 1rem;
+  padding: 8px max(16px, var(--inset-right)) calc(32px + var(--inset-bottom))
+    max(16px, var(--inset-left));
 }
-.nr-application header,
-.nr-application nav {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  align-items: center;
+:where(.nr-screen) > * + * {
+  margin-block-start: 16px;
 }
-.nr-application header {
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
+:where(.nr-screen) h1 {
+  margin: 8px 0 16px;
+  font: var(--type-headline-small);
+  text-wrap: balance;
 }
-.nr-application label {
-  display: grid;
-  min-width: 0;
-  gap: 0.4rem;
-  margin-block: 1rem;
+:where(.nr-screen) h1:focus {
+  outline: none;
 }
-.nr-application input,
-.nr-application textarea,
-.nr-application select {
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  min-height: 2.75rem;
+:where(.nr-screen) h2,
+:where(.nr-screen) h3 {
+  margin: 24px 0 8px;
+  font: var(--type-title-medium);
 }
-.nr-application input:not([type='checkbox']),
-.nr-application textarea,
-.nr-application select {
-  width: 100%;
+:where(.nr-screen) p {
+  margin: 8px 0;
 }
-.nr-application button {
-  min-height: 2.75rem;
+:where(.nr-screen) a {
+  color: var(--primary);
+}
+/* 클래스가 있는 요소(StatusPill, Card 등)는 컴포넌트 스타일을 그대로 쓴다. */
+:where(.nr-screen) :where([role='alert']:not([class])) {
+  color: var(--error);
+}
+:where(.nr-screen) :where([role='status']:not([class])) {
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
+}
+.nr-notice {
+  padding: 16px;
+  border-radius: var(--shape-md);
+  background: var(--surface-container-low);
+}
+.nr-notice--error {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+.nr-notice--error .nr-button--text {
+  color: var(--on-error-container);
+}
+/* 클래스 없는 기존 버튼: 토널 S 버튼 모양 */
+:where(.nr-screen) :where(button:not([class])) {
+  min-block-size: var(--touch-target);
+  margin: 4px 8px 4px 0;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--shape-full);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font: var(--type-label-large);
   cursor: pointer;
 }
-.nr-application button:disabled {
+:where(.nr-screen) :where(button:not([class])):disabled {
   cursor: default;
+  background: color-mix(in srgb, var(--on-surface) 12%, transparent);
+  color: color-mix(in srgb, var(--on-surface) 38%, transparent);
 }
-.nr-batch-panel fieldset,
-.nr-guidance-panel fieldset {
-  min-width: 0;
-}
-.nr-batch-range {
+:where(.nr-screen) label {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 4px;
+  min-inline-size: 0;
+  margin-block: 12px;
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
 }
-.nr-batch-range label,
-.nr-batch-range input {
-  min-width: 0;
-}
-.nr-batch-range input {
-  width: 100%;
-}
-.nr-application .nr-batch-retranslate {
+/* 체크박스·라디오 라벨은 한 행으로 둔다. :where로 특이도를 0으로 맞춰 컴포넌트 클래스를 이긴다. */
+:where(.nr-screen) label:where(:has(> input[type='checkbox'], > input[type='radio'])) {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
+  color: var(--on-surface);
+  font: var(--type-body-large);
 }
-.nr-batch-retranslate input {
-  min-height: 0;
-  flex-shrink: 0;
+:where(.nr-screen)
+  :where(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: var(--touch-target);
+  padding: 0 16px;
+  border: 0;
+  border-block-end: 1px solid var(--outline);
+  border-radius: var(--shape-xs) var(--shape-xs) 0 0;
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+  font: var(--type-body-large);
 }
-.nr-batch-panel p {
-  overflow-wrap: anywhere;
+:where(.nr-screen) textarea {
+  padding-block: 12px;
 }
-.nr-candidate {
-  border-bottom: 1px solid #8886;
-  padding-block: 0.75rem;
-  overflow-wrap: anywhere;
+:where(.nr-screen) :where(input[type='checkbox'], input[type='radio'], input[type='range']) {
+  accent-color: var(--primary-fill);
 }
-.nr-candidate label:has(input[type='checkbox']) {
+:where(.nr-screen) fieldset {
+  min-inline-size: 0;
+  margin: 16px 0;
+  padding: 8px 16px 16px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--shape-md);
+}
+:where(.nr-screen) legend {
+  padding: 0 4px;
+  font: var(--type-title-medium);
+}
+:where(.nr-screen) details {
+  padding: 8px 16px;
+  border-radius: var(--shape-md);
+  background: var(--surface-container-low);
+}
+:where(.nr-screen) summary {
+  min-block-size: var(--touch-target);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  cursor: pointer;
 }
-.nr-candidate input[type='checkbox'] {
-  flex-shrink: 0;
+:where(.nr-screen) ol,
+:where(.nr-screen) ul {
+  padding-inline-start: 24px;
 }
-.nr-quality {
-  margin-block: 1rem;
-  padding: 0.75rem;
-  border: 1px solid #8886;
-  overflow-wrap: anywhere;
+.nr-theme-choice [role='radiogroup'] {
+  display: grid;
+  gap: 4px;
 }
+.nr-theme-choice label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: var(--touch-target);
+  margin: 0;
+  color: var(--on-surface);
+  font: var(--type-body-large);
+}
+/* 기존 독서·번역 화면의 본문 영역 */
 .nr-reading-body {
   position: relative;
-  line-height: 1.8;
-  padding: 1.25rem;
-  margin-top: 1rem;
   overflow-y: auto;
-  max-height: 65vh;
+  max-block-size: 65vh;
+  margin-top: 16px;
+  padding: 20px;
+  border-radius: var(--shape-md);
+  background: var(--reading-surface);
+  color: var(--reading-on-surface);
+  line-height: 1.8;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
-.nr-stream-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+.nr-stream-body {
+  min-block-size: 40vh;
+  max-block-size: 70vh;
 }
-.nr-setting-toggle {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.5rem;
-}
-.nr-setting-toggle input {
-  min-height: 0;
-}
-.nr-setting-toggle span {
-  grid-column: 2;
-  font-size: 0.9rem;
-}
-.nr-paragraph-retry {
-  margin-block: 1rem;
-}
-.nr-title {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.nr-title h1 {
-  margin-bottom: 0.5rem;
-}
-.nr-title-actions {
+.nr-stream-toolbar,
+.nr-title-actions,
+.nr-batch-retranslate {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  margin-block: 0.5rem;
-  font-size: 0.9rem;
-}
-.nr-title form {
-  padding: 0.75rem;
-  border: 1px solid #8886;
-  margin-bottom: 1rem;
+  gap: 8px;
 }
 .nr-stream-toolbar p {
   flex: 1;
 }
-.nr-stream-body {
-  min-height: 40vh;
-  max-height: 70vh;
-}
 .nr-stream-caption,
 .nr-stream-empty {
-  color: #58685c;
-  font-size: 0.9rem;
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
 }
-@media (max-width: 420px) {
-  .nr-application {
-    padding: 0.75rem;
-  }
-  .nr-reading-body {
-    padding: 0.75rem;
-  }
+.nr-batch-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.nr-candidate,
+.nr-quality,
+.nr-title form {
+  overflow-wrap: anywhere;
+}
+.nr-title {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.nr-setting-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+}
+.nr-setting-toggle span {
+  grid-column: 2;
 }

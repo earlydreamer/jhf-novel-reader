@@ -7,6 +7,10 @@ const config: CapacitorConfig = {
  server: { androidScheme: 'https' },
  android: { allowMixedContent: false },
  // Use direct native HTTP only. Never globally patch browser fetch/XMLHttpRequest.
- plugins: { CapacitorHttp: { enabled: false } }
+ plugins: {
+  CapacitorHttp: { enabled: false },
+  // edge-to-edge: --safe-area-inset-* CSS 변수를 WebView에 넣는다(Android 10 WebView 포함).
+  SystemBars: { insetsHandling: 'css', initialViewportFitValueHint: 'cover' }
+ }
 };
 export default config;
