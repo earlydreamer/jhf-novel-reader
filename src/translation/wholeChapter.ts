@@ -92,7 +92,11 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             source,
             languageDirection: 'ja-ko',
             contractVersion: 'plain-v1',
-            promptVersion: 'hymt2-ko-v1',
+            promptVersion:
+              selected.connection.provider === 'openai-compatible' && selected.limits
+                ? 'hymt2-segments-v1'
+                : 'hymt2-ko-v1',
+            onProgress: (completed, total) => publish({ progress: { completed, total } }),
           },
           control.signal,
         );
@@ -136,14 +140,12 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           createdAt: new Date().toISOString(),
           provenance: {
             provider: selected.connection.provider,
-            connectionId: await digest([
-              selected.connection.provider,
-              normalizedBaseUrl,
-            ]),
+            connectionId: await digest([selected.connection.provider, normalizedBaseUrl]),
             modelId: selected.modelId,
             contractVersion: 'plain-v1',
-            promptVersion: 'hymt2-ko-v1',
+            promptVersion: result.generation ? 'hymt2-segments-v1' : 'hymt2-ko-v1',
             languageDirection: 'ja-ko',
+            ...(result.generation ? { generation: result.generation } : {}),
           },
         };
         if (control.signal.aborted || disposed) throw new ReaderError('cancelled', 'unknown');

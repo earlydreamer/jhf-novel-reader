@@ -8,6 +8,7 @@ import type {
   CompletedTranslation,
   ConnectionConfig,
   LibraryStore,
+  LocalTranslationLimits,
   ModelChoice,
   ProviderSession,
   ReadingPosition,
@@ -17,6 +18,7 @@ import type {
   WorkPage,
 } from '../contracts/reading';
 import type { Route } from './routes';
+import { limitsForModel } from '../translation/segments';
 
 export type CatalogStatus =
   | 'idle'
@@ -80,6 +82,7 @@ export interface RenewalSnapshot {
   readonly connection: ConnectionConfig;
   readonly models: readonly ModelChoice[];
   readonly selectedModelId: string | null;
+  readonly localLimits?: LocalTranslationLimits;
   readonly catalogStatus: CatalogStatus;
   readonly fontSize: number;
   readonly showOriginal: boolean;
@@ -211,7 +214,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       schemaVersion: 2,
       fontSize: snapshot.fontSize,
       selection: snapshot.selectedModelId
-        ? { connection: { ...snapshot.connection }, modelId: snapshot.selectedModelId }
+        ? {
+            connection: { ...snapshot.connection },
+            modelId: snapshot.selectedModelId,
+            ...(snapshot.localLimits ? { limits: { ...snapshot.localLimits } } : {}),
+          }
         : null,
     };
     settingsQueue = settingsQueue
@@ -313,6 +320,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           publish({
             connection: saved.selection?.connection ?? DEFAULT_CONNECTION,
             selectedModelId: saved.selection?.modelId ?? null,
+            localLimits: undefined,
             fontSize: saved.fontSize,
           });
         initialized = true;
@@ -586,6 +594,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       models: [],
       selectedModelId: null,
       catalogStatus: dependencies.connect || dependencies.catalog ? 'idle' : 'unavailable',
+      localLimits: undefined,
     });
     persistSettings();
   }
@@ -619,9 +628,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }
       if (operation !== catalogOperation || disposed) return;
       session = nextSession;
-      const selectedExists = models.some(
+      const selectedChoice = models.find(
         (model) => model.id === previousModelId && model.supportsGeneration,
       );
+      const selectedExists = selectedChoice !== undefined;
       let catalogStatus: CatalogStatus = 'connected';
       if (!models.some((model) => model.supportsGeneration)) catalogStatus = 'empty';
       else if (previousModelId && !selectedExists) catalogStatus = 'model_missing';
@@ -629,21 +639,45 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         connection,
         models,
         selectedModelId: selectedExists ? previousModelId : null,
+        localLimits:
+          connection.provider === 'openai-compatible' && selectedChoice
+            ? limitsForModel(selectedChoice.id, selectedChoice.contextTokens)
+            : undefined,
         catalogStatus,
       });
       persistSettings();
     } catch (error) {
       if (operation === catalogOperation) {
         session = null;
-        publish({ catalogStatus: errorLabel(error), models: [], selectedModelId: null });
+        publish({
+          catalogStatus: errorLabel(error),
+          models: [],
+          selectedModelId: null,
+          localLimits: undefined,
+        });
       }
     }
   }
   function chooseModel(modelId: string): void {
-    if (!snapshot.models.some((model) => model.id === modelId && model.supportsGeneration)) return;
+    const model = snapshot.models.find(
+      (choice) => choice.id === modelId && choice.supportsGeneration,
+    );
+    if (!model) return;
     if (disposed) return;
+    let localLimits: LocalTranslationLimits | undefined;
+    if (snapshot.connection.provider === 'openai-compatible') {
+      try {
+        localLimits = limitsForModel(model.id, model.contextTokens);
+      } catch {
+        publish({
+          error: '이 모델의 입력 한도로 번역을 준비할 수 없습니다. 다른 모델을 선택하세요.',
+        });
+        return;
+      }
+    }
     publish({
       selectedModelId: modelId,
+      localLimits,
       catalogStatus: 'connected',
       connection: {
         ...snapshot.connection,
@@ -678,6 +712,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const selectedModel: SelectedModel = {
       connection: snapshot.connection,
       modelId: snapshot.selectedModelId,
+      ...(snapshot.connection.provider === 'openai-compatible' && snapshot.localLimits
+        ? { limits: { ...snapshot.localLimits } }
+        : {}),
     };
     const request: ActiveTranslation = {
       chapterId: chapter.chapterId,

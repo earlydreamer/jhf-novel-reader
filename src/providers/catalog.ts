@@ -68,6 +68,29 @@ export async function listModels(
     if (!object(model) || typeof model.id !== 'string' || !model.id.trim() || ids.has(model.id))
       throw new ReaderError('model_list', 'received');
     ids.add(model.id);
-    return { id: model.id, displayName: model.id, supportsGeneration: true };
+    let contextTokens: number | undefined;
+    if (object(model.meta)) {
+      const serverContext = model.meta.n_ctx;
+      const trainedContext = model.meta.n_ctx_train;
+      if (
+        typeof serverContext === 'number' &&
+        Number.isSafeInteger(serverContext) &&
+        serverContext > 0
+      ) {
+        contextTokens = serverContext;
+        if (
+          typeof trainedContext === 'number' &&
+          Number.isSafeInteger(trainedContext) &&
+          trainedContext > 0
+        )
+          contextTokens = Math.min(contextTokens, trainedContext);
+      }
+    }
+    return {
+      id: model.id,
+      displayName: model.id,
+      supportsGeneration: true,
+      ...(contextTokens === undefined ? {} : { contextTokens }),
+    };
   });
 }

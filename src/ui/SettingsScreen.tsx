@@ -109,6 +109,7 @@ export function SettingsScreen({
           ))}
         </select>
       </label>
+      <p>원문은 모델에 맞는 분량으로 순서대로 번역하고, 한 화가 전부 완성되면 저장합니다.</p>
     </section>
   );
 }

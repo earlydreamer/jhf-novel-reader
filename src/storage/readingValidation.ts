@@ -2,6 +2,7 @@ import type { CompletedTranslation, ReadingPosition, WorkPage, SelectedModel } f
 import { check, integer, object, record, text, url } from './validation';
 import { StorageError } from './errors';
 import { secretRef } from './secrets';
+import { validLocalLimits } from '../translation/segments';
 export function identifier(value: unknown): asserts value is string {
   text(value);
   check(/^[A-Za-z0-9][A-Za-z0-9.-]{0,255}$/.test(value) && !value.includes('..'));
@@ -28,7 +29,7 @@ function date(value: unknown) {
   check(Number.isFinite(Date.parse(value)));
 }
 export function selected(value: unknown): asserts value is SelectedModel {
-  object(value, ['connection', 'modelId']);
+  object(value, ['connection', 'modelId', 'limits']);
   text(value.modelId);
   check(value.modelId.length <= 256);
   object(value.connection, ['provider', 'baseUrl', 'authRef', 'revision']);
@@ -37,6 +38,11 @@ export function selected(value: unknown): asserts value is SelectedModel {
   url(c.baseUrl);
   integer(c.revision);
   if (c.authRef !== undefined) secretRef(c.authRef);
+  if (value.limits !== undefined) {
+    object(value.limits, ['contextTokens', 'inputBudgetTokens', 'maxOutputTokens']);
+    check(c.provider === 'openai-compatible');
+    check(validLocalLimits(value.limits));
+  }
 }
 export async function completedTranslation(value: unknown): Promise<CompletedTranslation> {
   record(value);
@@ -119,6 +125,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'contractVersion',
     'promptVersion',
     'languageDirection',
+    'generation',
   ]);
   const p = value.provenance;
   check(p.provider === 'openai-compatible' || p.provider === 'gemini');
@@ -126,6 +133,23 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
   text(p.modelId);
   check(p.contractVersion === 'plain-v1' && p.languageDirection === 'ja-ko');
   text(p.promptVersion);
+  if (p.generation !== undefined) {
+    object(p.generation, [
+      'mode',
+      'contextTokens',
+      'inputBudgetTokens',
+      'maxOutputTokens',
+      'segments',
+    ]);
+    const g = p.generation;
+    check(
+      p.provider === 'openai-compatible' &&
+        p.promptVersion === 'hymt2-segments-v1' &&
+        g.mode === 'segments-v1',
+    );
+    integer(g.segments, 1);
+    check(validLocalLimits(g));
+  }
   return value as unknown as CompletedTranslation;
 }
 export async function workPage(value: unknown): Promise<WorkPage> {
