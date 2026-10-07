@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import type { CatalogStatus } from '../app/renewalController';
 import type { ErrorCode } from '../contracts';
 import type { ChapterRef, ConnectionConfig, TranslationState } from '../contracts/reading';
 export interface TranslationScreenProps {
@@ -10,6 +11,8 @@ export interface TranslationScreenProps {
   requestActive: boolean;
   pendingSaveElsewhere?: boolean;
   catalogReady?: boolean;
+  catalogStatus?: CatalogStatus;
+  onCheckConnection?(): void;
   onCancel?(): void;
   onRetry?(): void;
   onRetrySave?(): void;
@@ -54,8 +57,22 @@ export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
         제공자: {props.connection.provider === 'gemini' ? 'Google Gemini' : 'LM Studio / Ollama'}
       </p>
       <p>모델: {props.modelId ?? '선택하지 않음'}</p>
-      {props.catalogReady === false && (
-        <p role="status">서버 연결이 확인되지 않았습니다. 연결 설정에서 서버 주소를 확인하세요.</p>
+      {props.catalogStatus === 'checking' ? (
+        <p role="status">저장된 연결의 서버와 모델 목록을 확인하고 있습니다.</p>
+      ) : (
+        props.catalogReady === false && (
+          <p role="status">
+            서버 연결이 확인되지 않았습니다. 연결 설정에서 서버 주소를 확인하세요.
+          </p>
+        )
+      )}
+      {props.catalogReady === false && props.onCheckConnection && props.connection.baseUrl && (
+        <button
+          disabled={props.catalogStatus === 'checking' || props.requestActive}
+          onClick={props.onCheckConnection}
+        >
+          연결 다시 확인
+        </button>
       )}
       {props.catalogReady !== false && !props.modelId && (
         <p role="status">생성 모델이 선택되지 않았습니다. 연결 설정에서 모델을 선택하세요.</p>
