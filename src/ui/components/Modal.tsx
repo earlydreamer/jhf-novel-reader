@@ -1,0 +1,130 @@
+import { useId, useLayoutEffect, useRef, type JSX, type ReactNode } from 'react';
+import { useBackHandler } from '../shell/backStack';
+import { Button } from './Button';
+import { IconButton } from './IconButton';
+import './components.css';
+
+interface SurfaceProps {
+  open: boolean;
+  title: string;
+  onClose(): void;
+  className: string;
+  children: ReactNode;
+  header?(titleId: string): ReactNode;
+}
+
+function ModalSurface({ open, title, onClose, className, children, header }: SurfaceProps) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useBackHandler(open, onClose);
+  useLayoutEffect(() => {
+    const element = dialog.current;
+    if (!open || !element) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // 실제 WebView는 showModal로 최상위 레이어·배경 비활성을 얻는다. jsdom에는 없어서 open 속성으로 대체한다.
+    if (typeof element.showModal === 'function') {
+      if (!element.open) element.showModal();
+    } else element.setAttribute('open', '');
+    element.querySelector<HTMLElement>('.nr-modal__title')?.focus();
+    return () => {
+      if (typeof element.close === 'function' && element.open) element.close();
+      else element.removeAttribute('open');
+      opener?.focus();
+    };
+  }, [open]);
+  if (!open) return null;
+  return (
+    <dialog
+      ref={dialog}
+      className={`nr-modal ${className}`}
+      aria-labelledby={titleId}
+      aria-modal="true"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="nr-modal__surface">
+        {header ? (
+          header(titleId)
+        ) : (
+          <h2 id={titleId} tabIndex={-1} className="nr-modal__title">
+            {title}
+          </h2>
+        )}
+        {children}
+      </div>
+    </dialog>
+  );
+}
+
+export interface DialogProps {
+  open: boolean;
+  title: string;
+  onClose(): void;
+  children: ReactNode;
+  actions?: ReactNode;
+  fullScreen?: { confirmLabel: string; onConfirm(): void; confirmDisabled?: boolean };
+}
+export function Dialog({ open, title, onClose, children, actions, fullScreen }: DialogProps): JSX.Element | null {
+  if (fullScreen)
+    return (
+      <ModalSurface
+        open={open}
+        title={title}
+        onClose={onClose}
+        className="nr-dialog nr-dialog--fullscreen"
+        header={(titleId) => (
+          <div className="nr-dialog__header">
+            <IconButton icon="close" label="닫기" onClick={onClose} />
+            <h2 id={titleId} tabIndex={-1} className="nr-modal__title">
+              {title}
+            </h2>
+            <Button
+              variant="text"
+              disabled={fullScreen.confirmDisabled}
+              onClick={fullScreen.onConfirm}
+            >
+              {fullScreen.confirmLabel}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="nr-dialog__body">{children}</div>
+      </ModalSurface>
+    );
+  return (
+    <ModalSurface open={open} title={title} onClose={onClose} className="nr-dialog">
+      <div className="nr-dialog__body">{children}</div>
+      {actions && <div className="nr-dialog__actions">{actions}</div>}
+    </ModalSurface>
+  );
+}
+
+export function BottomSheet({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose(): void;
+  children: ReactNode;
+}): JSX.Element | null {
+  return (
+    <ModalSurface open={open} title={title} onClose={onClose} className="nr-sheet">
+      <span className="nr-sheet__handle" aria-hidden="true" />
+      {children}
+    </ModalSurface>
+  );
+}
