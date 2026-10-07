@@ -1,0 +1,21 @@
+{
+  "sourceHead": "aeb906b",
+  "device": "SKW-H0",
+  "api": 29,
+  "cancel": {
+    "status": "PASS",
+    "realSseBeforeCancel": true,
+    "modelPosts": 1,
+    "nativeCancelCalls": 1,
+    "settledRequests": 1,
+    "maximumActive": 1,
+    "noAutomaticReplay": true,
+    "noCompletedVersion": true,
+    "priorVersionsPreserved": 4
+  },
+  "cleanProcess": {
+    "status": "PASS",
+    "testHooksRemoved": true,
+    "savedReaderOpen": true
+  }
+}

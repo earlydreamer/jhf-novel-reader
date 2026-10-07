@@ -76,6 +76,12 @@ export function ReaderScreen(props: ReaderScreenProps): JSX.Element {
   return (
     <section aria-label="독서 화면">
       <h1>{props.version.source.title}</h1>
+      {!!props.version.failedParagraphs?.length && (
+        <p role="status">
+          번역하지 못한 {props.version.failedParagraphs.length}개 문단은 원문으로 남겼습니다. 본문의
+          표시를 확인하세요.
+        </p>
+      )}
       <nav aria-label="독서 이동">
         <button onClick={props.onContents} disabled={!props.work}>
           목차

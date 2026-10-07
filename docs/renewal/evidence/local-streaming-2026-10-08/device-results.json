@@ -1,0 +1,57 @@
+{
+  "sourceHead": "aeb906b",
+  "device": "SKW-H0",
+  "api": 29,
+  "upgrade": {
+    "storedVersionsPreserved": 3,
+    "settingsByteExact": true
+  },
+  "rows": {
+    "defaultMode": {
+      "status": "PASS",
+      "mode": "stream"
+    },
+    "firstVisible": {
+      "status": "PASS",
+      "firstVisibleMs": 354,
+      "active": 1,
+      "firstChunkPending": true,
+      "posted": 1
+    },
+    "completed": {
+      "status": "PASS",
+      "actualSourceAndModel": true,
+      "modelPosts": 6,
+      "maximumActive": 1,
+      "firstChunkParagraphs": 8,
+      "paragraphs": 76,
+      "contextTokens": 8192,
+      "segments": 6,
+      "retries": 0,
+      "failedParagraphs": 0,
+      "kanaBlocks": 0,
+      "missingTerms": 0,
+      "firstVisibleMs": 354,
+      "firstChunkCompletedMs": 3901,
+      "storedReadyMs": 42502,
+      "articlePreserved": true,
+      "scrollPreserved": true,
+      "storedTextDisplayed": true
+    },
+    "savedReader": {
+      "status": "PASS",
+      "storedTextExact": true,
+      "positionSaved": true,
+      "modelPosts": 6
+    },
+    "legacyOption": {
+      "status": "PASS",
+      "persistedAfterRestart": true
+    },
+    "cleanProcess": {
+      "status": "PASS",
+      "testHooksRemoved": true,
+      "savedReaderOpen": true
+    }
+  }
+}

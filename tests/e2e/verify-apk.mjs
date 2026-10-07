@@ -208,6 +208,15 @@ export function main() {
     })
     .join('\n');
   auditNativeBrowse(manifest, dexDump, mainDisassembly);
+  assert(
+    dexDump.includes('Lapp/narou/reader/ModelStreamPlugin;'),
+    'Missing compiled model SSE plugin',
+  );
+  assert.match(
+    mainDisassembly,
+    /const-class (v[0-9]+), Lapp\/narou\/reader\/ModelStreamPlugin;[^]*?invoke-virtual \{v[0-9]+, \1\}, Lapp\/narou\/reader\/MainActivity;\.registerPlugin:/,
+    'Model SSE plugin must be registered in app bridge',
+  );
   assert.match(manifest, /android:allowBackup[^\n]*\(type 0x12\)0x0/);
   for (const attribute of ['networkSecurityConfig', 'fullBackupContent', 'dataExtractionRules'])
     assert(manifest.includes(`android:${attribute}`));
@@ -221,13 +230,7 @@ export function main() {
       assert(xml.includes(`"${domain}"`));
   }
   const signer = signerCommand(process.platform, buildTools);
-  const signature = run(signer.file, [
-    ...signer.args,
-    'verify',
-    '--verbose',
-    '--print-certs',
-    apk,
-  ]);
+  const signature = run(signer.file, [...signer.args, 'verify', '--verbose', '--print-certs', apk]);
   assert(signature.includes('Verified using v2 scheme (APK Signature Scheme v2): true'));
   const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
   const report = {

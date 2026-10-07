@@ -29,7 +29,12 @@ function date(value: unknown) {
   check(Number.isFinite(Date.parse(value)));
 }
 export function selected(value: unknown): asserts value is SelectedModel {
-  object(value, ['connection', 'modelId', 'limits']);
+  object(value, ['connection', 'modelId', 'limits', 'translationMode']);
+  check(
+    value.translationMode === undefined ||
+      value.translationMode === 'stream' ||
+      value.translationMode === 'legacy',
+  );
   text(value.modelId);
   check(value.modelId.length <= 256);
   object(value.connection, ['provider', 'baseUrl', 'authRef', 'revision']);
@@ -57,6 +62,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'createdAt',
     'provenance',
     'quality',
+    'failedParagraphs',
   ]);
   check(value.schemaVersion === 2);
   identifier(value.versionId);
@@ -174,13 +180,28 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     check(
       p.provider === 'openai-compatible' &&
         ((p.promptVersion === 'hymt2-segments-v1' && g.mode === 'segments-v1') ||
-          (p.promptVersion === 'lines-v1' && g.mode === 'lines-v1')),
+          (p.promptVersion === 'lines-v1' && g.mode === 'lines-v1') ||
+          (p.promptVersion === 'colomo-local-v1' && g.mode === 'colomo-local-v1')),
     );
     integer(g.segments, 1);
     if (g.continuations !== undefined) integer(g.continuations, 0);
     if (g.estimator !== undefined)
       check(g.estimator === 'utf8-v1' || g.estimator === 'gemma-e4b-v1');
     check(validLocalLimits(g));
+  }
+  if (value.failedParagraphs !== undefined) {
+    check(Array.isArray(value.failedParagraphs));
+    const failures = value.failedParagraphs as number[];
+    const blocks = value.blocks as unknown[];
+    check(
+      failures.every(
+        (index, i) =>
+          Number.isSafeInteger(index) &&
+          index >= 0 &&
+          index < blocks.length &&
+          (i === 0 || index > failures[i - 1]!),
+      ),
+    );
   }
   return value as unknown as CompletedTranslation;
 }

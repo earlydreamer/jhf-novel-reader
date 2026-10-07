@@ -1,8 +1,12 @@
 import type { JSX } from 'react';
 import type { CatalogStatus } from '../app/renewalController';
+import { StreamingReader } from './StreamingReader';
 import type { ErrorCode } from '../contracts';
 import type { ChapterRef, ConnectionConfig, TranslationState } from '../contracts/reading';
 export interface TranslationScreenProps {
+  streaming?: boolean;
+  fontSize?: number;
+  onPreviewPosition?(index: number, offset: number): void;
   chapter: ChapterRef;
   connection: ConnectionConfig;
   modelId: string | null;
@@ -46,6 +50,7 @@ const errors: Partial<Record<ErrorCode, string>> = {
   storage: '기기 저장소를 읽거나 쓰지 못했습니다. 기기 상태를 확인하세요.',
 };
 export function TranslationScreen(props: TranslationScreenProps): JSX.Element {
+  if (props.streaming) return <StreamingReader {...props} />;
   const active = ['preparing', 'translating', 'validating', 'saving'].includes(props.state.phase);
   return (
     <section aria-label="회차 번역">

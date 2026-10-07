@@ -65,6 +65,11 @@ function RouteScreen({
     case 'translation':
       return state.chapter ? (
         <TranslationScreen
+          streaming={
+            state.translationMode === 'stream' && state.connection.provider === 'openai-compatible'
+          }
+          fontSize={state.fontSize}
+          onPreviewPosition={controller.previewPosition}
           chapter={state.chapter}
           connection={state.connection}
           modelId={state.selectedModelId}
@@ -116,6 +121,7 @@ function RouteScreen({
           onChange={controller.changeConnection}
           onCheck={controller.checkConnection}
           onSelect={controller.chooseModel}
+          onMode={controller.changeTranslationMode}
         />
       );
   }

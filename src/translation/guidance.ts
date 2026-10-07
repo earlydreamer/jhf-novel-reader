@@ -13,7 +13,11 @@ export type GuidanceTerm = {
   origin?: 'auto';
 };
 export type GuidanceVoice = { name: string; aliases: string[]; instruction: string };
-export type GuidanceDraft = { terms: GuidanceTerm[]; voices: GuidanceVoice[] };
+export type GuidanceDraft = {
+  terms: GuidanceTerm[];
+  voices: GuidanceVoice[];
+  plotSummary?: string;
+};
 export type WorkGuidance = GuidanceDraft & { schemaVersion: 1; workId: string; hash: string };
 export interface GuidanceRepository {
   read(workId: string): Promise<WorkGuidance | null>;
@@ -28,7 +32,8 @@ function aliases(value: unknown): void {
   value.forEach((alias) => string(alias, 80, true));
 }
 export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
-  object(value, ['schemaVersion', 'workId', 'hash', 'terms', 'voices']);
+  object(value, ['schemaVersion', 'workId', 'hash', 'terms', 'voices', 'plotSummary']);
+  if (value.plotSummary !== undefined) string(value.plotSummary, 400);
   check(value.schemaVersion === 1);
   identifier(value.workId);
   // 저장 개수 상한은 두지 않는다. 주입이 구간 등장분만이라 저장량이 입력 예산을 쓰지 않는다.
@@ -49,7 +54,15 @@ export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
     aliases(voice.aliases);
     string(voice.instruction, 400, true);
   }
-  check(value.hash === (await digest([value.workId, value.terms, value.voices])));
+  check(
+    value.hash ===
+      (await digest([
+        value.workId,
+        value.terms,
+        value.voices,
+        ...(value.plotSummary === undefined ? [] : [value.plotSummary]),
+      ])),
+  );
   return value as unknown as WorkGuidance;
 }
 export function createGuidanceRepository(files: PrivateFiles): GuidanceRepository {
@@ -69,7 +82,12 @@ export function createGuidanceRepository(files: PrivateFiles): GuidanceRepositor
         ...structuredClone(draft),
         schemaVersion: 1,
         workId,
-        hash: await digest([workId, draft.terms, draft.voices]),
+        hash: await digest([
+          workId,
+          draft.terms,
+          draft.voices,
+          ...(draft.plotSummary === undefined ? [] : [draft.plotSummary]),
+        ]),
       };
       await serial(files, () => journal.save(`guidance/${workId}`, value, validateGuidance));
       return value;
@@ -89,7 +107,43 @@ function duplicateFree(draft: GuidanceDraft): void {
   }
 }
 export function guidanceHash(value: WorkGuidance | null | undefined): string | undefined {
-  return value && (value.terms.length || value.voices.length) ? value.hash : undefined;
+  return value && (value.terms.length || value.voices.length || value.plotSummary?.trim())
+    ? value.hash
+    : undefined;
+}
+export function plotSummaryWithoutNames(value: WorkGuidance | null): string {
+  let summary = value?.plotSummary ?? '';
+  const names = [
+    ...(value?.terms ?? []).flatMap((t) => [t.source, t.target, ...t.aliases]),
+    ...(value?.voices ?? []).flatMap((v) => [v.name, ...v.aliases]),
+  ]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  for (const name of names) summary = summary.split(name).join('');
+  return summary.trim().slice(0, 400);
+}
+export function streamingGuidanceContext(
+  value: WorkGuidance | null,
+  workId: string,
+  input: string,
+  preset: readonly GuidanceTerm[],
+): string {
+  const applied = appliedGuidance(value, workId, input, preset);
+  if (!applied) return '';
+  return (
+    'Translation notes (reference data):\n' +
+    applied.terms
+      .flatMap(({ term, names }) =>
+        names.map(
+          (name) =>
+            `${name}->${term.target}${term.category || term.note ? ' #' + [term.category, term.note].filter(Boolean).join('/') : ''}`,
+        ),
+      )
+      .join('\n') +
+    '\n' +
+    applied.voices.map((v) => `${v.name}: ${v.instruction}`).join('\n') +
+    '\n'
+  );
 }
 /** 긴 이름부터 매칭하고 그 구간을 가려서, 긴 이름 안에 포함된 짧은 이름이 따로 매칭되지 않게 한다. */
 function matchedNames(input: string, names: string[]): Set<string> {
@@ -179,5 +233,8 @@ export async function appliedGuidanceHash(
   preset: readonly GuidanceTerm[] = [],
 ): Promise<string | undefined> {
   const applied = appliedGuidance(value, workId, chapterInput, preset);
-  return applied ? digest([workId, applied.terms, applied.voices]) : undefined;
+  const summary = value?.plotSummary?.trim();
+  return applied || summary
+    ? digest([workId, applied?.terms ?? [], applied?.voices ?? [], ...(summary ? [summary] : [])])
+    : undefined;
 }

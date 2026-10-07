@@ -21,6 +21,7 @@ import {
   type LineUnit,
 } from '../translation/lines';
 import { hasCalibratedEstimator } from '../translation/tokenEstimate';
+import { translateLocalStream } from './localStreaming';
 /** 회차당 이어 보내기 상한(사용자 승인, 2026-10-07). 출력 보정·재번역 호출은 하지 않는다. */
 const MAX_CONTINUATIONS = 8;
 export function normalizeChapterInput(source: SourceSnapshot): string {
@@ -99,6 +100,10 @@ export function createProviderSession(
         request.token.chapterId !== request.source.chapterId
       )
         throw new ReaderError('invalid_output');
+      if (snapshot.translationMode === 'stream') {
+        if (request.promptVersion !== 'colomo-local-v1') throw new ReaderError('invalid_output');
+        return translateLocalStream(request,snapshot,transport,`${base}/chat/completions`,await authorization(connection,secrets,signal),signal);
+      }
       if (limits && request.promptVersion !== 'lines-v1') throw new ReaderError('invalid_output');
       const chapterReference = request.reference?.(normalizeChapterInput(request.source)) ?? '';
       if (chapterReference && !limits) throw new ReaderError('input_limit');

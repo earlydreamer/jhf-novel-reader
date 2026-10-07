@@ -135,6 +135,24 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.nr-stream-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.nr-stream-toolbar p {
+  flex: 1;
+}
+.nr-stream-body {
+  min-height: 40vh;
+  max-height: 70vh;
+}
+.nr-stream-caption,
+.nr-stream-empty {
+  color: #58685c;
+  font-size: 0.9rem;
+}
 @media (max-width: 420px) {
   .nr-application {
     padding: 0.75rem;
