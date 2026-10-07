@@ -4,7 +4,15 @@ import type {
   PhaseDurations,
   WholeChapterFlow,
 } from '../translation/wholeChapter';
-import type { ReadingSettings } from '../storage/settings';
+import {
+  LINE_HEIGHTS,
+  READING_BACKGROUNDS,
+  THEME_PREFERENCES,
+  type LineHeight,
+  type ReadingBackground,
+  type ReadingSettings,
+  type ThemePreference,
+} from '../storage/settings';
 import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
 import { ReaderError } from '../contracts';
 import type {
@@ -120,6 +128,9 @@ export interface RenewalSnapshot {
   readonly localLimits?: LocalTranslationLimits;
   readonly catalogStatus: CatalogStatus;
   readonly fontSize: number;
+  readonly theme: ThemePreference;
+  readonly readingBackground: ReadingBackground;
+  readonly lineHeight: LineHeight;
   readonly showOriginal: boolean;
   readonly error: string | null;
   readonly busy: boolean;
@@ -205,6 +216,9 @@ export interface RenewalController {
   showContents(): void;
   adjacentChapter(direction: -1 | 1): void;
   changeFontSize(fontSize: number): void;
+  changeTheme(theme: ThemePreference): void;
+  changeReadingBackground(value: ReadingBackground): void;
+  changeLineHeight(value: LineHeight): void;
   savePosition(blockId: string, offset: number): Promise<void>;
   showOriginal(show: boolean): void;
   dispose(): void;
@@ -243,6 +257,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     selectedModelId: null,
     catalogStatus: dependencies.connect || dependencies.catalog ? 'idle' : 'unavailable',
     fontSize: 18,
+    theme: 'system',
+    readingBackground: 'theme',
+    lineHeight: 1.8,
     showOriginal: false,
     error: null,
     busy: false,
@@ -280,6 +297,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const value: ReadingSettings = {
       schemaVersion: 2,
       fontSize: snapshot.fontSize,
+      ...(snapshot.theme !== 'system' ? { theme: snapshot.theme } : {}),
+      ...(snapshot.readingBackground !== 'theme'
+        ? { readingBackground: snapshot.readingBackground }
+        : {}),
+      ...(snapshot.lineHeight !== 1.8 ? { lineHeight: snapshot.lineHeight } : {}),
       ...(snapshot.autoTranslate ? {} : { autoTranslate: false }),
       ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
       selection: snapshot.selectedModelId
@@ -668,6 +690,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
               saved.selection?.translationMode ?? dependencies.defaultTranslationMode ?? 'legacy',
             localLimits: undefined,
             fontSize: saved.fontSize,
+            theme: saved.theme ?? 'system',
+            readingBackground: saved.readingBackground ?? 'theme',
+            lineHeight: saved.lineHeight ?? 1.8,
             autoTranslate: saved.autoTranslate ?? true,
             autoRetryFailed: saved.autoRetryFailed ?? saved.selection?.autoRetryFailed ?? true,
           });
@@ -1398,6 +1423,21 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       persistSettings();
     }
   }
+  function changeTheme(theme: ThemePreference): void {
+    if (!THEME_PREFERENCES.includes(theme) || theme === snapshot.theme) return;
+    publish({ theme });
+    persistSettings();
+  }
+  function changeReadingBackground(value: ReadingBackground): void {
+    if (!READING_BACKGROUNDS.includes(value) || value === snapshot.readingBackground) return;
+    publish({ readingBackground: value });
+    persistSettings();
+  }
+  function changeLineHeight(value: LineHeight): void {
+    if (!LINE_HEIGHTS.includes(value) || value === snapshot.lineHeight) return;
+    publish({ lineHeight: value });
+    persistSettings();
+  }
   async function savePosition(blockId: string, offset: number): Promise<void> {
     const version = snapshot.version;
     if (
@@ -1683,6 +1723,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     showContents,
     adjacentChapter,
     changeFontSize,
+    changeTheme,
+    changeReadingBackground,
+    changeLineHeight,
     savePosition,
     showOriginal(showOriginal: boolean): void {
       publish({ showOriginal });

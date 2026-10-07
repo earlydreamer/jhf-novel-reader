@@ -4,17 +4,41 @@ import { StorageError, storageError } from './errors';
 import { check, integer, object, snapshot as cloneInput } from './validation';
 export type PreferenceBackend = Pick<PreferencesPlugin, 'get' | 'set'>;
 const queues = new WeakMap<PreferenceBackend, Promise<unknown>>();
+export type ThemePreference = 'system' | 'light' | 'dark';
+export type ReadingBackground = 'theme' | 'sepia' | 'black';
+export type LineHeight = 1.6 | 1.8 | 2;
+export const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
+export const READING_BACKGROUNDS: readonly ReadingBackground[] = ['theme', 'sepia', 'black'];
+export const LINE_HEIGHTS: readonly LineHeight[] = [1.6, 1.8, 2];
 export type ReadingSettings = {
   schemaVersion: 2;
   selection: import('../contracts').SelectedModel | null;
   fontSize: number;
   autoTranslate?: boolean;
   autoRetryFailed?: boolean;
+  theme?: ThemePreference;
+  readingBackground?: ReadingBackground;
+  lineHeight?: LineHeight;
 };
 function readingSettings(value: unknown): ReadingSettings {
-  object(value, ['schemaVersion', 'selection', 'fontSize', 'autoTranslate', 'autoRetryFailed']);
+  object(value, [
+    'schemaVersion',
+    'selection',
+    'fontSize',
+    'autoTranslate',
+    'autoRetryFailed',
+    'theme',
+    'readingBackground',
+    'lineHeight',
+  ]);
   check(value.autoTranslate === undefined || typeof value.autoTranslate === 'boolean');
   check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
+  check(value.theme === undefined || THEME_PREFERENCES.includes(value.theme as ThemePreference));
+  check(
+    value.readingBackground === undefined ||
+      READING_BACKGROUNDS.includes(value.readingBackground as ReadingBackground),
+  );
+  check(value.lineHeight === undefined || LINE_HEIGHTS.includes(value.lineHeight as LineHeight));
   if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 2)
     throw new StorageError('unsupported_schema');
   check(value.schemaVersion === 2);
