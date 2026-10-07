@@ -118,3 +118,18 @@ it('full-screen dialog has a close icon and a confirm action', () => {
   expect(onConfirm).toHaveBeenCalledTimes(1);
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+it('Escape in a nested dialog closes only the inner dialog', () => {
+  const outer = vi.fn();
+  const inner = vi.fn();
+  render(
+    <Dialog open title="바깥 대화상자" onClose={outer}>
+      <Dialog open title="안쪽 대화상자" onClose={inner}>
+        <p>안쪽 본문</p>
+      </Dialog>
+    </Dialog>,
+  );
+  fireEvent.keyDown(screen.getByRole('dialog', { name: '안쪽 대화상자' }), { key: 'Escape' });
+  expect(inner).toHaveBeenCalledTimes(1);
+  expect(outer).not.toHaveBeenCalled();
+});

@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Dialog } from '../../../src/ui/components/Modal';
 import { Menu } from '../../../src/ui/components/Menu';
 import { runTopBackHandler } from '../../../src/ui/shell/backStack';
 afterEach(cleanup);
@@ -102,4 +103,18 @@ it('flips upward on every open near the bottom edge', () => {
   } finally {
     spy.mockRestore();
   }
+});
+
+it('Escape on a menu inside a dialog closes only the menu', () => {
+  const onClose = vi.fn();
+  render(
+    <Dialog open title="작품 B를 서재에서 제거할까요?" onClose={onClose}>
+      <Menu label="더보기" items={[{ label: '서재로 가기', onSelect: () => {} }]} />
+    </Dialog>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.getByRole('dialog', { name: '작품 B를 서재에서 제거할까요?' })).toBeInTheDocument();
+  expect(onClose).not.toHaveBeenCalled();
 });

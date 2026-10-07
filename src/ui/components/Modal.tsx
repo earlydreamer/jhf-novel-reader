@@ -46,6 +46,8 @@ function ModalSurface({ open, title, onClose, className, children, header }: Sur
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
+          // 중첩된 대화상자에서 Esc를 처리한 뒤 바깥 대화상자까지 닫히지 않도록 전파를 멈춘다.
+          event.stopPropagation();
           onClose();
         }
       }}

@@ -67,6 +67,8 @@ export function Menu({
     else if (event.key === 'End') move(entries.length - 1);
     else if (event.key === 'Escape') {
       event.preventDefault();
+      // 메뉴가 대화상자 안에 있어도 Esc는 메뉴만 닫는다.
+      event.stopPropagation();
       close();
     } else if (event.key === 'Tab') close(false);
   }
