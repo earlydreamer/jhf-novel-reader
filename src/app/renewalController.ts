@@ -30,6 +30,14 @@ import type {
   CandidateChoice,
 } from '../translation/batch';
 import type { GuidanceDraft, GuidanceRepository, WorkGuidance } from '../translation/guidance';
+import {
+  displayedTitle,
+  workTitleInputs,
+  type SavedTitle,
+  type TitleInput,
+  type TitleRepository,
+  type TitleTranslation,
+} from '../translation/titles';
 
 export type CatalogStatus =
   | 'idle'
@@ -44,6 +52,8 @@ export type CatalogStatus =
   | 'unavailable';
 export type SourceChangeStatus = 'idle' | 'checking' | 'unchanged' | 'changed' | 'unavailable';
 export interface RenewalDependencies {
+  readonly titles?: TitleRepository;
+  readonly translateTitles?: TitleTranslation;
   readonly defaultTranslationMode?: 'stream' | 'legacy';
   readonly streamingAvailable?: boolean;
   readonly library?: LibraryStore;
@@ -78,6 +88,11 @@ export interface RenewalDependencies {
   ) => Promise<void>;
 }
 export interface RenewalSnapshot {
+  readonly titles: readonly SavedTitle[];
+  readonly titlesBusy: boolean;
+  readonly titlesError: string | null;
+  readonly titlesAvailable: boolean;
+  readonly recentTitles: Readonly<Record<string, string>>;
   readonly autoTranslate: boolean;
   readonly autoRetryFailed: boolean;
   readonly paragraphRepair: boolean;
@@ -150,6 +165,8 @@ function errorLabel(error: unknown): CatalogStatus {
   return 'model_list';
 }
 export interface RenewalController {
+  translateTitles(key?: string): Promise<void>;
+  saveTitle(key: string, target: string): Promise<void>;
   changeAutoTranslate(enabled: boolean): void;
   changeAutoRetryFailed(enabled: boolean): void;
   retryParagraphs(indexes?: readonly number[]): Promise<void>;
@@ -200,6 +217,11 @@ interface ActiveTranslation {
 }
 export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
   let snapshot: RenewalSnapshot = {
+    titles: [],
+    titlesBusy: false,
+    titlesError: null,
+    titlesAvailable: Boolean(dependencies.titles),
+    recentTitles: {},
     autoTranslate: true,
     autoRetryFailed: true,
     paragraphRepair: false,
@@ -286,6 +308,215 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let sourceAbort: AbortController | null = null;
   let automaticRequest: { chapterId: string; operation: number } | null = null;
   let retryableRepair: ParagraphRepair | null = null;
+  const titlesByWork = new Map<string, readonly SavedTitle[]>();
+  const titleAttempts = new Set<string>();
+  let titleAbort: AbortController | null = null;
+  let titleJob: Promise<void> | null = null;
+  let titleSaveJob: Promise<void> | null = null;
+  function titleInputs(): TitleInput[] {
+    const work = snapshot.work;
+    if (!work) return [];
+    const inputs = workTitleInputs(work);
+    if (snapshot.route.kind !== 'work') {
+      const source = snapshot.version?.source;
+      if (source?.workId === work.workId && source.chapterId === snapshot.chapter?.chapterId)
+        return inputs.map((input) =>
+          input.key === source.chapterId ? { ...input, source: source.title } : input,
+        );
+    }
+    return inputs;
+  }
+  async function loadTitles(workId: string) {
+    if (!dependencies.titles) return;
+    try {
+      const entries = await dependencies.titles.read(workId);
+      const attempts = await dependencies.titles.readAttempts(workId);
+      attempts.forEach((input) =>
+        titleAttempts.add(JSON.stringify([workId, input.key, input.source])),
+      );
+      titlesByWork.set(workId, entries);
+      if (snapshot.work?.workId === workId) {
+        const current = workTitleInputs(snapshot.work);
+        const unresolved = attempts.some(
+          (input) =>
+            current.some((title) => title.key === input.key && title.source === input.source) &&
+            !entries.some((entry) => entry.key === input.key && entry.source === input.source),
+        );
+        publish({
+          titles: entries,
+          titlesError: unresolved
+            ? '이전에 완료되지 않은 제목 번역이 있습니다. 해당 제목은 자동 재요청하지 않습니다. 제목 옆에서 다시 번역할 수 있습니다.'
+            : null,
+        });
+      }
+    } catch {
+      titlesByWork.delete(workId);
+      if (snapshot.work?.workId === workId)
+        publish({
+          titles: [],
+          titlesError: '제목 저장본을 읽지 못했습니다. 자동 제목 번역을 중단했습니다.',
+        });
+    }
+  }
+  function requestTitleTranslation() {
+    if (
+      snapshot.autoTranslate &&
+      snapshot.work &&
+      titlesByWork.has(snapshot.work.workId) &&
+      ['work', 'reader', 'translation'].includes(snapshot.route.kind)
+    )
+      void translateTitles(undefined, true);
+  }
+  async function stopTitles() {
+    titleAbort?.abort();
+    await titleJob;
+    await titleSaveJob;
+  }
+  async function translateTitles(
+    key?: string,
+    automatic = false,
+    currentOnly = false,
+  ): Promise<void> {
+    if (
+      !dependencies.titles ||
+      !dependencies.translateTitles ||
+      !snapshot.work ||
+      titleJob ||
+      titleSaveJob ||
+      disposed ||
+      !initialized ||
+      !foreground ||
+      snapshot.busy ||
+      activeTranslation ||
+      dependencies.flow?.active ||
+      dependencies.batch?.active ||
+      snapshot.pendingSaveChapter ||
+      (automatic && (!snapshot.autoTranslate || !titlesByWork.has(snapshot.work.workId)))
+    )
+      return;
+    const workId = snapshot.work.workId;
+    const inputs = titleInputs()
+      .filter(
+        (input) =>
+          !currentOnly || input.key === workId || input.key === snapshot.chapter?.chapterId,
+      )
+      .filter((input) =>
+        key
+          ? input.key === key
+          : /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(input.source) &&
+            !snapshot.titles.some(
+              (entry) => entry.key === input.key && entry.source === input.source,
+            ) &&
+            (!automatic || !titleAttempts.has(JSON.stringify([workId, input.key, input.source]))),
+      );
+    if (!inputs.length) return;
+    const control = new AbortController();
+    titleAbort = control;
+    publish({ titlesBusy: true, titlesError: null });
+    const job = (async () => {
+      try {
+        if (snapshot.catalogStatus === 'idle' && snapshot.selectedModelId) await checkConnection();
+        if (control.signal.aborted || disposed) return;
+        if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
+          if (!automatic)
+            publish({ titlesError: '설정에서 서버를 연결하고 번역 모델을 선택하세요.' });
+          return;
+        }
+        const selected: SelectedModel = {
+          connection: { ...snapshot.connection },
+          modelId: snapshot.selectedModelId,
+          ...(snapshot.localLimits ? { limits: { ...snapshot.localLimits } } : {}),
+          ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
+        };
+        for (let cursor = 0; cursor < inputs.length; cursor += 8) {
+          if (control.signal.aborted || disposed || !foreground) return;
+          const batch = inputs.slice(cursor, cursor + 8);
+          await dependencies.titles!.recordAttempt(workId, batch);
+          if (control.signal.aborted || disposed) return;
+          batch.forEach((input) =>
+            titleAttempts.add(JSON.stringify([workId, input.key, input.source])),
+          );
+          const results = await dependencies.translateTitles!(
+            selected,
+            workId,
+            batch,
+            control.signal,
+          );
+          if (
+            control.signal.aborted ||
+            disposed ||
+            selected.connection.revision !== snapshot.connection.revision
+          )
+            return;
+          if (results.length !== batch.length) throw new ReaderError('invalid_output');
+          const entries: SavedTitle[] = batch.flatMap((input, index) =>
+            results[index]
+              ? [
+                  {
+                    ...input,
+                    target: results[index]!,
+                    origin: 'model',
+                    modelId: selected.modelId,
+                    updatedAt: new Date().toISOString(),
+                  },
+                ]
+              : [],
+          );
+          if (entries.length) {
+            const saved = await dependencies.titles!.save(workId, entries);
+            titlesByWork.set(workId, saved);
+            if (snapshot.work?.workId === workId) publish({ titles: saved });
+          }
+          if (results.some((result) => !result))
+            publish({
+              titlesError:
+                '일부 제목을 번역하지 못했습니다. 기존 제목을 유지했습니다. 제목 옆에서 다시 번역할 수 있습니다.',
+            });
+        }
+      } catch (error) {
+        if (!control.signal.aborted && !disposed && snapshot.work?.workId === workId)
+          publish({
+            titlesError:
+              error instanceof ReaderError && error.code === 'timeout_unknown'
+                ? '제목 요청 결과를 확인하지 못했습니다. 자동으로 재전송하지 않습니다. 제목 옆에서 다시 번역할 수 있습니다.'
+                : '제목 번역 또는 저장에 실패했습니다. 기존 제목을 유지했습니다. 제목 옆에서 다시 번역할 수 있습니다.',
+          });
+      }
+    })();
+    titleJob = job;
+    try {
+      await job;
+    } finally {
+      if (titleJob === job) {
+        titleJob = null;
+        titleAbort = null;
+        publish({ titlesBusy: false });
+        runAutomaticTranslation();
+      }
+    }
+  }
+  async function saveTitle(key: string, target: string): Promise<void> {
+    const workId = snapshot.work?.workId;
+    const input = titleInputs().find((input) => input.key === key);
+    if (!dependencies.titles || !workId || !input || disposed || titleSaveJob)
+      throw new ReaderError('storage');
+    titleAbort?.abort();
+    const generation = titleJob;
+    const job = (async () => {
+      await generation;
+      const entries = await dependencies.titles!.save(workId, [
+        { ...input, target: target.trim(), origin: 'user', updatedAt: new Date().toISOString() },
+      ]);
+      titlesByWork.set(workId, entries);
+      if (snapshot.work?.workId === workId) publish({ titles: entries, titlesError: null });
+    })();
+    titleSaveJob = job;
+    try {
+      await job;
+    } finally {
+      if (titleSaveJob === job) titleSaveJob = null;
+    }
+  }
   const pendingPositions = new Map<string, ReadingPosition>();
   let positionDrain: Promise<void> | null = null;
   function requestAutomaticTranslation() {
@@ -334,11 +565,20 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     snapshot = {
       ...snapshot,
       ...update,
+      recentTitles: Object.fromEntries(
+        [...worksById.values()].flatMap((work) =>
+          workTitleInputs(work).map((input) => [
+            input.key,
+            displayedTitle(titlesByWork.get(work.workId) ?? [], input.key, input.source),
+          ]),
+        ),
+      ),
       pendingSaveChapter: pending ? (chaptersById.get(pending.source.chapterId) ?? null) : null,
     };
     listeners.forEach((listener) => listener());
   }
   function navigate(route: Route): void {
+    titleAbort?.abort();
     automaticRequest = null;
     sourceOperation++;
     selectionOperation++;
@@ -347,6 +587,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     publish({ route, showOriginal: false, error: null, busy: false });
   }
   function back(): void {
+    titleAbort?.abort();
     automaticRequest = null;
     sourceOperation++;
     sourceAbort?.abort();
@@ -383,6 +624,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (route.kind === 'translation' && settledToken?.chapterId === route.chapterId)
       showNonAdoptingOutcome(settledToken);
     requestAutomaticTranslation();
+    if (snapshot.work) publish({ titles: titlesByWork.get(snapshot.work.workId) ?? [] });
+    requestTitleTranslation();
   }
   async function initialize(): Promise<void> {
     if (initialization || disposed) return initialization ?? undefined;
@@ -394,6 +637,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             lifecycleEvents++;
             foreground = active;
             if (!active && activeTranslation) activeTranslation.cancelled = true;
+            if (!active) titleAbort?.abort();
             dependencies.flow?.setForeground(active);
             dependencies.batch?.setForeground(active);
             if (active) runAutomaticTranslation();
@@ -440,7 +684,16 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         // Saved reading does not depend on lifecycle, settings or request recovery.
         if (!disposed && dependencies.library) {
           try {
-            publish({ recent: await dependencies.library.listRecent() });
+            const recent = await dependencies.library.listRecent();
+            publish({ recent });
+            if (dependencies.titles) {
+              for (const entry of recent) {
+                for (const page of await dependencies.library.readWork(entry.workId))
+                  rememberWorkPage(page);
+                await loadTitles(entry.workId);
+              }
+              publish({});
+            }
           } catch {
             publish({ error: '저장된 독서 목록을 불러오지 못했습니다.' });
           }
@@ -570,6 +823,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         workId: work.workId,
         ...(selected ? { selectedChapterId: selected.chapterId } : {}),
       });
+      await loadTitles(work.workId);
+      requestTitleTranslation();
     } catch {
       if (operation === sourceOperation)
         publish({
@@ -598,6 +853,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ];
       savedChaptersByWork.set(work.workId, savedChapterIds);
       publish({ work: mergedWork, savedChapterIds, busy: false });
+      await loadTitles(work.workId);
+      requestTitleTranslation();
     } catch {
       if (operation === sourceOperation)
         publish({ busy: false, error: '다음 목차 페이지를 불러오지 못했습니다. 다시 시도하세요.' });
@@ -621,6 +878,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     return { phase: 'idle', elapsedMs: 0 };
   }
   async function selectChapter(chapter: ChapterRef): Promise<void> {
+    titleAbort?.abort();
     if (livePosition?.chapterId !== chapter.chapterId) livePosition = null;
     if (dependencies.flow?.getSnapshot().pendingSave?.source.chapterId === chapter.chapterId) {
       openPendingSave();
@@ -652,6 +910,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (version) {
         navigate({ kind: 'reader', versionId: version.versionId });
         void checkSourceChange(version, chapter);
+        if (titleJob) void stopTitles().then(() => requestTitleTranslation());
+        else requestTitleTranslation();
       } else {
         navigate({ kind: 'translation', chapterId: chapter.chapterId });
         const routedOperation = selectionOperation;
@@ -699,12 +959,16 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       positionsByVersion.set(version.versionId, position);
       publish({ work, chapter, version, position, savedChapterIds });
       navigate({ kind: 'reader', versionId });
+      await loadTitles(version.source.workId);
       void checkSourceChange(version, chapter);
+      // Cached reading remains offline. Title generation here needs an already checked connection.
+      if (snapshot.catalogStatus === 'connected') requestTitleTranslation();
     } catch {
       publish({ error: '저장된 번역을 불러오지 못했습니다.' });
     }
   }
   function changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void {
+    titleAbort?.abort();
     if (disposed || dependencies.batch?.active) return;
     catalogOperation++;
     catalogAbort?.abort();
@@ -786,6 +1050,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   function chooseModel(modelId: string): void {
+    titleAbort?.abort();
     const model = snapshot.models.find(
       (choice) => choice.id === modelId && choice.supportsGeneration,
     );
@@ -813,6 +1078,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     });
     persistSettings();
     runAutomaticTranslation();
+    requestTitleTranslation();
   }
   async function refreshSource(): Promise<void> {
     const chapter = snapshot.chapter;
@@ -825,6 +1091,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     navigate({ kind: 'translation', chapterId: chapter.chapterId });
   }
   async function translate(repair?: ParagraphRepair): Promise<void> {
+    const intendedChapter = snapshot.chapter?.chapterId;
+    const intendedOperation = selectionOperation;
+    if (titleJob || titleSaveJob) await stopTitles();
+    if (intendedOperation !== selectionOperation || intendedChapter !== snapshot.chapter?.chapterId)
+      return;
     if (
       (!dependencies.startTranslation && !dependencies.flow) ||
       (!session && !dependencies.catalog) ||
@@ -893,6 +1164,14 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         activeTranslation = null;
         publish({ translationActive: false });
         runAutomaticTranslation();
+        requestTitleTranslation();
+        if (
+          !snapshot.autoTranslate &&
+          dependencies.flow?.getCompleted()?.source.chapterId === chapter.chapterId &&
+          snapshot.chapter?.chapterId === chapter.chapterId &&
+          snapshot.version?.versionId === dependencies.flow?.getCompleted()?.versionId
+        )
+          void translateTitles(undefined, false, true);
       }
     }
   }
@@ -1103,6 +1382,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       workId: snapshot.work.workId,
       ...(snapshot.chapter ? { selectedChapterId: snapshot.chapter.chapterId } : {}),
     });
+    requestTitleTranslation();
   }
   function adjacentChapter(direction: -1 | 1): void {
     if (!snapshot.work || !snapshot.chapter || snapshot.busy) return;
@@ -1194,6 +1474,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     );
   }
   async function runBatch(retryUncertain: boolean = false): Promise<void> {
+    await stopTitles();
     if (
       !dependencies.batch ||
       disposed ||
@@ -1214,6 +1495,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ recent: await dependencies.library.listRecent() });
   }
   async function scanBatch(): Promise<void> {
+    await stopTitles();
     if (!initialized || disposed || !foreground || activeTranslation) return;
     if (!batchSelectionIsCurrent()) {
       publish({
@@ -1260,6 +1542,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     publish({ batch, translationActive: batch.active || activeTranslation !== null });
   });
   function dispose(): void {
+    titleAbort?.abort();
     disposed = true;
     sourceOperation++;
     selectionOperation++;
@@ -1274,11 +1557,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     listeners.clear();
   }
   return {
+    translateTitles,
+    saveTitle,
     changeAutoTranslate(enabled) {
       publish({ autoTranslate: enabled });
       if (!enabled) automaticRequest = null;
+      if (!enabled) titleAbort?.abort();
       persistSettings();
       if (enabled) requestAutomaticTranslation();
+      if (enabled) requestTitleTranslation();
     },
     changeAutoRetryFailed(enabled) {
       publish({ autoRetryFailed: enabled });

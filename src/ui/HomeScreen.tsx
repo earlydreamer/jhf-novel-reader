@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { RenewalSnapshot } from '../app/renewalController';
 export interface HomeScreenProps {
   recent: RenewalSnapshot['recent'];
+  recentTitles?: Readonly<Record<string, string>>;
   busy: boolean;
   sourceAvailable: boolean;
   onBrowse?(): void;
@@ -21,7 +22,8 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
           {props.recent.map((entry) => (
             <li key={entry.versionId}>
               <button onClick={() => props.onContinue(entry.versionId)}>
-                {entry.workId} · {entry.chapterId} 이어 읽기
+                {props.recentTitles?.[entry.workId] ?? entry.workId} ·{' '}
+                {props.recentTitles?.[entry.chapterId] ?? entry.chapterId} 이어 읽기
               </button>
             </li>
           ))}

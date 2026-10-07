@@ -3,6 +3,8 @@ import type { ChapterRef, WorkPage } from '../contracts/reading';
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
 import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
+import { TitleHeading, type TitleControls } from './TitleHeading';
+import { displayedTitle } from '../translation/titles';
 export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   work: WorkPage;
   selectedChapterId?: string;
@@ -11,6 +13,7 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   onSelect(chapter: ChapterRef): void;
   onLoadMore(): void;
   guidance?: Omit<GuidancePanelProps, 'workId'>;
+  titles?: TitleControls;
 }
 export function WorkScreen({
   work,
@@ -29,14 +32,26 @@ export function WorkScreen({
   onRetryBatchSave,
   onSettings,
   guidance,
+  titles,
 }: WorkScreenProps): JSX.Element {
   return (
     <section aria-label="작품 목차">
-      <h1>{work.title}</h1>
+      <TitleHeading
+        key={`title:${work.workId}`}
+        titleKey={work.workId}
+        source={work.title}
+        label="작품 제목"
+        controls={titles}
+      />
       <a href={work.canonicalUrl} target="_blank" rel="noreferrer">
         작품 원문
       </a>
       <h2>목차</h2>
+      {titles && (
+        <button disabled={titles.busy} onClick={() => void titles.onTranslate()}>
+          미번역 목차 제목 번역
+        </button>
+      )}
       {guidance && (
         <GuidancePanel
           key={work.workId}
@@ -81,8 +96,15 @@ export function WorkScreen({
             aria-current={chapter.chapterId === selectedChapterId ? 'true' : undefined}
           >
             <button disabled={busy} onClick={() => onSelect(chapter)}>
-              {chapter.title}
+              {displayedTitle(titles?.entries ?? [], chapter.chapterId, chapter.title)}
             </button>
+            <TitleHeading
+              titleKey={chapter.chapterId}
+              source={chapter.title}
+              label={`${chapter.ordinal}화 제목`}
+              controls={titles}
+              inline
+            />
             {savedChapterIds.includes(chapter.chapterId) && <span> 번역 저장됨</span>}
             {chapter.chapterId === selectedChapterId && <span> 선택한 회차</span>}
           </li>

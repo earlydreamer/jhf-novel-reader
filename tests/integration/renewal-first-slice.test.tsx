@@ -7,6 +7,7 @@ import { createLastChapterRepository } from '../../src/app/lastChapter';
 import { digest } from '../../src/storage/journal';
 import { createReaderStore } from '../../src/storage/store';
 import { createAttemptRepository } from '../../src/translation/attempts';
+import { createTitleRepository } from '../../src/translation/titles';
 import { StorageError } from '../../src/storage/errors';
 import type { NativeHttpRequest, HttpResponse, AppLifecycle } from '../../src/contracts';
 import { createCacheKey, type CompletedChapter } from '../../src/contracts/legacy';
@@ -134,6 +135,30 @@ function harness() {
 async function prepare(h: ReturnType<typeof harness>) {
   await h.app.initialize();
   h.app.changeAutoTranslate(false);
+  // These tests exercise body-request ownership. Titles are already saved independently.
+  await createTitleRepository(h.adapters.files).save('n1234ab', [
+    {
+      key: 'n1234ab',
+      source: '合成作品',
+      target: '합성 작품',
+      origin: 'user',
+      updatedAt: '2026-10-08T00:00:00Z',
+    },
+    {
+      key: 'n1234ab/1',
+      source: '第一話',
+      target: '1화',
+      origin: 'user',
+      updatedAt: '2026-10-08T00:00:00Z',
+    },
+    {
+      key: 'n1234ab/2',
+      source: '第二話',
+      target: '2화',
+      origin: 'user',
+      updatedAt: '2026-10-08T00:00:00Z',
+    },
+  ]);
   await h.app.browse();
   expect(h.app.getSnapshot().route).toMatchObject({ kind: 'work', selectedChapterId: 'n1234ab/2' });
   await h.app.selectChapter(h.app.getSnapshot().work!.chapters[1]!);
@@ -630,7 +655,7 @@ it('another chapter exposes a route back to save recovery and blocks generation 
   expect(h.posts()).toHaveLength(1);
   expect(screen.queryByRole('button', { name: '저장 대기 중인 번역으로 돌아가기' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '목차' }));
-  fireEvent.click(screen.getByRole('button', { name: '第一話' }));
+  fireEvent.click(screen.getByRole('button', { name: '1화' }));
   await expect.poll(() => h.app.getSnapshot().route.kind).toBe('translation');
   expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(false);
   expect(h.posts()).toHaveLength(1);

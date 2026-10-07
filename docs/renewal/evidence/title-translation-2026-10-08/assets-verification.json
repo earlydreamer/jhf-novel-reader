@@ -1,0 +1,12 @@
+{
+  "assetsExact": true,
+  "assetFiles": 16,
+  "dexExact": true,
+  "dexFiles": 9,
+  "provenance": {
+    "commit": "7f87ff08ae17780f26339fb36db6e3cb12f0ad0d",
+    "tree": "3f2677220d5f229b00e71532bf32d3dadaddb133",
+    "dirty": false
+  },
+  "apkSha256": "c09d8b82dfda319415126ae850de954b4afd9020031d189068295e348dcb7f54"
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type JSX } from 'react';
 import type { TranslationScreenProps } from './TranslationScreen';
 import { ParagraphRetryPanel } from './ParagraphRetryPanel';
+import { TitleHeading } from './TitleHeading';
 export function StreamingReader(props: TranslationScreenProps): JSX.Element {
   const body = useRef<HTMLElement>(null);
   const phase = props.state.phase,
@@ -57,7 +58,13 @@ export function StreamingReader(props: TranslationScreenProps): JSX.Element {
   }
   return (
     <section aria-label={ready ? '독서 화면' : '회차 번역'} className="nr-stream-reader">
-      <h1>{props.chapter.title}</h1>
+      <TitleHeading
+        titleKey={props.chapter.chapterId}
+        source={props.completedVersion?.source.title ?? props.chapter.title}
+        label="회차 제목"
+        controls={props.titles}
+        original={props.showOriginal}
+      />
       <div className="nr-stream-toolbar">
         <p role="status" aria-live="polite">
           {status}
