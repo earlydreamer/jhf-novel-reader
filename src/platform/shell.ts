@@ -19,7 +19,7 @@ export const capacitorShell: ShellPlatform = {
     if (!Capacitor.isNativePlatform()) return () => {};
     const handle = App.addListener('backButton', () => listener());
     return () => {
-      void handle.then((value) => value.remove());
+      void handle.then((value) => value.remove()).catch(() => {});
     };
   },
   exitApp() {
