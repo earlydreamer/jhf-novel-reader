@@ -27,7 +27,11 @@ export function GuidancePanel({
     void onRead(workId)
       .then((value) => {
         if (!mounted) return;
-        setDraft({ terms: value?.terms ?? [], voices: value?.voices ?? [] });
+        setDraft({
+          terms: value?.terms ?? [],
+          voices: value?.voices ?? [],
+          ...(value?.plotSummary !== undefined ? { plotSummary: value.plotSummary } : {}),
+        });
         setAvailable(true);
         setLoadedKey(loadKey);
       })
@@ -50,10 +54,15 @@ export function GuidancePanel({
     setBusy(true);
     try {
       const value = await onSave(workId, {
+        ...(draft.plotSummary !== undefined ? { plotSummary: draft.plotSummary } : {}),
         terms: draft.terms.map((term) => ({ ...term, aliases: term.aliases.filter(Boolean) })),
         voices: draft.voices.map((voice) => ({ ...voice, aliases: voice.aliases.filter(Boolean) })),
       });
-      setDraft({ terms: value.terms, voices: value.voices });
+      setDraft({
+        terms: value.terms,
+        voices: value.voices,
+        ...(value.plotSummary !== undefined ? { plotSummary: value.plotSummary } : {}),
+      });
       setMessage('저장했습니다. 다음 번역에 적용되며 기존 번역은 그대로 남습니다.');
     } catch {
       setMessage(
@@ -78,6 +87,14 @@ export function GuidancePanel({
       </p>
       <fieldset disabled={busy || locked || !available || loadedKey !== loadKey}>
         <legend>용어집</legend>
+        <label>
+          이전 이야기 요약 (선택, 이름 없이 400자 이내)
+          <textarea
+            maxLength={400}
+            value={draft.plotSummary ?? ''}
+            onChange={(event) => change({ ...draft, plotSummary: event.target.value })}
+          />
+        </label>
         {draft.terms.map((term, index) => (
           <fieldset key={index}>
             <legend>용어 {index + 1}</legend>

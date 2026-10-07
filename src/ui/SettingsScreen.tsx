@@ -7,6 +7,7 @@ export interface SettingsScreenProps {
   onChange(value: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
   onCheck(secret: string): Promise<void>;
   onSelect(modelId: string): void;
+  onMode?(mode: 'stream' | 'legacy'): void;
 }
 const catalogLabels: Record<CatalogStatus, string> = {
   idle: '연결 확인 전',
@@ -26,6 +27,7 @@ export function SettingsScreen({
   onChange,
   onCheck,
   onSelect,
+  onMode,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
   function update(value: Partial<Pick<ConnectionConfig, 'provider' | 'baseUrl'>>): void {
@@ -41,6 +43,21 @@ export function SettingsScreen({
   return (
     <section aria-label="연결 설정">
       <h1>연결 설정</h1>
+      {state.streamingAvailable && onMode && (
+        <label>
+          로컬 번역 방식
+          <select
+            aria-label="로컬 번역 방식"
+            value={state.translationMode}
+            disabled={state.translationActive || state.batch?.active || !!state.pendingSaveChapter}
+            onChange={(event) => onMode(event.target.value === 'stream' ? 'stream' : 'legacy')}
+          >
+            <option value="stream">읽으며 번역 (실시간)</option>
+            <option value="legacy">기존 묶음 번역</option>
+          </select>
+          <span>로컬 모델에 적용됩니다. 저장된 번역은 어느 방식에서나 읽을 수 있습니다.</span>
+        </label>
+      )}
       <label>
         제공자
         <select

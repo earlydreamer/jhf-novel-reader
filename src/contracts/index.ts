@@ -77,6 +77,13 @@ export interface NativeHttpRequest {
 export interface NativeHttpClient {
   request(options: NativeHttpRequest): Promise<HttpResponse>;
 }
+export interface NativeStreamingClient {
+  requestStream(
+    options: NativeHttpRequest,
+    signal: AbortSignal,
+    onData: (data: string) => void,
+  ): Promise<HttpResponse>;
+}
 export interface SourceTransport {
   get(url: string, signal: AbortSignal): Promise<HttpResponse>;
 }
@@ -95,6 +102,11 @@ export interface ModelTransport {
     signal: AbortSignal,
   ): Promise<HttpResponse>;
   post(request: ModelRequest, signal: AbortSignal): Promise<HttpResponse>;
+  streamPost?(
+    request: ModelRequest,
+    signal: AbortSignal,
+    onData: (data: string) => void,
+  ): Promise<HttpResponse>;
 }
 export interface AppLifecycle {
   isActive(): Promise<boolean>;

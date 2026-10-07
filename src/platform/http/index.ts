@@ -5,6 +5,7 @@ import type {
   HttpResponse,
   SourceTransport,
   ModelTransport,
+  NativeStreamingClient,
 } from '../../contracts';
 function validateUrl(value: string, source: boolean): URL {
   try {
@@ -108,8 +109,51 @@ export function createSourceTransport(
     },
   };
 }
-export function createModelTransport(client: NativeHttpClient): ModelTransport {
+export function createModelTransport(
+  client: NativeHttpClient,
+  streaming?: NativeStreamingClient,
+): ModelTransport {
   return {
+    ...(streaming
+      ? ({
+          async streamPost(input, signal, onData) {
+            const url = validateUrl(input.url, false);
+            if (
+              input.geminiApiKey !== undefined ||
+              !/^https?:\/\/[^/?#]+(?:\/[A-Za-z0-9._-]+)*\/v1\/chat\/completions$/.test(
+                input.url,
+              ) ||
+              input.url.includes('/../') ||
+              input.url.includes('/./')
+            )
+              throw new ReaderError('connection');
+            if (
+              input.authorization !== undefined &&
+              !/^Bearer [^\s\u007f]+$/.test(input.authorization)
+            )
+              throw new ReaderError('auth');
+            return dispatch(
+              { request: (options) => streaming.requestStream(options, signal, onData) },
+              {
+                url: url.href,
+                method: 'POST',
+                headers: {
+                  Accept: 'text/event-stream',
+                  'Content-Type': 'application/json',
+                  ...(input.authorization ? { Authorization: input.authorization } : {}),
+                },
+                data: { ...input.body, stream: true },
+                responseType: 'text',
+                disableRedirects: true,
+                connectTimeout: 15000,
+                readTimeout: 600000,
+              },
+              signal,
+              false,
+            );
+          },
+        } satisfies Partial<ModelTransport>)
+      : {}),
     async get(input, signal) {
       const url = validateUrl(input.url, false);
       const gemini = input.geminiApiKey !== undefined;

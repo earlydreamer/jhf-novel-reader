@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "sourceHead": "aeb906b",
+  "inputIds": 76,
+  "outputIds": 76,
+  "allIdsExact": true,
+  "allFinishStop": true,
+  "allStreamTrue": true,
+  "allSseDone": true,
+  "sourceParagraphs": 139,
+  "blankParagraphs": 63,
+  "storedTextReassembledExact": true,
+  "maxCurrentParagraphs": 16,
+  "historyPairsSent": 0,
+  "entityMaskedChunks": 0
+}

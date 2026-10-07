@@ -456,6 +456,7 @@ export function createBatchTranslation(dependencies: {
         ? await dependencies.guidance.save(record.work.workId, {
             terms,
             voices: current?.voices ?? [],
+            ...(current?.plotSummary !== undefined ? { plotSummary: current.plotSummary } : {}),
           })
         : current;
       let alreadySaved = 0;

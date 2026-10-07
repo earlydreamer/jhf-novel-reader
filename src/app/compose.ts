@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { capacitorHttpClient } from '../platform/http/capacitor';
+import { createNativeStreamingClient } from '../platform/http/stream';
 import { createModelTransport, createSourceTransport } from '../platform/http';
 import { capacitorLifecycle } from '../platform/lifecycle';
 import { createNativePreferences, createNativePrivateFiles } from '../storage/native';
@@ -66,6 +67,8 @@ export function createRenewalApplication(
     clock: adapters.clock ?? { now: () => performance.now() },
   });
   return createRenewalController({
+    defaultTranslationMode: adapters.modelTransport.streamPost ? 'stream' : 'legacy',
+    streamingAvailable: Boolean(adapters.modelTransport.streamPost),
     source,
     library,
     guidance,
@@ -143,7 +146,7 @@ export function createNativeRenewalApplication(): RenewalController {
     return createRenewalController();
   return createRenewalApplication({
     sourceTransport: createSourceTransport(capacitorHttpClient, { minIntervalMs: 1000 }),
-    modelTransport: createModelTransport(capacitorHttpClient),
+    modelTransport: createModelTransport(capacitorHttpClient, createNativeStreamingClient()),
     files: createNativePrivateFiles(),
     preferences: createNativePreferences(),
     secrets: createNativeSecretStore(),

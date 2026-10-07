@@ -17,6 +17,9 @@ import type { AttemptRepository } from './attempts';
 import { createSingleFlight } from './singleFlight';
 import {
   guidanceContext,
+  appliedGuidance,
+  plotSummaryWithoutNames,
+  streamingGuidanceContext,
   appliedGuidanceHash,
   type GuidanceRepository,
   type WorkGuidance,
@@ -108,16 +111,21 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             : frozenGuidance;
         const preset = referencePreset(selected);
         const segmented = selected.connection.provider === 'openai-compatible' && !!selected.limits;
+        const streaming =
+          selected.connection.provider === 'openai-compatible' &&
+          selected.translationMode === 'stream';
         // 문형 힌트는 구간 번역에서만, 그 구간에 해당 문형이 있을 때만 참고 데이터 앞에 붙는다.
         const reference = (input: string) => {
           const hints = segmented ? contextHints(input) : '';
-          const terms = guidanceContext(guidance, chapter.workId, input, preset);
+          const terms = streaming
+            ? streamingGuidanceContext(guidance, chapter.workId, input, preset)
+            : guidanceContext(guidance, chapter.workId, input, preset);
           return hints ? hints + (terms || '\n') : terms;
         };
         const chapterReference = reference(normalizeChapterInput(source));
         if (
           chapterReference &&
-          (selected.connection.provider !== 'openai-compatible' || !selected.limits)
+          (selected.connection.provider !== 'openai-compatible' || (!selected.limits && !streaming))
         )
           throw new ReaderError('guidance_unsupported');
         const provider = deps.createProvider(selected);
@@ -135,10 +143,19 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             source,
             languageDirection: 'ja-ko',
             contractVersion: 'plain-v1',
-            promptVersion: segmented ? 'lines-v1' : 'hymt2-ko-v1',
+            promptVersion: streaming ? 'colomo-local-v1' : segmented ? 'lines-v1' : 'hymt2-ko-v1',
             onProgress: (completed, total) => publish({ progress: { completed, total } }),
             onPreview: (preview) => publish({ preview }),
             ...(chapterReference ? { reference } : {}),
+            ...(streaming
+              ? {
+                  lockedTerms: (input: string) =>
+                    (appliedGuidance(guidance, chapter.workId, input, [])?.terms ?? []).flatMap(
+                      ({ term, names }) => names.map((source) => ({ source, target: term.target })),
+                    ),
+                  plotSummary: plotSummaryWithoutNames(guidance),
+                }
+              : {}),
           },
           control.signal,
         );
@@ -181,6 +198,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             .map(async (text, index) => ({ id: await digest([versionId, index]), text })),
         );
         const value: CompletedTranslation = {
+          ...(result.failedParagraphs?.length ? { failedParagraphs: result.failedParagraphs } : {}),
           schemaVersion: 2,
           versionId,
           source,
@@ -199,7 +217,12 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             connectionId: await digest([selected.connection.provider, normalizedBaseUrl]),
             modelId: selected.modelId,
             contractVersion: 'plain-v1',
-            promptVersion: result.generation ? 'lines-v1' : 'hymt2-ko-v1',
+            promptVersion:
+              result.generation?.mode === 'colomo-local-v1'
+                ? 'colomo-local-v1'
+                : result.generation
+                  ? 'lines-v1'
+                  : 'hymt2-ko-v1',
             languageDirection: 'ja-ko',
             ...(result.generation ? { generation: result.generation } : {}),
             ...(appliedHash ? { guidanceHash: appliedHash } : {}),
