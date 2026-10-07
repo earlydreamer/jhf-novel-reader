@@ -113,3 +113,15 @@ it('streams native audit outputs larger than the default child-process buffer', 
     rmSync(dir, { recursive: true });
   }
 });
+it('buffers packaged asset output larger than the default child-process limit', async () => {
+  const { runToBuffer } = await import('./verify-apk.mjs');
+  const size = 2 * 1024 * 1024;
+  const value = runToBuffer(
+    process.execPath,
+    ['-e', `process.stdout.write(Buffer.alloc(${size}, 42))`],
+    size,
+  );
+  expect(value.length).toBe(size);
+  expect(value[0]).toBe(42);
+  expect(value[value.length - 1]).toBe(42);
+});
