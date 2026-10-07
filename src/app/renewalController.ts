@@ -602,14 +602,28 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     listeners.forEach((listener) => listener());
   }
   const chapterLevel = (route: Route) => route.kind === 'translation' || route.kind === 'reader';
+  // 회차 단위 경로가 속한 작품 id. 알 수 없으면 null이다.
+  const workIdOf = (route: Route): string | null =>
+    route.kind === 'translation'
+      ? (chaptersById.get(route.chapterId)?.workId ?? null)
+      : route.kind === 'reader'
+        ? (versionsById.get(route.versionId)?.source.workId ?? null)
+        : null;
   function navigate(route: Route): void {
     titleAbort?.abort();
     automaticRequest = null;
     sourceOperation++;
     selectionOperation++;
     sourceAbort?.abort();
-    // 회차끼리의 이동(번역→리더, 이전·다음 화)은 쌓지 않는다. 뒤로 가기 한 번이면 회차에 들어오기 전 화면으로 간다.
-    if (!(chapterLevel(snapshot.route) && chapterLevel(route))) history.push(snapshot.route);
+    // 같은 작품 안의 회차끼리 이동(번역→리더, 이전·다음 화)은 쌓지 않는다. 뒤로 가기 한 번이면 회차에 들어오기 전 화면으로 간다.
+    // 작품이 다르면 쌓아서 뒤로 가기가 원래 회차로 돌아오게 한다. 현재 작품은 스냅샷 대신 현재 경로로 판정한다(openPendingSave는 navigate 전에 chapter를 바꾼다).
+    const currentWork = workIdOf(snapshot.route);
+    const sameWorkChapterMove =
+      chapterLevel(snapshot.route) &&
+      chapterLevel(route) &&
+      currentWork !== null &&
+      currentWork === workIdOf(route);
+    if (!sameWorkChapterMove) history.push(snapshot.route);
     publish({ route, showOriginal: false, error: null, busy: false });
   }
   function back(): void {

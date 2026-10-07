@@ -47,6 +47,23 @@ function version(index: number): CompletedTranslation {
   };
 }
 const versions = chapters.map((_, index) => version(index));
+// 다른 작품의 회차: 작품이 달라지는 이동은 스택에 쌓여야 한다.
+const otherPage: WorkPage = {
+  ...page,
+  workId: 'n5678cd',
+  canonicalUrl: 'https://ncode.syosetu.com/n5678cd/',
+  title: '다른 작품',
+  chapters: [
+    {
+      workId: 'n5678cd',
+      chapterId: 'n5678cd/1',
+      canonicalUrl: 'https://ncode.syosetu.com/n5678cd/1/',
+      title: '1화 제목',
+      ordinal: 1,
+    },
+  ],
+  pageUrl: 'https://ncode.syosetu.com/n5678cd/',
+};
 
 function controller() {
   const app = createRenewalController({
@@ -62,7 +79,10 @@ function controller() {
       savePosition: vi.fn(async () => {}),
       readPosition: vi.fn(async () => null),
     } as never,
-    source: { getWorkPage: async () => page, getChapter: async () => versions[0]!.source } as never,
+    source: {
+      getWorkPage: async (url: string) => (url === otherPage.canonicalUrl ? otherPage : page),
+      getChapter: async () => versions[0]!.source,
+    } as never,
   });
   app.changeAutoTranslate(false);
   return app;
@@ -86,6 +106,20 @@ it('moving between chapters replaces the top entry so back returns to the conten
   app.back();
   expect(app.getSnapshot().route.kind).toBe('home');
   expect(app.canGoBack()).toBe(false);
+  app.dispose();
+});
+
+it('moving to a chapter of another work pushes so back returns to the reader', async () => {
+  const app = controller();
+  await app.openWork(page.canonicalUrl);
+  await app.openWork(otherPage.canonicalUrl);
+  app.back();
+  await app.selectChapter(chapters[0]!);
+  expect(app.getSnapshot().route).toEqual({ kind: 'reader', versionId: 'saved-1' });
+  app.navigate({ kind: 'translation', chapterId: 'n5678cd/1' });
+  expect(app.getSnapshot().route).toEqual({ kind: 'translation', chapterId: 'n5678cd/1' });
+  app.back();
+  expect(app.getSnapshot().route).toEqual({ kind: 'reader', versionId: 'saved-1' });
   app.dispose();
 });
 
