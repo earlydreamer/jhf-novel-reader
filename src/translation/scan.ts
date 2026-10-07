@@ -23,8 +23,21 @@ export function scanNameCandidates(
   preset: readonly GuidanceTerm[] = [],
   minCount = 2,
 ): NameCandidate[] {
+  const scan = createNameCandidateScan(known, preset, minCount);
+  chapters.forEach((chapter) => scan.add(chapter));
+  return scan.result();
+}
+/** 회차 전문을 메모리에 모두 쌓지 않고 범위 전체의 등장 횟수를 모은다. */
+export function createNameCandidateScan(
+  known: readonly GuidanceTerm[],
+  preset: readonly GuidanceTerm[] = [],
+  minCount = 2,
+) {
   const knownKeys = new Set(
-    [...known, ...preset].flatMap((term) => [term.source, ...term.aliases]).map(nameKey),
+    [...known, ...preset]
+      .filter((term) => term.origin !== 'auto')
+      .flatMap((term) => [term.source, ...term.aliases])
+      .map(nameKey),
   );
   const found = new Map<string, NameCandidate>();
   const add = (
@@ -34,7 +47,8 @@ export function scanNameCandidates(
     reading?: string,
   ) => {
     if (knownKeys.has(nameKey(source))) return;
-    const entry = found.get(source) ?? {
+    const key = nameKey(source);
+    const entry = found.get(key) ?? {
       source,
       ...(reading ? { reading } : {}),
       kind,
@@ -42,17 +56,33 @@ export function scanNameCandidates(
       chapterIds: [],
     };
     entry.count++;
+    if (kind === 'ruby') {
+      entry.kind = kind;
+      if (reading) entry.reading = reading;
+    }
     if (!entry.chapterIds.includes(chapterId)) entry.chapterIds.push(chapterId);
-    found.set(source, entry);
+    found.set(key, entry);
   };
-  for (const { chapterId, paragraphs } of chapters)
+  function addChapter({ chapterId, paragraphs }: Pick<Chapter, 'chapterId' | 'paragraphs'>) {
     for (const paragraph of paragraphs) {
       for (const ruby of paragraph.ruby)
         add(paragraph.text.slice(ruby.start, ruby.end), 'ruby', chapterId, ruby.reading);
-      for (const match of paragraph.text.matchAll(KATAKANA_NAME))
+      for (const match of paragraph.text.matchAll(KATAKANA_NAME)) {
+        if (
+          paragraph.ruby.some(
+            (ruby) => match.index >= ruby.start && match.index + match[0].length <= ruby.end,
+          )
+        )
+          continue;
         add(match[0], 'katakana', chapterId);
+      }
     }
-  return [...found.values()]
-    .filter((entry) => entry.kind === 'ruby' || entry.count >= minCount)
-    .sort((left, right) => right.count - left.count);
+  }
+  return {
+    add: addChapter,
+    result: () =>
+      [...found.values()]
+        .filter((entry) => entry.kind === 'ruby' || entry.count >= minCount)
+        .sort((left, right) => right.count - left.count),
+  };
 }

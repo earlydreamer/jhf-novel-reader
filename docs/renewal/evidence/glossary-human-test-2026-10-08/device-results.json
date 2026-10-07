@@ -1,0 +1,80 @@
+{
+  "sourceHead": "fc195febbbdeded911e73b6285da7241fc354e6d",
+  "device": "SKW-H0",
+  "api": 29,
+  "startedAt": "2026-10-07T16:15:44.424Z",
+  "rows": {
+    "syntheticScope": {
+      "status": "PASS",
+      "sourceBoundary": "test-only native bridge source fixture; actual E4B model POST",
+      "selectedChapters": 2,
+      "candidates": 3,
+      "confirmedTerms": 2,
+      "modelPosts": 2,
+      "maximumActive": 1,
+      "chapterGets": 2,
+      "minimumSourceGapMs": 1000,
+      "beforeConfirmationPosts": 0,
+      "excludedCandidateNotInjected": true,
+      "cachedSourcesReused": true
+    },
+    "qualityFault": {
+      "status": "PASS",
+      "boundary": "first actual model response altered at test-only native bridge; product model/source unchanged",
+      "kanaBlocks": 1,
+      "missingTerms": 1,
+      "navigation": true,
+      "persistedAfterProcessRestart": true,
+      "offlineReopenPosts": 0
+    },
+    "realChapter": {
+      "status": "PASS",
+      "sourceBoundary": "actual source GET and actual E4B POST through packaged native bridge; no altered response",
+      "chapters": 1,
+      "candidates": 19,
+      "confirmedTerms": 0,
+      "posts": 3,
+      "sourceNonblank": 103,
+      "inputIds": 103,
+      "outputIds": 103,
+      "sourceCoverageExact": true,
+      "storedEqualsReassembledNativeOutput": true,
+      "generation": {
+        "mode": "lines-v1",
+        "contextTokens": 16384,
+        "inputBudgetTokens": 5290,
+        "maxOutputTokens": 10582,
+        "segments": 3,
+        "continuations": 0,
+        "estimator": "gemma-e4b-v1"
+      },
+      "kanaBlocks": 0,
+      "missingTerms": 1,
+      "fullSemanticReview": "USER TEST PENDING"
+    },
+    "realRestart": {
+      "status": "PASS",
+      "sameText": true,
+      "qualityPersisted": true,
+      "offlineModelPosts": 0
+    }
+  },
+  "humanReady": {
+    "package": "app.narou.reader.proof80",
+    "label": "나로우 리더 · 테스트",
+    "actualReaderOpen": true,
+    "testHooksRemoved": true,
+    "syntheticDataRemoved": true,
+    "modelConfigured": true
+  },
+  "preservation": {
+    "status": "PASS",
+    "originalFiles": 10,
+    "allBytesExact": true,
+    "preferencesExact": true,
+    "originalApkExact": true,
+    "testApkExact": true,
+    "temporaryForwards": 0
+  },
+  "finishedAt": "2026-10-07T16:17:17.685Z"
+}

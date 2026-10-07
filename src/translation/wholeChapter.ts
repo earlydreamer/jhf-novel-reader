@@ -6,6 +6,7 @@ import type {
   ProviderSession,
   RenewalSource,
   SelectedModel,
+  SourceSnapshot,
   TranslationState,
   TranslationToken,
 } from '../contracts/reading';
@@ -22,6 +23,7 @@ import {
 } from './guidance';
 import { normalizeChapterInput } from '../providers/plainText';
 import { contextHints, referencePreset } from './preset';
+import { checkTranslationQuality } from './quality';
 export interface FlowDependencies {
   source: RenewalSource;
   createProvider(selection: SelectedModel): ProviderSession;
@@ -67,6 +69,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
     ref: ChapterRef,
     selection: SelectedModel,
     approved?: WorkGuidance | null,
+    scannedSource?: SourceSnapshot,
   ): Promise<void> {
     if (!foreground || disposed || slot.occupied || state.pendingSave) return;
     const chapter = structuredClone(ref),
@@ -88,7 +91,15 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
       publish({});
       const timer = setInterval(() => publish({}), 250);
       try {
-        const source = await deps.source.getChapter(chapter, control.signal);
+        const source = scannedSource
+          ? structuredClone(scannedSource)
+          : await deps.source.getChapter(chapter, control.signal);
+        if (
+          source.chapterId !== chapter.chapterId ||
+          source.workId !== chapter.workId ||
+          source.canonicalUrl !== chapter.canonicalUrl
+        )
+          throw new ReaderError('source_parse');
         timings.sourceMs = deps.clock.now() - started;
         if (control.signal.aborted || !foreground || disposed) throw new ReaderError('cancelled');
         const guidance =
@@ -124,11 +135,9 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             source,
             languageDirection: 'ja-ko',
             contractVersion: 'plain-v1',
-            promptVersion:
-              selected.connection.provider === 'openai-compatible' && selected.limits
-                ? 'hymt2-segments-v1'
-                : 'hymt2-ko-v1',
+            promptVersion: segmented ? 'lines-v1' : 'hymt2-ko-v1',
             onProgress: (completed, total) => publish({ progress: { completed, total } }),
+            onPreview: (preview) => publish({ preview }),
             ...(chapterReference ? { reference } : {}),
           },
           control.signal,
@@ -166,15 +175,23 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           preset,
         );
         const versionId = crypto.randomUUID();
+        const blocks = await Promise.all(
+          text
+            .split('\n\n')
+            .map(async (text, index) => ({ id: await digest([versionId, index]), text })),
+        );
         const value: CompletedTranslation = {
           schemaVersion: 2,
           versionId,
           source,
           text,
-          blocks: await Promise.all(
-            text
-              .split('\n\n')
-              .map(async (text, index) => ({ id: await digest([versionId, index]), text })),
+          blocks,
+          quality: checkTranslationQuality(
+            chapter.workId,
+            normalizeChapterInput(source),
+            blocks,
+            guidance,
+            preset,
           ),
           createdAt: new Date().toISOString(),
           provenance: {
@@ -182,7 +199,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             connectionId: await digest([selected.connection.provider, normalizedBaseUrl]),
             modelId: selected.modelId,
             contractVersion: 'plain-v1',
-            promptVersion: result.generation ? 'hymt2-segments-v1' : 'hymt2-ko-v1',
+            promptVersion: result.generation ? 'lines-v1' : 'hymt2-ko-v1',
             languageDirection: 'ja-ko',
             ...(result.generation ? { generation: result.generation } : {}),
             ...(appliedHash ? { guidanceHash: appliedHash } : {}),

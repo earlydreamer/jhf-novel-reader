@@ -30,6 +30,91 @@ test('independent_saved_lookup', async () => {
   expect(await store.readVersion(value.versionId)).toEqual(value);
   expect(await store.listVersions(source.chapterId)).toEqual([value]);
 });
+test('quality survives reopening; legacy versions remain readable and invalid block references are rejected', async () => {
+  const memory = new Map<string, string>();
+  const files = {
+    read: async (p: string) => memory.get(p) ?? null,
+    write: async (p: string, t: string) => {
+      memory.set(p, t);
+    },
+  };
+  const store = createLibraryStore(files);
+  const reviewed: CompletedTranslation = {
+    ...value,
+    quality: {
+      ruleVersion: 'deterministic-v1',
+      japaneseBlocks: [0],
+      missingTerms: [{ source: 'アル', target: '알' }],
+    },
+  };
+  await store.commitVersion(reviewed);
+  expect(await createLibraryStore(files).readVersion(value.versionId)).toEqual(reviewed);
+  await store.commitVersion({ ...value, versionId: 'old-without-quality' });
+  expect((await store.readVersion('old-without-quality'))?.quality).toBeUndefined();
+  await expect(
+    store.commitVersion({
+      ...reviewed,
+      versionId: 'bad-quality',
+      quality: { ...reviewed.quality!, japaneseBlocks: [1] },
+    }),
+  ).rejects.toThrow();
+  await expect(
+    store.commitVersion({
+      ...reviewed,
+      versionId: 'duplicate-quality',
+      quality: { ...reviewed.quality!, japaneseBlocks: [0, 0] },
+    }),
+  ).rejects.toThrow();
+});
+
+test('이전 생성 기록과 새 추정기 기록을 모두 재열고 알 수 없는 추정기는 거부한다', async () => {
+  const memory = new Map<string, string>();
+  const files = {
+    read: async (p: string) => memory.get(p) ?? null,
+    write: async (p: string, t: string) => {
+      memory.set(p, t);
+    },
+  };
+  const store = createLibraryStore(files);
+  for (const estimator of [undefined, 'utf8-v1', 'gemma-e4b-v1'] as const) {
+    const version: CompletedTranslation = {
+      ...value,
+      versionId: estimator ?? 'legacy-lines',
+      provenance: {
+        ...value.provenance,
+        promptVersion: 'lines-v1',
+        generation: {
+          mode: 'lines-v1',
+          contextTokens: 16384,
+          inputBudgetTokens: 5290,
+          maxOutputTokens: 10582,
+          segments: 3,
+          continuations: 0,
+          ...(estimator ? { estimator } : {}),
+        },
+      },
+    };
+    await store.commitVersion(version);
+    expect(await createLibraryStore(files).readVersion(version.versionId)).toEqual(version);
+  }
+  const unknown: CompletedTranslation = {
+    ...value,
+    versionId: 'unknown-estimator',
+    provenance: {
+      ...value.provenance,
+      promptVersion: 'lines-v1',
+      generation: {
+        mode: 'lines-v1',
+        contextTokens: 8192,
+        inputBudgetTokens: 2048,
+        maxOutputTokens: 4096,
+        segments: 1,
+        estimator: 'unknown' as 'utf8-v1',
+      },
+    },
+  };
+  await expect(store.commitVersion(unknown)).rejects.toThrow();
+});
 test('save_retry_is_idempotent', async () => {
   const memory = new Map<string, string>();
   let fail = true;

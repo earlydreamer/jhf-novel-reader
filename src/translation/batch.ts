@@ -4,6 +4,7 @@ import type {
   LibraryStore,
   RenewalSource,
   SelectedModel,
+  SourceSnapshot,
   TranslationState,
   WorkPage,
 } from '../contracts/reading';
@@ -21,6 +22,10 @@ import {
   type GuidanceRepository,
   type WorkGuidance,
 } from './guidance';
+import { createNameCandidateScan, type NameCandidate } from './scan';
+
+export type CandidateChoice = { source: string; target: string };
+type RangeScan = { status: 'pending' | 'review' | 'confirmed'; candidates: NameCandidate[] };
 
 type BatchPhase = 'prepared' | 'running' | 'paused' | 'unknown' | 'saving' | 'complete';
 export type ChapterRange = { first: number; last: number };
@@ -39,6 +44,7 @@ export type BatchRecord = {
   phase: BatchPhase;
   currentVersionIds?: readonly string[];
   guidance?: WorkGuidance;
+  scan?: RangeScan;
 };
 export type BatchState = {
   record: BatchRecord | null;
@@ -46,6 +52,7 @@ export type BatchState = {
   preparing: boolean;
   error: string | null;
   chapterProgress?: TranslationState['progress'];
+  scanProgress?: { completed: number; total: number };
 };
 export interface BatchRepository {
   read(): Promise<BatchRecord | null>;
@@ -60,6 +67,8 @@ export interface BatchTranslation {
     retranslate: boolean,
   ): Promise<void>;
   run(retryUncertain?: boolean): Promise<void>;
+  scan(): Promise<void>;
+  confirmCandidates(choices: readonly CandidateChoice[]): Promise<void>;
   cancel(): void;
   retrySave(): Promise<void>;
   getSnapshot(): BatchState;
@@ -69,6 +78,8 @@ export interface BatchTranslation {
   dispose(): void;
 }
 const MAX_BATCH_CHAPTERS = 10000;
+// 범위가 커도 원문 전문은 처음 8화까지만 재사용한다. 나머지는 번역할 때 다시 가져온다.
+const SCANNED_SOURCE_CACHE_SIZE = 8;
 async function validateBatch(value: unknown): Promise<BatchRecord> {
   if (
     value &&
@@ -93,6 +104,7 @@ async function validateBatch(value: unknown): Promise<BatchRecord> {
     'phase',
     'currentVersionIds',
     'guidance',
+    'scan',
   ]);
   check(value.schemaVersion === 1);
   identifier(value.id);
@@ -111,6 +123,26 @@ async function validateBatch(value: unknown): Promise<BatchRecord> {
       value.chapters.length <= MAX_BATCH_CHAPTERS,
   );
   const validatedChapters = await workPage({ ...work, chapters: value.chapters });
+  const chapterIds = new Set(validatedChapters.chapters.map((chapter) => chapter.chapterId));
+  if (value.scan !== undefined) {
+    object(value.scan, ['status', 'candidates']);
+    check(['pending', 'review', 'confirmed'].includes(String(value.scan.status)));
+    check(Array.isArray(value.scan.candidates));
+    const names = new Set<string>();
+    for (const candidate of value.scan.candidates) {
+      object(candidate, ['source', 'reading', 'kind', 'count', 'chapterIds']);
+      text(candidate.source);
+      check(!!candidate.source.trim() && !names.has(candidate.source.normalize('NFKC')));
+      names.add(candidate.source.normalize('NFKC'));
+      if (candidate.reading !== undefined) text(candidate.reading);
+      check(candidate.kind === 'ruby' || candidate.kind === 'katakana');
+      integer(candidate.count, 1);
+      check(Array.isArray(candidate.chapterIds) && candidate.chapterIds.length > 0);
+      check(new Set(candidate.chapterIds).size === candidate.chapterIds.length);
+      check(candidate.chapterIds.every((id) => chapterIds.has(String(id))));
+    }
+    if (value.scan.status === 'pending') check(value.scan.candidates.length === 0);
+  }
   check(
     validatedChapters.chapters.every(
       (chapter, index) => chapter.ordinal === validatedChapters.chapters[0]!.ordinal + index,
@@ -162,6 +194,7 @@ export function createBatchTranslation(dependencies: {
   let disposed = false;
   let cancelled = false;
   let preparation: AbortController | null = null;
+  const scannedSources = new Map<string, SourceSnapshot>();
   const listeners = new Set<(state: BatchState) => void>();
   function publish(update: Partial<BatchState>): void {
     state = { ...state, ...update };
@@ -302,7 +335,11 @@ export function createBatchTranslation(dependencies: {
         completed: 0,
         skipped: 0,
         phase: 'prepared',
+        ...(dependencies.guidance
+          ? { scan: { status: 'pending', candidates: [] } as RangeScan }
+          : {}),
       });
+      scannedSources.clear();
     } catch {
       publish({
         error: cancelled
@@ -312,6 +349,142 @@ export function createBatchTranslation(dependencies: {
     } finally {
       preparation = null;
       publish({ active: false, preparing: false });
+    }
+  }
+  function canReview(): boolean {
+    return (
+      !!state.record &&
+      state.record.phase === 'prepared' &&
+      !state.active &&
+      !disposed &&
+      foreground &&
+      !dependencies.flow.active &&
+      !dependencies.flow.getSnapshot().pendingSave
+    );
+  }
+  async function scan(): Promise<void> {
+    const record = state.record;
+    if (!record || !canReview() || record.scan?.status !== 'pending') return;
+    const control = new AbortController();
+    preparation = control;
+    cancelled = false;
+    publish({
+      active: true,
+      error: null,
+      scanProgress: { completed: 0, total: record.chapters.length },
+    });
+    scannedSources.clear();
+    try {
+      const guidance = (await dependencies.guidance?.read(record.work.workId)) ?? null;
+      const candidateScan = createNameCandidateScan(
+        guidance?.terms ?? [],
+        referencePreset(record.selection),
+      );
+      let completed = 0;
+      for (const chapter of record.chapters) {
+        const source = await dependencies.source.getChapter(chapter, control.signal);
+        if (
+          source.workId !== record.work.workId ||
+          source.chapterId !== chapter.chapterId ||
+          source.canonicalUrl !== chapter.canonicalUrl
+        )
+          throw new ReaderError('source_parse');
+        if (cancelled || control.signal.aborted || !foreground || disposed)
+          throw new ReaderError('cancelled');
+        candidateScan.add(source);
+        if (scannedSources.size < SCANNED_SOURCE_CACHE_SIZE)
+          scannedSources.set(chapter.chapterId, source);
+        publish({ scanProgress: { completed: ++completed, total: record.chapters.length } });
+      }
+      const candidates = candidateScan.result();
+      await persist({ ...record, scan: { status: 'review', candidates } });
+    } catch {
+      scannedSources.clear();
+      publish({
+        error: cancelled
+          ? '후보 스캔을 중단했습니다. 범위 전체를 다시 스캔하세요.'
+          : '범위 전체의 원문을 확인하지 못했습니다. 일부 후보를 확정하지 않고 스캔을 다시 시도할 수 있습니다.',
+      });
+    } finally {
+      preparation = null;
+      publish({ active: false, scanProgress: undefined });
+    }
+  }
+  async function confirmCandidates(choices: readonly CandidateChoice[]): Promise<void> {
+    const record = state.record;
+    if (!record || !canReview() || record.scan?.status !== 'review' || !dependencies.guidance)
+      return;
+    const frozenChoices = structuredClone(choices);
+    cancelled = false;
+    publish({ active: true, error: null });
+    try {
+      const keys = frozenChoices.map((choice) => choice.source.normalize('NFKC'));
+      check(new Set(keys).size === keys.length);
+      check(
+        frozenChoices.every(
+          (choice) =>
+            record.scan!.candidates.some((candidate) => candidate.source === choice.source) &&
+            !!choice.target.trim(),
+        ),
+      );
+      const current = await dependencies.guidance.read(record.work.workId);
+      if (cancelled || !foreground || disposed) throw new ReaderError('cancelled');
+      const terms = [...(current?.terms ?? [])];
+      for (const choice of frozenChoices) {
+        const key = choice.source.normalize('NFKC');
+        const existing = terms.find((term) =>
+          [term.source, ...term.aliases].some((name) => name.normalize('NFKC') === key),
+        );
+        // 스캔 중 별도로 확정한 수동 항목은 덮어쓰지 않는다.
+        if (existing && existing.origin !== 'auto') continue;
+        const confirmed = {
+          source: choice.source,
+          target: choice.target.trim(),
+          aliases: [],
+          category: '고유명사',
+          note: '',
+        };
+        if (existing)
+          terms[terms.indexOf(existing)] = {
+            ...existing,
+            target: confirmed.target,
+            origin: undefined,
+          };
+        else terms.push(confirmed);
+      }
+      const guidance = frozenChoices.length
+        ? await dependencies.guidance.save(record.work.workId, {
+            terms,
+            voices: current?.voices ?? [],
+          })
+        : current;
+      let alreadySaved = 0;
+      if (!record.retranslate)
+        for (const chapter of record.chapters) {
+          const versions = await dependencies.library.listVersions(chapter.chapterId);
+          if (
+            (
+              await filterAsync(versions, (version) =>
+                matchesSelection(version, record.selection, guidance),
+              )
+            ).length
+          )
+            alreadySaved++;
+        }
+      const next = {
+        ...record,
+        guidance: guidanceHash(guidance) ? structuredClone(guidance!) : undefined,
+        alreadySaved,
+        scan: { ...record.scan, status: 'confirmed' as const },
+      };
+      await persist(next);
+    } catch {
+      publish({
+        error:
+          '후보를 확정하지 못했습니다. 한국어 표기(80자 이내)와 저장 상태를 확인한 뒤 다시 시도하세요.',
+      });
+    } finally {
+      publish({ active: false });
     }
   }
   async function advance(record: BatchRecord, skipped: boolean): Promise<BatchRecord> {
@@ -340,6 +513,10 @@ export function createBatchTranslation(dependencies: {
     )
       return;
     if (record.phase === 'unknown' && !retryUncertain) return;
+    if (record.scan && record.scan.status !== 'confirmed') {
+      publish({ error: '범위의 후보를 스캔하고 표기를 확정한 뒤 번역을 시작하세요.' });
+      return;
+    }
     cancelled = false;
     publish({ active: true, error: null });
     try {
@@ -360,6 +537,7 @@ export function createBatchTranslation(dependencies: {
           beforeRequest !== undefined &&
           sameModel.some((version) => !beforeRequest.includes(version.versionId));
         if (completedDuringBatch || (!record.retranslate && sameModel.length > 0)) {
+          scannedSources.delete(chapter.chapterId);
           record = await advance(record, !completedDuringBatch);
           retryUncertain = false;
           continue;
@@ -382,9 +560,15 @@ export function createBatchTranslation(dependencies: {
         };
         await persist(record);
         if (cancelled || !foreground || disposed) break;
-        await dependencies.flow.start(chapter, record.selection, record.guidance ?? null);
+        await dependencies.flow.start(
+          chapter,
+          record.selection,
+          record.guidance ?? null,
+          scannedSources.get(chapter.chapterId),
+        );
         const result = dependencies.flow.getCompleted();
         if (result && result.source.chapterId === chapter.chapterId) {
+          scannedSources.delete(chapter.chapterId);
           record = await advance(record, false);
           retryUncertain = false;
           continue;
@@ -462,6 +646,8 @@ export function createBatchTranslation(dependencies: {
   return {
     initialize,
     prepare,
+    scan,
+    confirmCandidates,
     run,
     cancel,
     retrySave,
@@ -484,6 +670,7 @@ export function createBatchTranslation(dependencies: {
       cancel();
       unsubscribe();
       listeners.clear();
+      scannedSources.clear();
     },
   };
 }

@@ -53,6 +53,8 @@ function RouteScreen({
           }
           onPrepareBatch={(range, retranslate) => void controller.prepareBatch(range, retranslate)}
           onRunBatch={(retryUncertain) => void controller.runBatch(retryUncertain)}
+          onScanBatch={() => void controller.scanBatch()}
+          onConfirmBatchCandidates={(choices) => void controller.confirmBatchCandidates(choices)}
           onCancelBatch={controller.cancelBatch}
           onRetryBatchSave={() => void controller.retryBatchSave()}
           onSettings={() => controller.navigate({ kind: 'settings' })}

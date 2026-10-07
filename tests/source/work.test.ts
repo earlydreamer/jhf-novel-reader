@@ -123,6 +123,24 @@ describe('renewal work metadata and explicit source selection', () => {
       ['n1234ab/102', 102],
     ]);
   });
+  it('treats a disabled next-page span as the end of the TOC without requesting it', async () => {
+    const { adapter, requests } = source(
+      `${toc}<span class="c-pager__item c-pager__item--next">次へ</span>`,
+    );
+    const page = await adapter.getWorkPage(workUrl, signal);
+    expect(page.nextPageUrl).toBeNull();
+    expect(page.complete).toBe(true);
+    expect(requests).toEqual([workUrl]);
+  });
+  it('prefers an enabled next-page anchor over a disabled duplicate pager and rejects malformed anchors', async () => {
+    const { adapter } = source(
+      `${toc}<span class="c-pager__item--next">次へ</span><a class="c-pager__item--next" href="?p=2">次へ</a>`,
+    );
+    expect((await adapter.getWorkPage(workUrl, signal)).nextPageUrl).toBe(workUrl + '?p=2');
+    await expect(
+      source(`${toc}<a class="c-pager__item--next">次へ</a>`).adapter.getWorkPage(workUrl, signal),
+    ).rejects.toMatchObject({ code: 'source_parse' });
+  });
   it('unicode_ruby_blank_lines_roundtrip', async () => {
     const html =
       '<h1 class="p-novel__title">龍😀</h1><div class="p-novel__body"><div class="p-novel__text"><p>　<ruby>龍😀<rt>りゅう</rt></ruby></p><p><br></p><p>同じ</p><p>同じ</p><p></p></div></div>';

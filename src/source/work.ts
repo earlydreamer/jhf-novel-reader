@@ -57,8 +57,13 @@ export function normalizeSourceInput(input: string): { workUrl: string; chapterU
 
 function nextPage(root: DocumentFragment, pageUrl: string): string | null {
   const currentPage = Number(new URL(pageUrl).searchParams.get('p') || 1);
-  const next = root.querySelector('.c-pager__item--next, .novelview_pager-next, a[rel="next"]');
+  const controls = Array.from(
+    root.querySelectorAll('.c-pager__item--next, .novelview_pager-next, a[rel="next"]'),
+  );
+  const next = controls.find((control) => control.tagName === 'A') ?? controls[0];
   if (!next) return null;
+  // 마지막 페이지에서 사이트가 비활성 '다음'을 href 없는 span으로 표시한다.
+  if (next.tagName === 'SPAN' && !next.hasAttribute('href')) return null;
   try {
     const href = next.getAttribute('href');
     if (!href || /[\\%\u0000-\u0020]/.test(href)) throw parseError();

@@ -23,6 +23,8 @@ export function WorkScreen({
   batchAvailable,
   onPrepareBatch,
   onRunBatch,
+  onScanBatch,
+  onConfirmBatchCandidates,
   onCancelBatch,
   onRetryBatchSave,
   onSettings,
@@ -35,13 +37,24 @@ export function WorkScreen({
         작품 원문
       </a>
       <h2>목차</h2>
-      {guidance && <GuidancePanel key={work.workId} workId={work.workId} {...guidance} />}
+      {guidance && (
+        <GuidancePanel
+          key={work.workId}
+          workId={work.workId}
+          {...guidance}
+          refreshKey={
+            batch?.record?.scan?.status === 'confirmed' ? batch.record.guidance?.hash : undefined
+          }
+        />
+      )}
       <BatchPanel
         workId={work.workId}
         batch={batch}
         batchAvailable={batchAvailable}
         onPrepareBatch={onPrepareBatch}
         onRunBatch={onRunBatch}
+        onScanBatch={onScanBatch}
+        onConfirmBatchCandidates={onConfirmBatchCandidates}
         onCancelBatch={onCancelBatch}
         onRetryBatchSave={onRetryBatchSave}
         onSettings={onSettings}

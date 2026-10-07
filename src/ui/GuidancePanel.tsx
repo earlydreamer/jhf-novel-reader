@@ -4,15 +4,24 @@ import type { GuidanceDraft, WorkGuidance } from '../translation/guidance';
 export interface GuidancePanelProps {
   workId: string;
   locked: boolean;
+  refreshKey?: string;
   onRead(workId: string): Promise<WorkGuidance | null>;
   onSave(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
 }
 const aliases = (value: string) => value.split(/[,、]/).map((name) => name.trim());
-export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelProps): JSX.Element {
+export function GuidancePanel({
+  workId,
+  locked,
+  refreshKey,
+  onRead,
+  onSave,
+}: GuidancePanelProps): JSX.Element {
   const [draft, setDraft] = useState<GuidanceDraft>({ terms: [], voices: [] });
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState('');
   const [available, setAvailable] = useState(false);
+  const loadKey = `${workId}:${refreshKey ?? ''}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   useEffect(() => {
     let mounted = true;
     void onRead(workId)
@@ -20,6 +29,7 @@ export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelP
         if (!mounted) return;
         setDraft({ terms: value?.terms ?? [], voices: value?.voices ?? [] });
         setAvailable(true);
+        setLoadedKey(loadKey);
       })
       .catch(() => {
         if (mounted)
@@ -31,7 +41,7 @@ export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelP
     return () => {
       mounted = false;
     };
-  }, [workId, onRead]);
+  }, [workId, onRead, loadKey]);
   function change(next: GuidanceDraft) {
     setDraft(next);
     setMessage('변경 사항을 저장해야 번역에 적용됩니다.');
@@ -66,7 +76,7 @@ export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelP
         분류는 40자, 설명은 300자, 말투 지침은 400자까지 입력하세요. 같은 이름(전각·반각 차이
         포함)은 한 번만 등록할 수 있습니다.
       </p>
-      <fieldset disabled={busy || locked || !available}>
+      <fieldset disabled={busy || locked || !available || loadedKey !== loadKey}>
         <legend>용어집</legend>
         {draft.terms.map((term, index) => (
           <fieldset key={index}>
