@@ -18,6 +18,8 @@ export const capacitorShell: ShellPlatform = {
   onBackButton(listener) {
     if (!Capacitor.isNativePlatform()) return () => {};
     const handle = App.addListener('backButton', () => listener());
+    // 등록이 실패해도 해제 전에 unhandled rejection이 나지 않도록 즉시 처리한다.
+    handle.catch(() => {});
     return () => {
       void handle.then((value) => value.remove()).catch(() => {});
     };
