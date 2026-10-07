@@ -45,13 +45,18 @@ const selection = {
   limits,
 };
 const secrets = { get: async () => null, set: async () => {}, remove: async () => {} };
-test('reference context consumes input capacity while every source atom is still sent exactly once', async () => {
-  const referenceContext = 'Approved data: ' + 'reference '.repeat(22) + '\n\n';
-  const segments = planSegments(longSource, limits, referenceContext);
+test('reference data is matched per segment, placed before the instruction, and every source atom is sent exactly once', async () => {
+  const reference = (input: string) =>
+    input.includes('最後')
+      ? 'Reference the following translations:\n最後 translates to 마지막 (' +
+        'note '.repeat(30) +
+        ')\n\n'
+      : '';
+  const chapterReference = reference(normalizeChapterInput(longSource));
+  const segments = planSegments(longSource, limits, chapterReference);
   expect(segments.length).toBeGreaterThan(planSegments(longSource, limits).length);
-  expect(segments.map((segment) => segment.input).join('')).toBe(normalizeChapterInput(longSource));
   for (const segment of segments)
-    expect(estimatedInputTokens(segment.input, referenceContext)).toBeLessThanOrEqual(
+    expect(estimatedInputTokens(segment.input, chapterReference)).toBeLessThanOrEqual(
       limits.inputBudgetTokens,
     );
   const post = vi.fn<ModelTransport['post']>(async (call) => ({
@@ -63,17 +68,26 @@ test('reference context consumes input capacity while every source atom is still
     },
   }));
   const provider = createProviderSession(selection, { post, get: vi.fn() }, secrets);
-  await provider.translateChapter({ ...request, referenceContext }, new AbortController().signal);
+  await provider.translateChapter({ ...request, reference }, new AbortController().signal);
   expect(post).toHaveBeenCalledTimes(segments.length);
   const inputs = post.mock.calls.map(
     ([call]) => (call.body.messages as { content: string }[])[0]!.content,
   );
-  expect(inputs.every((input) => input.startsWith(SEGMENT_INSTRUCTION + referenceContext))).toBe(
-    true,
-  );
-  expect(
-    inputs.map((input) => input.slice((SEGMENT_INSTRUCTION + referenceContext).length)).join(''),
-  ).toBe(normalizeChapterInput(longSource));
+  const sent = segments.map((segment) => segment.input);
+  expect(inputs).toEqual(sent.map((input) => reference(input) + SEGMENT_INSTRUCTION + input));
+  expect(inputs.some((input) => input.startsWith(SEGMENT_INSTRUCTION))).toBe(true);
+  expect(inputs.some((input) => input.startsWith(chapterReference))).toBe(true);
+  expect(sent.join('')).toBe(normalizeChapterInput(longSource));
+});
+test('an oversized per-segment reference fails before any request is sent', async () => {
+  const post = vi.fn<ModelTransport['post']>();
+  const provider = createProviderSession(selection, { post, get: vi.fn() }, secrets);
+  let calls = 0;
+  const reference = () => (calls++ === 0 ? '' : 'x'.repeat(limits.inputBudgetTokens));
+  await expect(
+    provider.translateChapter({ ...request, reference }, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'input_limit' });
+  expect(post).not.toHaveBeenCalled();
 });
 test('catalog capacity and model capability bound internal budgets; unreported capacity is conservative', async () => {
   const transport: ModelTransport = {

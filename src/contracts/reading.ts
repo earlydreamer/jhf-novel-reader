@@ -56,7 +56,8 @@ export type WholeChapterRequest = {
   contractVersion: 'plain-v1';
   promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1';
   onProgress?: (completed: number, total: number) => void;
-  referenceContext?: string;
+  /** 입력 하나에 대한 승인된 참고 데이터. 해당 입력의 지시문 앞에만 붙여 보낸다. */
+  reference?: (input: string) => string;
 };
 export type WholeChapterResult = {
   text: string;
