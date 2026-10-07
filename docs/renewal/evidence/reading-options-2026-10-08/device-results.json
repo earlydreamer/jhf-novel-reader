@@ -1,0 +1,63 @@
+{
+  "sourceHead": "90c0ec6",
+  "device": "SKW-H0",
+  "api": 29,
+  "rows": {
+    "upgrade": {
+      "status": "PASS",
+      "versionsPreserved": 8,
+      "settingsByteExact": true
+    },
+    "optionsRestart": {
+      "status": "PASS",
+      "autoTranslate": false,
+      "autoRetryFailed": false,
+      "modelPosts": 0
+    },
+    "manualMode": {
+      "status": "PASS",
+      "unsavedOrdinal": 11,
+      "modelPosts": 0,
+      "manualButtonEnabled": true
+    },
+    "automaticStream": {
+      "status": "PASS",
+      "ordinal": 11,
+      "modelPosts": 7,
+      "firstVisibleMs": 341,
+      "firstChunkPending": true,
+      "savedMs": 44513,
+      "articlePreserved": true,
+      "paragraphs": 146,
+      "automaticRetries": 1,
+      "failedParagraphs": 0
+    },
+    "manualRepair": {
+      "status": "PASS",
+      "paragraph": 232,
+      "modelPosts": 1,
+      "onlyRequestedParagraph": true,
+      "otherParagraphsPreserved": 233,
+      "originalVersionPreserved": true,
+      "recovered": false,
+      "remainingFailed": 1
+    },
+    "repairUnknownRetry": {
+      "status": "PASS",
+      "testOnlyBridgeFault": true,
+      "actualNetworkDisconnect": false,
+      "injectedUnknowns": 1,
+      "automaticReplay": 0,
+      "explicitActualModelPosts": 1,
+      "onlyRequestedParagraph": true
+    },
+    "nextAfterScroll": {
+      "status": "PASS",
+      "scrollEvents": 40,
+      "fileCalls": 140,
+      "transitionMs": 541,
+      "trustedNextClick": true,
+      "modelPosts": 0
+    }
+  }
+}

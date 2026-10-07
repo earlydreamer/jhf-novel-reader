@@ -7,6 +7,18 @@ import * as controllers from '../../src/app/controller';
 import type { RenewalDependencies } from '../../src/app/renewalController';
 import type { CompletedTranslation, WorkPage } from '../../src/contracts/reading';
 
+// 이 파일의 기존 생명주기 검증은 사용자가 자동 시작을 끈 수동 모드에서 실행한다.
+function manualController(dependencies?: RenewalDependencies) {
+  const controller = controllers.createRenewalController(dependencies);
+  controller.changeAutoTranslate(false);
+  const initialize = controller.initialize;
+  controller.initialize = async () => {
+    await initialize();
+    controller.changeAutoTranslate(false);
+  };
+  return controller;
+}
+
 const chapters = [1, 2].map((ordinal) => ({
   workId: 'n1234ab',
   chapterId: `n1234ab/${ordinal}`,
@@ -100,7 +112,7 @@ async function setup(hasSaved = false, translationAvailable = false) {
       },
     });
   }
-  const controller = controllers.createRenewalController(value.dependencies);
+  const controller = manualController(value.dependencies);
   render(<Application controller={controller} />);
   await screen.findByRole('heading', { name: '이어 읽기' });
   fireEvent.change(screen.getByLabelText('작품 또는 회차 URL'), {
@@ -111,6 +123,130 @@ async function setup(hasSaved = false, translationAvailable = false) {
   return { ...value, controller };
 }
 afterEach(cleanup);
+
+describe('automatic chapter dispatch and position writes', () => {
+  it('defaults to automatic start but never starts on initialization, catalog or opening a saved version', async () => {
+    const value = fixture(true);
+    const start = vi.fn(async () => {});
+    const controller = controllers.createRenewalController({
+      ...value.dependencies,
+      startTranslation: start,
+    });
+    await controller.initialize();
+    expect(controller.getSnapshot().autoTranslate).toBe(true);
+    controller.changeConnection({
+      provider: 'openai-compatible',
+      baseUrl: 'http://localhost:1234',
+    });
+    await controller.checkConnection();
+    controller.chooseModel('fixture-hymt2');
+    await controller.continueReading(saved.versionId);
+    expect(start).not.toHaveBeenCalled();
+    await controller.selectChapter(chapters[1]!);
+    expect(start).toHaveBeenCalledTimes(1);
+    controller.dispose();
+  });
+  it('drops automatic intent when navigation changes during restored connection verification', async () => {
+    const value = fixture();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const start = vi.fn(async () => {});
+    const controller = controllers.createRenewalController({
+      ...value.dependencies,
+      startTranslation: start,
+      settings: {
+        readReadingSettings: async () => ({
+          schemaVersion: 2,
+          fontSize: 18,
+          selection: {
+            connection: {
+              provider: 'openai-compatible',
+              baseUrl: 'http://localhost:1234',
+              revision: 1,
+            },
+            modelId: 'fixture-hymt2',
+          },
+        }),
+        saveReadingSettings: async () => {},
+      },
+      connect: async () => {
+        await gate;
+        return {
+          listModels: async () => [
+            { id: 'fixture-hymt2', displayName: 'fixture', supportsGeneration: true },
+          ],
+          translateChapter: value.generate,
+        };
+      },
+    });
+    await controller.initialize();
+    await controller.openWork(page.canonicalUrl);
+    const selection = controller.selectChapter(chapters[1]!);
+    await vi.waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('checking'));
+    controller.navigate({ kind: 'home' });
+    release();
+    await selection;
+    expect(start).not.toHaveBeenCalled();
+    expect(controller.getSnapshot().route.kind).toBe('home');
+    controller.dispose();
+  });
+  it('waits for actual settlement before starting the newly selected unsaved chapter', async () => {
+    const value = fixture();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const start = vi
+      .fn()
+      .mockImplementationOnce(() => gate)
+      .mockResolvedValue(undefined);
+    const controller = controllers.createRenewalController({
+      ...value.dependencies,
+      startTranslation: start,
+    });
+    await controller.initialize();
+    await controller.openWork(page.canonicalUrl);
+    controller.changeConnection({
+      provider: 'openai-compatible',
+      baseUrl: 'http://localhost:1234',
+    });
+    await controller.checkConnection();
+    controller.chooseModel('fixture-hymt2');
+    await controller.selectChapter(chapters[0]!);
+    await controller.selectChapter(chapters[1]!);
+    expect(start).toHaveBeenCalledTimes(1);
+    release();
+    await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+    expect(start.mock.calls[1]![0].chapterId).toBe(chapters[1]!.chapterId);
+    controller.dispose();
+  });
+  it('coalesces scroll bursts into the in-flight position and the latest position', async () => {
+    const value = fixture(true);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const write = vi
+      .fn()
+      .mockImplementationOnce(() => gate)
+      .mockResolvedValue(undefined);
+    value.dependencies.library!.savePosition = write;
+    const controller = controllers.createRenewalController(value.dependencies);
+    await controller.initialize();
+    await controller.continueReading(saved.versionId);
+    const pending = Array.from({ length: 50 }, (_, offset) =>
+      controller.savePosition(saved.blocks[0]!.id, offset),
+    );
+    expect(write).toHaveBeenCalledTimes(1);
+    release();
+    await Promise.all(pending);
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(write.mock.calls[1]![0].offset).toBe(49);
+    controller.dispose();
+  });
+});
 describe('renewal first reading screens', () => {
   function restoredFixture(hasSaved = false) {
     const value = fixture(hasSaved);
@@ -136,7 +272,7 @@ describe('renewal first reading screens', () => {
   }
   it('checks the restored model on selecting an unsaved chapter, without generation', async () => {
     const value = restoredFixture();
-    const controller = controllers.createRenewalController(value.dependencies);
+    const controller = manualController(value.dependencies);
     await controller.initialize();
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     render(<Application controller={controller} />);
@@ -151,7 +287,7 @@ describe('renewal first reading screens', () => {
   });
   it('keeps saved chapter reading offline and checks only when moving to an unsaved chapter', async () => {
     const value = restoredFixture(true);
-    const controller = controllers.createRenewalController(value.dependencies);
+    const controller = manualController(value.dependencies);
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
@@ -169,7 +305,7 @@ describe('renewal first reading screens', () => {
     const value = restoredFixture();
     const connect = value.dependencies.connect as ReturnType<typeof vi.fn>;
     connect.mockRejectedValueOnce(new ReaderError('connection'));
-    const controller = controllers.createRenewalController(value.dependencies);
+    const controller = manualController(value.dependencies);
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
@@ -199,7 +335,7 @@ describe('renewal first reading screens', () => {
         translateChapter: value.generate,
       };
     });
-    const controller = controllers.createRenewalController(value.dependencies);
+    const controller = manualController(value.dependencies);
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
@@ -223,7 +359,7 @@ describe('renewal first reading screens', () => {
       ],
       translateChapter: value.generate,
     });
-    const controller = controllers.createRenewalController(value.dependencies);
+    const controller = manualController(value.dependencies);
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
@@ -302,7 +438,7 @@ describe('renewal controller boundaries', () => {
     >((resolve) => {
       release = resolve;
     });
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       connect: async () => ({ listModels: async () => listing, translateChapter: value.generate }),
     });
@@ -323,7 +459,7 @@ describe('renewal controller boundaries', () => {
   it('does not replace a missing selected model on catalog refresh', async () => {
     const value = fixture();
     let models = [{ id: 'first', displayName: 'First', supportsGeneration: true }];
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       connect: async () => ({ listModels: async () => models, translateChapter: value.generate }),
     });
@@ -344,7 +480,7 @@ describe('renewal controller boundaries', () => {
     const loading = new Promise<WorkPage>((resolve) => {
       release = resolve;
     });
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       source: { getWorkPage: async () => loading, getChapter: async () => saved.source },
     });
@@ -357,7 +493,7 @@ describe('renewal controller boundaries', () => {
   });
   it('same chapter selection repeated while loading pushes one route', async () => {
     const value = fixture();
-    const controller = controllers.createRenewalController(value.dependencies);
+    const controller = manualController(value.dependencies);
     await controller.openWork(page.canonicalUrl);
     const first = controller.selectChapter(chapters[0]!);
     const second = controller.selectChapter(chapters[0]!);
@@ -366,7 +502,7 @@ describe('renewal controller boundaries', () => {
     expect(controller.getSnapshot().route.kind).toBe('work');
   });
   it('production is unavailable rather than fabricated source or catalog data', async () => {
-    const controller = controllers.createRenewalController();
+    const controller = manualController();
     render(<Application controller={controller} />);
     expect(screen.getByRole('button', { name: '작품 열기' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '설정' }));
@@ -379,7 +515,7 @@ describe('renewal controller boundaries', () => {
 describe('renewal reading affordances', () => {
   it('shows a changed-source notice and an explicit refresh action without generating automatically', async () => {
     const value = fixture(true);
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       source: {
         getWorkPage: async () => page,
@@ -471,7 +607,7 @@ describe('renewal connection failures', () => {
   ] as const)('distinguishes %s without exposing server errors', async (code, status) => {
     const { ReaderError } = await import('../../src/contracts');
     const value = fixture();
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       connect: async () => {
         throw new ReaderError(code);
@@ -488,7 +624,7 @@ describe('renewal connection failures', () => {
   it('shows an actionable secure-storage failure in connection settings', async () => {
     const { StorageError } = await import('../../src/storage/errors');
     const value = fixture();
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       connect: async () => {
         throw new StorageError('secure');
@@ -509,7 +645,7 @@ describe('renewal connection failures', () => {
   });
   it('invalid endpoint is a connection error rather than a model catalog error', async () => {
     const value = fixture();
-    const controller = controllers.createRenewalController(value.dependencies);
+    const controller = manualController(value.dependencies);
     controller.changeConnection({ provider: 'openai-compatible', baseUrl: 'not-a-url' });
     await controller.checkConnection();
     expect(controller.getSnapshot().catalogStatus).toBe('connection');
@@ -520,7 +656,7 @@ describe('renewal connection failures', () => {
     let release: (() => void) | undefined;
     let calls = 0;
     const start = vi.fn(async () => {});
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       startTranslation: start,
       connect: async () => {
@@ -561,7 +697,7 @@ describe('route restoration across works', () => {
       canonicalUrl: 'https://ncode.syosetu.com/n9999ab/',
       chapters: [],
     };
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       source: {
         getWorkPage: async (url) => (url === otherPage.canonicalUrl ? otherPage : page),
@@ -602,7 +738,7 @@ describe('review P1: translation ownership survives navigation', () => {
     const value = fixture();
     const request = deferredRequest();
     const start = vi.fn(async () => request.promise);
-    const controller = controllers.createRenewalController({
+    const controller = manualController({
       ...value.dependencies,
       startTranslation: start,
     });
@@ -675,7 +811,7 @@ describe('review P1: translation ownership survives navigation', () => {
 
 it('shows each skipped legacy record without blocking saved reading or exposing its endpoint', async () => {
   const value = fixture(true);
-  const controller = controllers.createRenewalController({
+  const controller = manualController({
     ...value.dependencies,
     migrateLegacy: async () => ({
       migrated: 1,
@@ -701,7 +837,7 @@ it('shows each skipped legacy record without blocking saved reading or exposing 
 describe('review P2: library-only continuation restores saved metadata', () => {
   it('shows the saved marker after cold-start offline continue reading and contents navigation', async () => {
     const value = fixture(true);
-    const controller = controllers.createRenewalController({ library: value.dependencies.library });
+    const controller = manualController({ library: value.dependencies.library });
     render(<Application controller={controller} />);
     await controller.continueReading(saved.versionId);
     await screen.findByText(saved.text);

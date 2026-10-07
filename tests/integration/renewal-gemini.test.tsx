@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { expect, it } from 'vitest';
 import { createRenewalApplication } from '../../src/app/compose';
-import type { AppLifecycle, HttpResponse, NativeHttpClient, NativeHttpRequest } from '../../src/contracts';
+import type {
+  AppLifecycle,
+  HttpResponse,
+  NativeHttpClient,
+  NativeHttpRequest,
+} from '../../src/contracts';
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 import { createLibraryStore } from '../../src/storage/library';
@@ -111,6 +116,7 @@ function harness(finishReason: Finish = 'STOP') {
 
 async function selectChapter(h: ReturnType<typeof harness>) {
   await h.app.initialize();
+  h.app.changeAutoTranslate(false);
   await h.app.browse();
   const chapter = h.app.getSnapshot().work?.chapters.at(0);
   if (!chapter) throw new Error('Test fixture did not create a chapter');

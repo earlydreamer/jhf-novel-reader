@@ -8,6 +8,8 @@ export interface SettingsScreenProps {
   onCheck(secret: string): Promise<void>;
   onSelect(modelId: string): void;
   onMode?(mode: 'stream' | 'legacy'): void;
+  onAutoTranslate?(enabled: boolean): void;
+  onAutoRetryFailed?(enabled: boolean): void;
 }
 const catalogLabels: Record<CatalogStatus, string> = {
   idle: '연결 확인 전',
@@ -28,6 +30,8 @@ export function SettingsScreen({
   onCheck,
   onSelect,
   onMode,
+  onAutoTranslate,
+  onAutoRetryFailed,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
   function update(value: Partial<Pick<ConnectionConfig, 'provider' | 'baseUrl'>>): void {
@@ -43,6 +47,31 @@ export function SettingsScreen({
   return (
     <section aria-label="연결 설정">
       <h1>연결 설정</h1>
+      {onAutoTranslate && (
+        <label className="nr-setting-toggle">
+          <input
+            type="checkbox"
+            checked={state.autoTranslate}
+            onChange={(event) => onAutoTranslate(event.target.checked)}
+          />
+          저장본이 없으면 자동 번역 시작
+          <span>회차를 열면 선택한 모델로 번역합니다. 끄면 ‘이 화 번역’을 눌러 시작합니다.</span>
+        </label>
+      )}
+      {onAutoRetryFailed && (
+        <label className="nr-setting-toggle">
+          <input
+            type="checkbox"
+            checked={state.autoRetryFailed}
+            onChange={(event) => onAutoRetryFailed(event.target.checked)}
+          />
+          실패 문단 자동 재시도
+          <span>
+            읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역합니다. 연결이 끊긴 요청은 자동으로
+            다시 보내지 않습니다.
+          </span>
+        </label>
+      )}
       {state.streamingAvailable && onMode && (
         <label>
           로컬 번역 방식

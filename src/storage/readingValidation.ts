@@ -29,7 +29,8 @@ function date(value: unknown) {
   check(Number.isFinite(Date.parse(value)));
 }
 export function selected(value: unknown): asserts value is SelectedModel {
-  object(value, ['connection', 'modelId', 'limits', 'translationMode']);
+  object(value, ['connection', 'modelId', 'limits', 'translationMode', 'autoRetryFailed']);
+  check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
   check(
     value.translationMode === undefined ||
       value.translationMode === 'stream' ||
@@ -157,8 +158,27 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'languageDirection',
     'generation',
     'guidanceHash',
+    'repair',
   ]);
   const p = value.provenance;
+  if (p.repair !== undefined) {
+    object(p.repair, ['baseVersionId', 'paragraphIndexes']);
+    identifier(p.repair.baseVersionId);
+    check(p.repair.baseVersionId !== value.versionId);
+    check(Array.isArray(p.repair.paragraphIndexes) && p.repair.paragraphIndexes.length > 0);
+    const indexes = p.repair.paragraphIndexes as number[];
+    const count = source.paragraphs.length;
+    check(
+      indexes.every(
+        (index, i) =>
+          Number.isSafeInteger(index) &&
+          index >= 0 &&
+          index < count &&
+          (i === 0 || index > indexes[i - 1]!),
+      ),
+    );
+    check(value.blocks.length === source.paragraphs.length);
+  }
   check(p.provider === 'openai-compatible' || p.provider === 'gemini');
   text(p.connectionId);
   text(p.modelId);

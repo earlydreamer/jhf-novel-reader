@@ -1,0 +1,15 @@
+{
+  "assetsExact": true,
+  "assetFiles": 16,
+  "dexExact": true,
+  "provenance": {
+    "commit": "90c0ec692b868a9a7057aa66ab2ea5cbb2b16638",
+    "tree": "35df6f9077c05d9a893607635f23840e3cfa8766",
+    "dirty": false
+  },
+  "isolatedApkSha256": "fecbc01b997b5402e76bc53bee9997295fa3c03a9193a5bc2a5d93898ee8314d",
+  "variantChanges": [
+    "applicationId=app.narou.reader.proof80",
+    "app_name/title_activity_main=나로우 리더 · 테스트"
+  ]
+}

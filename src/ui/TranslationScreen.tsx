@@ -2,8 +2,25 @@ import type { JSX } from 'react';
 import type { CatalogStatus } from '../app/renewalController';
 import { StreamingReader } from './StreamingReader';
 import type { ErrorCode } from '../contracts';
-import type { ChapterRef, ConnectionConfig, TranslationState } from '../contracts/reading';
+import type {
+  ChapterRef,
+  ConnectionConfig,
+  TranslationState,
+  CompletedTranslation,
+  WorkPage,
+  ReadingPosition,
+} from '../contracts/reading';
 export interface TranslationScreenProps {
+  completedVersion?: CompletedTranslation | null;
+  work?: WorkPage | null;
+  position?: ReadingPosition | null;
+  showOriginal?: boolean;
+  busy?: boolean;
+  onShowOriginal?(show: boolean): void;
+  onFontSize?(value: number): void;
+  onContents?(): void;
+  onAdjacent?(direction: -1 | 1): void;
+  onRetryParagraphs?(indexes?: readonly number[]): void;
   streaming?: boolean;
   fontSize?: number;
   onPreviewPosition?(index: number, offset: number): void;

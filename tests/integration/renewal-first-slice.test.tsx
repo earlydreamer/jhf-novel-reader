@@ -133,6 +133,7 @@ function harness() {
 }
 async function prepare(h: ReturnType<typeof harness>) {
   await h.app.initialize();
+  h.app.changeAutoTranslate(false);
   await h.app.browse();
   expect(h.app.getSnapshot().route).toMatchObject({ kind: 'work', selectedChapterId: 'n1234ab/2' });
   await h.app.selectChapter(h.app.getSnapshot().work!.chapters[1]!);

@@ -115,14 +115,17 @@ export async function translateLocalStream(
   };
   request.onProgress?.(0, batches.length);
   for (const [index, batch] of batches.entries()) {
-    const pendingMessage = current(batch);
-    const messages = fits([...previous, pendingMessage])
-      ? [...previous, pendingMessage]
-      : [pendingMessage];
-    let accepted: Map<string, string> = new Map(),
-      historyOutput = '';
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const accepted = new Map<string, string>(),
+      historyRows = new Map<string, string>();
+    let historyOutput = '';
+    const attempts = selection.autoRetryFailed === false ? 1 : 2;
+    for (let attempt = 0; attempt < attempts; attempt++) {
       if (signal.aborted) throw new ReaderError('cancelled', 'not_sent');
+      const pending = batch.filter((unit) => !accepted.has(unit.id));
+      const pendingMessage = current(pending);
+      const messages = fits([...previous, pendingMessage])
+        ? [...previous, pendingMessage]
+        : [pendingMessage];
       const validateLine = (unit: LineUnit, body: string) => {
         const parsed = clean(body),
           original = mask(unit.text);
@@ -143,15 +146,16 @@ export async function translateLocalStream(
       const parser = createOpenAIStream((text) => {
         if (!request.onPreview) return;
         const values = new Map(done);
+        for (const [id, text] of accepted) values.set(id, text);
         const closed = [...text.matchAll(/<p id="([A-Za-z]{1,3})">([\s\S]*?)<\/p>/g)];
         let offset = 0;
         for (const m of closed) {
-          if (m[1] !== batch[offset]?.id) break;
-          const value = validateLine(batch[offset]!, m[2]!);
+          if (m[1] !== pending[offset]?.id) break;
+          const value = validateLine(pending[offset]!, m[2]!);
           if (value !== null) values.set(m[1]!, value);
           offset++;
         }
-        const next = batch[offset];
+        const next = pending[offset];
         if (next) {
           const open = text.match(new RegExp('<p id="' + next.id + '">([^]*?)$'));
           if (open && !open[1]!.includes('</p>')) {
@@ -188,25 +192,31 @@ export async function translateLocalStream(
       try {
         result = final.complete();
       } catch (error) {
-        if (attempt === 0) {
+        if (attempt + 1 < attempts) {
           retries++;
           continue;
         }
-        throw error;
-      }
-      if (result.finishReason === 'blocked') return { text: '', finishReason: 'blocked' };
-      const parsed = rows(result.text, batch);
-      accepted = new Map();
-      if (parsed.exact)
-        for (const [i, m] of parsed.matches.entries()) {
-          const value = validateLine(batch[i]!, m[2]!);
-          if (value !== null) accepted.set(m[1]!, value);
-        }
-      if (parsed.exact && accepted.size === batch.length && result.finishReason === 'complete') {
-        historyOutput = result.text;
+        // Received malformed output is a failed paragraph, never a network replay.
         break;
       }
-      if (attempt === 0) {
+      if (result.finishReason === 'blocked') return { text: '', finishReason: 'blocked' };
+      const parsed = rows(result.text, pending);
+      if (parsed.exact && result.finishReason === 'complete')
+        for (const [i, m] of parsed.matches.entries()) {
+          const value = validateLine(pending[i]!, m[2]!);
+          if (value !== null) {
+            accepted.set(m[1]!, value);
+            historyRows.set(m[1]!, m[2]!);
+          }
+        }
+      if (parsed.exact && accepted.size === batch.length && result.finishReason === 'complete') {
+        historyOutput =
+          '<main>\n' +
+          batch.map((unit) => `<p id="${unit.id}">${historyRows.get(unit.id)}</p>`).join('\n') +
+          '\n</main>';
+        break;
+      }
+      if (attempt + 1 < attempts) {
         retries++;
         continue;
       }

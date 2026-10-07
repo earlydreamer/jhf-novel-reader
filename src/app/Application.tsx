@@ -65,8 +65,23 @@ function RouteScreen({
     case 'translation':
       return state.chapter ? (
         <TranslationScreen
+          key={state.chapter.chapterId}
+          completedVersion={
+            state.version?.source.chapterId === state.chapter.chapterId ? state.version : null
+          }
+          work={state.work}
+          position={state.position}
+          showOriginal={state.showOriginal}
+          busy={state.busy}
+          onShowOriginal={controller.showOriginal}
+          onFontSize={controller.changeFontSize}
+          onContents={controller.showContents}
+          onAdjacent={controller.adjacentChapter}
+          onRetryParagraphs={(indexes) => void controller.retryParagraphs(indexes)}
           streaming={
-            state.translationMode === 'stream' && state.connection.provider === 'openai-compatible'
+            state.paragraphRepair ||
+            (state.translationMode === 'stream' &&
+              state.connection.provider === 'openai-compatible')
           }
           fontSize={state.fontSize}
           onPreviewPosition={controller.previewPosition}
@@ -96,6 +111,12 @@ function RouteScreen({
     case 'reader':
       return state.version ? (
         <ReaderScreen
+          busy={state.busy || state.translationActive}
+          onRetryParagraphs={
+            state.streamingAvailable && state.connection.provider === 'openai-compatible'
+              ? (indexes) => void controller.retryParagraphs(indexes)
+              : undefined
+          }
           key={state.version.versionId}
           version={state.version}
           work={state.work}
@@ -122,6 +143,8 @@ function RouteScreen({
           onCheck={controller.checkConnection}
           onSelect={controller.chooseModel}
           onMode={controller.changeTranslationMode}
+          onAutoTranslate={controller.changeAutoTranslate}
+          onAutoRetryFailed={controller.changeAutoRetryFailed}
         />
       );
   }
