@@ -13,13 +13,13 @@ export function Switch({
   onChange(checked: boolean): void;
 }): JSX.Element {
   const id = useId();
-  // 설명은 label 밖에 둔다. label 안에 있으면 접근성 이름에 설명이 섞인다.
+  // 행 전체가 label이라 글자와 설명 어디를 눌러도 토글된다. 접근성 이름은 라벨 글자만 쓰고 설명은 description으로 따로 잇는다.
   return (
-    <div className="nr-switch-row">
+    <label className="nr-switch-row">
       <span className="nr-switch-row__text">
-        <label htmlFor={id} className="nr-switch-row__label">
+        <span id={`${id}-label`} className="nr-switch-row__label">
           {label}
-        </label>
+        </span>
         {description && (
           <span id={`${id}-description`} className="nr-switch-row__description">
             {description}
@@ -27,14 +27,14 @@ export function Switch({
         )}
       </span>
       <input
-        id={id}
         type="checkbox"
         role="switch"
         className="nr-switch"
         checked={checked}
+        aria-labelledby={`${id}-label`}
         aria-describedby={description ? `${id}-description` : undefined}
         onChange={(event) => onChange(event.target.checked)}
       />
-    </div>
+    </label>
   );
 }

@@ -79,6 +79,17 @@ describe('Switch', () => {
     expect(control).toHaveAccessibleDescription('끄면 직접 시작해요.');
     fireEvent.click(control);
     expect(onChange).toHaveBeenCalledWith(true);
+    fireEvent.click(screen.getByText('끄면 직접 시작해요.'));
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('LinearProgress', () => {
+  it('treats a non-finite value as indeterminate', () => {
+    render(<LinearProgress label="계산 중" value={NaN} />);
+    expect(screen.getByRole('progressbar', { name: '계산 중' })).not.toHaveAttribute(
+      'aria-valuenow',
+    );
   });
 });
 

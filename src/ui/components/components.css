@@ -517,17 +517,25 @@
   background: var(--primary-container);
   color: var(--on-primary-container);
   box-shadow: var(--elevation-3);
+  visibility: visible;
   transition:
     transform var(--duration-enter) var(--ease-standard),
-    opacity var(--duration-enter) var(--ease-standard);
+    opacity var(--duration-enter) var(--ease-standard),
+    visibility 0s linear 0s;
 }
 .nr-toolbar .nr-icon-button {
   color: inherit;
 }
+/* inert를 지원하지 않는 WebView에서도 숨은 뒤에는 포커스가 가지 않도록 visibility를 함께 쓴다. */
 .nr-toolbar--hidden {
   opacity: 0;
   transform: translateY(calc(100% + 16px + var(--inset-bottom)));
   pointer-events: none;
+  visibility: hidden;
+  transition:
+    transform var(--duration-enter) var(--ease-standard),
+    opacity var(--duration-enter) var(--ease-standard),
+    visibility 0s linear var(--duration-enter);
 }
 
 /* Switch */
@@ -537,6 +545,7 @@
   gap: 16px;
   min-block-size: var(--list-one-line);
   padding: 8px 16px;
+  cursor: pointer;
 }
 .nr-switch-row__text {
   display: flex;
