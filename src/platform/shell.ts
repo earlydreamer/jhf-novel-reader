@@ -4,13 +4,13 @@ import type { ResolvedTheme } from '../ui/theme/theme';
 
 export interface ShellPlatform {
   onBackButton(listener: () => void): () => void;
-  exitApp(): void;
+  moveToBackground(): void;
   setSystemBarsTheme(theme: ResolvedTheme): void;
 }
 
 export const noopShell: ShellPlatform = {
   onBackButton: () => () => {},
-  exitApp: () => {},
+  moveToBackground: () => {},
   setSystemBarsTheme: () => {},
 };
 
@@ -24,8 +24,9 @@ export const capacitorShell: ShellPlatform = {
       void handle.then((value) => value.remove()).catch(() => {});
     };
   },
-  exitApp() {
-    if (Capacitor.isNativePlatform()) void App.exitApp();
+  moveToBackground() {
+    // 루트에서 뒤로 가기는 앱을 끝내지 않고 백그라운드로 보낸다(Android 12+ 관례).
+    if (Capacitor.isNativePlatform()) void App.minimizeApp().catch(() => {});
   },
   setSystemBarsTheme(theme) {
     if (!Capacitor.isNativePlatform()) return;

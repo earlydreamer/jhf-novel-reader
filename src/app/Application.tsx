@@ -233,10 +233,10 @@ export function Application({
   useEffect(
     () =>
       platform.onBackButton(() => {
-        // 순서: 열린 오버레이 → 이전 화면 → 서재에서 앱 종료.
+        // 순서: 열린 오버레이 → 이전 화면 → 서재에서 앱을 백그라운드로.
         if (runTopBackHandler()) return;
         if (controller.canGoBack()) controller.back();
-        else platform.exitApp();
+        else platform.moveToBackground();
       }),
     [controller, platform],
   );

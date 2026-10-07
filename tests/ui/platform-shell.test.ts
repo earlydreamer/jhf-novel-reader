@@ -22,7 +22,7 @@ vi.mock('@capacitor/app', () => ({
       app.registered.push(event);
       return app.addListener(event, listener);
     },
-    exitApp: vi.fn(async () => {}),
+    minimizeApp: vi.fn(async () => {}),
   },
 }));
 
@@ -84,6 +84,11 @@ describe('capacitorShell native branches', () => {
       capacitorShell.onBackButton(() => {})();
     });
     expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves the app to the background instead of finishing it', () => {
+    capacitorShell.moveToBackground();
+    expect(App.minimizeApp).toHaveBeenCalledTimes(1);
   });
 
   it('sets the system bar style for the resolved theme', () => {

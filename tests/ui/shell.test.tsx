@@ -19,7 +19,7 @@ function platform() {
         back = null;
       };
     },
-    exitApp: vi.fn(),
+    moveToBackground: vi.fn(),
     setSystemBarsTheme: vi.fn(),
     pressBack: () => back?.(),
   };
@@ -57,7 +57,7 @@ describe('application shell', () => {
     act(() => shell.pressBack());
     expect(controller.getSnapshot().route.kind).toBe('home');
     act(() => shell.pressBack());
-    expect(shell.exitApp).toHaveBeenCalledTimes(1);
+    expect(shell.moveToBackground).toHaveBeenCalledTimes(1);
     controller.dispose();
   });
 
