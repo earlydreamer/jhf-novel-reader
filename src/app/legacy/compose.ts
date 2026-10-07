@@ -52,7 +52,7 @@ export function createReaderApplication(adapters: ApplicationAdapters): ReaderCo
 export function createNativeReaderApplication(): ReaderController | null {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
   return createReaderApplication({
-    sourceTransport: createSourceTransport(capacitorHttpClient),
+    sourceTransport: createSourceTransport(capacitorHttpClient, { minIntervalMs: 1000 }),
     modelTransport: createModelTransport(capacitorHttpClient),
     files: createNativePrivateFiles(), preferences: createNativePreferences(),
     secrets: createNativeSecretStore(), lifecycle: capacitorLifecycle,

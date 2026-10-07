@@ -48,10 +48,49 @@ async function dispatch(
     throw new ReaderError(source ? 'source_access' : 'connection', 'received', response.status);
   return response;
 }
-export function createSourceTransport(client: NativeHttpClient): SourceTransport {
+export type SourcePacing = {
+  /** 연속한 원문 요청 사이의 최소 간격(ms). 원문 사이트에 요청이 몰리지 않게 한다. */
+  minIntervalMs: number;
+  now?: () => number;
+  wait?: (ms: number, signal: AbortSignal) => Promise<void>;
+};
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => (clearTimeout(timer), reject(new Error('aborted'))), {
+      once: true,
+    });
+  });
+}
+export function createSourceTransport(
+  client: NativeHttpClient,
+  pacing: SourcePacing = { minIntervalMs: 0 },
+): SourceTransport {
+  const now = pacing.now ?? Date.now;
+  const wait = pacing.wait ?? sleep;
+  let lastSent = Number.NEGATIVE_INFINITY;
+  let queue: Promise<void> = Promise.resolve();
+  // 요청을 한 줄로 세워 보낸 시각 기준으로 간격을 둔다. 대기 중 취소되면 보내지 않는다.
+  function turn(signal: AbortSignal): Promise<void> {
+    const next = queue.then(async () => {
+      const delay = lastSent + pacing.minIntervalMs - now();
+      if (delay > 0) {
+        try {
+          await wait(delay, signal);
+        } catch {
+          throw new ReaderError('cancelled', 'not_sent');
+        }
+      }
+      if (signal.aborted) throw new ReaderError('cancelled', 'not_sent');
+      lastSent = now();
+    });
+    queue = next.catch(() => undefined);
+    return next;
+  }
   return {
     async get(value, signal) {
       const url = validateUrl(value, true);
+      await turn(signal);
       return dispatch(
         client,
         {

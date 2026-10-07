@@ -12,7 +12,10 @@ import { check, integer, object, text } from '../storage/validation';
 import { StorageError } from '../storage/errors';
 import { identifier, selected, workPage } from '../storage/readingValidation';
 import type { WholeChapterFlow } from './wholeChapter';
+import { normalizeChapterInput } from '../providers/plainText';
+import { referencePreset } from './preset';
 import {
+  appliedGuidanceHash,
   guidanceHash,
   validateGuidance,
   type GuidanceRepository,
@@ -168,16 +171,26 @@ export function createBatchTranslation(dependencies: {
     await dependencies.repository.write(record);
     publish({ record, error: null });
   }
-  function matchesSelection(
+  async function matchesSelection(
     version: Awaited<ReturnType<LibraryStore['listVersions']>>[number],
     selection: SelectedModel,
     guidance?: WorkGuidance | null,
-  ): boolean {
+  ): Promise<boolean> {
     return (
       version.provenance.provider === selection.connection.provider &&
       version.provenance.modelId === selection.modelId &&
-      version.provenance.guidanceHash === guidanceHash(guidance)
+      version.provenance.guidanceHash ===
+        (await appliedGuidanceHash(
+          guidance ?? null,
+          version.source.workId,
+          normalizeChapterInput(version.source),
+          referencePreset(selection),
+        ))
     );
+  }
+  async function filterAsync<T>(items: readonly T[], test: (item: T) => Promise<boolean>) {
+    const kept = await Promise.all(items.map(test));
+    return items.filter((_, index) => kept[index]);
   }
   async function initialize(): Promise<void> {
     const record = await dependencies.repository.read();
@@ -267,8 +280,10 @@ export function createBatchTranslation(dependencies: {
       if (!retranslate) {
         for (const chapter of chapters) {
           const versions = await dependencies.library.listVersions(chapter.chapterId);
-          if (versions.some((version) => matchesSelection(version, frozenSelection, guidance)))
-            alreadySaved++;
+          const matching = await filterAsync(versions, (version) =>
+            matchesSelection(version, frozenSelection, guidance),
+          );
+          if (matching.length) alreadySaved++;
         }
       }
       if (cancelled || control.signal.aborted || !foreground || disposed)
@@ -337,7 +352,7 @@ export function createBatchTranslation(dependencies: {
         const chapter = record.chapters[record.cursor]!;
         const versions = await dependencies.library.listVersions(chapter.chapterId);
         const selection = record.selection;
-        const sameModel = versions.filter((version) =>
+        const sameModel = await filterAsync(versions, (version) =>
           matchesSelection(version, selection, record!.guidance),
         );
         const beforeRequest = record.currentVersionIds;

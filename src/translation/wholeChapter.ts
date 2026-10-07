@@ -16,11 +16,12 @@ import type { AttemptRepository } from './attempts';
 import { createSingleFlight } from './singleFlight';
 import {
   guidanceContext,
-  guidanceHash,
+  appliedGuidanceHash,
   type GuidanceRepository,
   type WorkGuidance,
 } from './guidance';
 import { normalizeChapterInput } from '../providers/plainText';
+import { contextHints, referencePreset } from './preset';
 export interface FlowDependencies {
   source: RenewalSource;
   createProvider(selection: SelectedModel): ProviderSession;
@@ -94,13 +95,17 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           frozenGuidance === undefined
             ? ((await deps.guidance?.read(chapter.workId)) ?? null)
             : frozenGuidance;
-        const referenceContext = guidanceContext(
-          guidance,
-          chapter.workId,
-          normalizeChapterInput(source),
-        );
+        const preset = referencePreset(selected);
+        const segmented = selected.connection.provider === 'openai-compatible' && !!selected.limits;
+        // 문형 힌트는 구간 번역에서만, 그 구간에 해당 문형이 있을 때만 참고 데이터 앞에 붙는다.
+        const reference = (input: string) => {
+          const hints = segmented ? contextHints(input) : '';
+          const terms = guidanceContext(guidance, chapter.workId, input, preset);
+          return hints ? hints + (terms || '\n') : terms;
+        };
+        const chapterReference = reference(normalizeChapterInput(source));
         if (
-          referenceContext &&
+          chapterReference &&
           (selected.connection.provider !== 'openai-compatible' || !selected.limits)
         )
           throw new ReaderError('guidance_unsupported');
@@ -124,7 +129,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
                 ? 'hymt2-segments-v1'
                 : 'hymt2-ko-v1',
             onProgress: (completed, total) => publish({ progress: { completed, total } }),
-            ...(referenceContext ? { referenceContext } : {}),
+            ...(chapterReference ? { reference } : {}),
           },
           control.signal,
         );
@@ -154,6 +159,12 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           default:
             throw new ReaderError('connection');
         }
+        const appliedHash = await appliedGuidanceHash(
+          guidance,
+          chapter.workId,
+          normalizeChapterInput(source),
+          preset,
+        );
         const versionId = crypto.randomUUID();
         const value: CompletedTranslation = {
           schemaVersion: 2,
@@ -174,7 +185,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             promptVersion: result.generation ? 'hymt2-segments-v1' : 'hymt2-ko-v1',
             languageDirection: 'ja-ko',
             ...(result.generation ? { generation: result.generation } : {}),
-            ...(guidanceHash(guidance) ? { guidanceHash: guidanceHash(guidance) } : {}),
+            ...(appliedHash ? { guidanceHash: appliedHash } : {}),
           },
         };
         if (control.signal.aborted || disposed) throw new ReaderError('cancelled', 'unknown');

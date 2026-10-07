@@ -47,7 +47,7 @@ export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelP
       setMessage('저장했습니다. 다음 번역에 적용되며 기존 번역은 그대로 남습니다.');
     } catch {
       setMessage(
-        '저장하지 못했습니다. 필수 항목과 글자 수·별칭 수를 확인하세요. 입력은 그대로 남아 있습니다.',
+        '저장하지 못했습니다. 필수 항목, 글자 수·별칭 수, 중복된 이름을 확인하세요. 입력은 그대로 남아 있습니다.',
       );
     } finally {
       setBusy(false);
@@ -62,8 +62,9 @@ export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelP
         예산이 부족하면 항목을 줄인 뒤 다시 시작하세요.
       </p>
       <p>
-        용어는 40개, 캐릭터는 20개까지 저장할 수 있습니다. 원문·표기·이름은 80자, 분류는 40자,
-        설명은 300자, 말투 지침은 400자까지 입력하세요.
+        저장 개수에는 제한이 없고, 번역 구간에 등장한 항목만 전달합니다. 원문·표기·이름은 80자,
+        분류는 40자, 설명은 300자, 말투 지침은 400자까지 입력하세요. 같은 이름(전각·반각 차이
+        포함)은 한 번만 등록할 수 있습니다.
       </p>
       <fieldset disabled={busy || locked || !available}>
         <legend>용어집</legend>
@@ -113,7 +114,6 @@ export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelP
         ))}
         <button
           type="button"
-          disabled={draft.terms.length >= 40}
           onClick={() =>
             change({
               ...draft,
@@ -189,7 +189,6 @@ export function GuidancePanel({ workId, locked, onRead, onSave }: GuidancePanelP
         ))}
         <button
           type="button"
-          disabled={draft.voices.length >= 20}
           onClick={() =>
             change({
               ...draft,

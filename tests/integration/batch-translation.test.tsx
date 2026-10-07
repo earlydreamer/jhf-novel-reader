@@ -8,7 +8,12 @@ import { createModelTransport, createSourceTransport } from '../../src/platform/
 import { createLibraryStore } from '../../src/storage/library';
 import { createBatchRepository } from '../../src/translation/batch';
 import type { NativeHttpRequest } from '../../src/contracts';
-import { createGuidanceRepository, guidanceContext } from '../../src/translation/guidance';
+import {
+  appliedGuidanceHash,
+  createGuidanceRepository,
+  guidanceContext,
+} from '../../src/translation/guidance';
+import { normalizeChapterInput } from '../../src/providers/plainText';
 
 afterEach(cleanup);
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
@@ -368,11 +373,30 @@ test('approved work context survives restart, is included in requests and change
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(1);
   const body = harness.posts()[0]!.data as { messages: { content: string }[] };
-  expect(body.messages[0]!.content).toContain('가온');
-  expect(body.messages[0]!.content).toContain('never invent a speaker');
-  expect((await harness.library.listVersions('n1234ab/1'))[0]!.provenance.guidanceHash).toBe(
-    first.hash,
+  expect(body.messages[0]!.content).toMatch(
+    /^Reference the following translations:\n.* translates to 가온\n/,
   );
+  expect(body.messages[0]!.content).toContain('합성일 때 존댓말');
+  expect(body.messages[0]!.content).toContain(
+    'only when the source clearly identifies the speaker',
+  );
+  const saved = (await harness.library.listVersions('n1234ab/1'))[0]!;
+  expect(saved.provenance.guidanceHash).toBe(
+    await appliedGuidanceHash(first, 'n1234ab', normalizeChapterInput(saved.source)),
+  );
+  expect(saved.provenance.guidanceHash).not.toBe(first.hash);
+  // 이 회차에 등장하지 않는 항목을 추가해도 기존 완성본은 같은 선택으로 남는다.
+  await harness.app.saveGuidance('n1234ab', {
+    ...approved,
+    terms: [
+      ...approved.terms,
+      { source: '未登場', target: '미등장', aliases: [], category: '', note: '' },
+    ],
+  });
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(1);
+  await harness.app.runBatch();
+  expect(harness.posts()).toHaveLength(1);
   const second = await harness.app.saveGuidance('n1234ab', {
     ...approved,
     terms: [{ ...approved.terms[0]!, target: '다온' }],
@@ -388,6 +412,29 @@ test('approved work context survives restart, is included in requests and change
   expect((await restarted.readGuidance('n1234ab'))?.hash).toBe(second.hash);
   expect(harness.posts()).toHaveLength(2);
   restarted.dispose();
+});
+test('the work glossary has no entry-count cap but rejects normalized duplicate names', async () => {
+  const harness = fixture();
+  await harness.setup();
+  const terms = Array.from({ length: 60 }, (_, index) => ({
+    source: `用語${index}`,
+    target: `용어${index}`,
+    aliases: [],
+    category: '',
+    note: '',
+  }));
+  expect((await harness.app.saveGuidance('n1234ab', { terms, voices: [] })).terms).toHaveLength(60);
+  await expect(
+    harness.app.saveGuidance('n1234ab', {
+      terms: [
+        { source: 'アルベルト', target: '알베르트', aliases: [], category: '', note: '' },
+        { source: 'ｱﾙﾍﾞﾙﾄ', target: '알버트', aliases: [], category: '', note: '' },
+      ],
+      voices: [],
+    }),
+  ).rejects.toThrow();
+  expect((await harness.app.readGuidance('n1234ab'))?.terms).toHaveLength(60);
+  harness.app.dispose();
 });
 test('editing context after a batch preview requires a fresh preview and makes no generation request', async () => {
   const harness = fixture();

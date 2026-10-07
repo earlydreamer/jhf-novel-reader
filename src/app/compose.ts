@@ -142,7 +142,7 @@ export function createNativeRenewalApplication(): RenewalController {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
     return createRenewalController();
   return createRenewalApplication({
-    sourceTransport: createSourceTransport(capacitorHttpClient),
+    sourceTransport: createSourceTransport(capacitorHttpClient, { minIntervalMs: 1000 }),
     modelTransport: createModelTransport(capacitorHttpClient),
     files: createNativePrivateFiles(),
     preferences: createNativePreferences(),

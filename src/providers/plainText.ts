@@ -11,6 +11,7 @@ import { authorization, envelope, listModels, object } from './catalog';
 import { normalizeOpenAICompatibleBaseUrl } from './endpoint';
 import {
   chapterAtoms,
+  estimatedInputTokens,
   planSegments,
   SEGMENT_INSTRUCTION,
   validLocalLimits,
@@ -88,11 +89,23 @@ export function createProviderSession(
         throw new ReaderError('invalid_output');
       if (limits && request.promptVersion !== 'hymt2-segments-v1')
         throw new ReaderError('invalid_output');
-      if (request.referenceContext && !limits) throw new ReaderError('input_limit');
+      const chapterReference = request.reference?.(normalizeChapterInput(request.source)) ?? '';
+      if (chapterReference && !limits) throw new ReaderError('input_limit');
       const segments = limits
-        ? planSegments(request.source, limits, request.referenceContext)
+        ? planSegments(request.source, limits, chapterReference)
         : [{ input: normalizeChapterInput(request.source), separator: '' }];
       if (!segments[0]?.input.trim()) throw new ReaderError('source_parse');
+      const references = segments.map((segment) =>
+        limits ? (request.reference?.(segment.input) ?? '') : '',
+      );
+      if (
+        limits &&
+        segments.some(
+          (segment, index) =>
+            estimatedInputTokens(segment.input, references[index]) > limits.inputBudgetTokens,
+        )
+      )
+        throw new ReaderError('input_limit');
       const auth = await authorization(connection, secrets, signal);
       const outputs: string[] = [];
       if (limits) request.onProgress?.(0, segments.length);
@@ -109,8 +122,7 @@ export function createProviderSession(
                   ? [
                       {
                         role: 'user',
-                        content:
-                          SEGMENT_INSTRUCTION + (request.referenceContext ?? '') + segment.input,
+                        content: references[index] + SEGMENT_INSTRUCTION + segment.input,
                       },
                     ]
                   : [
