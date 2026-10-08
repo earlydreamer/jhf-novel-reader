@@ -114,7 +114,7 @@ function RouteScreen({
           onSettings={() => controller.navigate({ kind: 'settings' })}
         />
       ) : (
-        <p>작품 목차를 찾지 못했습니다.</p>
+        <p>작품 목차를 찾지 못했어요.</p>
       );
     case 'translation':
       return state.chapter ? (

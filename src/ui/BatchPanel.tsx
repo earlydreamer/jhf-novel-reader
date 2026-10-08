@@ -25,9 +25,9 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   return (
     <section className="nr-batch-panel" aria-label="일괄 번역">
       <h2>미리 번역하기</h2>
-      <p>범위나 전체 회차를 확인한 뒤 시작하세요. 완료된 회차는 저장본으로 읽을 수 있습니다.</p>
+      <p>범위나 전체 회차를 확인한 뒤 시작해 주세요. 완료한 회차는 저장본으로 읽을 수 있어요.</p>
       {!props.batchAvailable && !active && (
-        <p>연결 설정에서 서버와 모델을 확인하면 번역 대상을 준비할 수 있습니다.</p>
+        <p>연결 설정에서 서버와 모델을 확인하면 번역 대상을 준비할 수 있어요.</p>
       )}
       {!props.batchAvailable && !active && (
         <button onClick={props.onSettings}>일괄 번역 연결 설정</button>
@@ -66,11 +66,11 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           </button>
         </fieldset>
       </form>
-      {props.batch?.preparing && <p role="status">전체 목차와 번역할 회차를 확인하고 있습니다.</p>}
+      {props.batch?.preparing && <p role="status">전체 목차와 번역할 회차를 확인하고 있어요.</p>}
       {props.batch?.scanProgress && (
         <p role="status">
           범위 후보 스캔 {props.batch.scanProgress.completed}/{props.batch.scanProgress.total}화 ·
-          모델 요청 없이 원문을 확인하고 있습니다.
+          모델 요청 없이 원문을 확인하고 있어요.
         </p>
       )}
       {props.batch?.error && <p role="alert">{props.batch.error}</p>}
@@ -83,8 +83,8 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           <p>모델: {record.selection.modelId}</p>
           <p>
             {record.retranslate
-              ? '기존 완성본을 보존하며 새 번역을 추가합니다.'
-              : `이미 저장한 ${record.alreadySaved}화는 기본적으로 건너뜁니다.`}
+              ? '기존 완성본은 그대로 두고 새 번역을 추가해요.'
+              : `이미 저장한 ${record.alreadySaved}화는 기본적으로 건너뛰어요.`}
           </p>
           <p role="status">
             처리 {record.cursor}/{record.chapters.length}화 · 새로 저장 {record.completed}화 ·
@@ -102,8 +102,8 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           {record.phase === 'prepared' && record.scan?.status === 'pending' && (
             <>
               <p>
-                선택한 범위 전체에서 후보를 한 번 확인합니다. 작품 용어집에서 편집한 항목은 먼저
-                저장하세요.
+                선택한 범위 전체에서 후보를 한 번 확인해요. 작품 용어집에서 편집한 항목은 먼저
+                저장해 주세요.
               </p>
               <button disabled={!canPrepare} onClick={props.onScanBatch}>
                 범위 고유명사 후보 스캔
@@ -119,7 +119,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             />
           )}
           {record.scan?.status === 'confirmed' && (
-            <p>후보 확인을 마쳤습니다. 확정한 작품 용어집으로 각 회차를 순서대로 번역합니다.</p>
+            <p>후보 확인을 마쳤어요. 확정한 작품 용어집으로 각 회차를 순서대로 번역해요.</p>
           )}
           {record.phase === 'prepared' && (!record.scan || record.scan.status === 'confirmed') && (
             <button disabled={!canPrepare} onClick={() => props.onRunBatch?.()}>
@@ -128,7 +128,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           )}
           {record.phase === 'paused' && (
             <>
-              <p>일괄 번역이 중단됐습니다. 완료본은 보존했습니다.</p>
+              <p>일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.</p>
               <button
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.()}
@@ -140,8 +140,8 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           {record.phase === 'unknown' && (
             <>
               <p>
-                이전 요청 결과를 확인할 수 없습니다. 다시 요청하면 중복 처리나 비용이 발생할 수
-                있습니다.
+                이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수
+                있어요.
               </p>
               <button
                 disabled={!props.batchAvailable || props.globalBlocked || active}
@@ -153,14 +153,14 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           )}
           {record.phase === 'saving' && (
             <>
-              <p>완료한 번역을 저장하지 못했습니다. 새 요청 전에 저장을 마쳐야 합니다.</p>
+              <p>완료한 번역을 저장하지 못했어요. 새로 요청하기 전에 저장을 마쳐야 해요.</p>
               <button disabled={active} onClick={props.onRetryBatchSave}>
                 모델 요청 없이 일괄 결과 저장 다시 시도
               </button>
             </>
           )}
           {record.phase === 'complete' && (
-            <p>일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.</p>
+            <p>일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.</p>
           )}
         </div>
       )}

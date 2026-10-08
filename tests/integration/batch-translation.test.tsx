@@ -353,7 +353,7 @@ test('UI offers range and all preview with a separate explicit start action', as
     timeout: 10_000,
   });
   await screen.findByText(
-    '일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.',
+    '일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.',
     {},
     { timeout: 10_000 },
   );
@@ -383,9 +383,7 @@ test('keeps a failed preparation error on B while preserving A as the latest rec
   render(<Application controller={harness.app} />);
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
-  expect(
-    await screen.findByText(/전체 목차와 지정 범위를 확인하지 못했습니다/),
-  ).toBeInTheDocument();
+  expect(await screen.findByText(/전체 목차와 고른 범위를 확인하지 못했어요/)).toBeInTheDocument();
   expect(screen.queryByText('확정 범위: 1–1화 · 총 1화')).toBeNull();
 
   harness.app.back();
@@ -393,7 +391,7 @@ test('keeps a failed preparation error on B while preserving A as the latest rec
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
   expect(await screen.findByText('확정 범위: 1–1화 · 총 1화')).toBeInTheDocument();
-  expect(screen.queryByText(/전체 목차와 지정 범위를 확인하지 못했습니다/)).toBeNull();
+  expect(screen.queryByText(/전체 목차와 고른 범위를 확인하지 못했어요/)).toBeNull();
   expect(harness.posts()).toHaveLength(0);
   harness.app.dispose();
 });
@@ -466,7 +464,7 @@ test('corrupt queue metadata blocks generation after restart', async () => {
   harness.bytes.set('batches/current.1.json', '{');
   const restarted = createRenewalApplication(harness.adapters);
   await restarted.initialize();
-  expect(restarted.getSnapshot().error).toContain('새 번역을 차단');
+  expect(restarted.getSnapshot().error).toContain('새 번역을 막았어요');
   await restarted.checkConnection();
   await restarted.runBatch(true);
   expect(harness.posts()).toHaveLength(0);
@@ -562,7 +560,7 @@ test('editing context after a batch preview requires a fresh preview and makes n
   await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(0);
-  expect(harness.app.getSnapshot().batch?.error).toContain('용어집·말투가 바뀌었습니다');
+  expect(harness.app.getSnapshot().batch?.error).toContain('용어집이나 말투가 바뀌었어요');
   harness.app.dispose();
 });
 test('oversized approved context fails before generation without silently dropping terms', async () => {
@@ -594,7 +592,7 @@ test('the work editor only applies explicitly saved terms and supports multiple 
   fireEvent.change(screen.getByLabelText('용어 1 별칭'), { target: { value: '合成君, 先生' } });
   expect(await harness.app.readGuidance('n1234ab')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '용어집·말투 저장' }));
-  await screen.findByText(/저장했습니다. 다음 번역에 적용/);
+  await screen.findByText(/저장했어요. 다음 번역부터 적용/);
   expect((await harness.app.readGuidance('n1234ab'))?.terms[0]?.aliases).toEqual([
     '合成君',
     '先生',
@@ -615,7 +613,7 @@ test('the work glossary keeps a failed draft across Back and resets it for anoth
   fireEvent.change(sourceField, { target: { value: '초안은 저장 실패 뒤에도 남아야 해요.' } });
   harness.failGuidance = true;
   fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
-  await screen.findByText(/저장하지 못했습니다/);
+  await screen.findByText(/저장하지 못했어요/);
   expect(sourceField).toHaveValue('초안은 저장 실패 뒤에도 남아야 해요.');
   let handled = false;
   act(() => {
@@ -767,7 +765,7 @@ test('candidate UI requires a checked item and spelling, refreshes the editor af
   await waitFor(() => expect(screen.getByLabelText('용어 1 한국어 표기')).toHaveValue('알베르트'));
   expect(harness.posts()).toHaveLength(0);
   fireEvent.click(start);
-  await screen.findByText('일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.');
+  await screen.findByText('일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.');
   await harness.app.continueReading(
     (await harness.library.listVersions('n1234ab/1'))[0]!.versionId,
   );

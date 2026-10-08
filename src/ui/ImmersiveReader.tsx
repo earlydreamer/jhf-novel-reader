@@ -498,7 +498,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     ),
     props.route === 'translation' && props.catalogStatus === 'checking' && (
       <p key="catalog-checking" className="nr-reader-note" role="status">
-        저장된 연결의 서버와 모델 목록을 확인하고 있습니다.
+        저장된 연결의 서버와 모델 목록을 확인하고 있어요.
       </p>
     ),
     props.route === 'translation' && catalogUnavailable && props.catalogStatus !== 'checking' && (

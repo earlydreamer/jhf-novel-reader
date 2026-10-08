@@ -25,5 +25,5 @@ export function normalizeOpenAICompatibleBaseUrl(value: string): string {
 
 /** Static text only: no endpoint, credentials, raw exception or novel content can be echoed. */
 export function getLocalConnectionGuidance(): string {
-  return 'localhost는 휴대폰 자신을 가리킵니다. PC의 LAN 주소와 기존 Ollama 또는 LM Studio 서버 실행 상태를 확인하세요. 서버를 공인 인터넷에 노출할 필요는 없습니다.';
+  return 'localhost는 휴대폰 자신을 가리켜요. PC의 LAN 주소와 Ollama 또는 LM Studio 서버가 실행 중인지 확인해 주세요. 서버를 공인 인터넷에 열 필요는 없어요.';
 }
