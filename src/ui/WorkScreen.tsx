@@ -1,29 +1,48 @@
-import type { JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import type { ChapterRef, WorkPage } from '../contracts/reading';
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
 import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
 import { TitleHeading, type TitleControls } from './TitleHeading';
 import { displayedTitle } from '../translation/titles';
+import { BottomSheet, Dialog } from './components/Modal';
+import { Button } from './components/Button';
+import { ListItem } from './components/ListItem';
+import type { WorkRecentSnapshot } from '../app/renewalController';
+
 export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   work: WorkPage;
   selectedChapterId?: string;
+  recentChapterId?: string;
+  recentStatus?: WorkRecentSnapshot['status'] | 'idle';
+  batchGlobalBlocked?: boolean;
+  dialogRequest?: { dialog: 'guidance' | 'batch'; id: number; workId: string } | null;
+  onDialogRequestHandled?(id: number): void;
   busy: boolean;
   savedChapterIds: readonly string[];
   onSelect(chapter: ChapterRef): void;
   onLoadMore(): void;
+  onContinue?(): void;
+  onRetryContinue?(): void;
   guidance?: Omit<GuidancePanelProps, 'workId'>;
   titles?: TitleControls;
 }
 export function WorkScreen({
   work,
   selectedChapterId,
+  recentChapterId,
   savedChapterIds,
   busy,
   onSelect,
   onLoadMore,
+  recentStatus,
+  dialogRequest,
+  onDialogRequestHandled,
+  onContinue,
+  onRetryContinue,
   batch,
   batchAvailable,
+  batchGlobalBlocked,
   onPrepareBatch,
   onRunBatch,
   onScanBatch,
@@ -34,86 +53,247 @@ export function WorkScreen({
   guidance,
   titles,
 }: WorkScreenProps): JSX.Element {
-  return (
-    <section aria-label="작품 목차">
-      <TitleHeading
-        key={`title:${work.workId}`}
-        titleKey={work.workId}
-        source={work.title}
-        label="작품 제목"
-        controls={titles}
-      />
-      <a href={work.canonicalUrl} target="_blank" rel="noreferrer">
-        작품 원문
-      </a>
-      <h2>목차</h2>
-      {titles && (
-        <button disabled={titles.busy} onClick={() => void titles.onTranslate()}>
-          미번역 목차 제목 번역
-        </button>
-      )}
-      {guidance && (
-        <GuidancePanel
-          key={work.workId}
-          workId={work.workId}
-          {...guidance}
-          refreshKey={
-            batch?.record?.scan?.status === 'confirmed' ? batch.record.guidance?.hash : undefined
+  const [sheetChapter, setSheetChapter] = useState<ChapterRef | null>(null);
+  const [dialog, setDialog] = useState<'guidance' | 'batch' | null>(null);
+  const guidanceBody = useRef<HTMLDivElement>(null);
+  const recentRow = useRef<HTMLDivElement>(null);
+  const didScrollRecent = useRef(false);
+  const recentIsLoaded =
+    !!recentChapterId && work.chapters.some((item) => item.chapterId === recentChapterId);
+  useEffect(() => {
+    if (!recentIsLoaded || !recentChapterId || didScrollRecent.current) return;
+    didScrollRecent.current = true;
+    recentRow.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [recentChapterId, recentIsLoaded]);
+  useEffect(() => {
+    if (!dialogRequest) return;
+    return () => onDialogRequestHandled?.(dialogRequest.id);
+  }, [dialogRequest, onDialogRequestHandled]);
+  const requestedDialog = dialogRequest?.workId === work.workId ? dialogRequest.dialog : null;
+  const visibleDialog = requestedDialog ?? dialog;
+  const closeDialog = () => {
+    setDialog(null);
+    if (requestedDialog && dialogRequest) onDialogRequestHandled?.(dialogRequest.id);
+  };
+  const savedCount = new Set(savedChapterIds).size;
+  const maximumOrdinal = Math.max(0, ...work.chapters.map((chapter) => chapter.ordinal));
+  const recentOwnsWork = batch?.preparing
+    ? batch.preparingWorkId === work.workId
+    : batch?.record?.work.workId === work.workId;
+  const currentBatchActive = Boolean(recentOwnsWork && batch?.active);
+  const batchRecord =
+    recentOwnsWork && batch?.record?.work.workId === work.workId ? batch.record : null;
+  const visibleBatch =
+    !recentOwnsWork || !batch
+      ? null
+      : batch.preparing && batch.record?.work.workId !== work.workId
+        ? {
+            ...batch,
+            record: null,
+            error: null,
+            scanProgress: undefined,
+            chapterProgress: undefined,
           }
+        : batch;
+  const selectedTitles = titles?.entries ?? [];
+  const chapterSavedTitle = (chapter: ChapterRef) =>
+    selectedTitles.find(
+      (entry) => entry.key === chapter.chapterId && entry.source === chapter.title,
+    );
+  const openSheet = (chapter: ChapterRef) => setSheetChapter(chapter);
+  const sheetTitle = sheetChapter ? chapterSavedTitle(sheetChapter) : undefined;
+  const currentRecentStatus = recentStatus ?? 'none';
+  return (
+    <section className="nr-work-screen" aria-label="작품 목차">
+      <header className="nr-work-heading">
+        <TitleHeading
+          key={`title:${work.workId}`}
+          titleKey={work.workId}
+          source={work.title}
+          label="작품 제목"
+          controls={titles}
         />
-      )}
-      <BatchPanel
-        workId={work.workId}
-        batch={batch}
-        batchAvailable={batchAvailable}
-        onPrepareBatch={onPrepareBatch}
-        onRunBatch={onRunBatch}
-        onScanBatch={onScanBatch}
-        onConfirmBatchCandidates={onConfirmBatchCandidates}
-        onCancelBatch={onCancelBatch}
-        onRetryBatchSave={onRetryBatchSave}
-        onSettings={onSettings}
-      />
-      <a href={work.pageUrl} target="_blank" rel="noreferrer">
-        현재 목차 원문
-      </a>
-      {work.chapters.length > 0 && (
-        <p>
-          현재 확인한 범위: {work.chapters[0]!.ordinal}–
-          {work.chapters[work.chapters.length - 1]!.ordinal}화 ({work.chapters.length}개 회차)
+        <p lang="ja" className="nr-work-heading__original">
+          {work.title}
         </p>
-      )}
-      <p>
-        {work.complete
-          ? `확인된 전체 목차 (총 ${work.chapters[work.chapters.length - 1]?.ordinal ?? 0}화)`
-          : '일부 목차입니다. 전체 목록은 아직 확인하지 않았습니다.'}
-      </p>
-      <ol start={work.chapters[0]?.ordinal || 1}>
-        {work.chapters.map((chapter) => (
-          <li
-            key={chapter.chapterId}
-            value={chapter.ordinal}
-            aria-current={chapter.chapterId === selectedChapterId ? 'true' : undefined}
-          >
-            <button disabled={busy} onClick={() => onSelect(chapter)}>
-              {displayedTitle(titles?.entries ?? [], chapter.chapterId, chapter.title)}
+        <p className="nr-work-heading__meta">
+          {work.complete
+            ? `전체 ${maximumOrdinal}화 · ${savedCount}화 저장됨`
+            : `${maximumOrdinal}화까지 확인했어요 · ${savedCount}화 저장됨`}
+        </p>
+        <Button
+          variant="filled"
+          className="nr-work-continue"
+          disabled={
+            busy ||
+            currentRecentStatus === 'loading' ||
+            currentRecentStatus === 'idle' ||
+            currentRecentStatus === 'error'
+          }
+          onClick={() => onContinue?.()}
+        >
+          이어서 읽기
+        </Button>
+        {(currentRecentStatus === 'loading' || currentRecentStatus === 'idle') && (
+          <p role="status">최근 읽은 위치를 확인하고 있어요.</p>
+        )}
+        {currentRecentStatus === 'error' && (
+          <p role="alert">
+            최근 읽은 회차를 확인하지 못했어요. 다시 시도해 주세요.{' '}
+            <button type="button" onClick={() => onRetryContinue?.()}>
+              다시 시도
             </button>
-            <TitleHeading
-              titleKey={chapter.chapterId}
-              source={chapter.title}
-              label={`${chapter.ordinal}화 제목`}
-              controls={titles}
-              inline
-            />
-            {savedChapterIds.includes(chapter.chapterId) && <span> 번역 저장됨</span>}
-            {chapter.chapterId === selectedChapterId && <span> 선택한 회차</span>}
-          </li>
-        ))}
+          </p>
+        )}
+      </header>
+      {currentBatchActive && (
+        <div className="nr-batch-progress-card">
+          <button type="button" onClick={() => setDialog('batch')}>
+            <span>
+              {batch?.preparing
+                ? '미리 번역 대상을 확인하고 있어요'
+                : `미리 번역하는 중 · ${batchRecord?.cursor ?? 0}/${batchRecord?.chapters.length ?? 0}화`}
+            </span>
+            <span>진행 보기</span>
+          </button>
+          <Button variant="text" onClick={onCancelBatch}>
+            중단
+          </Button>
+        </div>
+      )}
+      <h2>회차 목록</h2>
+      <ol className="nr-work-chapters" start={work.chapters[0]?.ordinal || 1}>
+        {work.chapters.map((chapter) => {
+          const saved = savedChapterIds.includes(chapter.chapterId);
+          const actualRecent = recentIsLoaded && chapter.chapterId === recentChapterId;
+          const translated = chapterSavedTitle(chapter);
+          const chapterTitle = displayedTitle(selectedTitles, chapter.chapterId, chapter.title);
+          const supporting = [
+            saved ? '저장됨' : '',
+            actualRecent ? '읽는 중' : '',
+            translated ? '' : '제목 번역 전',
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <li key={chapter.chapterId} value={chapter.ordinal}>
+              <div ref={actualRecent ? recentRow : undefined}>
+                <ListItem
+                  headline={
+                    <>
+                      <span>{chapter.ordinal}화</span>　{chapterTitle}
+                    </>
+                  }
+                  supporting={supporting || undefined}
+                  lang={translated ? undefined : 'ja'}
+                  current={actualRecent}
+                  disabled={busy}
+                  mainLabel={`${chapter.ordinal}화 ${chapterTitle}`}
+                  supportingId={
+                    supporting
+                      ? `chapter-${encodeURIComponent(chapter.chapterId)}-state`
+                      : undefined
+                  }
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    openSheet(chapter);
+                  }}
+                  onClick={() => onSelect(chapter)}
+                  trailing={
+                    <button
+                      type="button"
+                      aria-label={`${chapter.ordinal}화 메뉴`}
+                      onClick={() => openSheet(chapter)}
+                    >
+                      ⋮
+                    </button>
+                  }
+                />
+              </div>
+              {selectedChapterId === chapter.chapterId && !actualRecent && (
+                <span className="nr-work-selected-hint">선택한 회차</span>
+              )}
+            </li>
+          );
+        })}
       </ol>
       {work.nextPageUrl && (
-        <button disabled={busy} onClick={onLoadMore}>
+        <Button variant="text" disabled={busy} onClick={onLoadMore}>
           다음 목차 페이지 불러오기
-        </button>
+        </Button>
+      )}
+      <BottomSheet
+        open={!!sheetChapter}
+        title={sheetChapter ? `${sheetChapter.ordinal}화 메뉴` : '회차 메뉴'}
+        onClose={() => setSheetChapter(null)}
+      >
+        {sheetChapter && (
+          <div className="nr-work-chapter-menu">
+            <p>{sheetTitle ? '제목 다시 번역하기' : '제목 번역하기'}</p>
+            {titles && (
+              <TitleHeading
+                titleKey={sheetChapter.chapterId}
+                source={sheetChapter.title}
+                label={`${sheetChapter.ordinal}화 제목`}
+                controls={titles}
+                inline
+              />
+            )}
+            <a href={sheetChapter.canonicalUrl} target="_blank" rel="noreferrer">
+              원문 사이트에서 보기
+            </a>
+          </div>
+        )}
+      </BottomSheet>
+      <Dialog
+        open={visibleDialog === 'guidance'}
+        title="작품 용어집"
+        onClose={closeDialog}
+        keepMounted
+        fullScreen={{
+          confirmLabel: '저장하기',
+          onConfirm: () =>
+            guidanceBody.current?.querySelector<HTMLButtonElement>('[data-guidance-save]')?.click(),
+          confirmDisabled: guidance?.locked,
+        }}
+      >
+        {guidance && (
+          <div ref={guidanceBody}>
+            <GuidancePanel
+              key={work.workId}
+              workId={work.workId}
+              {...guidance}
+              refreshKey={
+                batchRecord?.scan?.status === 'confirmed' ? batchRecord.guidance?.hash : undefined
+              }
+            />
+          </div>
+        )}
+      </Dialog>
+      <Dialog
+        open={visibleDialog === 'batch'}
+        title="미리 번역하기"
+        onClose={closeDialog}
+        fullScreen
+        keepMounted
+      >
+        <BatchPanel
+          key={`${work.workId}:${batchRecord?.id ?? 'none'}`}
+          workId={work.workId}
+          batch={visibleBatch}
+          batchAvailable={batchAvailable}
+          globalBlocked={batchGlobalBlocked}
+          onPrepareBatch={onPrepareBatch}
+          onRunBatch={onRunBatch}
+          onScanBatch={onScanBatch}
+          onConfirmBatchCandidates={onConfirmBatchCandidates}
+          onCancelBatch={recentOwnsWork ? onCancelBatch : undefined}
+          onRetryBatchSave={recentOwnsWork ? onRetryBatchSave : undefined}
+          onSettings={onSettings}
+        />
+      </Dialog>
+      {recentChapterId && !recentIsLoaded && (
+        <span className="sr-only">최근 읽은 회차는 현재 목차 범위에 없어요.</span>
       )}
     </section>
   );

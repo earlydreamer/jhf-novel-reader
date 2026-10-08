@@ -60,6 +60,16 @@ export type CatalogStatus =
   | 'model_missing'
   | 'unavailable';
 export type SourceChangeStatus = 'idle' | 'checking' | 'unchanged' | 'changed' | 'unavailable';
+export type WorkRecentSnapshot =
+  | { workId: string; status: 'loading' }
+  | { workId: string; status: 'none' | 'error' }
+  | {
+      workId: string;
+      status: 'verified';
+      chapterId: string;
+      versionId: string;
+      position: ReadingPosition | null;
+    };
 export interface RenewalDependencies {
   readonly titles?: TitleRepository;
   readonly translateTitles?: TitleTranslation;
@@ -110,6 +120,7 @@ export interface RenewalSnapshot {
   readonly legacyWarnings: readonly LegacyMigrationWarning[];
   readonly route: Route;
   readonly work: WorkPage | null;
+  readonly workRecent: WorkRecentSnapshot | null;
   readonly savedChapterIds: readonly string[];
   readonly chapter: ChapterRef | null;
   readonly translation: TranslationState;
@@ -210,6 +221,8 @@ export interface RenewalController {
   loadMoreWorkPage(): Promise<void>;
   selectChapter(chapter: ChapterRef): Promise<void>;
   continueReading(versionId: string): Promise<void>;
+  continueReadingFromWork(workId: string): Promise<void>;
+  retryWorkRecent(workId: string): Promise<void>;
   changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
   checkConnection(secret?: string): Promise<void>;
   chooseModel(modelId: string): void;
@@ -255,6 +268,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     route: { kind: 'home' },
     legacyWarnings: [],
     work: null,
+    workRecent: null,
     savedChapterIds: [],
     chapter: null,
     version: null,
@@ -298,6 +312,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   const retiredBatchRecordIds = new Set<string>();
   const retiredCompletedVersionIds = new Set<string>();
   const removalGenerations = new Map<string, number>();
+  const workRecentOperations = new Map<string, number>();
+  const workRecentPromises = new Map<string, Promise<WorkRecentSnapshot>>();
   const workWriters = new Map<string, Set<Promise<unknown>>>();
   let disposed = false;
   let initialized = !dependencies.lifecycle,
@@ -697,6 +713,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (!sameWorkChapterMove) history.push(snapshot.route);
     publish({ route, showOriginal: false, error: null, busy: false });
     if (route.kind === 'home') void refreshLibrary();
+    if (route.kind === 'work') void verifyWorkRecent(route.workId);
   }
   function back(): void {
     titleAbort?.abort();
@@ -737,6 +754,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (route.kind === 'translation' && settledToken?.chapterId === route.chapterId)
       showNonAdoptingOutcome(settledToken);
     requestAutomaticTranslation();
+    if (route.kind === 'work') void verifyWorkRecent(route.workId);
     if (snapshot.work) publish({ titles: titlesByWork.get(snapshot.work.workId) ?? [] });
     requestTitleTranslation();
   }
@@ -1082,6 +1100,80 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ error: '일부 작품 정보를 불러오지 못했어요.' });
     }
   }
+  function verifyWorkRecent(workId: string): Promise<WorkRecentSnapshot> {
+    const operation = (workRecentOperations.get(workId) ?? 0) + 1;
+    workRecentOperations.set(workId, operation);
+    const generation = removalGeneration(workId);
+    const selectionAtStart = selectionOperation;
+    const isCurrent = () =>
+      !disposed &&
+      operation === workRecentOperations.get(workId) &&
+      generation === removalGeneration(workId) &&
+      selectionAtStart === selectionOperation &&
+      snapshot.route.kind === 'work' &&
+      snapshot.route.workId === workId;
+    const promise = (async (): Promise<WorkRecentSnapshot> => {
+      const loading: WorkRecentSnapshot = { workId, status: 'loading' };
+      if (isCurrent()) publish({ workRecent: loading });
+      try {
+        if (!dependencies.library) {
+          const none: WorkRecentSnapshot = { workId, status: 'none' };
+          if (isCurrent()) publish({ workRecent: none });
+          return none;
+        }
+        const recentEntries = await dependencies.library.listRecent();
+        if (!isCurrent()) return loading;
+        const recent = recentEntries.find((entry) => entry.workId === workId);
+        if (!recent) {
+          const none: WorkRecentSnapshot = { workId, status: 'none' };
+          if (isCurrent()) publish({ workRecent: none });
+          return none;
+        }
+        const version = await dependencies.library.readVersion(recent.versionId);
+        if (!isCurrent()) return loading;
+        if (!version) {
+          const none: WorkRecentSnapshot = { workId, status: 'none' };
+          if (isCurrent()) publish({ workRecent: none });
+          return none;
+        }
+        if (
+          version.versionId !== recent.versionId ||
+          version.source.workId !== workId ||
+          version.source.chapterId !== recent.chapterId
+        ) {
+          const none: WorkRecentSnapshot = { workId, status: 'none' };
+          if (isCurrent()) publish({ workRecent: none });
+          return none;
+        }
+        const position = await dependencies.library.readPosition(version.versionId);
+        if (!isCurrent()) return loading;
+        if (
+          position &&
+          (position.workId !== workId ||
+            position.chapterId !== recent.chapterId ||
+            position.versionId !== version.versionId ||
+            !version.blocks.some((block) => block.id === position.blockId))
+        )
+          throw new ReaderError('storage');
+        if (!isCurrent()) return loading;
+        const verified: WorkRecentSnapshot = {
+          workId,
+          status: 'verified',
+          chapterId: recent.chapterId,
+          versionId: recent.versionId,
+          position,
+        };
+        if (isCurrent()) publish({ workRecent: verified, recent: recentEntries });
+        return verified;
+      } catch {
+        const error: WorkRecentSnapshot = { workId, status: 'error' };
+        if (isCurrent()) publish({ workRecent: error });
+        return error;
+      }
+    })();
+    workRecentPromises.set(workId, promise);
+    return promise;
+  }
   async function openCachedWork(workId: string): Promise<void> {
     const library = dependencies.library;
     if (
@@ -1405,6 +1497,104 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (operation === selectionOperation && !disposed)
         publish({ error: '저장된 번역을 불러오지 못했습니다.' });
     }
+  }
+  async function continueReadingFromWork(workId: string): Promise<void> {
+    const library = dependencies.library;
+    const work = snapshot.work?.workId === workId ? snapshot.work : worksById.get(workId);
+    if (!library || !work || removingWorkIds.has(workId) || removedWorkIds.has(workId)) return;
+    const routeAtStart = snapshot.route;
+    const routeKeyAtStart = JSON.stringify(routeAtStart);
+    const selectionAtStart = selectionOperation;
+    const generation = removalGeneration(workId);
+    const current = () =>
+      !disposed &&
+      !removingWorkIds.has(workId) &&
+      generation === removalGeneration(workId) &&
+      selectionAtStart === selectionOperation &&
+      JSON.stringify(snapshot.route) === routeKeyAtStart;
+    const showError = () => {
+      if (current())
+        publish({
+          workRecent: { workId, status: 'error' },
+          error: '최근 읽은 번역을 확인하지 못했어요. 다시 시도해 주세요.',
+        });
+    };
+    try {
+      let recent = snapshot.workRecent?.workId === workId ? snapshot.workRecent : null;
+      if (!recent || recent.status === 'loading')
+        recent = await (workRecentPromises.get(workId) ?? verifyWorkRecent(workId));
+      if (!current()) return;
+      const fallback = async () => {
+        const chapters = work.chapters;
+        const first = [...chapters].sort((a, b) => a.ordinal - b.ordinal)[0];
+        if (!first) {
+          if (current()) publish({ error: '목차에서 읽을 회차를 찾지 못했어요.' });
+          return;
+        }
+        if (current()) await selectChapter(first);
+      };
+      if (recent.status === 'error') {
+        showError();
+        return;
+      }
+      if (recent.status === 'none') {
+        await fallback();
+        return;
+      }
+      if (recent.status !== 'verified') return;
+      const version = await library.readVersion(recent.versionId);
+      if (!current()) return;
+      if (
+        !version ||
+        version.versionId !== recent.versionId ||
+        version.source.workId !== workId ||
+        version.source.chapterId !== recent.chapterId
+      ) {
+        await fallback();
+        return;
+      }
+      const position = await library.readPosition(recent.versionId);
+      if (
+        position &&
+        (position.workId !== workId ||
+          position.chapterId !== recent.chapterId ||
+          position.versionId !== version.versionId ||
+          !version.blocks.some((block) => block.id === position.blockId))
+      )
+        throw new ReaderError('storage');
+      const pages = (await library.readWork(workId)).filter((page) => page.workId === workId);
+      const chapter =
+        pages
+          .flatMap((page) => page.chapters)
+          .find((entry) => entry.workId === workId && entry.chapterId === recent.chapterId) ??
+        work.chapters.find(
+          (entry) => entry.workId === workId && entry.chapterId === recent.chapterId,
+        ) ??
+        null;
+      if (!chapter) throw new ReaderError('storage');
+      const savedChapterIds = await readSavedChapterIds(pages.flatMap((page) => page.chapters));
+      if (!current()) return;
+      for (const page of pages) rememberWorkPage(page);
+      savedChaptersByWork.set(workId, savedChapterIds);
+      versionsById.set(version.versionId, version);
+      positionsByVersion.set(version.versionId, position);
+      publish({ work, chapter, version, position, savedChapterIds });
+      navigate({ kind: 'reader', versionId: version.versionId });
+      void loadTitles(workId);
+      void checkSourceChange(version, chapter);
+      if (snapshot.catalogStatus === 'connected') requestTitleTranslation();
+    } catch {
+      showError();
+    }
+  }
+  async function retryWorkRecent(workId: string): Promise<void> {
+    if (
+      snapshot.route.kind !== 'work' ||
+      snapshot.route.workId !== workId ||
+      removingWorkIds.has(workId)
+    )
+      return;
+    await verifyWorkRecent(workId);
   }
   function changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void {
     titleAbort?.abort();
@@ -2169,6 +2359,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     loadMoreWorkPage,
     selectChapter,
     continueReading,
+    continueReadingFromWork,
+    retryWorkRecent,
     changeConnection,
     checkConnection,
     chooseModel,

@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { HomeScreen } from '../ui/HomeScreen';
 import { WorkScreen } from '../ui/WorkScreen';
 import { TranslationScreen } from '../ui/TranslationScreen';
@@ -25,12 +25,16 @@ function RouteScreen({
   urlDialogOpen,
   onCloseUrlDialog,
   onRequestRemove,
+  workDialogRequest,
+  onWorkDialogRequestHandled,
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
   urlDialogOpen: boolean;
   onCloseUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
+  workDialogRequest: { dialog: 'guidance' | 'batch'; id: number; workId: string } | null;
+  onWorkDialogRequestHandled(id: number): void;
 }): JSX.Element {
   const titles = state.titlesAvailable
     ? {
@@ -60,11 +64,24 @@ function RouteScreen({
     case 'work':
       return state.work ? (
         <WorkScreen
+          key={state.work.workId}
           titles={titles}
           work={state.work}
+          recentStatus={
+            state.workRecent?.workId === state.work.workId ? state.workRecent.status : 'loading'
+          }
+          recentChapterId={
+            state.workRecent?.workId === state.work.workId && state.workRecent.status === 'verified'
+              ? state.workRecent.chapterId
+              : undefined
+          }
+          dialogRequest={workDialogRequest}
+          onDialogRequestHandled={onWorkDialogRequestHandled}
           savedChapterIds={state.savedChapterIds}
           selectedChapterId={state.route.selectedChapterId}
           busy={state.busy}
+          onContinue={() => void controller.continueReadingFromWork(state.work!.workId)}
+          onRetryContinue={() => void controller.retryWorkRecent(state.work!.workId)}
           onSelect={(chapter) => void controller.selectChapter(chapter)}
           guidance={
             state.guidanceAvailable
@@ -77,6 +94,11 @@ function RouteScreen({
           }
           onLoadMore={() => void controller.loadMoreWorkPage()}
           batch={state.batch}
+          batchGlobalBlocked={
+            !!state.batch?.active ||
+            state.batch?.record?.phase === 'saving' ||
+            !!state.pendingSaveChapter
+          }
           batchAvailable={
             state.batchAvailable &&
             state.catalogStatus === 'connected' &&
@@ -197,11 +219,13 @@ function ShellAppBar({
   state,
   onOpenUrlDialog,
   onRequestRemove,
+  onOpenWorkDialog,
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
   onOpenUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
+  onOpenWorkDialog(dialog: 'guidance' | 'batch'): void;
 }): JSX.Element {
   if (state.route.kind === 'home')
     return (
@@ -221,7 +245,23 @@ function ShellAppBar({
       />
     );
   const items: MenuItem[] = [{ label: '서재로 가기', onSelect: controller.goHome }];
-  if (state.route.kind === 'work' && state.work)
+  if (state.route.kind === 'work' && state.work) {
+    if (state.guidanceAvailable)
+      items.push({ label: '용어집 편집하기', onSelect: () => onOpenWorkDialog('guidance') });
+    items.push({ label: '미리 번역하기', onSelect: () => onOpenWorkDialog('batch') });
+    if (state.titlesAvailable)
+      items.push({
+        label: '목차 제목 번역하기',
+        onSelect: () => void controller.translateTitles(),
+      });
+    items.push({
+      label: '원문 사이트에서 보기',
+      onSelect: () => window.open(state.work!.canonicalUrl, '_blank', 'noopener,noreferrer'),
+    });
+    items.push({
+      label: '현재 목차 원문 보기',
+      onSelect: () => window.open(state.work!.pageUrl, '_blank', 'noopener,noreferrer'),
+    });
     items.push({
       label: '서재에서 제거하기',
       tone: 'danger',
@@ -232,11 +272,16 @@ function ShellAppBar({
           state.recentTitles[state.work!.workId] ?? state.work!.title,
         ),
     });
+  }
   if (state.route.kind !== 'settings')
     items.push({ label: '설정', onSelect: () => controller.navigate({ kind: 'settings' }) });
   return (
     <TopAppBar
-      title={routeTitles[state.route.kind]}
+      title={
+        state.route.kind === 'work' && state.work
+          ? (state.recentTitles[state.work.workId] ?? state.work.title)
+          : routeTitles[state.route.kind]
+      }
       titleAs="span"
       navigation={<IconButton icon="arrow_back" label="뒤로 가기" onClick={controller.back} />}
       actions={<Menu label="더보기" items={items} />}
@@ -257,6 +302,15 @@ export function Application({
     controller.getSnapshot,
   );
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
+  const [workDialogRequest, setWorkDialogRequest] = useState<{
+    dialog: 'guidance' | 'batch';
+    id: number;
+    workId: string;
+  } | null>(null);
+  const workDialogSequence = useRef(0);
+  const handleWorkDialogRequestHandled = useCallback((id: number) => {
+    setWorkDialogRequest((current) => (current?.id === id ? null : current));
+  }, []);
   const [removeTarget, setRemoveTarget] = useState<{
     workId: string;
     title: string;
@@ -349,6 +403,14 @@ export function Application({
           state={state}
           onOpenUrlDialog={() => setUrlDialogOpen(true)}
           onRequestRemove={requestRemove}
+          onOpenWorkDialog={(dialog) =>
+            state.work &&
+            setWorkDialogRequest({
+              dialog,
+              id: ++workDialogSequence.current,
+              workId: state.work.workId,
+            })
+          }
         />
         <main ref={main} className="nr-screen">
           <RouteScreen
@@ -357,6 +419,8 @@ export function Application({
             urlDialogOpen={urlDialogOpen}
             onCloseUrlDialog={() => setUrlDialogOpen(false)}
             onRequestRemove={requestRemove}
+            workDialogRequest={workDialogRequest}
+            onWorkDialogRequestHandled={handleWorkDialogRequestHandled}
           />
           {state.translationTimings && (
             <details>

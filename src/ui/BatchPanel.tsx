@@ -12,6 +12,7 @@ export interface BatchPanelProps {
   onCancelBatch?(): void;
   onRetryBatchSave?(): void;
   onSettings?(): void;
+  globalBlocked?: boolean;
 }
 export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const first = useRef<HTMLInputElement>(null);
@@ -20,7 +21,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const record = props.batch?.record?.work.workId === props.workId ? props.batch.record : null;
   const active = props.batch?.active ?? false;
   const awaitingSave = props.batch?.record?.phase === 'saving';
-  const canPrepare = props.batchAvailable && !active && !awaitingSave;
+  const canPrepare = props.batchAvailable && !props.globalBlocked && !active && !awaitingSave;
   return (
     <section className="nr-batch-panel" aria-label="일괄 번역">
       <h2>미리 번역하기</h2>
@@ -129,7 +130,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             <>
               <p>일괄 번역이 중단됐습니다. 완료본은 보존했습니다.</p>
               <button
-                disabled={!props.batchAvailable || active}
+                disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.()}
               >
                 남은 회차 번역 재개
@@ -143,7 +144,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
                 있습니다.
               </p>
               <button
-                disabled={!props.batchAvailable || active}
+                disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.(true)}
               >
                 중복 처리 가능성을 확인하고 일괄 번역 재개

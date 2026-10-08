@@ -51,6 +51,7 @@ export function GuidancePanel({
     setMessage('변경 사항을 저장해야 번역에 적용됩니다.');
   }
   async function save() {
+    if (busy || locked || !available || loadedKey !== loadKey) return;
     setBusy(true);
     try {
       const value = await onSave(workId, {
@@ -225,7 +226,7 @@ export function GuidancePanel({
         >
           캐릭터 추가
         </button>
-        <button type="button" onClick={() => void save()}>
+      <button type="button" data-guidance-save onClick={() => void save()}>
           용어집·말투 저장
         </button>
       </fieldset>

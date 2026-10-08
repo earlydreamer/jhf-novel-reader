@@ -53,6 +53,83 @@
 .nr-notice--error .nr-button--text {
   color: var(--on-error-container);
 }
+.nr-work-screen > * + * {
+  margin-block-start: 16px;
+}
+.nr-work-heading {
+  padding: 12px 0 20px;
+}
+.nr-work-heading .nr-title h1 {
+  margin-block: 4px 8px;
+}
+.nr-work-heading__original {
+  color: var(--on-surface-variant);
+  overflow-wrap: anywhere;
+}
+.nr-work-heading__meta {
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
+}
+.nr-work-continue {
+  min-block-size: var(--touch-target);
+  inline-size: 100%;
+  margin-block-start: 12px;
+}
+.nr-work-chapters {
+  list-style: none;
+  padding: 0 !important;
+  margin: 0;
+}
+.nr-work-chapters > li {
+  margin-block: 4px;
+}
+.nr-work-chapters .nr-list-item {
+  border-radius: var(--shape-md);
+}
+.nr-work-chapters .nr-list-item__trailing button {
+  min-inline-size: var(--touch-target);
+  min-block-size: var(--touch-target);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 24px;
+}
+.nr-work-selected-hint {
+  display: block;
+  color: var(--on-surface-variant);
+  font: var(--type-body-small);
+  padding-inline-start: 16px;
+}
+.nr-work-chapter-menu {
+  display: grid;
+  gap: 8px;
+}
+.nr-batch-progress-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--shape-md);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+.nr-batch-progress-card > button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: var(--touch-target);
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+}
+[hidden].nr-modal {
+  display: none !important;
+}
 /* 클래스 없는 기존 버튼: 토널 S 버튼 모양 */
 :where(.nr-screen) :where(button:not([class])) {
   min-block-size: var(--touch-target);

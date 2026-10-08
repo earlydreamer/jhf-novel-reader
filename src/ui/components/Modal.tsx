@@ -11,20 +11,40 @@ interface SurfaceProps {
   className: string;
   children: ReactNode;
   header?(titleId: string): ReactNode;
+  keepMounted?: boolean;
 }
 
-function ModalSurface({ open, title, onClose, className, children, header }: SurfaceProps) {
+function ModalSurface({
+  open,
+  title,
+  onClose,
+  className,
+  children,
+  header,
+  keepMounted = false,
+}: SurfaceProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useBackHandler(open, onClose);
   useLayoutEffect(() => {
     const element = dialog.current;
-    if (!open || !element) return;
+    if (!element) return;
+    if (!open) {
+      if (element.open && typeof element.close === 'function') element.close();
+      element.removeAttribute('open');
+      element.setAttribute('hidden', '');
+      element.setAttribute('inert', '');
+      element.removeAttribute('aria-modal');
+      return;
+    }
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // 실제 WebView는 showModal로 최상위 레이어·배경 비활성을 얻는다. jsdom에는 없어서 open 속성으로 대체한다.
     if (typeof element.showModal === 'function') {
       if (!element.open) element.showModal();
     } else element.setAttribute('open', '');
+    element.removeAttribute('hidden');
+    element.removeAttribute('inert');
+    element.setAttribute('aria-modal', 'true');
     element.querySelector<HTMLElement>('.nr-modal__title')?.focus();
     return () => {
       if (typeof element.close === 'function' && element.open) element.close();
@@ -32,13 +52,15 @@ function ModalSurface({ open, title, onClose, className, children, header }: Sur
       opener?.focus();
     };
   }, [open]);
-  if (!open) return null;
+  if (!open && !keepMounted) return null;
   return (
     <dialog
       ref={dialog}
       className={`nr-modal ${className}`}
       aria-labelledby={titleId}
-      aria-modal="true"
+      aria-modal={open ? 'true' : undefined}
+      hidden={!open}
+      inert={!open}
       onCancel={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -76,7 +98,8 @@ export interface DialogProps {
   onClose(): void;
   children: ReactNode;
   actions?: ReactNode;
-  fullScreen?: { confirmLabel: string; onConfirm(): void; confirmDisabled?: boolean };
+  fullScreen?: boolean | { confirmLabel?: string; onConfirm?(): void; confirmDisabled?: boolean };
+  keepMounted?: boolean;
 }
 export function Dialog({
   open,
@@ -85,27 +108,33 @@ export function Dialog({
   children,
   actions,
   fullScreen,
+  keepMounted = false,
 }: DialogProps): JSX.Element | null {
-  if (fullScreen)
+  const isFullScreen = !!fullScreen;
+  const fullScreenConfirm = typeof fullScreen === 'object' ? fullScreen : undefined;
+  if (isFullScreen)
     return (
       <ModalSurface
         open={open}
         title={title}
         onClose={onClose}
         className="nr-dialog nr-dialog--fullscreen"
+        keepMounted={keepMounted}
         header={(titleId) => (
           <div className="nr-dialog__header">
             <IconButton icon="close" label="닫기" onClick={onClose} />
             <h2 id={titleId} tabIndex={-1} className="nr-modal__title">
               {title}
             </h2>
-            <Button
-              variant="text"
-              disabled={fullScreen.confirmDisabled}
-              onClick={fullScreen.onConfirm}
-            >
-              {fullScreen.confirmLabel}
-            </Button>
+            {fullScreenConfirm?.confirmLabel && fullScreenConfirm.onConfirm && (
+              <Button
+                variant="text"
+                disabled={fullScreenConfirm.confirmDisabled}
+                onClick={fullScreenConfirm.onConfirm}
+              >
+                {fullScreenConfirm.confirmLabel}
+              </Button>
+            )}
           </div>
         )}
       >
@@ -113,7 +142,13 @@ export function Dialog({
       </ModalSurface>
     );
   return (
-    <ModalSurface open={open} title={title} onClose={onClose} className="nr-dialog">
+    <ModalSurface
+      open={open}
+      title={title}
+      onClose={onClose}
+      className="nr-dialog"
+      keepMounted={keepMounted}
+    >
       <div className="nr-dialog__body">{children}</div>
       {actions && <div className="nr-dialog__actions">{actions}</div>}
     </ModalSurface>
