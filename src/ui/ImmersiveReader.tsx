@@ -152,6 +152,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     pendingSave.source.chapterId === chapter.chapterId &&
     props.translation.token?.chapterId === chapter.chapterId &&
     (!pendingSave.provenance.repair ||
+      !version ||
       pendingSave.provenance.repair.baseVersionId === version?.versionId),
   );
   const ownsLivePreview =

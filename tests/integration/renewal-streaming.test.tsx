@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
 import { createRenewalApplication } from '../../src/app/compose';
@@ -379,7 +379,7 @@ test('paragraph repair keeps the owned live preview on the same article and adop
   await h.app.savePosition(base.blocks[0]!.id, 17);
   h.app.chooseModel('repair-model');
   render(<Application controller={h.app} />);
-  const article = screen.getByRole('article', { name: '번역 본문' });
+  let article = screen.getByRole('article', { name: '번역 본문' });
   expect(article).toHaveTextContent(base.blocks[2]!.text);
 
   h.setBroken(false);
@@ -453,9 +453,40 @@ test('paragraph repair keeps the owned live preview on the same article and adop
   expect(quality).not.toHaveTextContent('용어 확인 기록 없음');
   fireEvent.keyDown(quality, { key: 'Escape' });
 
+  act(() => h.app.goHome());
+  expect(h.app.getSnapshot().route.kind).toBe('home');
+  fireEvent.click(screen.getByRole('button', { name: '저장 화면으로 가기' }));
+  await waitFor(() => {
+    expect(h.app.getSnapshot().route.kind).toBe('translation');
+    expect(h.app.getSnapshot().version).toBeNull();
+    expect(h.app.getSnapshot().translation.pendingSave?.versionId).toBe(pendingSave.versionId);
+  });
+  await h.app.selectChapter(chapter);
+  expect(h.app.getSnapshot().version).toBeNull();
+  expect(h.app.getSnapshot().translation.pendingSave?.versionId).toBe(pendingSave.versionId);
+  article = screen.getByRole('article', { name: '번역 미리보기' });
+  expect(article).toHaveTextContent(pendingSave.blocks[2]!.text);
+  expect(article).not.toHaveTextContent('번역하지 못해 원문으로 남겼어요.');
+  expect(screen.queryByRole('button', { name: '실패한 문단 다시 번역하기' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 정보 보기' }));
+  const reopenedInfo = screen.getByRole('dialog', { name: '번역 정보' });
+  expect(reopenedInfo).toHaveTextContent('저장 상태: 저장 대기');
+  expect(reopenedInfo).toHaveTextContent('모델: repair-model');
+  fireEvent.keyDown(reopenedInfo, { key: 'Escape' });
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 확인 결과 보기' }));
+  const reopenedQuality = screen.getByRole('dialog', { name: '번역 확인 결과' });
+  expect(reopenedQuality).toHaveTextContent('저장 대기 결과');
+  expect(reopenedQuality).toHaveTextContent(
+    `가나가 남은 문단 ${pendingSave.quality?.japaneseBlocks.length ?? 0}개`,
+  );
+  fireEvent.keyDown(reopenedQuality, { key: 'Escape' });
+
   h.failSave(false);
   fireEvent.click(screen.getByRole('button', { name: '저장 다시 하기' }));
-  await waitFor(() => expect(h.app.getSnapshot().version?.versionId).not.toBe(base.versionId));
+  await waitFor(() => expect(h.app.getSnapshot().version?.versionId).toBe(pendingSave.versionId));
   const repaired = h.app.getSnapshot().version!;
   expect(repaired.provenance.repair?.paragraphIndexes).toEqual([2]);
   expect(h.app.getSnapshot().position).toMatchObject({
