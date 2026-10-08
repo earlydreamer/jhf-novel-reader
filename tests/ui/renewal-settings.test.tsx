@@ -99,12 +99,34 @@ describe('Android 목록형 설정', () => {
     }
     expect(screen.getByText('웹 미리보기 0.1.0')).toBeVisible();
     expect(screen.queryByRole('button', { name: '버전' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '오픈소스 라이선스' })).toHaveTextContent(
-      'THIRD_PARTY_NOTICES.md · android/NOTICE',
-    );
-    expect(screen.getByText('기록 없음')).toBeVisible();
+    expect(
+      screen.getByRole('button', {
+        name: '오픈소스 라이선스 THIRD_PARTY_NOTICES.md · android/NOTICE',
+      }),
+    ).toHaveTextContent('THIRD_PARTY_NOTICES.md · android/NOTICE');
+    expect(screen.getByText('아직 기록이 없어요')).toBeVisible();
     expect(screen.queryByRole('button', { name: '최근 번역 시간' })).not.toBeInTheDocument();
     expect(document.querySelector('details')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '오픈소스 라이선스 THIRD_PARTY_NOTICES.md · android/NOTICE',
+      }),
+    );
+    expect(screen.getByRole('dialog', { name: '오픈소스 라이선스' })).not.toHaveTextContent(
+      'Android scaffold',
+    );
+    value.controller.dispose();
+  });
+
+  it('설정 행의 접근성 이름에 현재 값을 포함해요', async () => {
+    const value = await setup();
+
+    expect(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' })).toHaveAccessibleName(
+      '제공자 LM Studio / Ollama',
+    );
+    expect(
+      screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' }),
+    ).toHaveAccessibleName('로컬 번역 방식 기존 묶음 방식');
     value.controller.dispose();
   });
 
@@ -112,7 +134,7 @@ describe('Android 목록형 설정', () => {
     const value = await setup({ streamingAvailable: false });
 
     expect(screen.getAllByRole('switch')).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: '로컬 번역 방식' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^로컬 번역 방식/ })).not.toBeInTheDocument();
     value.controller.dispose();
   });
 
@@ -120,18 +142,22 @@ describe('Android 목록형 설정', () => {
     const value = await setup();
     const before = structuredClone(value.controller.getSnapshot().connection);
 
-    fireEvent.click(screen.getByRole('button', { name: '제공자' }));
+    fireEvent.click(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' }));
+    const providerGroup = screen.getByRole('radiogroup', { name: '제공자 선택' });
+    expect(providerGroup.querySelectorAll('button')).toHaveLength(0);
+    expect(providerGroup.querySelectorAll('input[type="radio"]')).toHaveLength(2);
     fireEvent.click(screen.getByRole('radio', { name: 'Google Gemini' }));
     expect(screen.getByRole('dialog', { name: 'Gemini를 사용할까요?' })).toBeVisible();
     expect(screen.getByText(/비용이 발생할 수 있어요/)).toBeVisible();
     expect(screen.getByText(/회차 원문을 Google로 전송해요/)).toBeVisible();
+    expect(screen.getByText('다른 제공자로 자동으로 바꾸지 않아요.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
 
     expect(value.controller.getSnapshot().connection).toEqual(before);
     expect(value.catalog).not.toHaveBeenCalled();
     expect(value.post).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: '제공자' }));
+    fireEvent.click(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Google Gemini' }));
     fireEvent.click(screen.getByRole('button', { name: 'Gemini 사용하기' }));
     expect(value.controller.getSnapshot().connection).toEqual({
@@ -148,7 +174,7 @@ describe('Android 목록형 설정', () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     const before = structuredClone(value.controller.getSnapshot());
 
-    fireEvent.click(screen.getByRole('button', { name: '제공자' }));
+    fireEvent.click(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' }));
     fireEvent.click(screen.getByRole('radio', { name: 'LM Studio / Ollama' }));
 
     expect(value.controller.getSnapshot().connection).toEqual(before.connection);
@@ -157,11 +183,42 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
+  it('같은 번역 방식을 다시 골라도 revision을 올리거나 저장하지 않아요', async () => {
+    const value = await setup({ saved: savedSettings('provider.existing') });
+    value.saveReadingSettings.mockClear();
+    const before = value.controller.getSnapshot().connection.revision;
+
+    value.controller.changeTranslationMode('stream');
+
+    expect(value.controller.getSnapshot().connection.revision).toBe(before);
+    expect(value.saveReadingSettings).not.toHaveBeenCalled();
+    value.controller.dispose();
+  });
+
+  it('같은 모델을 다시 골라도 상태를 바꾸거나 저장과 자동 요청을 반복하지 않아요', async () => {
+    const value = await setup({ saved: savedSettings('provider.existing') });
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+    await screen.findByRole('button', { name: '모델 Generation model' });
+    await waitFor(() => expect(value.saveReadingSettings).toHaveBeenCalled());
+    value.saveReadingSettings.mockClear();
+    const before = value.controller.getSnapshot();
+
+    value.controller.chooseModel('generation');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(value.controller.getSnapshot().connection.revision).toBe(before.connection.revision);
+    expect(value.controller.getSnapshot().catalogStatus).toBe(before.catalogStatus);
+    expect(value.saveReadingSettings).not.toHaveBeenCalled();
+    expect(value.post).not.toHaveBeenCalled();
+    value.controller.dispose();
+  });
+
   it('모델 대화상자에서 생성 불가 모델을 비활성화하고 현재 선택을 유지해요', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
-    await screen.findByRole('button', { name: '모델' });
-    fireEvent.click(screen.getByRole('button', { name: '모델' }));
+    await screen.findByRole('button', { name: '모델 Generation model' });
+    fireEvent.click(screen.getByRole('button', { name: '모델 Generation model' }));
 
     expect(screen.getByRole('radio', { name: 'Embedding model' })).toBeDisabled();
     expect(screen.getByRole('radio', { name: 'Generation model' })).toBeChecked();
@@ -190,7 +247,7 @@ describe('Android 목록형 설정', () => {
 
   it('저장한 인증값의 변경 취소와 빈 확인은 기존 참조를 보존해요', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
-    expect(screen.getByRole('button', { name: '인증값' })).toHaveTextContent('저장됨');
+    expect(screen.getByRole('button', { name: '인증값 저장됨' })).toHaveTextContent('저장됨');
 
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
     fireEvent.change(screen.getByLabelText('새 인증값'), { target: { value: 'discard-me' } });
@@ -210,11 +267,34 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
+  it('주소가 비어 있으면 인증값 입력과 저장하기를 비활성으로 둬요', async () => {
+    const value = await setup({ saved: savedSettings('provider.existing') });
+    fireEvent.click(screen.getByRole('button', { name: '인증값 저장됨' }));
+    fireEvent.change(screen.getByLabelText('API 기본 주소'), { target: { value: '' } });
+
+    expect(screen.getByLabelText('새 인증값')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '저장하기' })).toBeDisabled();
+    expect(
+      screen.getByText(
+        '인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.',
+      ),
+    ).toBeVisible();
+    value.controller.dispose();
+  });
+
+  it('번역 방식 대화상자에서 저장본 호환성을 안내해요', async () => {
+    const value = await setup();
+    fireEvent.click(screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' }));
+
+    expect(screen.getByText('저장된 번역은 어느 방식에서나 읽을 수 있어요.')).toBeVisible();
+    value.controller.dispose();
+  });
+
   it('스위치와 테마 선택을 v2 설정에 저장하고 재시작 뒤 복원해요', async () => {
     const value = await setup();
     fireEvent.click(screen.getByRole('switch', { name: '저장본이 없으면 자동으로 번역 시작' }));
     fireEvent.click(screen.getByRole('switch', { name: '실패한 문단 자동으로 다시 번역' }));
-    fireEvent.click(screen.getByRole('button', { name: '테마' }));
+    fireEvent.click(screen.getByRole('button', { name: '테마 시스템 설정 따르기' }));
     fireEvent.click(screen.getByRole('radio', { name: '다크' }));
 
     await waitFor(() =>
@@ -231,7 +311,7 @@ describe('Android 목록형 설정', () => {
 
   it('대화상자는 Esc와 시스템 Back으로 닫히고 연 버튼으로 포커스를 돌려줘요', async () => {
     const value = await setup();
-    const provider = screen.getByRole('button', { name: '제공자' });
+    const provider = screen.getByRole('button', { name: '제공자 LM Studio / Ollama' });
     provider.focus();
     fireEvent.click(provider);
     const dialog = screen.getByRole('dialog', { name: '제공자 선택' });

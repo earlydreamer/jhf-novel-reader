@@ -70,23 +70,25 @@ function RadioList({
   return (
     <div role="radiogroup" aria-label={label}>
       {choices.map((choice) => (
-        <ListItem
+        <div
           key={choice.value}
-          headline={choice.label}
-          current={choice.value === value}
-          disabled={choice.disabled}
-          onClick={() => onSelect(choice.value)}
-          trailing={
+          className={`nr-list-item${choice.value === value ? ' nr-list-item--current' : ''}`}
+        >
+          <label className="nr-list-item__main">
+            <span className="nr-list-item__text">
+              <span className="nr-list-item__headline">{choice.label}</span>
+            </span>
             <input
+              className="nr-list-item__radio"
               type="radio"
               name={name}
-              aria-label={choice.label}
+              value={choice.value}
               checked={choice.value === value}
               disabled={choice.disabled}
               onChange={() => onSelect(choice.value)}
             />
-          }
-        />
+          </label>
+        </div>
       ))}
     </div>
   );
@@ -94,7 +96,7 @@ function RadioList({
 
 function timingLabel(state: RenewalSnapshot): string {
   const timings = state.translationTimings;
-  if (!timings) return '기록 없음';
+  if (!timings) return '아직 기록이 없어요';
   return `원문 준비 ${Math.round(timings.sourceMs)}ms · 모델 대기 ${Math.round(timings.modelMs)}ms · 결과 확인·저장 ${Math.round(timings.validationStorageMs)}ms · 리더 표시 ${Math.round(timings.readerDisplayMs)}ms`;
 }
 
@@ -130,7 +132,7 @@ export function SettingsScreen({
         if (mounted) setVersion(`Android 앱 ${info.version} (build ${info.build})`);
       },
       () => {
-        if (mounted) setVersion('Android 앱 정보 없음');
+        if (mounted) setVersion('앱 정보를 불러오지 못했어요');
       },
     );
     return () => {
@@ -181,6 +183,7 @@ export function SettingsScreen({
     '선택 전';
   const modeDisabled =
     state.translationActive || !!state.batch?.active || !!state.pendingSaveChapter;
+  const authDisabled = !state.connectionAvailable || checking || !state.connection.baseUrl;
 
   return (
     <section aria-label="설정">
@@ -199,7 +202,6 @@ export function SettingsScreen({
         <ListItem
           headline="제공자"
           supporting={providerLabels[state.connection.provider]}
-          mainLabel="제공자"
           onClick={() => setProviderOpen(true)}
         />
         <label>
@@ -215,7 +217,6 @@ export function SettingsScreen({
           <ListItem
             headline="인증값"
             supporting="저장됨"
-            mainLabel="인증값"
             onClick={() => setAuthOpen(true)}
             trailing={
               <Button variant="text" onClick={() => setAuthOpen(true)}>
@@ -245,7 +246,6 @@ export function SettingsScreen({
         <ListItem
           headline="모델"
           supporting={modelLabel}
-          mainLabel="모델"
           disabled={checking || state.models.length === 0}
           onClick={() => setModelOpen(true)}
         />
@@ -257,7 +257,6 @@ export function SettingsScreen({
           <ListItem
             headline="로컬 번역 방식"
             supporting={modeLabels[state.translationMode]}
-            mainLabel="로컬 번역 방식"
             disabled={modeDisabled}
             onClick={() => setModeOpen(true)}
           />
@@ -286,7 +285,6 @@ export function SettingsScreen({
           <ListItem
             headline="테마"
             supporting={themeLabels[state.theme]}
-            mainLabel="테마"
             onClick={() => setThemeOpen(true)}
           />
         </section>
@@ -305,7 +303,6 @@ export function SettingsScreen({
         <ListItem
           headline="오픈소스 라이선스"
           supporting="THIRD_PARTY_NOTICES.md · android/NOTICE"
-          mainLabel="오픈소스 라이선스"
           onClick={() => setLicensesOpen(true)}
         />
         <div className="nr-list-item nr-list-item--two-line">
@@ -363,6 +360,7 @@ export function SettingsScreen({
       >
         <p>Gemini API 사용량에 따라 비용이 발생할 수 있어요.</p>
         <p>번역할 회차 원문을 Google로 전송해요.</p>
+        <p>다른 제공자로 자동으로 바꾸지 않아요.</p>
       </Dialog>
 
       <Dialog
@@ -374,7 +372,7 @@ export function SettingsScreen({
             <Button variant="text" onClick={closeAuth}>
               닫기
             </Button>
-            <Button variant="text" onClick={() => void saveAuth()}>
+            <Button variant="text" disabled={authDisabled} onClick={() => void saveAuth()}>
               저장하기
             </Button>
           </>
@@ -382,9 +380,9 @@ export function SettingsScreen({
       >
         <label>
           새 인증값
-          <input ref={secret} type="password" autoComplete="off" />
+          <input ref={secret} type="password" autoComplete="off" disabled={authDisabled} />
         </label>
-        <p>비워 두고 저장하면 기존 인증값을 유지해요.</p>
+        <p>인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.</p>
       </Dialog>
 
       <Dialog
@@ -423,6 +421,7 @@ export function SettingsScreen({
           </Button>
         }
       >
+        <p>저장된 번역은 어느 방식에서나 읽을 수 있어요.</p>
         <RadioList
           name="translation-mode"
           label="로컬 번역 방식 선택"
@@ -481,10 +480,10 @@ export function SettingsScreen({
         </p>
         <p>
           <a href={`${noticesUrl}android/NOTICE`} target="_blank" rel="noreferrer">
-            Android scaffold 고지 보기
+            Android 앱 오픈소스 고지 보기
           </a>
         </p>
-        <p>Android scaffold의 MIT 고지는 narou-reader 프로젝트 자체 라이선스가 아니에요.</p>
+        <p>Android 앱에 포함된 MIT 고지는 narou-reader 프로젝트 자체 라이선스가 아니에요.</p>
       </Dialog>
     </section>
   );
