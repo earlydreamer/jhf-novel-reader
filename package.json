@@ -12,6 +12,7 @@
     "test": "vitest",
     "build": "vite build",
     "android:sync": "npm run build && cap sync android",
+    "postinstall": "patch-package --error-on-fail",
     "lint": "eslint src tests vite.config.ts capacitor.config.ts --max-warnings 0",
     "format:check": "prettier --check \"src/app/{Application,bootstrap,renewalController,routes}.{ts,tsx}\" \"src/ui/{HomeScreen,WorkScreen,TranslationScreen,ReaderScreen,SettingsScreen}.tsx\" src/ui/home.css \"src/contracts/*.ts\" src/app/application.css \"tests/ui/renewal*.{ts,tsx,html}\" \"src/ui/components/*.{ts,tsx,css}\" \"src/ui/theme/*.{ts,css}\" \"src/ui/shell/*.ts\" \"src/platform/shell.ts\" \"tests/ui/components/*.tsx\" \"tests/ui/{shell,theme}.test.tsx\" tests/ui/theme-contrast.test.ts tests/ui/platform-shell.test.ts tests/ui/application-css.test.ts tests/integration/navigation-stack.test.ts tests/integration/theme-preferences.test.ts package.json package-lock.json eslint.config.mjs .prettierrc.json"
   },
@@ -39,6 +40,7 @@
     "eslint": "10.12.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "jsdom": "30.1.2",
+    "patch-package": "8.0.1",
     "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vite": "8.3.2",
