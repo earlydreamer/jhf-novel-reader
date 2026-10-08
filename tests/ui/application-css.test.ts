@@ -183,3 +183,13 @@ describe('immersive-reader.css system bars', () => {
     }
   });
 });
+
+const homeCss = readFileSync('src/ui/home.css', 'utf8');
+
+describe('home.css library scroll', () => {
+  it('서재는 내용이 짧으면 스크롤되지 않고 작품 추가 버튼만큼만 아래 여백을 둔다', () => {
+    const library = rules(homeCss).find((rule) => rule.selector === '.nr-library');
+    expect(library?.body).not.toMatch(/min-block-size/);
+    expect(library?.body).toMatch(/padding-block-end:\s*calc\(var\(--fab\) \+ 16px\);/);
+  });
+});
