@@ -76,7 +76,7 @@ public final class SourceBrowserLoader {
     }
 
     static Resource denied(URI uri) {
-        return new Resource(uri, 403, "text/plain", "UTF-8", Collections.singletonMap("Cache-Control", "no-store"), "이 주소 또는 요청 방식은 앱 내 탐색에서 지원하지 않습니다.".getBytes(StandardCharsets.UTF_8));
+        return new Resource(uri, 403, "text/plain", "UTF-8", Collections.singletonMap("Cache-Control", "no-store"), "이 주소나 요청 방식은 앱 안 탐색에서 지원하지 않아요.".getBytes(StandardCharsets.UTF_8));
     }
 
     private static String header(Map<String, String> headers, String name) {

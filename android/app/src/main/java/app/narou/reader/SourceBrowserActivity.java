@@ -6,6 +6,7 @@ import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Build;
@@ -155,7 +156,9 @@ public final class SourceBrowserActivity extends AppCompatActivity {
         shape.setColor(new ColorStateList(
             new int[][] { new int[] { -android.R.attr.state_enabled }, new int[] {} },
             new int[] { SourceBrowserTheme.alpha(theme.onSurface, 0.12f), theme.primaryFill }));
-        button.setBackground(new InsetDrawable(shape, 0, dp(4), 0, dp(4)));
+        InsetDrawable inset = new InsetDrawable(shape, 0, dp(4), 0, dp(4));
+        button.setBackground(new RippleDrawable(
+            ColorStateList.valueOf(SourceBrowserTheme.alpha(theme.onPrimary, 0.10f)), inset, null));
         button.setTextColor(new ColorStateList(
             new int[][] { new int[] { -android.R.attr.state_enabled }, new int[] {} },
             new int[] { SourceBrowserTheme.alpha(theme.onSurface, 0.38f), theme.onPrimary }));
