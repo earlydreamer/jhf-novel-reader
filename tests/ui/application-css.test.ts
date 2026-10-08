@@ -113,11 +113,39 @@ describe('immersive-reader.css progress bar', () => {
   });
 });
 
+describe('immersive-reader.css chapter end card', () => {
+  // .nr-reader-end 규칙은 여러 번 나오므로 같은 선택자를 가진 규칙 본문을 모두 모은다.
+  const endBody = rules(readerCss)
+    .filter((rule) => selectorParts(rule.selector).includes('.nr-reader-end'))
+    .map((rule) => rule.body)
+    .join('\n');
+
+  it('회차 끝 카드는 문구와 버튼을 한 줄에 펼치고 사이를 벌린다', () => {
+    expect(endBody).toMatch(/display:\s*flex;/);
+    expect(endBody).toMatch(/justify-content:\s*space-between;/);
+  });
+
+  it('행동 버튼은 카드의 끝(오른쪽)에 둔다', () => {
+    const button = rules(readerCss).find((rule) => rule.selector === '.nr-reader-end > .nr-button');
+    expect(button?.body).toMatch(/margin-inline-start:\s*auto;/);
+  });
+});
+
 const componentsCss = readFileSync('src/ui/components/components.css', 'utf8');
 
 function zIndex(body: string | undefined): number {
   return Number(body?.match(/z-index:\s*(\d+);/)?.[1]);
 }
+
+describe('immersive-reader.css blank paragraph spacing', () => {
+  it('원문 빈 줄 문단은 앞 문단 아래 여백과 합쳐 한 줄 높이만 차지한다(#137)', () => {
+    const blank = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-immersive-article > p.nr-reader-blank',
+    );
+    expect(blank?.body).toMatch(/block-size:\s*0\.4em;/);
+    expect(blank?.body).toMatch(/margin-block:\s*0;/);
+  });
+});
 
 describe('immersive-reader.css system bars', () => {
   it('몰입 리더는 상태바와 내비게이션 바 자리를 독서 배경으로 덮는다', () => {
@@ -136,8 +164,15 @@ describe('immersive-reader.css system bars', () => {
     expect(shared?.body).toMatch(/z-index:\s*10;/);
     const top = sheet.find((rule) => rule.selector === '.nr-immersive-reader::before');
     const bottom = sheet.find((rule) => rule.selector === '.nr-immersive-reader::after');
-    expect(top?.body).toMatch(/block-size:\s*var\(--inset-top\);/);
-    expect(bottom?.body).toMatch(/block-size:\s*var\(--inset-bottom\);/);
+    // 띠 끝 16px은 독서 배경에서 투명으로 흐려, 잘린 글자 조각이 경계에 남지 않게 한다(#137).
+    expect(top?.body).toMatch(/block-size:\s*calc\(var\(--inset-top\) \+ 16px\);/);
+    expect(top?.body).toMatch(
+      /background:\s*linear-gradient\(to bottom, var\(--reading-surface\) calc\(100% - 16px\), transparent\);/,
+    );
+    expect(bottom?.body).toMatch(/block-size:\s*calc\(var\(--inset-bottom\) \+ 16px\);/);
+    expect(bottom?.body).toMatch(
+      /background:\s*linear-gradient\(to top, var\(--reading-surface\) calc\(100% - 16px\), transparent\);/,
+    );
     const above = [
       rules(componentsCss).find((rule) => rule.selector === '.nr-toolbar')?.body,
       sheet.find((rule) => rule.selector === '.nr-immersive-appbar')?.body,

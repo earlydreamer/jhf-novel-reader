@@ -28,6 +28,7 @@ import { IconButton } from './components/IconButton';
 import { LinearProgress } from './components/LinearProgress';
 import { Menu } from './components/Menu';
 import { StatusPill } from './components/StatusPill';
+import { useSnackbar } from './components/Snackbar';
 import { TopAppBar } from './components/TopAppBar';
 import { useBackHandler } from './shell/backStack';
 import './immersive-reader.css';
@@ -126,6 +127,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const swallowClick = useRef(false);
   const shownVersionId = useRef<string | null>(null);
   const trackedVersionId = useRef<string | null>(null);
+  const announcedSavedVersion = useRef<string | null>(null);
+  const showSnackbar = useSnackbar();
   const [barsVisible, setBarsVisible] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
@@ -274,6 +277,13 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   useEffect(() => {
     if (route === 'reader' && version) onDisplayed?.(version.versionId);
   }, [route, version, onDisplayed]);
+
+  useEffect(() => {
+    if (props.route !== 'translation' || !version || props.translation.phase !== 'ready') return;
+    if (announcedSavedVersion.current === version.versionId) return;
+    announcedSavedVersion.current = version.versionId;
+    showSnackbar('번역을 저장했어요. 저장된 번역을 읽고 있어요.');
+  }, [props.route, props.translation.phase, version, showSnackbar]);
 
   useEffect(
     () => () => {
@@ -748,7 +758,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
                 data-reader-index={index}
                 data-preview-index={props.route === 'translation' ? index : undefined}
                 data-block-id={version?.blocks[index]?.id}
-                className={`nr-reader-paragraph${isFailed ? ' nr-reader-paragraph--failed' : ''}${selected ? ' nr-reader-paragraph--selected' : ''}`}
+                className={`nr-reader-paragraph${isFailed ? ' nr-reader-paragraph--failed' : ''}${selected ? ' nr-reader-paragraph--selected' : ''}${!text.trim() && !isFailed ? ' nr-reader-blank' : ''}`}
                 role={selectionMode ? 'button' : undefined}
                 tabIndex={selectionMode ? 0 : undefined}
                 aria-pressed={selectionMode ? selected : undefined}
@@ -801,9 +811,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             원문과 번역 문단 수가 달라 문단별 원문 대응·재번역은 제공하지 않아요. 원문 전체는
             앱바에서 전환할 수 있어요.
           </p>
-        )}
-        {props.route === 'translation' && version && props.translation.phase === 'ready' && (
-          <p className="nr-reader-caption">저장된 번역을 읽고 있어요.</p>
         )}
         {version &&
           !props.showOriginal &&
