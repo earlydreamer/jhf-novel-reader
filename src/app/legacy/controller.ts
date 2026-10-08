@@ -7,7 +7,12 @@ import { normalizeGeminiBaseUrl, normalizeGeminiModel } from '../../providers/ge
 import type { SavedSettings } from '../../storage/legacy/settings';
 
 export interface SettingsRepository { read(): Promise<SavedSettings>; save(settings: SavedSettings): Promise<void> }
-export interface LastChapterRepository { read(): Promise<string | null>; save(key: string): Promise<void> }
+export interface LastChapterRepository {
+  read(): Promise<string | null>;
+  save(key: string): Promise<void>;
+  clear?(): Promise<void>;
+  clearIfMatches?(key: string): Promise<boolean>;
+}
 export type ApplicationError = 'startup' | 'settings' | 'configuration' | 'secret' | 'position' | 'last_chapter';
 export interface ApplicationSnapshot {
   readonly initialized: boolean;

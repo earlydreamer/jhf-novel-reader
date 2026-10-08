@@ -357,6 +357,17 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
     getSnapshot: () => state,
     getCompleted: () => completed,
     getUnfinished: () => unfinished,
+    clearWork(workId: string): boolean {
+      if (slot.occupied && state.token?.chapterId.startsWith(`${workId}/`)) return false;
+      if (state.pendingSave?.source.workId === workId) return false;
+      if (unfinished.some((token) => token.chapterId.startsWith(`${workId}/`))) return false;
+      if (completed?.source.workId === workId) completed = null;
+      if (state.token?.chapterId.startsWith(`${workId}/`)) {
+        state = { phase: 'idle', elapsedMs: 0 };
+        if (!disposed) listeners.forEach((listener) => listener(state));
+      }
+      return true;
+    },
     getTimings: () => ({ ...timings }),
     get active() {
       return slot.occupied;

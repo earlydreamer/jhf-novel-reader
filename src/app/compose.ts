@@ -47,7 +47,7 @@ export function createRenewalApplication(
   },
 ): RenewalController {
   const source = createRenewalSource(adapters.sourceTransport),
-    library = createLibraryStore(adapters.files);
+    library = createLibraryStore(adapters.files, { preferences: adapters.preferences });
   const migrateV1 = createV1Migration(adapters.files, adapters.preferences, library);
   const guidance = createGuidanceRepository(adapters.files);
   const createProvider = (selection: import('../contracts').SelectedModel) => {

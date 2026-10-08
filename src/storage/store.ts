@@ -1,14 +1,23 @@
 import type { Chapter } from '../contracts';
-import type { Checkpoint, CompletedChapter, ReadPosition, ReaderStore, StoredReaderData } from '../contracts/legacy';
-import { StorageError } from "./errors";
-import { Journal, digest, serial, type PrivateFiles } from "./journal";
+import type {
+  Checkpoint,
+  CompletedChapter,
+  ReadPosition,
+  ReaderStore,
+  StoredReaderData,
+} from '../contracts/legacy';
+import { StorageError } from './errors';
+import { Journal, digest, serial, type PrivateFiles } from './journal';
 import { check, integer, object, snapshot as cloneInput } from './validation';
 import { cacheKey, checkpoint, completed, position } from './legacy/validation';
-export type { PrivateFiles } from "./journal";
+export type { PrivateFiles } from './journal';
 type Body = { chapter: CompletedChapter | null; checkpoint: Checkpoint | null };
 type PositionRecord = { position: ReadPosition; ordinal: number };
+export async function legacyPositionRecord(value: unknown): Promise<PositionRecord> {
+  return positionRecord(value);
+}
 async function body(value: unknown): Promise<Body> {
-  object(value, ["chapter", "checkpoint"]);
+  object(value, ['chapter', 'checkpoint']);
   check(
     value.chapter !== undefined &&
       value.checkpoint !== undefined &&
@@ -18,19 +27,19 @@ async function body(value: unknown): Promise<Body> {
   for (const record of [value.chapter, value.checkpoint]) {
     if (
       record &&
-      typeof record === "object" &&
-      "schemaVersion" in record &&
-      typeof record.schemaVersion === "number" &&
+      typeof record === 'object' &&
+      'schemaVersion' in record &&
+      typeof record.schemaVersion === 'number' &&
       record.schemaVersion !== 1
     )
-      throw new StorageError("unsupported_schema");
+      throw new StorageError('unsupported_schema');
   }
   if (value.chapter !== null) await completed(value.chapter);
   if (value.checkpoint !== null) await checkpoint(value.checkpoint);
   return value as unknown as Body;
 }
 async function positionRecord(value: unknown): Promise<PositionRecord> {
-  object(value, ["position", "ordinal"]);
+  object(value, ['position', 'ordinal']);
   position(value.position);
   integer(value.ordinal);
   return value as unknown as PositionRecord;
@@ -40,11 +49,7 @@ export function createReaderStore(files: PrivateFiles): ReaderStore {
   const journal = new Journal(files),
     known = new Map<string, Chapter>();
   function validator(key: string) {
-    return async (value: unknown) => {
-      const result = await body(value);
-      check((result.chapter ?? result.checkpoint)?.cacheKey === key);
-      return result;
-    };
+    return legacyBodyValidator(key);
   }
   async function positionName(id: string) {
     return `positions/${await digest(id)}`;
@@ -55,23 +60,17 @@ export function createReaderStore(files: PrivateFiles): ReaderStore {
         cacheKey(key);
         const entry = await journal.load(`chapters/${key}`, validator(key));
         if (!entry) return null;
-        const source =
-          entry.value.chapter?.source ?? entry.value.checkpoint!.chapter;
+        const source = entry.value.chapter?.source ?? entry.value.checkpoint!.chapter;
         known.set(source.chapterId, source);
-        const saved = await journal.load(
-          await positionName(source.chapterId),
-          positionRecord,
-        );
+        const saved = await journal.load(await positionName(source.chapterId), positionRecord);
         let restored: ReadPosition | null = null;
         if (saved) {
           const pos = saved.value.position;
           check(pos.chapterId === source.chapterId);
-          const paragraphs =
-            entry.value.chapter?.paragraphs ?? source.paragraphs;
+          const paragraphs = entry.value.chapter?.paragraphs ?? source.paragraphs;
           let index = paragraphs.findIndex((p) => p.id === pos.paragraphId);
           const exists = index >= 0;
-          if (!exists)
-            index = Math.min(saved.value.ordinal, paragraphs.length - 1);
+          if (!exists) index = Math.min(saved.value.ordinal, paragraphs.length - 1);
           const paragraph = paragraphs[index]!;
           restored = {
             chapterId: source.chapterId,
@@ -111,9 +110,7 @@ export function createReaderStore(files: PrivateFiles): ReaderStore {
       return serial(files, async () => {
         position(snapshot);
         const source = known.get(snapshot.chapterId);
-        const ordinal =
-          source?.paragraphs.findIndex((p) => p.id === snapshot.paragraphId) ??
-          0;
+        const ordinal = source?.paragraphs.findIndex((p) => p.id === snapshot.paragraphId) ?? 0;
         await journal.save(
           await positionName(snapshot.chapterId),
           { position: snapshot, ordinal: Math.max(ordinal, 0) },
@@ -121,5 +118,13 @@ export function createReaderStore(files: PrivateFiles): ReaderStore {
         );
       });
     },
+  };
+}
+
+export function legacyBodyValidator(key: string) {
+  return async (value: unknown) => {
+    const result = await body(value);
+    check((result.chapter ?? result.checkpoint)?.cacheKey === key);
+    return result;
   };
 }

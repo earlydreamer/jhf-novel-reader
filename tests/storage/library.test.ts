@@ -292,7 +292,7 @@ test('reading an older saved version moves the durable recent pointer', async ()
   expect((await store.listVersions(source.chapterId))[0]?.versionId).toBe('version-2');
 });
 
-test('same UUID repairs a partial first index write without rewriting the version body', async () => {
+test('부분 인덱스 손상은 pending 삭제 여부가 불명확하므로 재등록을 차단한다', async () => {
   const memory = new Map<string, string>();
   let partial = true;
   const writes: string[] = [];
@@ -305,7 +305,7 @@ test('same UUID repairs a partial first index write without rewriting the versio
   });
   await expect(store.commitVersion(value)).rejects.toMatchObject({ reason: 'io' });
   partial = false;
-  await store.commitVersion(value);
-  expect(await store.listVersions(source.chapterId)).toEqual([value]);
+  await expect(store.commitVersion(value)).rejects.toMatchObject({ reason: 'corrupt' });
+  expect(await store.readVersion(value.versionId)).toEqual(value);
   expect(writes.filter((p) => p.startsWith('versions/'))).toHaveLength(1);
 });

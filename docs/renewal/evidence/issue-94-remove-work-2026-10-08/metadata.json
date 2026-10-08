@@ -1,0 +1,319 @@
+{
+  "kind": "android-removal-data-preservation-validation",
+  "issue": 94,
+  "date": "2026-10-08",
+  "productSource": {
+    "commit": "6cbc56a56ba3587c588fd7c7973c2257065ded4b",
+    "tree": "879e57875e9cb0ad65f725cd2f7018728adc4ab7",
+    "productChangesByValidationAgent": false,
+    "laterTestOnlyHead": {
+      "commit": "d882946485d4f8ff53d06058c2c98936c769176d",
+      "tree": "49ede9ca3b24056d5f0064afb1c5c939536ae3aa",
+      "changedPath": "tests/ui/renewal-library.test.tsx",
+      "productBlobsIdenticalToApkSource": true
+    },
+    "review": "Sol 6.1 final product and regression audit approved; no P1/P2",
+    "ci": {
+      "checks": "success",
+      "android": "success",
+      "checksRun": "37708727160",
+      "androidRun": "37708727229"
+    }
+  },
+  "apks": {
+    "production": {
+      "applicationId": "app.narou.reader",
+      "sourceCommit": "6cbc56a56ba3587c588fd7c7973c2257065ded4b",
+      "sourceTree": "879e57875e9cb0ad65f725cd2f7018728adc4ab7",
+      "sourceClean": true,
+      "apkSha256": "bc16fa5e9a6de2d0c644735782fc6d361125edc379435128d06dc487331a03ad",
+      "installedOrLaunched": false,
+      "verifier": "PASS: tests/e2e/verify-apk.mjs",
+      "installBoundary": "not installed",
+      "evidenceFile": "production-6cbc56a56ba3587c588fd7c7973c2257065ded4b.apk",
+      "provenanceFile": "production-6cbc56a56ba3587c588fd7c7973c2257065ded4b-provenance.json",
+      "artifactRole": "clean debug APK with production applicationId; not release-signed",
+      "buildType": "debug"
+    },
+    "devicecheck2": {
+      "applicationId": "app.narou.reader.devicecheck2",
+      "sourceCommit": "6cbc56a56ba3587c588fd7c7973c2257065ded4b",
+      "sourceTree": "879e57875e9cb0ad65f725cd2f7018728adc4ab7",
+      "nativeProvenanceDirty": true,
+      "nativeDirtyReason": "temporary android/app/build.gradle debug applicationIdSuffix .devicecheck2 only",
+      "webProvenanceDirty": false,
+      "webAssetCount": 11,
+      "webAssetsByteIdenticalToDist": true,
+      "apkBytes": 6491762,
+      "apkSha256": "4b13e6a7c2ad7603784bb512c0e30c1baca8fe4127808d2af3b569afe2a1af81",
+      "minSdk": 24,
+      "targetSdk": 36,
+      "signatureV2Verified": true,
+      "signerCertificateSha256": "8c5d8712374dff61e93c2ecbcc240a17d2db4759c97ee4ab11275322aa5fe0a6",
+      "installedOn": [
+        "BlackBerry KEY2 / 5000337213 / user 0",
+        "BlackShark 2 / 67f3906b / user 0"
+      ],
+      "gradleSuffixRestored": true,
+      "installResult": "Performing Streamed Install Success on both devices",
+      "evidenceFile": "devicecheck2-6cbc56a56ba3587c588fd7c7973c2257065ded4b.apk",
+      "auditFile": "devicecheck2-6cbc56a56ba3587c588fd7c7973c2257065ded4b-audit.json",
+      "signatureFile": "devicecheck2-6cbc56a56ba3587c588fd7c7973c2257065ded4b-signature.txt",
+      "distAssetListFile": "devicecheck2-6cbc56a56ba3587c588fd7c7973c2257065ded4b-dist-assets.json"
+    }
+  },
+  "build": {
+    "node": "v24.19.0",
+    "commands": [
+      "npm run build",
+      "npx cap sync android",
+      "gradlew :app:assembleDebug",
+      "node tests/e2e/verify-apk.mjs"
+    ],
+    "cleanBuildVerifier": "PASS",
+    "helperUnitTests": {
+      "passed": 8,
+      "total": 8,
+      "scope": "ignored CDP fixture helper only"
+    },
+    "distManifestFile": "dist-manifest-6cbc56a56ba3587c588fd7c7973c2257065ded4b.json"
+  },
+  "fixture": {
+    "syntheticOnly": true,
+    "workA": "n9501ab",
+    "workB": "n9502bc",
+    "existingFixturePreserved": "n1020aa",
+    "includes": [
+      "table of contents",
+      "one completed translation block",
+      "reading position",
+      "recent reading",
+      "title and glossary owned files",
+      "legacy A record for actual migration"
+    ],
+    "noNovelOrModelOrPrivateEndpoint": true
+  },
+  "devices": [
+    {
+      "model": "BlackBerry KEY2 / BBF100-6",
+      "serial": "5000337213",
+      "android": "8.1.0 / API 27",
+      "abi": "arm64-v8a",
+      "webView": "com.android.chrome 121.0.6167.178",
+      "fontScaleBeforeAfter": 1.0,
+      "appThemeBeforeAfter": "system",
+      "globalSettingsChanged": false,
+      "results": {
+        "seedMergedExistingIndex": true,
+        "legacyMigrationObservedBeforeRemoval": true,
+        "homeConfirmationDismissedWithoutMutation": true,
+        "homeRemovalAndColdRestart": "PASS",
+        "AIndexAndLegacyCandidatesAfter": 0,
+        "BPrivateFileCount": 5,
+        "BPrivateHashesEqualBeforeAfter": true,
+        "hashesCapturedBeforeOpeningBReader": true,
+        "existingN1020aaPreserved": true,
+        "pendingRemovalInventoryAfter": 0,
+        "BReader": "one synthetic translated block",
+        "themeLightDarkAndSystemRestore": "PASS",
+        "systemBack": "reader to table of contents to library",
+        "insets": "상단 상태 표시줄/툴바 분리와 바 배경·아이콘 대비는 캡처로 확인; 하단 전체 콘텐츠 비겹침 및 최대 스크롤 말단 도달은 미검증; CSS inset 수치 미측정; 정상 edge-to-edge 여부나 접근성 결함은 판정하지 않음",
+        "systemStatusBarSamples": {
+          "lightRgb": "250,250,253",
+          "darkRgb": "19,19,27"
+        },
+        "runtimeLogcat": {
+          "scope": "current devicecheck2 PID only, filtered after runtime checks",
+          "errorOrFatalLines": 0,
+          "fatalExceptionLines": 0
+        }
+      },
+      "evidence": [
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-key2-home-after-remove.png",
+          "bytes": 82871,
+          "sha256": "b2df85cbc6659e944e5482127a49fafc9eb3cc9b61ebdfc3aa31e06b4eac0c94"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-key2-home-remove-confirm.png",
+          "bytes": 115763,
+          "sha256": "71493e8407359167338958fcd52a0c2a06a22980df9a616525873ad586ef08dc"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-key2-reader-b.png",
+          "bytes": 110764,
+          "sha256": "1a3edef1b78e88a7972eadd6f43d2574dba95c834028c698a56303a5018b180a"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-key2-theme-light.png",
+          "bytes": 149467,
+          "sha256": "cbaf437286bfccdfecb3af291cd478d2093978abbcc5df72d9603752fb7a4f71"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-key2-theme-dark.png",
+          "bytes": 163952,
+          "sha256": "5efb3ba040ba508921cd0e77eec08e3909a5c515b533766c154f29baa4fefaea"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-key2-theme-system-restored.png",
+          "bytes": 149450,
+          "sha256": "65b7f5ee1e05390bf7ea2dbddab56361de1d89b5bb6c7ffea56f059b4f75ba3e"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/snapshot-before.json",
+          "bytes": 1324,
+          "sha256": "30c5c692a1fa172aca4dbdd73d2ba4f51f4c0b6422886c13eceadb121922f7c0"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/snapshot-cancel-before.json",
+          "bytes": 1324,
+          "sha256": "30c5c692a1fa172aca4dbdd73d2ba4f51f4c0b6422886c13eceadb121922f7c0"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/snapshot-cancel-after.json",
+          "bytes": 1324,
+          "sha256": "30c5c692a1fa172aca4dbdd73d2ba4f51f4c0b6422886c13eceadb121922f7c0"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/snapshot-after-restart.json",
+          "bytes": 1335,
+          "sha256": "a6dd565ebcf41b1fd578a0b3165c2c58b6570c312ba664b47d139a441053b0d7"
+        },
+        {
+          "file": "key2-5000337213-6cbc56a56ba3587c588fd7c7973c2257065ded4b/runtime-summary.json",
+          "bytes": 449,
+          "sha256": "2d92cb91a302083dff91712cc7fa7ac3bb8ffda5b093bc7e2e446e8448c6c087"
+        }
+      ]
+    },
+    {
+      "model": "BlackShark 2 / SKW-H0",
+      "serial": "67f3906b",
+      "android": "10 / API 29",
+      "abi": "arm64-v8a",
+      "webView": "com.google.android.webview 153.0.8010.36",
+      "fontScaleBeforeAfter": 1.0,
+      "appThemeBeforeAfter": "system",
+      "globalSettingsChanged": false,
+      "results": {
+        "seedMergedExistingIndex": true,
+        "legacyMigrationObservedBeforeRemoval": true,
+        "workAppbarConfirmationDismissedBySystemBackWithoutMutation": true,
+        "workAppbarRemovalAndColdRestart": "PASS",
+        "AIndexAndLegacyCandidatesAfter": 0,
+        "BPrivateFileCount": 5,
+        "BPrivateHashesEqualBeforeAfter": true,
+        "hashesCapturedBeforeOpeningBReader": true,
+        "existingN1020aaPreserved": true,
+        "pendingRemovalInventoryAfter": 0,
+        "BReader": "one synthetic translated block",
+        "themeLightDarkAndSystemRestore": "PASS",
+        "systemBack": "confirmation only dismissed; table of contents remained",
+        "insets": "상단 상태 표시줄/툴바 분리와 바 배경·아이콘 대비는 캡처로 확인; 하단 전체 콘텐츠 비겹침 및 최대 스크롤 말단 도달은 미검증; CSS inset 수치 미측정; 정상 edge-to-edge 여부나 접근성 결함은 판정하지 않음",
+        "systemStatusBarSamples": {
+          "lightRgb": "250,250,253",
+          "darkRgb": "19,19,27"
+        },
+        "runtimeLogcat": {
+          "scope": "current devicecheck2 PID only, filtered after runtime checks",
+          "errorOrFatalLines": 0,
+          "fatalExceptionLines": 0
+        },
+        "bottomNavigationObservation": "BlackShark home-after-remove 캡처에서 고정 FAB와 시스템 내비게이션 □ 아이콘의 시각적 겹침이 관찰됨; 최대 스크롤 및 상호작용은 검증하지 않아 결함 여부 미판정"
+      },
+      "evidence": [
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-after-system-back.png",
+          "bytes": 144625,
+          "sha256": "d4ac74ad9774e526444d7f75b70bd1cabc5ff10752f6911e8e7d3a5083f46f78"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-home-after-remove.png",
+          "bytes": 84712,
+          "sha256": "043e43aa2cb062985f993a9b132867e8f03073143d3f4d4edfe19cc57769aa94"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-reader-b.png",
+          "bytes": 115239,
+          "sha256": "84a97948b68d017028e7e433ac109816d1be3317ceef67be22b393bcc92353c9"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-theme-light.png",
+          "bytes": 192827,
+          "sha256": "47b2212be3b350fd98091ff15f04fa6e522f22535d6cc8b3e44571a82228867f"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-theme-dark.png",
+          "bytes": 192862,
+          "sha256": "bb0eacaa671428b997f575194c311b1dee3ddd3de9f4cf5c260da85830e454f4"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-theme-system-restored.png",
+          "bytes": 192786,
+          "sha256": "3fce60777aee81456c16d15f690fffc47f0f3a6fc8ece2b04b5ae311dee21504"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-work-remove-confirm.png",
+          "bytes": 145772,
+          "sha256": "d075d211bcfecb140cafca5a8cf5b37b36e16522de0d4ff4bd0e6cf9b851c475"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/6cbc56a56ba3587c588fd7c7973c2257065ded4b-blackshark-work-system-back.png",
+          "bytes": 144625,
+          "sha256": "d4ac74ad9774e526444d7f75b70bd1cabc5ff10752f6911e8e7d3a5083f46f78"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/snapshot-before.json",
+          "bytes": 1325,
+          "sha256": "21c090898f52cb024a2892bf5f0615bb2a04f154d9f41ab3997d1695806b3f38"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/snapshot-after-back-cancel.json",
+          "bytes": 1325,
+          "sha256": "21c090898f52cb024a2892bf5f0615bb2a04f154d9f41ab3997d1695806b3f38"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/snapshot-after-restart.json",
+          "bytes": 1335,
+          "sha256": "a6dd565ebcf41b1fd578a0b3165c2c58b6570c312ba664b47d139a441053b0d7"
+        },
+        {
+          "file": "blackshark-67f3906b-6cbc56a56ba3587c588fd7c7973c2257065ded4b/runtime-summary.json",
+          "bytes": 415,
+          "sha256": "23e2833ba240a1c9f2170b268ccdecb7167d7985686fcaac4c5818e6f8589afc"
+        }
+      ]
+    }
+  ],
+  "runtimeErrorSummary": {
+    "helperCdpEvaluationExceptions": 0,
+    "firstHostHelperResponseParserFailure": "resolved in ignored helper by accepting CDP returnByValue object or JSON string; seed readback confirmed by snapshot",
+    "appLogcatScope": "only each current app PID at observation time",
+    "webConsoleAggregation": "not performed",
+    "fullDeviceLogcatAggregation": "not performed"
+  },
+  "preservation": {
+    "productionApkInstalledOrLaunched": false,
+    "productionPackageDataWrittenOrDeleted": false,
+    "productionDataBeforeAfterHashOrListing": false,
+    "productionDataByteIdentityClaim": false,
+    "testPackageData": "synthetic fixture only; A removed and B plus n1020aa retained",
+    "otherPackagesModified": false,
+    "systemSettingsChanged": false,
+    "systemFontScaleBeforeAfter": [
+      1.0,
+      1.0
+    ],
+    "externalPlayProtectTransmission": "declined",
+    "apkLeftInstalledForInspection": true
+  },
+  "limitations": [
+    "Physical keyboard not tested",
+    "Real model requests and external source browsing not performed",
+    "상단 상태 표시줄/툴바 분리와 바 배경·아이콘 대비는 캡처로 확인했으나, 하단 전체 콘텐츠 비겹침과 최대 스크롤 말단 도달은 미검증; CSS inset 수치 미측정; 정상 edge-to-edge 여부나 접근성 결함은 판정하지 않음. BlackShark home-after-remove 캡처에서는 고정 FAB와 시스템 내비게이션 □ 아이콘의 시각적 겹침이 관찰됐으며, 최대 스크롤·상호작용 미검증으로 결함 여부는 판정하지 않음.",
+    "Current-PID logcat count does not represent all app history or device logs",
+    "Production data byte identity was not measured",
+    "Raw screenshots are local ignored evidence only and include system status-bar icons"
+  ],
+  "localEvidenceDirectory": "D:/projects/narou-reader/.superpowers/verification-94-remove-work/"
+}

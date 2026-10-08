@@ -143,6 +143,23 @@ export interface LibraryStore {
   commitVersion(value: CompletedTranslation): Promise<void>;
   savePosition(value: ReadingPosition): Promise<void>;
   readPosition(versionId: string): Promise<ReadingPosition | null>;
+  readRemovalInventory?(): Promise<readonly WorkRemovalInventory[]>;
+  isWorkRemovalPending?(workId: string): Promise<boolean>;
+  removeWork?(workId: string, runtime?: { activeBatchWorkId?: string }): Promise<WorkRemovalResult>;
+}
+export interface WorkRemovalInventory {
+  workId: string;
+  cacheKeys: string[];
+  paths: string[];
+  createdAt: string;
+  pointerCacheKey?: string;
+  issues?: string[];
+}
+export interface WorkRemovalResult {
+  removed: boolean | null;
+  cleanupComplete: boolean;
+  remainingInventory: readonly string[];
+  blockedBy?: 'translation' | 'pending_save' | 'batch' | 'unfinished_attempt';
 }
 
 export type { ProviderId } from './index';

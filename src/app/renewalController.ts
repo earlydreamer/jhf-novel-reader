@@ -28,6 +28,7 @@ import type {
   SelectedModel,
   TranslationState,
   WorkPage,
+  WorkRemovalResult,
 } from '../contracts/reading';
 import type { Route } from './routes';
 import { limitsForModel } from '../translation/segments';
@@ -195,6 +196,7 @@ export interface RenewalController {
   navigate(route: Route): void;
   back(): void;
   goHome(): void;
+  removeWork(workId: string): Promise<WorkRemovalResult>;
   canGoBack(): boolean;
   browse(startUrl?: string): Promise<void>;
   cancelTranslation(): void;
@@ -291,6 +293,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   const savedChaptersByWork = new Map<string, readonly string[]>();
   const versionsById = new Map<string, CompletedTranslation>();
   const positionsByVersion = new Map<string, ReadingPosition | null>();
+  const removingWorkIds = new Set<string>();
+  const removedWorkIds = new Set<string>();
+  const retiredBatchRecordIds = new Set<string>();
+  const retiredCompletedVersionIds = new Set<string>();
+  const removalGenerations = new Map<string, number>();
+  const workWriters = new Map<string, Set<Promise<unknown>>>();
   let disposed = false;
   let initialized = !dependencies.lifecycle,
     foreground = !dependencies.lifecycle;
@@ -348,6 +356,37 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let titleAbort: AbortController | null = null;
   let titleJob: Promise<void> | null = null;
   let titleSaveJob: Promise<void> | null = null;
+  let titleWorkId: string | null = null;
+  function trackWorkWrite<T>(workId: string, action: () => Promise<T>): Promise<T> {
+    if (removingWorkIds.has(workId)) return Promise.reject(new ReaderError('storage'));
+    let task: Promise<T>;
+    try {
+      task = action();
+    } catch (error) {
+      task = Promise.reject(error);
+    }
+    const writers = workWriters.get(workId) ?? new Set<Promise<unknown>>();
+    writers.add(task);
+    workWriters.set(workId, writers);
+    void task
+      .finally(() => {
+        writers.delete(task);
+        if (!writers.size) workWriters.delete(workId);
+      })
+      .catch(() => {});
+    return task;
+  }
+  function removalGeneration(workId: string): number {
+    return removalGenerations.get(workId) ?? 0;
+  }
+  function workIdFromUrl(value: string): string | null {
+    try {
+      const segment = new URL(value).pathname.split('/').filter(Boolean)[0] ?? '';
+      return /^(n[0-9]{4}[a-z]{1,2})$/i.exec(segment)?.[1]?.toLowerCase() ?? null;
+    } catch {
+      return null;
+    }
+  }
   function titleInputs(): TitleInput[] {
     const work = snapshot.work;
     if (!work) return [];
@@ -362,10 +401,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     return inputs;
   }
   async function loadTitles(workId: string) {
-    if (!dependencies.titles) return;
+    if (!dependencies.titles || removingWorkIds.has(workId)) return;
+    const generation = removalGeneration(workId);
     try {
       const entries = await dependencies.titles.read(workId);
       const attempts = await dependencies.titles.readAttempts(workId);
+      if (removingWorkIds.has(workId) || generation !== removalGeneration(workId)) return;
       attempts.forEach((input) =>
         titleAttempts.add(JSON.stringify([workId, input.key, input.source])),
       );
@@ -385,6 +426,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         });
       }
     } catch {
+      if (removingWorkIds.has(workId) || generation !== removalGeneration(workId)) return;
       titlesByWork.delete(workId);
       if (snapshot.work?.workId === workId)
         publish({
@@ -416,6 +458,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       !dependencies.titles ||
       !dependencies.translateTitles ||
       !snapshot.work ||
+      removingWorkIds.has(snapshot.work.workId) ||
       titleJob ||
       titleSaveJob ||
       disposed ||
@@ -448,7 +491,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const control = new AbortController();
     titleAbort = control;
     publish({ titlesBusy: true, titlesError: null });
-    const job = (async () => {
+    titleWorkId = workId;
+    const job = trackWorkWrite(workId, async () => {
       try {
         if (snapshot.catalogStatus === 'idle' && snapshot.selectedModelId) await checkConnection();
         if (control.signal.aborted || disposed) return;
@@ -517,7 +561,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
                 : '제목 번역 또는 저장에 실패했습니다. 기존 제목을 유지했습니다. 제목 옆에서 다시 번역할 수 있습니다.',
           });
       }
-    })();
+    });
     titleJob = job;
     try {
       await job;
@@ -525,6 +569,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (titleJob === job) {
         titleJob = null;
         titleAbort = null;
+        titleWorkId = null;
         publish({ titlesBusy: false });
         runAutomaticTranslation();
       }
@@ -533,23 +578,34 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   async function saveTitle(key: string, target: string): Promise<void> {
     const workId = snapshot.work?.workId;
     const input = titleInputs().find((input) => input.key === key);
-    if (!dependencies.titles || !workId || !input || disposed || titleSaveJob)
+    if (
+      !dependencies.titles ||
+      !workId ||
+      !input ||
+      disposed ||
+      titleSaveJob ||
+      removingWorkIds.has(workId)
+    )
       throw new ReaderError('storage');
     titleAbort?.abort();
     const generation = titleJob;
-    const job = (async () => {
+    titleWorkId = workId;
+    const job = trackWorkWrite(workId, async () => {
       await generation;
       const entries = await dependencies.titles!.save(workId, [
         { ...input, target: target.trim(), origin: 'user', updatedAt: new Date().toISOString() },
       ]);
       titlesByWork.set(workId, entries);
       if (snapshot.work?.workId === workId) publish({ titles: entries, titlesError: null });
-    })();
+    });
     titleSaveJob = job;
     try {
       await job;
     } finally {
-      if (titleSaveJob === job) titleSaveJob = null;
+      if (titleSaveJob === job) {
+        titleSaveJob = null;
+        titleWorkId = null;
+      }
     }
   }
   const pendingPositions = new Map<string, ReadingPosition>();
@@ -688,6 +744,164 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     navigate({ kind: 'home' });
     history.length = 0;
   }
+  function routeBelongsToWork(route: Route, workId: string): boolean {
+    if (route.kind === 'work') return route.workId === workId;
+    if (route.kind === 'translation') return route.chapterId.startsWith(`${workId}/`);
+    if (route.kind === 'reader') return versionsById.get(route.versionId)?.source.workId === workId;
+    return false;
+  }
+  async function removeWork(workId: string): Promise<WorkRemovalResult> {
+    const library = dependencies.library;
+    if (!library?.removeWork || disposed || removingWorkIds.has(workId))
+      return { removed: false, cleanupComplete: false, remainingInventory: [] };
+    const flowState = dependencies.flow?.getSnapshot();
+    if (
+      snapshot.pendingSaveChapter?.workId === workId ||
+      flowState?.pendingSave?.source.workId === workId
+    )
+      return {
+        removed: false,
+        cleanupComplete: false,
+        remainingInventory: [],
+        blockedBy: 'pending_save',
+      };
+    if (
+      (activeTranslation?.chapterId.startsWith(`${workId}/`) ?? false) ||
+      (flowState?.token?.chapterId.startsWith(`${workId}/`) && dependencies.flow?.active)
+    )
+      return {
+        removed: false,
+        cleanupComplete: false,
+        remainingInventory: [],
+        blockedBy: 'translation',
+      };
+    const batchState = dependencies.batch?.getSnapshot();
+    const batchRuntimeOwner = batchState?.preparing
+      ? batchState.preparingWorkId
+      : batchState?.active
+        ? batchState.record?.work.workId
+        : undefined;
+    if (
+      batchState &&
+      ((batchState.active && batchRuntimeOwner === workId) ||
+        (batchState.record?.work.workId === workId && batchState.record.phase !== 'complete'))
+    )
+      return { removed: false, cleanupComplete: false, remainingInventory: [], blockedBy: 'batch' };
+    if (
+      dependencies.flow?.getUnfinished().some((token) => token.chapterId.startsWith(`${workId}/`))
+    )
+      return {
+        removed: false,
+        cleanupComplete: false,
+        remainingInventory: [],
+        blockedBy: 'unfinished_attempt',
+      };
+
+    removingWorkIds.add(workId);
+    removalGenerations.set(workId, removalGeneration(workId) + 1);
+    sourceOperation++;
+    libraryRefreshOperation++;
+    selectionOperation++;
+    automaticRequest = null;
+    if (routeBelongsToWork(snapshot.route, workId)) sourceAbort?.abort();
+    if (titleWorkId === workId) {
+      try {
+        await stopTitles();
+      } catch {
+        // A failed title write is settled below; storage removal still owns the final cleanup.
+      }
+    }
+    for (const [versionId, position] of pendingPositions)
+      if (position.workId === workId) pendingPositions.delete(versionId);
+    const activeWriters = [...(workWriters.get(workId) ?? [])];
+    if (activeWriters.length) await Promise.allSettled(activeWriters);
+
+    let result: WorkRemovalResult;
+    try {
+      result = await library.removeWork(workId, { activeBatchWorkId: batchRuntimeOwner });
+    } catch {
+      result = { removed: null, cleanupComplete: false, remainingInventory: ['library/index'] };
+    }
+    if (result.removed === false) {
+      removingWorkIds.delete(workId);
+      return result;
+    }
+    if (result.removed === true) {
+      removedWorkIds.add(workId);
+      if (batchState?.record?.work.workId === workId)
+        retiredBatchRecordIds.add(batchState.record.id);
+      const completedBeforeRemoval = dependencies.flow?.getCompleted();
+      if (completedBeforeRemoval?.source.workId === workId)
+        retiredCompletedVersionIds.add(completedBeforeRemoval.versionId);
+      dependencies.flow?.clearWork(workId);
+      dependencies.batch?.clearWork(workId);
+      if (livePosition?.chapterId.startsWith(`${workId}/`)) livePosition = null;
+      if (retryableRepair?.base.source.workId === workId) retryableRepair = null;
+      const batchAfterRemoval = dependencies.batch?.getSnapshot() ?? snapshot.batch;
+      const versionIds = [...versionsById]
+        .filter(([, value]) => value.source.workId === workId)
+        .map(([versionId]) => versionId);
+      const removedVersionIds = new Set(versionIds);
+      versionIds.forEach((versionId) => {
+        versionsById.delete(versionId);
+        positionsByVersion.delete(versionId);
+        observedSavedVersionIds.delete(versionId);
+      });
+      worksById.delete(workId);
+      pagesByWorkId.delete(workId);
+      savedChaptersByWork.delete(workId);
+      titlesByWork.delete(workId);
+      for (const [chapterId, chapter] of chaptersById)
+        if (chapter.workId === workId) chaptersById.delete(chapterId);
+      for (const attempt of [...titleAttempts]) {
+        try {
+          if (JSON.parse(attempt)[0] === workId) titleAttempts.delete(attempt);
+        } catch {
+          titleAttempts.delete(attempt);
+        }
+      }
+      for (let index = history.length - 1; index >= 0; index--) {
+        const route = history[index]!;
+        if (
+          routeBelongsToWork(route, workId) ||
+          (route.kind === 'reader' && removedVersionIds.has(route.versionId))
+        )
+          history.splice(index, 1);
+      }
+      if (result.cleanupComplete) removingWorkIds.delete(workId);
+      publish({
+        route: { kind: 'home' },
+        work: null,
+        chapter: null,
+        version: null,
+        position: null,
+        titles: [],
+        titlesBusy: false,
+        titlesError: null,
+        savedChapterIds: [],
+        recent: snapshot.recent.filter((entry) => entry.workId !== workId),
+        libraryWorks: snapshot.libraryWorks.filter((entry) => entry.work.workId !== workId),
+        batch: batchAfterRemoval,
+        translation: { phase: 'idle', elapsedMs: 0 },
+        translationTimings: null,
+        sourceChange: 'idle',
+        showOriginal: false,
+        paragraphRepair: false,
+        busy: false,
+        translationActive: false,
+        pendingSaveChapter: null,
+        error: result.cleanupComplete
+          ? '서재에서 제거했어요.'
+          : '서재에서는 제거했지만 일부 저장 데이터를 지우지 못했어요.',
+      });
+      if (result.cleanupComplete) void refreshLibrary();
+      return result;
+    }
+    publish({
+      error: '제거 결과를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+    });
+    return result;
+  }
   function canGoBack(): boolean {
     return history.length > 0;
   }
@@ -757,6 +971,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
 
   async function browse(startUrl?: string): Promise<void> {
     if (snapshot.busy || disposed) return;
+    const expectedWorkId = startUrl ? workIdFromUrl(startUrl) : null;
+    const expectedGeneration = expectedWorkId ? removalGeneration(expectedWorkId) : null;
+    if (expectedWorkId && removingWorkIds.has(expectedWorkId)) return;
     if (!dependencies.browse) {
       publish({ error: '작품 찾기를 아직 사용할 수 없어요. URL로 열어 주세요.' });
       return;
@@ -766,6 +983,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     try {
       const result = await dependencies.browse(startUrl);
       if (disposed || operation !== sourceOperation) return;
+      if (
+        expectedWorkId &&
+        (removingWorkIds.has(expectedWorkId) ||
+          expectedGeneration !== removalGeneration(expectedWorkId))
+      )
+        return;
       publish({ busy: false });
       if (result) await openWork(result.selectedUrl);
     } catch (error) {
@@ -810,13 +1033,18 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const rows = new Map<string, RenewalSnapshot['libraryWorks'][number]>();
     let hadWorkReadFailure = false;
     for (const workId of workIds) {
+      if (removingWorkIds.has(workId)) continue;
       try {
         const pages = await library.readWork(workId);
+        if (removingWorkIds.has(workId) || disposed || operation !== libraryRefreshOperation)
+          return;
         if (!pages.length) throw new Error('Empty cached work');
         let merged: WorkPage | null = null;
         for (const page of pages) merged = rememberWorkPage(page);
         if (!merged) continue;
         const savedChapterIds = await readSavedChapterIds(merged.chapters);
+        if (removingWorkIds.has(workId) || disposed || operation !== libraryRefreshOperation)
+          return;
         savedChaptersByWork.set(workId, savedChapterIds);
         await loadTitles(workId);
         if (disposed || operation !== libraryRefreshOperation) return;
@@ -856,7 +1084,14 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   async function openCachedWork(workId: string): Promise<void> {
     const library = dependencies.library;
-    if (!library || snapshot.busy || disposed) return;
+    if (
+      !library ||
+      snapshot.busy ||
+      disposed ||
+      removingWorkIds.has(workId) ||
+      removedWorkIds.has(workId)
+    )
+      return;
     const operation = ++sourceOperation;
     sourceAbort?.abort();
     sourceAbort = new AbortController();
@@ -904,6 +1139,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   function ownsVisibleTranslation(request: ActiveTranslation): boolean {
     return (
       !request.cancelled &&
+      !removingWorkIds.has(chaptersById.get(request.chapterId)?.workId ?? '') &&
       request.selectionOperation === selectionOperation &&
       snapshot.route.kind === 'translation' &&
       snapshot.route.chapterId === request.chapterId &&
@@ -954,6 +1190,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ error: '지원하는 작품 또는 회차 주소를 입력해 주세요.' });
       return;
     }
+    const expectedWorkId = workIdFromUrl(url);
+    const expectedGeneration = expectedWorkId ? removalGeneration(expectedWorkId) : null;
+    if (expectedWorkId && removingWorkIds.has(expectedWorkId)) return;
     const operation = ++sourceOperation;
     sourceAbort?.abort();
     sourceAbort = new AbortController();
@@ -961,10 +1200,22 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     try {
       const page = await dependencies.source.getWorkPage(url, sourceAbort.signal);
       if (operation !== sourceOperation || disposed) return;
+      if (
+        removingWorkIds.has(page.workId) ||
+        (expectedWorkId === page.workId && expectedGeneration !== removalGeneration(page.workId))
+      )
+        return;
       if (dependencies.library) await dependencies.library.saveWorkPage(page);
       const newlySavedChapterIds = await readSavedChapterIds(page.chapters);
-      if (operation !== sourceOperation || disposed) return;
+      if (
+        operation !== sourceOperation ||
+        disposed ||
+        removingWorkIds.has(page.workId) ||
+        (expectedWorkId === page.workId && expectedGeneration !== removalGeneration(page.workId))
+      )
+        return;
       const work = rememberWorkPage(page);
+      removedWorkIds.delete(page.workId);
       const savedChapterIds = [
         ...new Set([...(savedChaptersByWork.get(page.workId) ?? []), ...newlySavedChapterIds]),
       ];
@@ -989,17 +1240,38 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   async function loadMoreWorkPage(): Promise<void> {
     const work = snapshot.work;
     const nextPageUrl = work?.nextPageUrl;
-    if (!dependencies.source || !work || !nextPageUrl || snapshot.busy || disposed) return;
+    if (
+      !dependencies.source ||
+      !work ||
+      !nextPageUrl ||
+      snapshot.busy ||
+      disposed ||
+      removingWorkIds.has(work.workId)
+    )
+      return;
+    const generation = removalGeneration(work.workId);
     const operation = ++sourceOperation;
     sourceAbort?.abort();
     sourceAbort = new AbortController();
     publish({ busy: true, error: null });
     try {
       const page = await dependencies.source.getWorkPage(nextPageUrl, sourceAbort.signal);
-      if (operation !== sourceOperation || disposed) return;
+      if (
+        operation !== sourceOperation ||
+        disposed ||
+        removingWorkIds.has(work.workId) ||
+        generation !== removalGeneration(work.workId)
+      )
+        return;
       if (dependencies.library) await dependencies.library.saveWorkPage(page);
       const newlySavedChapterIds = await readSavedChapterIds(page.chapters);
-      if (operation !== sourceOperation || disposed) return;
+      if (
+        operation !== sourceOperation ||
+        disposed ||
+        removingWorkIds.has(work.workId) ||
+        generation !== removalGeneration(work.workId)
+      )
+        return;
       const mergedWork = rememberWorkPage(page);
       const savedChapterIds = [
         ...new Set([...(savedChaptersByWork.get(work.workId) ?? []), ...newlySavedChapterIds]),
@@ -1031,6 +1303,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     return { phase: 'idle', elapsedMs: 0 };
   }
   async function selectChapter(chapter: ChapterRef): Promise<void> {
+    if (removingWorkIds.has(chapter.workId)) return;
     titleAbort?.abort();
     if (livePosition?.chapterId !== chapter.chapterId) livePosition = null;
     if (dependencies.flow?.getSnapshot().pendingSave?.source.chapterId === chapter.chapterId) {
@@ -1048,7 +1321,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       const position = version
         ? ((await dependencies.library?.readPosition(version.versionId)) ?? null)
         : null;
-      if (operation !== selectionOperation || disposed) return;
+      if (operation !== selectionOperation || disposed || removingWorkIds.has(chapter.workId))
+        return;
       if (version) {
         versionsById.set(version.versionId, version);
         positionsByVersion.set(version.versionId, position);
@@ -1092,9 +1366,14 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     try {
       const version = await dependencies.library.readVersion(versionId);
       if (!version) {
+        if (operation !== selectionOperation || disposed) return;
         publish({ error: '저장된 번역을 찾지 못했습니다.' });
         return;
       }
+      if (operation !== selectionOperation || disposed) return;
+      const workId = version.source.workId;
+      const generation = removalGeneration(workId);
+      if (removingWorkIds.has(workId) || removedWorkIds.has(workId)) return;
       const pages = (await dependencies.library.readWork(version.source.workId)).filter(
         (page) => page.workId === version.source.workId,
       );
@@ -1105,7 +1384,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           .find((value) => value.chapterId === version.source.chapterId) ?? null;
       const position = await dependencies.library.readPosition(versionId);
       const savedChapterIds = await readSavedChapterIds(pages.flatMap((page) => page.chapters));
-      if (operation !== selectionOperation || disposed) return;
+      if (
+        operation !== selectionOperation ||
+        disposed ||
+        removingWorkIds.has(workId) ||
+        generation !== removalGeneration(workId)
+      )
+        return;
       for (const page of pages) work = rememberWorkPage(page);
       if (work) savedChaptersByWork.set(work.workId, savedChapterIds);
       versionsById.set(version.versionId, version);
@@ -1117,7 +1402,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       // Cached reading remains offline. Title generation here needs an already checked connection.
       if (snapshot.catalogStatus === 'connected') requestTitleTranslation();
     } catch {
-      publish({ error: '저장된 번역을 불러오지 못했습니다.' });
+      if (operation === selectionOperation && !disposed)
+        publish({ error: '저장된 번역을 불러오지 못했습니다.' });
     }
   }
   function changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void {
@@ -1245,9 +1531,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   async function translate(repair?: ParagraphRepair): Promise<void> {
     const intendedChapter = snapshot.chapter?.chapterId;
+    const intendedWorkId = intendedChapter ? chaptersById.get(intendedChapter)?.workId : undefined;
     const intendedOperation = selectionOperation;
+    if (intendedWorkId && removingWorkIds.has(intendedWorkId)) return;
     if (titleJob || titleSaveJob) await stopTitles();
-    if (intendedOperation !== selectionOperation || intendedChapter !== snapshot.chapter?.chapterId)
+    if (
+      intendedOperation !== selectionOperation ||
+      intendedChapter !== snapshot.chapter?.chapterId ||
+      (intendedWorkId && removingWorkIds.has(intendedWorkId))
+    )
       return;
     if (
       (!dependencies.startTranslation && !dependencies.flow) ||
@@ -1261,6 +1553,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       !snapshot.chapter ||
       !snapshot.selectedModelId ||
       activeTranslation !== null ||
+      (intendedWorkId !== undefined && removingWorkIds.has(intendedWorkId)) ||
       disposed ||
       snapshot.translation.phase !== 'idle'
     )
@@ -1348,6 +1641,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   function updateSavedMetadata(value: CompletedTranslation) {
     const workId = value.source.workId;
+    if (
+      removedWorkIds.has(workId) ||
+      removingWorkIds.has(workId) ||
+      retiredCompletedVersionIds.has(value.versionId)
+    )
+      return;
     const ids = [...new Set([...(savedChaptersByWork.get(workId) ?? []), value.source.chapterId])];
     savedChaptersByWork.set(workId, ids);
     if (snapshot.work?.workId === workId) publish({ savedChapterIds: ids });
@@ -1599,6 +1898,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (
       !dependencies.library ||
       !version ||
+      removingWorkIds.has(version.source.workId) ||
       !version.blocks.some((block) => block.id === blockId) ||
       !Number.isFinite(offset) ||
       offset < 0 ||
@@ -1620,8 +1920,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         while (pendingPositions.size) {
           const next = pendingPositions.values().next().value!;
           pendingPositions.delete(next.versionId);
+          if (removingWorkIds.has(next.workId)) continue;
           try {
-            await dependencies.library!.savePosition(next);
+            await trackWorkWrite(next.workId, () => dependencies.library!.savePosition(next));
           } catch {
             publish({ error: '읽던 위치를 저장하지 못했어요.' });
           }
@@ -1630,7 +1931,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         positionDrain = null;
       });
     await positionDrain;
-    if (dependencies.library && !disposed) {
+    if (dependencies.library && !disposed && !removingWorkIds.has(position.workId)) {
       try {
         publish({ recent: await dependencies.library.listRecent() });
       } catch {
@@ -1648,7 +1949,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       activeTranslation ||
       !initialized ||
       !foreground ||
-      disposed
+      disposed ||
+      removingWorkIds.has(snapshot.work.workId)
     )
       return;
     await dependencies.batch.prepare(
@@ -1737,6 +2039,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   const unsubscribeBatch = dependencies.batch?.subscribe((batch) => {
     const record = batch.record;
     if (record) {
+      if (
+        retiredBatchRecordIds.has(record.id) ||
+        removedWorkIds.has(record.work.workId) ||
+        removingWorkIds.has(record.work.workId)
+      )
+        return;
       worksById.set(record.work.workId, record.work);
       record.work.chapters.forEach((chapter) => chaptersById.set(chapter.chapterId, chapter));
       if (snapshot.work?.workId === record.work.workId) publish({ work: record.work });
@@ -1822,6 +2130,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     navigate,
     back,
     goHome,
+    removeWork,
     canGoBack,
     browse,
     cancelTranslation,
@@ -1874,6 +2183,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     async saveGuidance(workId, draft) {
       if (
         !dependencies.guidance ||
+        removingWorkIds.has(workId) ||
         disposed ||
         !initialized ||
         !foreground ||
@@ -1883,7 +2193,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         dependencies.flow?.active
       )
         throw new ReaderError('storage');
-      return dependencies.guidance.save(workId, draft);
+      return trackWorkWrite(workId, () => dependencies.guidance!.save(workId, draft));
     },
     translate,
     refreshSource,

@@ -33,13 +33,13 @@ function titleText(value: unknown): asserts value is string {
   check(typeof value === 'string' && !!value.trim() && value.length <= 4096);
   check(!/[\u0000-\u001f\u007f]/.test(value));
 }
-type TitleRecord = {
+export type TitleRecord = {
   schemaVersion: 1;
   workId: string;
   entries: SavedTitle[];
   attempted: TitleInput[];
 };
-async function validate(value: unknown): Promise<TitleRecord> {
+export async function validateTitleRecord(value: unknown): Promise<TitleRecord> {
   object(value, ['schemaVersion', 'workId', 'entries', 'attempted']);
   check(value.schemaVersion === 1);
   identifier(value.workId);
@@ -83,7 +83,7 @@ export function createTitleRepository(files: PrivateFiles): TitleRepository {
     readAttempts(workId) {
       identifier(workId);
       return serial(files, async () => {
-        const record = (await journal.load(`titles/${workId}`, validate))?.value;
+        const record = (await journal.load(`titles/${workId}`, validateTitleRecord))?.value;
         check(!record || record.workId === workId);
         return record?.attempted ?? [];
       });
@@ -92,7 +92,7 @@ export function createTitleRepository(files: PrivateFiles): TitleRepository {
       identifier(workId);
       const frozen = structuredClone(inputs);
       return serial(files, async () => {
-        const old = (await journal.load(`titles/${workId}`, validate))?.value;
+        const old = (await journal.load(`titles/${workId}`, validateTitleRecord))?.value;
         check(!old || old.workId === workId);
         const attempted = new Map((old?.attempted ?? []).map((input) => [input.key, input]));
         frozen.forEach((input) => attempted.set(input.key, input));
@@ -104,14 +104,14 @@ export function createTitleRepository(files: PrivateFiles): TitleRepository {
             entries: old?.entries ?? [],
             attempted: [...attempted.values()],
           },
-          validate,
+          validateTitleRecord,
         );
       });
     },
     read(workId) {
       identifier(workId);
       return serial(files, async () => {
-        const record = (await journal.load(`titles/${workId}`, validate))?.value;
+        const record = (await journal.load(`titles/${workId}`, validateTitleRecord))?.value;
         check(!record || record.workId === workId);
         return record?.entries ?? [];
       });
@@ -120,7 +120,7 @@ export function createTitleRepository(files: PrivateFiles): TitleRepository {
       identifier(workId);
       const frozen = structuredClone(entries);
       return serial(files, async () => {
-        const old = (await journal.load(`titles/${workId}`, validate))?.value;
+        const old = (await journal.load(`titles/${workId}`, validateTitleRecord))?.value;
         check(!old || old.workId === workId);
         const merged = new Map((old?.entries ?? []).map((entry) => [entry.key, entry]));
         frozen.forEach((entry) => merged.set(entry.key, entry));
@@ -130,7 +130,7 @@ export function createTitleRepository(files: PrivateFiles): TitleRepository {
           entries: [...merged.values()],
           attempted: old?.attempted ?? [],
         };
-        await journal.save(`titles/${workId}`, value, validate);
+        await journal.save(`titles/${workId}`, value, validateTitleRecord);
         return value.entries;
       });
     },

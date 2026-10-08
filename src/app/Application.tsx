@@ -8,6 +8,9 @@ import { SettingsScreen } from '../ui/SettingsScreen';
 import { TopAppBar } from '../ui/components/TopAppBar';
 import { IconButton } from '../ui/components/IconButton';
 import { Menu } from '../ui/components/Menu';
+import type { MenuItem } from '../ui/components/Menu';
+import { Button } from '../ui/components/Button';
+import { Dialog } from '../ui/components/Modal';
 import { SnackbarProvider, useSnackbar } from '../ui/components/Snackbar';
 import { runTopBackHandler } from '../ui/shell/backStack';
 import { useResolvedTheme } from '../ui/theme/theme';
@@ -21,11 +24,13 @@ function RouteScreen({
   state,
   urlDialogOpen,
   onCloseUrlDialog,
+  onRequestRemove,
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
   urlDialogOpen: boolean;
   onCloseUrlDialog(): void;
+  onRequestRemove(workId: string, title: string): void;
 }): JSX.Element {
   const titles = state.titlesAvailable
     ? {
@@ -45,6 +50,7 @@ function RouteScreen({
           onBrowse={(startUrl) => void controller.browse(startUrl)}
           onOpen={(url) => void controller.openWork(url)}
           onOpenLibraryWork={(workId) => void controller.openLibraryWork(workId)}
+          onRequestRemove={onRequestRemove}
           onContinue={(id) => void controller.continueReading(id)}
           onOpenPendingSave={controller.openPendingSave}
           onOpenBatch={controller.openBatch}
@@ -190,10 +196,12 @@ function ShellAppBar({
   controller,
   state,
   onOpenUrlDialog,
+  onRequestRemove,
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
   onOpenUrlDialog(): void;
+  onRequestRemove(workId: string, title: string): void;
 }): JSX.Element {
   if (state.route.kind === 'home')
     return (
@@ -212,7 +220,18 @@ function ShellAppBar({
         }
       />
     );
-  const items = [{ label: '서재로 가기', onSelect: controller.goHome }];
+  const items: MenuItem[] = [{ label: '서재로 가기', onSelect: controller.goHome }];
+  if (state.route.kind === 'work' && state.work)
+    items.push({
+      label: '서재에서 제거하기',
+      tone: 'danger',
+      icon: 'delete',
+      onSelect: () =>
+        onRequestRemove(
+          state.work!.workId,
+          state.recentTitles[state.work!.workId] ?? state.work!.title,
+        ),
+    });
   if (state.route.kind !== 'settings')
     items.push({ label: '설정', onSelect: () => controller.navigate({ kind: 'settings' }) });
   return (
@@ -238,6 +257,57 @@ export function Application({
     controller.getSnapshot,
   );
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<{
+    workId: string;
+    title: string;
+    savedCount: number;
+  } | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeFeedback, setRemoveFeedback] = useState<string | null>(null);
+  const [removeNotice, setRemoveNotice] = useState<string | null>(null);
+  const requestRemove = (workId: string, title: string) => {
+    const row = state.libraryWorks.find((entry) => entry.work.workId === workId);
+    const savedChapterIds =
+      row?.savedChapterIds ?? (state.work?.workId === workId ? state.savedChapterIds : []);
+    setRemoveTarget({ workId, title, savedCount: new Set(savedChapterIds).size });
+    setRemoveFeedback(null);
+    setRemoveNotice(null);
+  };
+  const confirmRemove = async () => {
+    if (!removeTarget || removeBusy) return;
+    setRemoveBusy(true);
+    try {
+      const result = await controller.removeWork(removeTarget.workId);
+      if (result.removed === false) {
+        setRemoveFeedback(
+          result.blockedBy === 'pending_save'
+            ? '저장하지 못한 번역이 있어요. 먼저 저장을 마친 뒤 다시 제거해 주세요.'
+            : result.blockedBy === 'batch'
+              ? '이 작품의 일괄 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 제거해 주세요.'
+              : result.blockedBy === 'unfinished_attempt'
+                ? '요청 결과를 확인하지 못한 회차가 있어요. 지금은 작품을 제거할 수 없어요.'
+                : result.blockedBy === 'translation'
+                  ? '이 작품을 번역 중이에요. 번역을 마치거나 중단한 뒤 다시 제거해 주세요.'
+                  : '작품을 제거하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+        );
+      } else if (result.removed === null) {
+        setRemoveFeedback(
+          '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+        );
+      } else if (!result.cleanupComplete) {
+        setRemoveTarget(null);
+        setRemoveNotice('서재 목록에서는 제거했지만 저장 데이터 정리를 끝내지 못했어요.');
+      } else {
+        setRemoveTarget(null);
+      }
+    } catch {
+      setRemoveFeedback(
+        '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+      );
+    } finally {
+      setRemoveBusy(false);
+    }
+  };
   useEffect(() => {
     void controller.initialize();
   }, [controller]);
@@ -278,6 +348,7 @@ export function Application({
           controller={controller}
           state={state}
           onOpenUrlDialog={() => setUrlDialogOpen(true)}
+          onRequestRemove={requestRemove}
         />
         <main ref={main} className="nr-screen">
           <RouteScreen
@@ -285,6 +356,7 @@ export function Application({
             state={state}
             urlDialogOpen={urlDialogOpen}
             onCloseUrlDialog={() => setUrlDialogOpen(false)}
+            onRequestRemove={requestRemove}
           />
           {state.translationTimings && (
             <details>
@@ -298,6 +370,53 @@ export function Application({
             </details>
           )}
         </main>
+        <Dialog
+          open={!!removeTarget}
+          title={
+            removeTarget ? `${removeTarget.title}을 서재에서 제거할까요?` : '작품을 제거할까요?'
+          }
+          onClose={() => {
+            if (!removeBusy) {
+              setRemoveTarget(null);
+              setRemoveFeedback(null);
+            }
+          }}
+          actions={
+            <>
+              <Button variant="text" disabled={removeBusy} onClick={() => setRemoveTarget(null)}>
+                닫기
+              </Button>
+              <Button
+                variant="filled"
+                tone="danger"
+                disabled={removeBusy}
+                onClick={() => void confirmRemove()}
+              >
+                제거하기
+              </Button>
+            </>
+          }
+        >
+          {removeTarget && (
+            <p>
+              이 기기에 저장한 번역 {removeTarget.savedCount}화, 읽던 위치, 번역한 제목, 용어집이
+              함께 삭제돼요. 삭제한 내용은 되돌릴 수 없어요.
+            </p>
+          )}
+          {removeFeedback && <p role="alert">{removeFeedback}</p>}
+        </Dialog>
+        <Dialog
+          open={removeNotice !== null}
+          title="일부 데이터를 정리하지 못했어요"
+          onClose={() => setRemoveNotice(null)}
+          actions={
+            <Button variant="text" onClick={() => setRemoveNotice(null)}>
+              닫기
+            </Button>
+          }
+        >
+          <p>{removeNotice}</p>
+        </Dialog>
       </div>
     </SnackbarProvider>
   );
