@@ -352,7 +352,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       .then(() => dependencies.settings!.saveReadingSettings(value))
       .catch(() => {
         if (operation === settingsOperation)
-          publish({ error: '연결 설정을 저장하지 못했습니다. 다시 확인하세요.' });
+          publish({ error: '설정을 저장하지 못했어요. 다시 시도해 주세요.' });
       });
   }
   let sourceOperation = 0;
@@ -1679,6 +1679,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   function chooseModel(modelId: string): void {
+    if (modelId === snapshot.selectedModelId) return;
     titleAbort?.abort();
     const model = snapshot.models.find(
       (choice) => choice.id === modelId && choice.supportsGeneration,
@@ -1691,7 +1692,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         localLimits = limitsForModel(model.id, model.contextTokens);
       } catch {
         publish({
-          error: '이 모델의 입력 한도로 번역을 준비할 수 없습니다. 다른 모델을 선택하세요.',
+          error: '이 모델의 입력 한도로 번역을 준비할 수 없어요. 다른 모델을 선택해 주세요.',
         });
         return;
       }
@@ -2300,6 +2301,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         dependencies.flow?.active ||
         dependencies.batch?.active ||
         snapshot.pendingSaveChapter ||
+        mode === snapshot.translationMode ||
         (mode === 'stream' && !dependencies.streamingAvailable)
       )
         return;
