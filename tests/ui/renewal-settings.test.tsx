@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
 import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
@@ -277,11 +277,30 @@ describe('Android 목록형 설정', () => {
 
     expect(screen.getByLabelText('새 인증값')).toBeDisabled();
     expect(screen.getByRole('button', { name: '저장하기' })).toBeDisabled();
+    value.controller.dispose();
+  });
+
+  it('저장된 인증값을 바꿀 때 비워 두면 기존 인증값을 유지한다고 안내해요', async () => {
+    const value = await setup({ saved: savedSettings('provider.existing') });
+    fireEvent.click(screen.getByRole('button', { name: '인증값 저장됨' }));
+
+    const dialog = screen.getByRole('dialog', { name: '인증값 변경' });
     expect(
-      screen.getByText(
-        '인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.',
+      within(dialog).getByText(
+        '새 인증값은 이 기기의 보안 저장소에 저장해요. 비워 두고 저장하면 기존 인증값을 유지해요.',
       ),
     ).toBeVisible();
+    expect(dialog).not.toHaveTextContent('인증이 없는 서버라면');
+    value.controller.dispose();
+  });
+
+  it('인증값이 없을 때 인증값 입력은 비워 두라는 안내를 설명으로 연결해요', async () => {
+    const value = await setup();
+    const input = screen.getByLabelText('인증값 (선택)');
+
+    expect(input).toHaveAccessibleDescription(
+      '인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.',
+    );
     value.controller.dispose();
   });
 
