@@ -12,4 +12,4 @@
 
 ## Synthetic preview and tests
 
-`npm run dev -- --host 0.0.0.0`, then open `/tests/ui/preview.html`. `mockReaderController.tsx` is a synthetic, in-memory preview outside the production entry; it makes no network or persistence calls. Secret saving intentionally rejects because the preview has no secure storage. Tests run with jsdom/Testing Library; no source site or model is contacted. Narrow-screen visual verification is separate from native Android validation.
+`npm run dev -- --host 0.0.0.0`, then open `/tests/ui/renewal-preview.html`. It is a labelled, synthetic 390 × 844 phone preview that supplies only test fixtures and cannot send a real translation request; the production entry does not import it. Tests run with jsdom/Testing Library; no source site or model is contacted. Narrow-screen visual verification is separate from native Android validation.
