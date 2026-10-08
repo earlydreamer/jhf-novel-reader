@@ -312,6 +312,8 @@ test('UI offers range and all preview with a separate explicit start action', as
   const harness = fixture();
   await harness.setup();
   render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
   fireEvent.change(screen.getByLabelText('끝 회차'), { target: { value: '2' } });
   fireEvent.click(screen.getByRole('button', { name: '범위 확인' }));
   await screen.findByText('확정 범위: 1–2화 · 총 2화');
@@ -324,7 +326,14 @@ test('UI offers range and all preview with a separate explicit start action', as
   fireEvent.click(screen.getByRole('button', { name: '후보 확인 완료' }));
   await screen.findByRole('button', { name: '확인한 회차 번역 시작' });
   fireEvent.click(screen.getByRole('button', { name: '확인한 회차 번역 시작' }));
-  await screen.findByText('일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.');
+  await waitFor(() => expect(harness.app.getSnapshot().batch?.record?.phase).toBe('complete'), {
+    timeout: 10_000,
+  });
+  await screen.findByText(
+    '일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.',
+    {},
+    { timeout: 10_000 },
+  );
   expect(harness.posts()).toHaveLength(4);
   expect(screen.getByRole('heading', { name: '합성 작품' })).toBeInTheDocument();
   harness.app.dispose();
@@ -516,6 +525,8 @@ test('the work editor only applies explicitly saved terms and supports multiple 
   const harness = fixture();
   await harness.setup();
   render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
   fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
   await waitFor(() => expect(screen.getByRole('button', { name: '용어 추가' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '용어 추가' }));
@@ -644,6 +655,8 @@ test('candidate UI requires a checked item and spelling, refreshes the editor af
   await harness.setup();
   harness.chapterExtra = 'アルベルトとアルベルト。';
   render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
   fireEvent.change(screen.getByLabelText('끝 회차'), { target: { value: '1' } });
   fireEvent.click(screen.getByRole('button', { name: '범위 확인' }));
   fireEvent.click(await screen.findByRole('button', { name: '범위 고유명사 후보 스캔' }));

@@ -123,7 +123,7 @@ test('real compose translates titles, reads the same chapter heading, edits it a
   await screen.findByRole('heading', { name: '여름 이야기' });
   await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
   expect(h.requests).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: '여름 아침' }));
+  fireEvent.click(screen.getByRole('button', { name: '1화 여름 아침' }));
   await screen.findByRole('article', { name: '번역 본문' });
   await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
   expect(h.requests).toHaveLength(2);
@@ -134,7 +134,7 @@ test('real compose translates titles, reads the same chapter heading, edits it a
   fireEvent.click(screen.getByRole('button', { name: '원문 확인' }));
   await screen.findByRole('heading', { name: '夏の朝' });
   fireEvent.click(screen.getByRole('button', { name: '목차' }));
-  await screen.findByRole('button', { name: '수정한 아침' });
+  await screen.findByRole('button', { name: '1화 수정한 아침' });
   expect(h.requests).toHaveLength(2);
   expect(
     (await createTitleRepository(h.files).read('n1234ab')).find(
