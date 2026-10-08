@@ -100,3 +100,15 @@ describe('application.css screen defaults', () => {
     expect(menu?.body).toMatch(/justify-items:\s*start;/);
   });
 });
+
+const readerCss = readFileSync('src/ui/immersive-reader.css', 'utf8');
+
+describe('immersive-reader.css progress bar', () => {
+  it('앱바가 숨으면 번역 진행 막대를 화면 맨 위로 올린다', () => {
+    const hidden = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-progress',
+    );
+    expect(hidden?.body).toMatch(/inset-block-start:\s*var\(--inset-top\);/);
+  });
+});

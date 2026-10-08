@@ -231,6 +231,12 @@
   z-index: 34;
   inset-block-start: calc(var(--app-bar) + var(--inset-top));
   inset-inline: 0;
+  transition: inset-block-start var(--duration-enter) var(--ease-standard);
+}
+
+/* 앱바가 숨은 몰입 상태에서는 막대를 상태바 바로 아래(화면 맨 위)로 올려 본문 줄 위에 뜨지 않게 한다(#131). */
+.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-progress {
+  inset-block-start: var(--inset-top);
 }
 
 .nr-immersive-reader > .nr-status-pill {
@@ -341,5 +347,9 @@
   .nr-immersive-article {
     scroll-behavior: auto;
     transition-duration: 0ms;
+  }
+
+  .nr-immersive-reader > .nr-progress {
+    transition: none;
   }
 }
