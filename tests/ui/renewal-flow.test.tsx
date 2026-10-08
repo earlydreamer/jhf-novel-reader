@@ -12,6 +12,16 @@ function chooseShellMenu(item: string) {
   fireEvent.click(screen.getByRole('menuitem', { name: item }));
 }
 
+function revealReaderBars() {
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+}
+
+function chooseReaderMenu(item: string) {
+  revealReaderBars();
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: item }));
+}
+
 // 이 파일의 기존 생명주기 검증은 사용자가 자동 시작을 끈 수동 모드에서 실행한다.
 function manualController(dependencies?: RenewalDependencies) {
   const controller = controllers.createRenewalController(dependencies);
@@ -670,7 +680,9 @@ describe('renewal first reading screens', () => {
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
     fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: '이 화 번역' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeEnabled(),
+    );
     expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
     expect(value.dependencies.connect).toHaveBeenCalledTimes(1);
     expect(value.dependencies.startTranslation).not.toHaveBeenCalled();
@@ -686,8 +698,11 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(value.dependencies.connect).not.toHaveBeenCalled();
+    revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '다음 화' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: '이 화 번역' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeEnabled(),
+    );
     expect(value.dependencies.connect).toHaveBeenCalledTimes(1);
     expect(value.generate).not.toHaveBeenCalled();
     controller.dispose();
@@ -704,9 +719,11 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connection'));
     expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
-    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '연결 다시 확인' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: '이 화 번역' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeEnabled(),
+    );
     expect(connect).toHaveBeenCalledTimes(2);
     expect(value.generate).not.toHaveBeenCalled();
     controller.dispose();
@@ -734,8 +751,8 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await screen.findByText('저장된 연결의 서버와 모델 목록을 확인하고 있습니다.');
     expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
-    chooseShellMenu('서재로 가기');
+    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
+    chooseReaderMenu('서재로 가기');
     release();
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connected'));
     expect(controller.getSnapshot().route.kind).toBe('home');
@@ -758,7 +775,7 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('model_missing'));
     expect(controller.getSnapshot().selectedModelId).toBeNull();
-    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
     expect(value.generate).not.toHaveBeenCalled();
     controller.dispose();
   });
@@ -768,7 +785,7 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
     expect(value.generate).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
   });
   it('saved_chapter_opens_without_settings', async () => {
     const value = await setup(true);
@@ -791,6 +808,10 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(screen.queryByLabelText('API 기본 주소')).toBeNull();
+    expect(
+      screen.getByRole('region', { name: '몰입형 리더' }).querySelector('.nr-toolbar'),
+    ).toHaveAttribute('inert');
+    revealReaderBars();
     expect(screen.getByRole('button', { name: '목차' })).toBeVisible();
   });
   it('no_budget_or_prefetch_controls', async () => {
@@ -812,7 +833,8 @@ describe('renewal first reading screens', () => {
     await screen.findByRole('option', { name: 'HyMT2 synthetic' });
     fireEvent.change(screen.getByLabelText('모델 선택'), { target: { value: 'fixture-hymt2' } });
     fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
-    fireEvent.click(screen.getByRole('button', { name: '이 화 번역' }));
+    revealReaderBars();
+    fireEvent.click(screen.getByRole('button', { name: '이 화 번역하기' }));
     await waitFor(() => expect(value.generate).toHaveBeenCalledTimes(1));
   });
 });
@@ -928,8 +950,8 @@ describe('renewal reading affordances', () => {
     await controller.openWork(page.canonicalUrl);
     await controller.selectChapter(chapters[0]!);
 
-    expect(await screen.findByText('원문이 변경되었습니다.')).toBeVisible();
-    expect(screen.getByRole('button', { name: '새 원문으로 번역 준비' })).toBeVisible();
+    expect(await screen.findByText('원문이 바뀌었어요.')).toBeVisible();
+    expect(screen.getByRole('button', { name: '새 원문으로 번역하기' })).toBeVisible();
     expect(value.generate).not.toHaveBeenCalled();
   });
   it('shows saved status in the work contents before choosing a chapter', async () => {
@@ -942,21 +964,28 @@ describe('renewal reading affordances', () => {
     const value = await setup(true);
     fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
-    expect(article).toHaveStyle({ fontSize: '18px' });
-    expect(screen.getByLabelText('글자 크기')).toHaveAttribute('min', '10');
-    expect(screen.getByLabelText('글자 크기')).toHaveAttribute('max', '48');
+    expect(
+      (article.parentElement as HTMLElement).style.getPropertyValue('--nr-reading-font-rem'),
+    ).toBe('1.125');
     value.controller.changeFontSize(49);
     expect(value.controller.getSnapshot().fontSize).toBe(18);
-    fireEvent.change(screen.getByLabelText('글자 크기'), { target: { value: '24' } });
-    expect(article).toHaveStyle({ fontSize: '24px' });
+    revealReaderBars();
+    fireEvent.click(screen.getByRole('button', { name: '보기 설정' }));
+    for (let index = 0; index < 3; index += 1)
+      fireEvent.click(screen.getByRole('button', { name: '글자 크기 키우기' }));
+    expect(
+      (article.parentElement as HTMLElement).style.getPropertyValue('--nr-reading-font-rem'),
+    ).toBe('1.5');
   });
   it('returns to the top when no translation position has been saved', async () => {
     const value = await setup(true);
     fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
-    fireEvent.click(screen.getByRole('button', { name: '원문 확인' }));
+    revealReaderBars();
+    fireEvent.click(screen.getByRole('button', { name: '원문 보기' }));
     article.scrollTop = 300;
     fireEvent.scroll(article);
+    revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '번역 보기' }));
     expect(article.scrollTop).toBe(0);
     expect(value.dependencies.library!.savePosition).not.toHaveBeenCalled();
@@ -974,10 +1003,12 @@ describe('renewal reading affordances', () => {
       ),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '원문 확인' }));
+    revealReaderBars();
+    fireEvent.click(screen.getByRole('button', { name: '원문 보기' }));
     article.scrollTop = 0;
     fireEvent.scroll(article);
     expect(value.dependencies.library!.savePosition).toHaveBeenCalledTimes(1);
+    revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '번역 보기' }));
     offsetTop.mockRestore();
     expect(article.scrollTop).toBe(357);
@@ -986,11 +1017,13 @@ describe('renewal reading affordances', () => {
     const value = await setup(true);
     fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
+    revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '다음 화' }));
     await screen.findByRole('heading', { name: '2화 제목' });
-    expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
     expect(value.generate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
+    revealReaderBars();
+    fireEvent.click(screen.getByRole('button', { name: '목차로 돌아가기' }));
     expect(screen.getByRole('heading', { name: page.title })).toBeVisible();
     expect(screen.queryByText('저장된 한국어 본문')).toBeNull();
   });
@@ -1113,6 +1146,7 @@ describe('route restoration across works', () => {
     expect(controller.getSnapshot().work?.workId).toBe(page.workId);
     expect(controller.getSnapshot().chapter?.chapterId).toBe(saved.source.chapterId);
     render(<Application controller={controller} />);
+    revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '목차' }));
     expect(
       screen.getByRole('button', { name: '1화 1화 제목' }).closest('.nr-list-item'),
@@ -1244,6 +1278,7 @@ describe('review P2: library-only continuation restores saved metadata', () => {
     render(<Application controller={controller} />);
     await controller.continueReading(saved.versionId);
     await screen.findByText(saved.text);
+    revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '목차' }));
     expect(screen.getByRole('heading', { name: page.title })).toBeVisible();
     expect(

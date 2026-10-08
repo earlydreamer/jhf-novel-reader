@@ -131,7 +131,7 @@ test('live reader updates before model settlement, keeps position on save and op
   await h.app.openWork(url);
   await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
   render(<Application controller={h.app} />);
-  fireEvent.click(screen.getByRole('button', { name: '이 화 번역' }));
+  fireEvent.click(screen.getByRole('button', { name: '이 화 번역하기' }));
   const preview = await screen.findByRole('article', { name: '번역 미리보기' });
   await screen.findByText('빠르게 읽는 문단');
   expect(h.app.getSnapshot().translation.phase).toBe('translating');
@@ -184,14 +184,17 @@ test('automatic start is opt-out, dispatches once and leaves completed reading i
   h.release();
   await waitFor(() => expect(h.app.getSnapshot().version).not.toBeNull());
   expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
   expect(screen.getByRole('button', { name: /^목차$/ })).toBeEnabled();
   expect(screen.queryByRole('button', { name: '저장본으로 읽기' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '원문 확인' }));
+  fireEvent.click(screen.getByRole('button', { name: '원문 보기' }));
   expect(screen.getByRole('article', { name: '원문 본문' })).toHaveTextContent('夏の朝');
   fireEvent.click(screen.getByRole('button', { name: '번역 보기' }));
   fireEvent.click(screen.getByRole('button', { name: /^목차$/ }));
   await h.app.selectChapter(chapter);
   expect(h.app.getSnapshot().route.kind).toBe('reader');
+  expect(document.querySelector('.nr-immersive-appbar')).toHaveAttribute('inert');
+  expect(document.querySelector('.nr-toolbar')).toHaveAttribute('inert');
   expect(h.requests.filter((r) => r.method === 'POST')).toHaveLength(1);
   h.app.dispose();
 });
@@ -211,7 +214,7 @@ test('both options survive restart, and automatic start off keeps a manual start
   });
   await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
   expect(h.app.getSnapshot().translation.phase).toBe('idle');
-  fireEvent.click(screen.getByRole('button', { name: '이 화 번역' }));
+  fireEvent.click(screen.getByRole('button', { name: '이 화 번역하기' }));
   h.release();
   await waitFor(() => expect(h.app.getSnapshot().version).not.toBeNull());
   expect(h.requests.filter((r) => r.method === 'POST')).toHaveLength(1);

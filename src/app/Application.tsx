@@ -2,8 +2,7 @@ import type { JSX } from 'react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { HomeScreen } from '../ui/HomeScreen';
 import { WorkScreen } from '../ui/WorkScreen';
-import { TranslationScreen } from '../ui/TranslationScreen';
-import { ReaderScreen } from '../ui/ReaderScreen';
+import { ImmersiveReader } from '../ui/ImmersiveReader';
 import { SettingsScreen } from '../ui/SettingsScreen';
 import { TopAppBar } from '../ui/components/TopAppBar';
 import { IconButton } from '../ui/components/IconButton';
@@ -118,78 +117,152 @@ function RouteScreen({
       );
     case 'translation':
       return state.chapter ? (
-        <TranslationScreen
-          titles={titles}
-          key={state.chapter.chapterId}
-          completedVersion={
-            state.version?.source.chapterId === state.chapter.chapterId ? state.version : null
-          }
-          work={state.work}
-          position={state.position}
-          showOriginal={state.showOriginal}
-          busy={state.busy}
-          onShowOriginal={controller.showOriginal}
-          onFontSize={controller.changeFontSize}
-          onContents={controller.showContents}
-          onAdjacent={controller.adjacentChapter}
-          onRetryParagraphs={(indexes) => void controller.retryParagraphs(indexes)}
-          streaming={
-            state.paragraphRepair ||
-            (state.translationMode === 'stream' &&
-              state.connection.provider === 'openai-compatible')
-          }
-          fontSize={state.fontSize}
-          onPreviewPosition={controller.previewPosition}
+        <ImmersiveReader
+          key={`${state.chapter.workId}:${state.chapter.chapterId}`}
+          route="translation"
           chapter={state.chapter}
-          connection={state.connection}
-          modelId={state.selectedModelId}
-          state={state.translation}
-          available={state.translationAvailable}
-          requestActive={state.translationActive}
+          work={state.work}
+          version={state.version}
+          position={state.position}
+          translation={state.translation}
+          translationActive={state.translationActive}
+          translationAvailable={state.translationAvailable}
+          selectedModelId={state.selectedModelId}
+          connected={state.catalogStatus === 'connected' && !!state.selectedModelId}
+          catalogStatus={state.catalogStatus}
+          connectionConfigured={!!state.connection.baseUrl}
+          fontSize={state.fontSize}
+          readingBackground={state.readingBackground}
+          lineHeight={state.lineHeight}
+          showOriginal={state.showOriginal}
+          sourceChange={state.sourceChange}
+          busy={state.busy}
+          retryParagraphsAvailable={
+            state.streamingAvailable && state.connection.provider === 'openai-compatible'
+          }
           pendingSaveElsewhere={
             !!state.pendingSaveChapter &&
             state.pendingSaveChapter.chapterId !== state.chapter.chapterId
           }
-          catalogReady={state.catalogStatus === 'connected'}
-          catalogStatus={state.catalogStatus}
-          onCheckConnection={() => void controller.checkConnection()}
+          titles={
+            state.titlesAvailable
+              ? { entries: state.titles, busy: titles?.busy ?? false }
+              : undefined
+          }
+          onBack={controller.showContents}
+          onShowOriginal={controller.showOriginal}
+          onFontSize={controller.changeFontSize}
+          onReadingBackground={controller.changeReadingBackground}
+          onLineHeight={controller.changeLineHeight}
+          onPreviewPosition={controller.previewPosition}
+          onPosition={(block, offset) => void controller.savePosition(block, offset)}
+          onAdjacent={controller.adjacentChapter}
+          onTranslate={() => void controller.translate()}
           onCancel={controller.cancelTranslation}
           onRetry={() => void controller.retryTranslation()}
           onRetrySave={() => void controller.retrySave()}
-          onOpenSaved={() => void controller.openSavedTranslation()}
-          onTranslate={() => void controller.translate()}
-          onSettings={() => controller.navigate({ kind: 'settings' })}
-        />
-      ) : (
-        <p>선택한 회차를 찾지 못했습니다.</p>
-      );
-    case 'reader':
-      return state.version ? (
-        <ReaderScreen
-          titles={titles}
-          busy={state.busy || state.translationActive}
           onRetryParagraphs={
             state.streamingAvailable && state.connection.provider === 'openai-compatible'
               ? (indexes) => void controller.retryParagraphs(indexes)
               : undefined
           }
-          key={state.version.versionId}
-          version={state.version}
-          work={state.work}
-          position={state.position}
-          fontSize={state.fontSize}
-          showOriginal={state.showOriginal}
-          sourceChange={state.sourceChange}
-          onDisplayed={controller.readerDisplayed}
-          onFontSize={controller.changeFontSize}
-          onPosition={(block, offset) => void controller.savePosition(block, offset)}
-          onShowOriginal={controller.showOriginal}
+          onSettings={() => controller.navigate({ kind: 'settings' })}
+          onCheckConnection={() => void controller.checkConnection()}
           onRefreshSource={() => void controller.refreshSource()}
-          onContents={controller.showContents}
-          onAdjacent={controller.adjacentChapter}
+          onOpenSaved={() => void controller.openSavedTranslation()}
+          onRetryTitle={
+            state.titlesAvailable
+              ? () => void controller.translateTitles(state.chapter!.chapterId)
+              : undefined
+          }
+          onSaveTitle={
+            state.titlesAvailable
+              ? (value) => controller.saveTitle(state.chapter!.chapterId, value)
+              : undefined
+          }
+          onGoHome={controller.goHome}
+          onDisplayed={controller.readerDisplayed}
         />
       ) : (
-        <p>저장된 번역을 찾지 못했습니다.</p>
+        <p>선택한 회차를 찾지 못했어요.</p>
+      );
+    case 'reader':
+      return state.version ? (
+        <ImmersiveReader
+          key={`${state.version.source.workId}:${state.version.source.chapterId}`}
+          route="reader"
+          chapter={
+            state.chapter ?? {
+              workId: state.version.source.workId,
+              chapterId: state.version.source.chapterId,
+              canonicalUrl: state.version.source.canonicalUrl,
+              title: state.version.source.title,
+              ordinal:
+                state.work?.chapters.find(
+                  (chapter) => chapter.chapterId === state.version!.source.chapterId,
+                )?.ordinal ?? 1,
+            }
+          }
+          work={state.work}
+          version={state.version}
+          position={state.position}
+          translation={state.translation}
+          translationActive={state.translationActive}
+          translationAvailable={state.translationAvailable}
+          selectedModelId={state.selectedModelId}
+          connected={state.catalogStatus === 'connected' && !!state.selectedModelId}
+          catalogStatus={state.catalogStatus}
+          connectionConfigured={!!state.connection.baseUrl}
+          fontSize={state.fontSize}
+          readingBackground={state.readingBackground}
+          lineHeight={state.lineHeight}
+          showOriginal={state.showOriginal}
+          sourceChange={state.sourceChange}
+          busy={state.busy || state.translationActive}
+          retryParagraphsAvailable={
+            state.streamingAvailable && state.connection.provider === 'openai-compatible'
+          }
+          titles={
+            state.titlesAvailable
+              ? { entries: state.titles, busy: titles?.busy ?? false }
+              : undefined
+          }
+          onBack={controller.showContents}
+          onShowOriginal={controller.showOriginal}
+          onFontSize={controller.changeFontSize}
+          onReadingBackground={controller.changeReadingBackground}
+          onLineHeight={controller.changeLineHeight}
+          onPreviewPosition={controller.previewPosition}
+          onPosition={(block, offset) => void controller.savePosition(block, offset)}
+          onAdjacent={controller.adjacentChapter}
+          onTranslate={() => void controller.translate()}
+          onCancel={controller.cancelTranslation}
+          onRetry={() => void controller.retryTranslation()}
+          onRetrySave={() => void controller.retrySave()}
+          onRetryParagraphs={
+            state.streamingAvailable && state.connection.provider === 'openai-compatible'
+              ? (indexes) => void controller.retryParagraphs(indexes)
+              : undefined
+          }
+          onSettings={() => controller.navigate({ kind: 'settings' })}
+          onCheckConnection={() => void controller.checkConnection()}
+          onRefreshSource={() => void controller.refreshSource()}
+          onOpenSaved={() => void controller.openSavedTranslation()}
+          onRetryTitle={
+            state.titlesAvailable
+              ? () => void controller.translateTitles(state.version!.source.chapterId)
+              : undefined
+          }
+          onSaveTitle={
+            state.titlesAvailable
+              ? (value) => controller.saveTitle(state.version!.source.chapterId, value)
+              : undefined
+          }
+          onGoHome={controller.goHome}
+          onDisplayed={controller.readerDisplayed}
+        />
+      ) : (
+        <p>저장된 번역을 찾지 못했어요.</p>
       );
     case 'settings':
       return (
@@ -226,7 +299,7 @@ function ShellAppBar({
   onOpenUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
   onOpenWorkDialog(dialog: 'guidance' | 'batch'): void;
-}): JSX.Element {
+}): JSX.Element | null {
   if (state.route.kind === 'home')
     return (
       <TopAppBar
@@ -275,6 +348,7 @@ function ShellAppBar({
   }
   if (state.route.kind !== 'settings')
     items.push({ label: '설정', onSelect: () => controller.navigate({ kind: 'settings' }) });
+  if (state.route.kind === 'translation' || state.route.kind === 'reader') return null;
   return (
     <TopAppBar
       title={
@@ -412,7 +486,10 @@ export function Application({
             })
           }
         />
-        <main ref={main} className="nr-screen">
+        <main
+          ref={main}
+          className={`nr-screen${state.route.kind === 'translation' || state.route.kind === 'reader' ? ' nr-screen--immersive' : ''}`}
+        >
           <RouteScreen
             controller={controller}
             state={state}
@@ -422,17 +499,19 @@ export function Application({
             workDialogRequest={workDialogRequest}
             onWorkDialogRequestHandled={handleWorkDialogRequestHandled}
           />
-          {state.translationTimings && (
-            <details>
-              <summary>최근 번역 단계별 시간</summary>
-              <p>
-                원문 준비 {Math.round(state.translationTimings.sourceMs)}ms · 모델 대기{' '}
-                {Math.round(state.translationTimings.modelMs)}ms · 결과 확인·저장{' '}
-                {Math.round(state.translationTimings.validationStorageMs)}ms · 리더 표시{' '}
-                {Math.round(state.translationTimings.readerDisplayMs)}ms
-              </p>
-            </details>
-          )}
+          {state.route.kind !== 'translation' &&
+            state.route.kind !== 'reader' &&
+            state.translationTimings && (
+              <details>
+                <summary>최근 번역 단계별 시간</summary>
+                <p>
+                  원문 준비 {Math.round(state.translationTimings.sourceMs)}ms · 모델 대기{' '}
+                  {Math.round(state.translationTimings.modelMs)}ms · 결과 확인·저장{' '}
+                  {Math.round(state.translationTimings.validationStorageMs)}ms · 리더 표시{' '}
+                  {Math.round(state.translationTimings.readerDisplayMs)}ms
+                </p>
+              </details>
+            )}
         </main>
         <Dialog
           open={!!removeTarget}

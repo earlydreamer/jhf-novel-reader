@@ -99,16 +99,50 @@ const reading = [
   { name: 'light 독서 기본', fg: themes.light['on-surface'], bg: themes.light.surface },
   { name: 'dark 독서 기본', fg: themes.dark['on-surface'], bg: themes.dark.surface },
   {
-    name: '독서 세피아',
+    name: 'light 독서 세피아',
     fg: block("[data-reading-background='sepia']")['reading-on-surface'],
     bg: block("[data-reading-background='sepia']")['reading-surface'],
   },
   {
-    name: '독서 검정',
+    name: 'light 독서 검정',
+    fg: block("[data-reading-background='black']")['reading-on-surface'],
+    bg: block("[data-reading-background='black']")['reading-surface'],
+  },
+  {
+    name: 'dark 독서 세피아',
+    fg: block("[data-reading-background='sepia']")['reading-on-surface'],
+    bg: block("[data-reading-background='sepia']")['reading-surface'],
+  },
+  {
+    name: 'dark 독서 검정',
     fg: block("[data-reading-background='black']")['reading-on-surface'],
     bg: block("[data-reading-background='black']")['reading-surface'],
   },
 ].map((value) => ({ ...value, gate: READ }));
+const readingSubtext = [
+  { name: 'light 독서 보조', fg: themes.light['on-surface-variant'], bg: themes.light.surface },
+  { name: 'dark 독서 보조', fg: themes.dark['on-surface-variant'], bg: themes.dark.surface },
+  {
+    name: 'light 독서 세피아 보조',
+    fg: block("[data-reading-background='sepia']")['reading-on-surface-variant'],
+    bg: block("[data-reading-background='sepia']")['reading-surface'],
+  },
+  {
+    name: 'light 독서 검정 보조',
+    fg: block("[data-reading-background='black']")['reading-on-surface-variant'],
+    bg: block("[data-reading-background='black']")['reading-surface'],
+  },
+  {
+    name: 'dark 독서 세피아 보조',
+    fg: block("[data-reading-background='sepia']")['reading-on-surface-variant'],
+    bg: block("[data-reading-background='sepia']")['reading-surface'],
+  },
+  {
+    name: 'dark 독서 검정 보조',
+    fg: block("[data-reading-background='black']")['reading-on-surface-variant'],
+    bg: block("[data-reading-background='black']")['reading-surface'],
+  },
+].map((value) => ({ ...value, gate: SUB }));
 
 describe('design token contrast', () => {
   it('gives every light color token a dark override so no value silently falls back to light', () => {
@@ -117,7 +151,7 @@ describe('design token contrast', () => {
     expect(Object.keys(block(':root')).filter((name) => !(name in dark))).toEqual([]);
   });
 
-  it.each([...cases, ...reading])('$name', ({ fg, bg, gate }) => {
+  it.each([...cases, ...reading, ...readingSubtext])('$name', ({ fg, bg, gate }) => {
     expect(fg, '전경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
     expect(bg, '배경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
     expect(wcag(fg!, bg!)).toBeGreaterThanOrEqual(gate[0]);

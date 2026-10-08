@@ -341,8 +341,12 @@ test('UI offers range and all preview with a separate explicit start action', as
   await screen.findByText('확정 범위: 1–4화 · 총 4화');
   expect(harness.posts()).toHaveLength(0);
   fireEvent.click(screen.getByRole('button', { name: '범위 고유명사 후보 스캔' }));
-  await screen.findByRole('button', { name: '후보 확인 완료' });
-  fireEvent.click(screen.getByRole('button', { name: '후보 확인 완료' }));
+  await waitFor(
+    () => expect(harness.app.getSnapshot().batch?.record?.scan?.status).toBe('review'),
+    { timeout: 10_000 },
+  );
+  const confirmCandidates = await screen.findByRole('button', { name: /확인 완료/ });
+  fireEvent.click(confirmCandidates);
   await screen.findByRole('button', { name: '확인한 회차 번역 시작' });
   fireEvent.click(screen.getByRole('button', { name: '확인한 회차 번역 시작' }));
   await waitFor(() => expect(harness.app.getSnapshot().batch?.record?.phase).toBe('complete'), {
@@ -767,8 +771,14 @@ test('candidate UI requires a checked item and spelling, refreshes the editor af
   await harness.app.continueReading(
     (await harness.library.listVersions('n1234ab/1'))[0]!.versionId,
   );
-  await screen.findByText('번역 확인 · 가나가 남은 문단 0개 · 확정 표기 미발견 1개');
-  expect(screen.getByRole('article', { name: '번역 본문' }).textContent).toBe('번역 1');
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 확인 결과 보기' }));
+  await screen.findByRole('heading', { name: '번역 확인 결과' });
+  expect(screen.getByText('가나가 남은 문단 0개 · 확정 표기 미발견 1개')).toBeVisible();
+  expect(
+    screen.getByRole('article', { name: '번역 본문' }).querySelector('[data-reader-index="0"]'),
+  ).toHaveTextContent('번역 1');
   expect(harness.posts()).toHaveLength(1);
   harness.app.dispose();
 });

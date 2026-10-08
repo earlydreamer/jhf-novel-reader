@@ -58,3 +58,31 @@ it('ignores values outside the allowed preferences', async () => {
   expect(saveReadingSettings).not.toHaveBeenCalled();
   controller.dispose();
 });
+
+it('preserves an odd legacy reading size on restore and persists only the explicit two-pixel adjustment', async () => {
+  let persisted: ReadingSettings = { schemaVersion: 2, selection: null, fontSize: 19 };
+  const saveReadingSettings = vi.fn(async (value: ReadingSettings) => {
+    persisted = value;
+  });
+  const create = () =>
+    createRenewalController({
+      settings: {
+        readReadingSettings: async () => persisted,
+        saveReadingSettings,
+      },
+    });
+
+  const first = create();
+  await first.initialize();
+  expect(first.getSnapshot().fontSize).toBe(19);
+  expect(saveReadingSettings).not.toHaveBeenCalled();
+  first.changeFontSize(21);
+  await vi.waitFor(() => expect(saveReadingSettings).toHaveBeenCalledTimes(1));
+  expect(persisted.fontSize).toBe(21);
+  first.dispose();
+
+  const restored = create();
+  await restored.initialize();
+  expect(restored.getSnapshot().fontSize).toBe(21);
+  restored.dispose();
+});
