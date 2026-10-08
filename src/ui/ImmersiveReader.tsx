@@ -464,6 +464,144 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     unavailable: '서버 연결을 확인할 수 없어요. 연결 설정을 확인해 주세요.',
   };
 
+  // 안내 카드는 본문 흐름 안(article 첫 자식)의 컨테이너에 모아 상태바·화면 가장자리에 붙지 않게 한다.
+  const notices = [
+    props.sourceChange === 'changed' && (
+      <div
+        key="source-changed"
+        className="nr-reader-notice nr-reader-notice--warning"
+        role="status"
+      >
+        <span>원문이 바뀌었어요.</span>
+        <Button variant="text" onClick={props.onRefreshSource}>
+          새 원문으로 번역하기
+        </Button>
+      </div>
+    ),
+    props.sourceChange === 'checking' && (
+      <p key="source-checking" className="nr-reader-note" role="status">
+        원문 변경을 확인하고 있어요.
+      </p>
+    ),
+    props.sourceChange === 'unavailable' && (
+      <p key="source-unavailable" className="nr-reader-note" role="status">
+        원문 변경을 확인하지 못했어요.
+      </p>
+    ),
+    props.busy && (
+      <p key="busy" className="nr-reader-note" role="status">
+        회차를 불러오고 있어요.
+      </p>
+    ),
+    props.route === 'translation' && props.catalogStatus === 'checking' && (
+      <p key="catalog-checking" className="nr-reader-note" role="status">
+        저장된 연결의 서버와 모델 목록을 확인하고 있습니다.
+      </p>
+    ),
+    props.route === 'translation' && catalogUnavailable && props.catalogStatus !== 'checking' && (
+      <p key="catalog-unavailable" className="nr-reader-note" role="status">
+        {catalogMessage[props.catalogStatus] ?? '연결 상태를 확인해 주세요.'}
+      </p>
+    ),
+    props.route === 'translation' && props.connectionConfigured && catalogUnavailable && (
+      <Button
+        key="check-connection"
+        variant="outlined"
+        disabled={props.catalogStatus === 'checking' || props.busy}
+        onClick={props.onCheckConnection}
+      >
+        연결 다시 확인
+      </Button>
+    ),
+    props.route === 'translation' && !props.selectedModelId && !catalogUnavailable && (
+      <p key="model-missing" className="nr-reader-note" role="status">
+        생성 모델이 선택되지 않았어요. 연결 설정에서 모델을 선택해 주세요.
+      </p>
+    ),
+    props.route === 'translation' && props.translation.phase === 'idle' && !active && (
+      <div key="translate-start" className="nr-reader-notice">
+        <p>
+          {props.connected && props.translationAvailable
+            ? '이 회차를 번역하면 여기서 읽을 수 있어요.'
+            : '번역 서버를 연결하면 바로 읽을 수 있어요.'}
+        </p>
+        <Button
+          variant="filled"
+          size="m"
+          disabled={!canStartTranslation}
+          onClick={props.onTranslate}
+        >
+          이 화 번역하기
+        </Button>
+        {(!props.connected || !props.translationAvailable) && (
+          <Button variant="tonal" onClick={props.onSettings}>
+            연결 설정
+          </Button>
+        )}
+      </div>
+    ),
+    props.route === 'translation' && activeFlow && !paragraphs.length && (
+      <p key="translating-note" className="nr-reader-note">
+        다음 문단을 번역하고 있어요…
+      </p>
+    ),
+    props.route === 'translation' && props.translation.phase === 'unknown' && (
+      <div key="unknown-result" className="nr-reader-notice nr-reader-notice--warning" role="alert">
+        <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
+        <Button
+          variant="outlined"
+          disabled={active || !props.connected || !props.selectedModelId}
+          onClick={props.onRetry}
+        >
+          확인하고 다시 번역하기
+        </Button>
+      </div>
+    ),
+    props.route === 'translation' && props.translation.phase === 'failed' && (
+      <div
+        key="translation-failed"
+        className="nr-reader-notice nr-reader-notice--error"
+        role="alert"
+      >
+        <p>
+          {props.translation.pendingSave
+            ? '번역 결과를 저장하지 못했어요.'
+            : (failureMessage ?? '번역을 완료하지 못했어요. 자동으로 다시 요청하지 않아요.')}
+        </p>
+        {props.translation.pendingSave ? (
+          <Button variant="outlined" disabled={active} onClick={props.onRetrySave}>
+            저장 다시 하기
+          </Button>
+        ) : failureNeedsSettings ? (
+          <Button variant="outlined" onClick={props.onSettings}>
+            연결 설정 열기
+          </Button>
+        ) : failureNeedsSourceRefresh ? (
+          <Button variant="outlined" onClick={props.onRetry}>
+            원문 다시 확인하고 번역하기
+          </Button>
+        ) : (
+          <Button
+            variant="outlined"
+            disabled={active || !props.connected || !props.selectedModelId}
+            onClick={props.onRetry}
+          >
+            중복 여부를 확인하고 다시 번역하기
+          </Button>
+        )}
+      </div>
+    ),
+    props.route === 'translation' && props.translation.phase === 'ready' && !version && (
+      <div key="ready-saved" className="nr-reader-notice">
+        <p>번역을 저장했어요.</p>
+        <Button variant="filled" size="m" onClick={props.onOpenSaved}>
+          저장된 번역 열기
+        </Button>
+      </div>
+    ),
+  ];
+  const hasNotices = notices.some(Boolean);
+
   return (
     <section
       aria-label="몰입형 리더"
@@ -511,122 +649,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           value={progress?.total ? progress.completed / progress.total : undefined}
         />
       )}
-      {props.sourceChange === 'changed' && (
-        <div className="nr-reader-notice nr-reader-notice--warning" role="status">
-          <span>원문이 바뀌었어요.</span>
-          <Button variant="text" onClick={props.onRefreshSource}>
-            새 원문으로 번역하기
-          </Button>
-        </div>
-      )}
-      {props.sourceChange === 'checking' && (
-        <p className="nr-reader-note" role="status">
-          원문 변경을 확인하고 있어요.
-        </p>
-      )}
-      {props.sourceChange === 'unavailable' && (
-        <p className="nr-reader-note" role="status">
-          원문 변경을 확인하지 못했어요.
-        </p>
-      )}
-      {props.busy && (
-        <p className="nr-reader-note" role="status">
-          회차를 불러오고 있어요.
-        </p>
-      )}
-      {props.route === 'translation' && props.catalogStatus === 'checking' && (
-        <p className="nr-reader-note" role="status">
-          저장된 연결의 서버와 모델 목록을 확인하고 있습니다.
-        </p>
-      )}
-      {props.route === 'translation' &&
-        catalogUnavailable &&
-        props.catalogStatus !== 'checking' && (
-          <p className="nr-reader-note" role="status">
-            {catalogMessage[props.catalogStatus] ?? '연결 상태를 확인해 주세요.'}
-          </p>
-        )}
-      {props.route === 'translation' && props.connectionConfigured && catalogUnavailable && (
-        <Button
-          variant="outlined"
-          disabled={props.catalogStatus === 'checking' || props.busy}
-          onClick={props.onCheckConnection}
-        >
-          연결 다시 확인
-        </Button>
-      )}
-      {props.route === 'translation' && !props.selectedModelId && !catalogUnavailable && (
-        <p className="nr-reader-note" role="status">
-          생성 모델이 선택되지 않았어요. 연결 설정에서 모델을 선택해 주세요.
-        </p>
-      )}
-      {props.route === 'translation' && props.translation.phase === 'idle' && !active && (
-        <div className="nr-reader-notice">
-          <p>
-            {props.connected && props.translationAvailable
-              ? '이 회차를 번역하면 여기서 읽을 수 있어요.'
-              : '번역 서버를 연결하면 바로 읽을 수 있어요.'}
-          </p>
-          <Button
-            variant="filled"
-            size="m"
-            disabled={!canStartTranslation}
-            onClick={props.onTranslate}
-          >
-            이 화 번역하기
-          </Button>
-          {(!props.connected || !props.translationAvailable) && (
-            <Button variant="tonal" onClick={props.onSettings}>
-              연결 설정
-            </Button>
-          )}
-        </div>
-      )}
-      {props.route === 'translation' && activeFlow && !paragraphs.length && (
-        <p className="nr-reader-note">다음 문단을 번역하고 있어요…</p>
-      )}
-      {props.route === 'translation' && props.translation.phase === 'unknown' && (
-        <div className="nr-reader-notice nr-reader-notice--warning" role="alert">
-          <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
-          <Button
-            variant="outlined"
-            disabled={active || !props.connected || !props.selectedModelId}
-            onClick={props.onRetry}
-          >
-            확인하고 다시 번역하기
-          </Button>
-        </div>
-      )}
-      {props.route === 'translation' && props.translation.phase === 'failed' && (
-        <div className="nr-reader-notice nr-reader-notice--error" role="alert">
-          <p>
-            {props.translation.pendingSave
-              ? '번역 결과를 저장하지 못했어요.'
-              : (failureMessage ?? '번역을 완료하지 못했어요. 자동으로 다시 요청하지 않아요.')}
-          </p>
-          {props.translation.pendingSave ? (
-            <Button variant="outlined" disabled={active} onClick={props.onRetrySave}>
-              저장 다시 하기
-            </Button>
-          ) : failureNeedsSettings ? (
-            <Button variant="outlined" onClick={props.onSettings}>
-              연결 설정 열기
-            </Button>
-          ) : failureNeedsSourceRefresh ? (
-            <Button variant="outlined" onClick={props.onRetry}>
-              원문 다시 확인하고 번역하기
-            </Button>
-          ) : (
-            <Button
-              variant="outlined"
-              disabled={active || !props.connected || !props.selectedModelId}
-              onClick={props.onRetry}
-            >
-              중복 여부를 확인하고 다시 번역하기
-            </Button>
-          )}
-        </div>
-      )}
       {activeFlow && (
         <StatusPill action={{ label: '중단', onClick: props.onCancel }}>
           {phaseLabel}
@@ -634,14 +656,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             ? ` · ${progress.completed}/${progress.total}묶음`
             : ''}
         </StatusPill>
-      )}
-      {props.route === 'translation' && props.translation.phase === 'ready' && !version && (
-        <div className="nr-reader-notice">
-          <p>번역을 저장했어요.</p>
-          <Button variant="filled" size="m" onClick={props.onOpenSaved}>
-            저장된 번역 열기
-          </Button>
-        </div>
       )}
       <article
         ref={body}
@@ -670,6 +684,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           }
         }}
       >
+        {hasNotices && <div className="nr-reader-notices">{notices}</div>}
         <header className="nr-reader-heading">
           <span className="nr-reader-ordinal">{chapter.ordinal}화</span>
           <h1>{title}</h1>

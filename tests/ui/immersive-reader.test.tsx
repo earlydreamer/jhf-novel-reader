@@ -537,3 +537,40 @@ test('source access failures keep their specific guidance and explicit retry act
   expect(onRetry).toHaveBeenCalledOnce();
   expect(onRefreshSource).not.toHaveBeenCalled();
 });
+
+test('원문 변경 안내는 번역 본문 안에서 회차 제목보다 앞에 놓인다', () => {
+  render(<ImmersiveReader {...props({ sourceChange: 'unavailable' })} />);
+
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  const notice = screen.getByText('원문 변경을 확인하지 못했어요.');
+  const heading = screen.getByRole('heading', { level: 1 });
+  expect(notice).toHaveAttribute('role', 'status');
+  expect(article).toContainElement(notice);
+  expect(notice.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test('번역 실패 카드도 번역 본문 안에 표시된다', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'failed',
+          elapsedMs: 0,
+          error: new ReaderError('source_access', 'not_sent'),
+        },
+      })}
+    />,
+  );
+
+  const article = screen.getByRole('article', { name: '번역 미리보기' });
+  expect(article).toContainElement(screen.getByRole('alert'));
+  expect(screen.getByRole('alert')).toHaveTextContent('선택한 회차에 접근하지 못했어요.');
+});
+
+test('안내가 없으면 리더 안내 컨테이너를 렌더하지 않는다', () => {
+  render(<ImmersiveReader {...props()} />);
+
+  expect(document.querySelector('.nr-reader-notices')).toBeNull();
+});
