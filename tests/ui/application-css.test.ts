@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/app/application.css', 'utf8');
@@ -215,5 +216,23 @@ describe('home.css library scroll', () => {
     const library = rules(homeCss).find((rule) => rule.selector === '.nr-library');
     expect(library?.body).not.toMatch(/min-block-size/);
     expect(library?.body).toMatch(/padding-block-end:\s*calc\(var\(--fab\) \+ 16px\);/);
+  });
+});
+
+describe('CSS 토큰 참조', () => {
+  it('src의 CSS가 쓰는 var(--type-…) 토큰은 모두 tokens.css에 정의돼 있다', () => {
+    const tokens = readFileSync('src/ui/theme/tokens.css', 'utf8');
+    const defined = new Set([...tokens.matchAll(/--(type-[\w-]+)\s*:/g)].map((match) => match[1]));
+    const sheets = readdirSync('src', { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith('.css'));
+    const missing: string[] = [];
+    for (const sheet of sheets) {
+      const source = readFileSync(join('src', sheet), 'utf8');
+      for (const match of source.matchAll(/var\(--(type-[\w-]+)/g)) {
+        if (!defined.has(match[1]!)) missing.push(`${sheet}: --${match[1]}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });

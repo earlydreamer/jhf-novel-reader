@@ -108,20 +108,41 @@ describe('Android 목록형 설정', () => {
     expect(screen.queryByRole('button', { name: '버전' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: '오픈소스 라이선스 THIRD_PARTY_NOTICES.md · android/NOTICE',
+        name: '오픈소스 라이선스 포함된 오픈소스와 라이선스',
       }),
-    ).toHaveTextContent('THIRD_PARTY_NOTICES.md · android/NOTICE');
+    ).toHaveTextContent('포함된 오픈소스와 라이선스');
     expect(screen.getByText('아직 기록이 없어요')).toBeVisible();
     expect(screen.queryByRole('button', { name: '최근 번역 시간' })).not.toBeInTheDocument();
     expect(document.querySelector('details')).toBeNull();
     fireEvent.click(
       screen.getByRole('button', {
-        name: '오픈소스 라이선스 THIRD_PARTY_NOTICES.md · android/NOTICE',
+        name: '오픈소스 라이선스 포함된 오픈소스와 라이선스',
       }),
     );
     expect(screen.getByRole('dialog', { name: '오픈소스 라이선스' })).not.toHaveTextContent(
       'Android scaffold',
     );
+    value.controller.dispose();
+  });
+
+  it('오픈소스 라이선스 전체 화면에 실제 구성 요소와 원문을 지연 로드해 보여 줘요(#142)', async () => {
+    const value = await setup();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '오픈소스 라이선스 포함된 오픈소스와 라이선스',
+      }),
+    );
+    const dialog = screen.getByRole('dialog', { name: '오픈소스 라이선스' });
+    expect(dialog).toHaveClass('nr-dialog--fullscreen');
+    for (const name of ['react', 'androidx.core:core', 'Pretendard Variable']) {
+      expect(
+        await within(dialog).findByText(name, { selector: '.nr-license__name' }),
+      ).toBeInTheDocument();
+    }
+    expect(
+      within(dialog).getAllByText(/Permission is hereby granted/, { selector: 'pre' }).length,
+    ).toBeGreaterThan(0);
     value.controller.dispose();
   });
 

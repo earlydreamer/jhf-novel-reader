@@ -40,6 +40,7 @@
   --type-title-medium: 600 1rem/1.5rem var(--font-sans);
   --type-body-large: 400 1rem/1.5rem var(--font-sans);
   --type-body-medium: 400 0.875rem/1.25rem var(--font-sans);
+  --type-body-small: 400 0.75rem/1rem var(--font-sans);
   --type-label-large: 600 0.875rem/1.25rem var(--font-sans);
   --type-label-medium: 500 0.75rem/1rem var(--font-sans);
 

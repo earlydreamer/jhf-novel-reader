@@ -18,6 +18,7 @@ import { Dialog } from './components/Modal';
 import { ListItem } from './components/ListItem';
 import { Switch } from './components/Switch';
 import { useSnackbar } from './components/Snackbar';
+import { LicensesList } from './LicensesList';
 
 export interface SettingsScreenProps {
   state: RenewalSnapshot;
@@ -97,7 +98,6 @@ const themeLabels: Record<ThemePreference, string> = {
   light: '라이트',
   dark: '다크',
 };
-const noticesUrl = 'https://github.com/earlydreamer/narou-reader/blob/main/';
 
 type RadioChoice = {
   readonly value: string;
@@ -511,7 +511,7 @@ export function SettingsScreen({
         </div>
         <ListItem
           headline="오픈소스 라이선스"
-          supporting="THIRD_PARTY_NOTICES.md · android/NOTICE"
+          supporting="포함된 오픈소스와 라이선스"
           navigates
           onClick={() => setLicensesOpen(true)}
         />
@@ -678,24 +678,10 @@ export function SettingsScreen({
       <Dialog
         open={licensesOpen}
         title="오픈소스 라이선스"
+        fullScreen
         onClose={() => setLicensesOpen(false)}
-        actions={
-          <Button variant="text" onClick={() => setLicensesOpen(false)}>
-            닫기
-          </Button>
-        }
       >
-        <p>
-          <a href={`${noticesUrl}THIRD_PARTY_NOTICES.md`} target="_blank" rel="noreferrer">
-            웹 앱 제3자 고지 보기
-          </a>
-        </p>
-        <p>
-          <a href={`${noticesUrl}android/NOTICE`} target="_blank" rel="noreferrer">
-            Android 앱 오픈소스 고지 보기
-          </a>
-        </p>
-        <p>Android 앱에 포함된 MIT 고지는 narou-reader 프로젝트 자체 라이선스가 아니에요.</p>
+        <LicensesList />
       </Dialog>
     </section>
   );
