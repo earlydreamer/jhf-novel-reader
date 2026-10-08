@@ -432,7 +432,7 @@ test('paragraph repair keeps the owned live preview on the same article and adop
     base.blocks[0]!.id,
   );
   expect(article).not.toHaveTextContent('번역하지 못해 원문으로 남겼어요.');
-  expect(article.querySelector('.nr-reader-quality-note')).not.toHaveTextContent('번역에 실패한');
+  expect(article).not.toHaveTextContent('번역에 실패한');
   expect(screen.queryByRole('button', { name: '실패한 문단 다시 번역하기' })).toBeNull();
   expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(
     postsBeforeRepair + 1,

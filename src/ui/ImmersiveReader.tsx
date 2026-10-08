@@ -191,6 +191,9 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const heuristic =
     displayVersion?.quality?.japaneseBlocks ?? japaneseBlockIndexes(displayVersion?.blocks ?? []);
   const missingTerms = displayVersion?.quality?.missingTerms ?? [];
+  // 안내할 내용이 있을 때만 품질 안내 카드를 그린다. 둘 다 없으면 빈 카드가 보인다.
+  const showFailedNote = failed.length > 0;
+  const showHeuristicNote = heuristic.some((index) => !failed.includes(index));
   const oneToOneParagraphs = Boolean(
     version && version.blocks.length === version.source.paragraphs.length,
   );
@@ -783,12 +786,12 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         ) : (
           <p className="nr-reader-empty">저장된 번역을 찾지 못했어요.</p>
         )}
-        {displayVersion && !props.showOriginal && (
+        {displayVersion && !props.showOriginal && (showFailedNote || showHeuristicNote) && (
           <div className="nr-reader-quality-note">
-            {failed.length > 0 && (
+            {showFailedNote && (
               <p role="status">번역에 실패한 {failed.length}개 문단을 원문으로 남겼어요.</p>
             )}
-            {heuristic.some((index) => !failed.includes(index)) && (
+            {showHeuristicNote && (
               <p role="status">일본어가 남은 문단은 번역 확인 결과에서 살펴봐 주세요.</p>
             )}
           </div>

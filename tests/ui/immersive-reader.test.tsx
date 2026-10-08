@@ -239,6 +239,12 @@ test('font size is expressed in rem and quality heuristics stay distinct from co
   ).toBeInTheDocument();
 });
 
+test('실패 문단과 일본어 잔존이 없는 저장본에는 빈 품질 안내 카드를 렌더하지 않는다', () => {
+  render(<ImmersiveReader {...props()} />);
+
+  expect(document.querySelector('.nr-reader-quality-note')).toBeNull();
+});
+
 test('paragraph original action scrolls after the original DOM commit and preserves both reader anchors', () => {
   const version = completed({
     blocks: [
