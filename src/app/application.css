@@ -53,7 +53,7 @@
 .nr-notice--error .nr-button--text {
   color: var(--on-error-container);
 }
-.nr-work-screen > * + * {
+.nr-work-screen > :where(:not(.nr-modal)) + :where(:not(.nr-modal)) {
   margin-block-start: 16px;
 }
 .nr-work-heading {
