@@ -257,6 +257,13 @@
   text-align: start;
   cursor: pointer;
 }
+label.nr-list-item__main {
+  margin: 0;
+}
+.nr-list-item__radio {
+  flex: none;
+  margin-inline-start: auto;
+}
 .nr-list-item__leading {
   flex: none;
   min-inline-size: 2ch;

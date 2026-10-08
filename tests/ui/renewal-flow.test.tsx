@@ -819,7 +819,7 @@ describe('renewal first reading screens', () => {
     chooseShellMenu('설정');
     expect(screen.queryByText(/예산|미리 번역/)).toBeNull();
     expect(screen.queryByLabelText('모델 이름')).toBeNull();
-    expect(screen.getByRole('button', { name: '모델' })).toHaveTextContent('선택 전');
+    expect(screen.getByRole('button', { name: '모델 선택 전' })).toHaveTextContent('선택 전');
   });
   it('uses_real_catalog_selection_and_explicit_translation_action', async () => {
     const value = await setup(false, true);
@@ -831,7 +831,7 @@ describe('renewal first reading screens', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
     await screen.findByText('모델 목록을 확인했어요. 번역 호환성은 아직 확인하지 않았어요.');
-    fireEvent.click(screen.getByRole('button', { name: '모델' }));
+    fireEvent.click(screen.getByRole('button', { name: '모델 선택 전' }));
     fireEvent.click(screen.getByRole('radio', { name: 'HyMT2 synthetic' }));
     fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
     revealReaderBars();
@@ -1070,7 +1070,9 @@ describe('renewal connection failures', () => {
     expect(
       screen.getByText(/인증값을 기기의 보안 저장소에 저장하거나 읽지 못했어요/),
     ).toBeVisible();
-    expect(screen.queryByText('모델 목록을 불러오지 못했습니다.')).toBeNull();
+    expect(
+      screen.queryByText('모델 목록을 불러오지 못했어요. 잠시 뒤 다시 확인해 주세요.'),
+    ).toBeNull();
     expect(screen.getByLabelText('인증값 (선택)')).toHaveValue('');
     expect(document.body.textContent).not.toContain('private-secret-canary');
     expect(value.generate).not.toHaveBeenCalled();

@@ -29,9 +29,13 @@ describe('SettingsScreen theme section', () => {
         onTheme={onTheme}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: '테마' }));
+    const themeRow = screen.getByRole('button', { name: '테마 시스템 설정 따르기' });
+    expect(themeRow).toHaveAccessibleName('테마 시스템 설정 따르기');
+    fireEvent.click(themeRow);
     const group = screen.getByRole('radiogroup', { name: '테마 선택' });
     expect(group).toBeVisible();
+    expect(group.querySelectorAll('button')).toHaveLength(0);
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(3);
     expect(screen.getByRole('radio', { name: '시스템 설정 따르기' })).toBeChecked();
     fireEvent.click(screen.getByRole('radio', { name: '다크' }));
     expect(onTheme).toHaveBeenCalledWith('dark');
