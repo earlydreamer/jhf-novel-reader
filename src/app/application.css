@@ -265,3 +265,13 @@
   min-inline-size: 0;
   overflow-wrap: anywhere;
 }
+.nr-address-preset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem;
+  gap: 12px;
+}
+.nr-address-ports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

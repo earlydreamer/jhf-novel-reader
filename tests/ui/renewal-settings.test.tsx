@@ -9,7 +9,11 @@ import type { ConnectionConfig, ModelChoice } from '../../src/contracts/reading'
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
 import type { ShellPlatform } from '../../src/platform/shell';
 import type { ReadingSettings } from '../../src/storage/settings';
-import { SettingsScreen } from '../../src/ui/SettingsScreen';
+import {
+  composePresetAddress,
+  parsePresetAddress,
+  SettingsScreen,
+} from '../../src/ui/SettingsScreen';
 import { SnackbarProvider } from '../../src/ui/components/Snackbar';
 
 const models: readonly ModelChoice[] = [
@@ -136,7 +140,7 @@ describe('Android 목록형 설정', () => {
   it('웹에서는 자동 설정 스위치를 유지하고 로컬 번역 방식만 숨겨요', async () => {
     const value = await setup({ streamingAvailable: false });
 
-    expect(screen.getAllByRole('switch')).toHaveLength(2);
+    expect(screen.getAllByRole('switch')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: /^로컬 번역 방식/ })).not.toBeInTheDocument();
     value.controller.dispose();
   });
@@ -237,9 +241,7 @@ describe('Android 목록형 설정', () => {
       throw new Error('synthetic connection failure');
     });
     const value = await setup({ catalog });
-    fireEvent.change(screen.getByLabelText('API 기본 주소'), {
-      target: { value: 'http://192.0.2.1/v1' },
-    });
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.0.2.1' } });
     const input = screen.getByLabelText('인증값 (선택)');
     fireEvent.change(input, { target: { value: 'private-secret-canary' } });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
@@ -276,7 +278,7 @@ describe('Android 목록형 설정', () => {
   it('주소가 비어 있으면 인증값 입력과 저장하기를 비활성으로 둬요', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     fireEvent.click(screen.getByRole('button', { name: '인증값 저장됨' }));
-    fireEvent.change(screen.getByLabelText('API 기본 주소'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '' } });
 
     expect(screen.getByLabelText('새 인증값')).toBeDisabled();
     expect(screen.getByRole('button', { name: '저장하기' })).toBeDisabled();
@@ -384,6 +386,179 @@ describe('Android 목록형 설정', () => {
   });
 });
 
+function savedAddress(baseUrl: string): ReadingSettings {
+  return {
+    schemaVersion: 2,
+    fontSize: 18,
+    selection: {
+      connection: { provider: 'openai-compatible', baseUrl, revision: 4 },
+      modelId: 'generation',
+      translationMode: 'stream',
+    },
+  };
+}
+
+describe('OpenAI 호환 서버 주소 프리셋', () => {
+  it('저장 주소가 없으면 서버 주소와 포트 입력과 안내를 보여 줘요', async () => {
+    const value = await setup();
+
+    expect(screen.getByLabelText('서버 주소')).toHaveAttribute('placeholder', '192.168.0.10');
+    expect(screen.getByLabelText('포트')).toHaveAttribute('placeholder', '1234');
+    expect(
+      screen.getByText(
+        'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 예: 192.168.0.10 · 1234',
+      ),
+    ).toBeVisible();
+    value.controller.dispose();
+  });
+
+  it('서버 주소와 포트를 입력하면 완성 주소를 저장하고 보여 줘요', async () => {
+    const value = await setup();
+
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.168.0.10' } });
+    fireEvent.change(screen.getByLabelText('포트'), { target: { value: '1234' } });
+
+    expect(value.controller.getSnapshot().connection.baseUrl).toBe('http://192.168.0.10:1234/v1');
+    expect(screen.getByText('완성 주소: http://192.168.0.10:1234/v1')).toBeVisible();
+    value.controller.dispose();
+  });
+
+  it('자주 쓰는 포트 칩을 누르면 포트를 채우고 선택 상태를 보여 줘요', async () => {
+    const value = await setup();
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.168.0.10' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ollama 11434' }));
+
+    expect(value.controller.getSnapshot().connection.baseUrl).toBe('http://192.168.0.10:11434/v1');
+    expect(screen.getByLabelText('포트')).toHaveValue('11434');
+    expect(screen.getByRole('button', { name: 'Ollama 11434' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    value.controller.dispose();
+  });
+
+  it('포트 칸에는 숫자만 남기고 다섯 자리까지만 받아요', async () => {
+    const value = await setup();
+
+    fireEvent.change(screen.getByLabelText('포트'), { target: { value: '12a34' } });
+
+    expect(screen.getByLabelText('포트')).toHaveValue('1234');
+    value.controller.dispose();
+  });
+
+  it('저장 주소를 해석할 수 있으면 서버 주소와 포트 칸에 나눠 보여 줘요', async () => {
+    const value = await setup({ saved: savedAddress('http://100.64.1.2:1234/v1') });
+
+    expect(screen.getByLabelText('서버 주소')).toHaveValue('100.64.1.2');
+    expect(screen.getByLabelText('포트')).toHaveValue('1234');
+    expect(screen.getByRole('switch', { name: '전체 주소 직접 입력' })).not.toBeChecked();
+    value.controller.dispose();
+  });
+
+  it('해석할 수 없는 저장 주소는 스위치를 켜고 전체 주소 칸에 그대로 보여 줘요', async () => {
+    const value = await setup({ saved: savedAddress('https://proxy.example/api/v1') });
+
+    expect(screen.getByRole('switch', { name: '전체 주소 직접 입력' })).toBeChecked();
+    expect(screen.getByLabelText('API 기본 주소')).toHaveValue('https://proxy.example/api/v1');
+    expect(screen.queryByLabelText('서버 주소')).toBeNull();
+    expect(screen.queryByLabelText('포트')).toBeNull();
+    value.controller.dispose();
+  });
+
+  it('전체 주소 직접 입력에서는 입력한 주소를 그대로 저장해요', async () => {
+    const value = await setup();
+
+    fireEvent.click(screen.getByRole('switch', { name: '전체 주소 직접 입력' }));
+    fireEvent.change(screen.getByLabelText('API 기본 주소'), {
+      target: { value: 'https://other.example/v1' },
+    });
+
+    expect(value.controller.getSnapshot().connection.baseUrl).toBe('https://other.example/v1');
+    value.controller.dispose();
+  });
+
+  it('제공자가 Gemini면 주소·포트 칸과 스위치를 보여 주지 않아요', async () => {
+    const value = await setup({
+      saved: {
+        schemaVersion: 2,
+        fontSize: 18,
+        selection: {
+          connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 4 },
+          modelId: 'generation',
+          translationMode: 'stream',
+        },
+      },
+    });
+
+    expect(screen.getByLabelText('API 기본 주소')).toHaveValue(GEMINI_BASE_URL);
+    expect(screen.queryByLabelText('서버 주소')).toBeNull();
+    expect(screen.queryByLabelText('포트')).toBeNull();
+    expect(screen.queryByRole('switch', { name: '전체 주소 직접 입력' })).toBeNull();
+    value.controller.dispose();
+  });
+
+  it('Gemini에서 LM Studio / Ollama로 바꾸면 Gemini 주소를 비우고 주소·포트 칸도 비워요', async () => {
+    const value = await setup({
+      saved: {
+        schemaVersion: 2,
+        fontSize: 18,
+        selection: {
+          connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 4 },
+          modelId: 'generation',
+          translationMode: 'stream',
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '제공자 Google Gemini' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'LM Studio / Ollama' }));
+
+    expect(value.controller.getSnapshot().connection.baseUrl).toBe('');
+    expect(screen.getByLabelText('서버 주소')).toHaveValue('');
+    expect(screen.getByLabelText('포트')).toHaveValue('');
+    value.controller.dispose();
+  });
+});
+
+describe('OpenAI 호환 주소 조합과 해석', () => {
+  it('포트 없는 주소와 끝 슬래시를 해석해요', () => {
+    expect(parsePresetAddress('http://192.168.0.10/v1')).toEqual({
+      host: '192.168.0.10',
+      port: '',
+    });
+    expect(parsePresetAddress('http://192.168.0.10/v1/')).toEqual({
+      host: '192.168.0.10',
+      port: '',
+    });
+  });
+
+  it('대문자 스킴도 해석해요', () => {
+    expect(parsePresetAddress('HTTP://192.168.0.10:1234/v1')).toEqual({
+      host: '192.168.0.10',
+      port: '1234',
+    });
+  });
+
+  it('주소·포트 형식이 아니면 null을 돌려줘요', () => {
+    for (const address of [
+      'https://proxy.example/api/v1',
+      'http://192.168.0.10:1234/api/v1',
+      'http://192.168.0.10:1234/v1?x=1',
+      'http://user@192.168.0.10:1234/v1',
+      'http://192.168.0.10:1234',
+    ]) {
+      expect(parsePresetAddress(address)).toBeNull();
+    }
+  });
+
+  it('주소와 포트로 기본 주소를 만들고 주소가 비면 빈 문자열이에요', () => {
+    expect(composePresetAddress(' 192.168.0.10 ', ' 1234 ')).toBe('http://192.168.0.10:1234/v1');
+    expect(composePresetAddress('192.168.0.10', '')).toBe('http://192.168.0.10/v1');
+    expect(composePresetAddress('   ', '1234')).toBe('');
+  });
+});
+
 describe('연결 확인 결과 알림', () => {
   const baseUrl = 'http://192.0.2.1/v1';
   const messages = {
@@ -409,12 +584,9 @@ describe('연결 확인 결과 알림', () => {
     supportsGeneration: true,
   });
 
-  async function checkWith(
-    catalog: NonNullable<RenewalDependencies['catalog']>,
-    address = baseUrl,
-  ) {
+  async function checkWith(catalog: NonNullable<RenewalDependencies['catalog']>) {
     const value = await setup({ catalog });
-    fireEvent.change(screen.getByLabelText('API 기본 주소'), { target: { value: address } });
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.0.2.1' } });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
     return value;
   }
@@ -608,14 +780,15 @@ describe('연결 확인 결과 알림', () => {
     const host = 'private-host.example.test';
     const canary = 'private-auth-canary';
     const value = await setup({ catalog });
-    fireEvent.change(screen.getByLabelText('API 기본 주소'), {
-      target: { value: `http://${host}:1234/v1` },
-    });
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: host } });
+    fireEvent.change(screen.getByLabelText('포트'), { target: { value: '1234' } });
     fireEvent.change(screen.getByLabelText('인증값 (선택)'), { target: { value: canary } });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
 
     await waitFor(() => expect(snackbarText()).toBe(message));
-    expect(document.body.textContent).not.toContain(host);
+    // 화면의 '완성 주소' 안내에는 주소가 보이는 게 맞으므로, 메시지 영역(스낵바·연결 상태)만 확인한다.
+    expect(snackbarText()).not.toContain(host);
+    expect(connectionStatusText()).not.toContain(host);
     expect(document.body.textContent).not.toContain(canary);
     value.controller.dispose();
   });
