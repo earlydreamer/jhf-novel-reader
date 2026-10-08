@@ -56,7 +56,12 @@ function harness(fault = false, automatic = false) {
         url: options.url,
         headers: { 'Content-Type': 'text/html' },
         data: options.url.endsWith('/models')
-          ? JSON.stringify({ data: [{ id: 'gemma-4-E4B', meta: { n_ctx: 16384 } }] })
+          ? JSON.stringify({
+              data: [
+                { id: 'gemma-4-E4B', meta: { n_ctx: 16384 } },
+                { id: 'repair-model', meta: { n_ctx: 16384 } },
+              ],
+            })
           : options.url === url
             ? toc
             : html,
@@ -78,7 +83,7 @@ function harness(fault = false, automatic = false) {
       } else {
         const paragraphId = [...input.matchAll(/<p id="([A-Za-z]+)">([^]*?)<\/p>/g)]
           .map((match) => match[1])
-          .at(-1);
+          .at(0);
         onData(delta(`<main><p id="${paragraphId ?? 'C'}">재번역 중인 합성 미리보기`));
       }
       await streamGate;
@@ -127,6 +132,7 @@ function harness(fault = false, automatic = false) {
     app: createRenewalApplication(adapters),
     release: () => releaseStream(),
     holdNextStream,
+    streamCallCount: () => streamCalls,
     requests,
     setBroken: (value: boolean) => {
       broken = value;
@@ -224,11 +230,86 @@ test('source-access retry refetches the chapter and sends no model request befor
   h.app.dispose();
 });
 
-test('first-translation pending save keeps its owned body and retrying storage adds no model request', async () => {
+test('manual translation after source refresh replaces an owned saved body with the current preview', async () => {
   const h = harness();
+  await prepareStreaming(h);
+  const chapter = h.app.getSnapshot().work!.chapters[0]!;
+  await h.app.selectChapter(chapter);
+  const firstTranslation = h.app.translate();
+  await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('translating'));
+  h.release();
+  await firstTranslation;
+  const base = h.app.getSnapshot().version!;
+  await h.app.savePosition(base.blocks[0]!.id, 23);
+  h.app.chooseModel('repair-model');
+  await h.app.selectChapter(chapter);
+  expect(h.app.getSnapshot().route.kind).toBe('reader');
+  render(<Application controller={h.app} />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  expect(article).toHaveTextContent(base.blocks[0]!.text);
+
+  await h.app.refreshSource();
+  expect(h.app.getSnapshot().route.kind).toBe('translation');
+  h.holdNextStream();
+  h.failSave(true);
+  fireEvent.click(await screen.findByRole('button', { name: '이 화 번역하기' }));
+  await waitFor(() =>
+    expect(h.app.getSnapshot()).toMatchObject({
+      translationActive: true,
+      paragraphRepair: false,
+      translation: { phase: 'translating', token: { chapterId: chapter.chapterId } },
+    }),
+  );
+  await waitFor(() =>
+    expect({
+      preview: h.app.getSnapshot().translation.preview,
+      streamCalls: h.streamCallCount(),
+    }).toMatchObject({
+      preview: expect.stringContaining('재번역 중인 합성 미리보기'),
+      streamCalls: 2,
+    }),
+  );
+  await screen.findByText('재번역 중인 합성 미리보기');
+  expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+  expect(article).toHaveTextContent('재번역 중인 합성 미리보기');
+  expect(article).not.toHaveTextContent(base.blocks[0]!.text);
+  h.release();
+  await waitFor(() =>
+    expect(h.app.getSnapshot().translation).toMatchObject({
+      phase: 'failed',
+      pendingSave: { source: { chapterId: chapter.chapterId } },
+    }),
+  );
+  const pendingSave = h.app.getSnapshot().translation.pendingSave!;
+  expect(pendingSave.provenance.repair).toBeUndefined();
+  expect(h.app.getSnapshot().version?.versionId).toBe(base.versionId);
+  await waitFor(() => expect(article).toHaveTextContent(pendingSave.blocks[0]!.text));
+  expect(article.querySelector('[data-reader-index="0"]')).toHaveAttribute(
+    'data-block-id',
+    base.blocks[0]!.id,
+  );
+  expect(h.app.getSnapshot().position).toMatchObject({
+    versionId: base.versionId,
+    blockId: base.blocks[0]!.id,
+    offset: 23,
+  });
+
+  const postsBeforeSaveRetry = h.requests.filter((request) => request.method === 'POST').length;
+  h.failSave(false);
+  fireEvent.click(screen.getByRole('button', { name: '저장 다시 하기' }));
+  await waitFor(() => expect(h.app.getSnapshot().version?.versionId).toBe(pendingSave.versionId));
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(
+    postsBeforeSaveRetry,
+  );
+  h.app.dispose();
+});
+
+test('first-translation pending save keeps its owned body and retrying storage adds no model request', async () => {
+  const h = harness(true);
   await prepareStreaming(h);
   await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
   render(<Application controller={h.app} />);
+  const streamCallsBeforeTranslation = h.streamCallCount();
   h.failSave(true);
 
   fireEvent.click(screen.getByRole('button', { name: '이 화 번역하기' }));
@@ -241,6 +322,7 @@ test('first-translation pending save keeps its owned body and retrying storage a
     }),
   );
   const pendingSave = h.app.getSnapshot().translation.pendingSave!;
+  expect(pendingSave.failedParagraphs).toEqual([2]);
   expect(h.app.getSnapshot().version).toBeNull();
   const article = screen.getByRole('article', { name: '번역 미리보기' });
   await waitFor(() => {
@@ -248,13 +330,38 @@ test('first-translation pending save keeps its owned body and retrying storage a
     expect(rows).toHaveLength(pendingSave.blocks.length);
     pendingSave.blocks.forEach((block, index) => expect(rows[index]).toHaveTextContent(block.text));
   });
-  const modelPosts = h.requests.filter((request) => request.method === 'POST').length;
-  expect(modelPosts).toBe(1);
+  expect(article).toHaveTextContent('번역에 실패한 1개 문단을 원문으로 남겼어요.');
+  expect(article.querySelector('[data-reader-index="2"]')).toHaveTextContent(
+    '번역하지 못해 원문으로 남겼어요.',
+  );
+  expect(screen.queryByRole('button', { name: '실패한 문단 다시 번역하기' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 정보 보기' }));
+  const info = screen.getByRole('dialog', { name: '번역 정보' });
+  expect(info).toHaveTextContent('저장 상태: 저장 대기');
+  expect(info).toHaveTextContent('모델: gemma-4-E4B');
+  fireEvent.keyDown(info, { key: 'Escape' });
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 확인 결과 보기' }));
+  const quality = screen.getByRole('dialog', { name: '번역 확인 결과' });
+  expect(quality).toHaveTextContent('저장 대기 결과');
+  expect(quality).toHaveTextContent('가나가 남은 문단');
+  expect(quality).toHaveTextContent(
+    `확정 표기 미발견 ${pendingSave.quality?.missingTerms.length ?? 0}개`,
+  );
+  fireEvent.keyDown(quality, { key: 'Escape' });
+  const streamCalls = h.streamCallCount();
+  expect(streamCalls).toBeGreaterThan(streamCallsBeforeTranslation);
+  const postsBeforeSaveRetry = h.requests.filter((request) => request.method === 'POST').length;
 
   h.failSave(false);
   fireEvent.click(screen.getByRole('button', { name: '저장 다시 하기' }));
   await waitFor(() => expect(h.app.getSnapshot().version?.versionId).toBe(pendingSave.versionId));
-  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(modelPosts);
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(
+    postsBeforeSaveRetry,
+  );
+  expect(h.streamCallCount()).toBe(streamCalls);
   h.app.dispose();
 });
 
@@ -270,6 +377,7 @@ test('paragraph repair keeps the owned live preview on the same article and adop
   const base = h.app.getSnapshot().version!;
   expect(base.failedParagraphs).toEqual([2]);
   await h.app.savePosition(base.blocks[0]!.id, 17);
+  h.app.chooseModel('repair-model');
   render(<Application controller={h.app} />);
   const article = screen.getByRole('article', { name: '번역 본문' });
   expect(article).toHaveTextContent(base.blocks[2]!.text);
@@ -304,6 +412,7 @@ test('paragraph repair keeps the owned live preview on the same article and adop
     }),
   );
   const pendingSave = h.app.getSnapshot().translation.pendingSave!;
+  expect(pendingSave.failedParagraphs).toBeUndefined();
   expect(pendingSave.source.workId).toBe(chapter.workId);
   expect(pendingSave.source.chapterId).toBe(chapter.chapterId);
   expect(pendingSave.provenance.repair?.baseVersionId).toBe(base.versionId);
@@ -318,9 +427,31 @@ test('paragraph repair keeps the owned live preview on the same article and adop
     expect(rows).toHaveLength(pendingSave.blocks.length);
     pendingSave.blocks.forEach((block, index) => expect(rows[index]).toHaveTextContent(block.text));
   });
+  expect(article.querySelector('[data-reader-index="0"]')).toHaveAttribute(
+    'data-block-id',
+    base.blocks[0]!.id,
+  );
+  expect(article).not.toHaveTextContent('번역하지 못해 원문으로 남겼어요.');
+  expect(article.querySelector('.nr-reader-quality-note')).not.toHaveTextContent('번역에 실패한');
+  expect(screen.queryByRole('button', { name: '실패한 문단 다시 번역하기' })).toBeNull();
   expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(
     postsBeforeRepair + 1,
   );
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 정보 보기' }));
+  const info = screen.getByRole('dialog', { name: '번역 정보' });
+  expect(info).toHaveTextContent('저장 상태: 저장 대기');
+  expect(info).toHaveTextContent('모델: repair-model');
+  expect(info).not.toHaveTextContent('모델: gemma-4-E4B');
+  fireEvent.keyDown(info, { key: 'Escape' });
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 확인 결과 보기' }));
+  const quality = screen.getByRole('dialog', { name: '번역 확인 결과' });
+  expect(quality).toHaveTextContent('저장 대기 결과');
+  expect(quality).not.toHaveTextContent('용어 확인 기록 없음');
+  fireEvent.keyDown(quality, { key: 'Escape' });
 
   h.failSave(false);
   fireEvent.click(screen.getByRole('button', { name: '저장 다시 하기' }));

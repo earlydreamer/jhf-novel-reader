@@ -156,14 +156,19 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   );
   const ownsLivePreview =
     props.route === 'translation' &&
+    (!pendingSave || ownsPendingSave) &&
     (props.translationActive || ['failed', 'unknown'].includes(props.translation.phase)) &&
-    props.translation.token?.chapterId === chapter.chapterId &&
-    (!version || props.paragraphRepair);
+    props.translation.token?.chapterId === chapter.chapterId;
   const livePreview = ownsPendingSave
     ? pendingSave?.text
     : ownsLivePreview && typeof preview === 'string'
       ? preview
       : undefined;
+  const displayVersion = ownsPendingSave
+    ? pendingSave
+    : ownsLivePreview && typeof preview === 'string'
+      ? null
+      : version;
   const paragraphs =
     props.showOriginal && version
       ? version.source.paragraphs.map((paragraph) => paragraph.text)
@@ -181,14 +186,20 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const nextAvailable =
     !!props.work && chapterIndex >= 0 && chapterIndex < props.work.chapters.length - 1;
   const active = props.translationActive;
-  const failed = version?.failedParagraphs ?? [];
-  const heuristic = version?.quality?.japaneseBlocks ?? japaneseBlockIndexes(version?.blocks ?? []);
-  const missingTerms = version?.quality?.missingTerms ?? [];
+  const failed = displayVersion?.failedParagraphs ?? [];
+  const heuristic =
+    displayVersion?.quality?.japaneseBlocks ?? japaneseBlockIndexes(displayVersion?.blocks ?? []);
+  const missingTerms = displayVersion?.quality?.missingTerms ?? [];
   const oneToOneParagraphs = Boolean(
     version && version.blocks.length === version.source.paragraphs.length,
   );
   const mayRepair = Boolean(
-    props.onRetryParagraphs && props.retryParagraphsAvailable && version && oneToOneParagraphs,
+    props.onRetryParagraphs &&
+    props.retryParagraphsAvailable &&
+    version &&
+    oneToOneParagraphs &&
+    !props.translation.pendingSave &&
+    !props.translationActive,
   );
 
   const overlayOpen =
@@ -360,7 +371,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   }
 
   const menuItems = [
-    ...(version
+    ...(displayVersion
       ? [
           { label: '번역 확인 결과 보기', onSelect: () => setQualityOpen(true) },
           ...(mayRepair
@@ -392,7 +403,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           {
             label: '원문 사이트에서 보기',
             onSelect: () =>
-              window.open(version.source.canonicalUrl, '_blank', 'noopener,noreferrer'),
+              window.open(displayVersion.source.canonicalUrl, '_blank', 'noopener,noreferrer'),
           },
           { label: '번역 정보 보기', onSelect: () => setInfoOpen(true) },
         ]
@@ -756,7 +767,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         ) : (
           <p className="nr-reader-empty">저장된 번역을 찾지 못했어요.</p>
         )}
-        {version && !props.showOriginal && (
+        {displayVersion && !props.showOriginal && (
           <div className="nr-reader-quality-note">
             {failed.length > 0 && (
               <p role="status">번역에 실패한 {failed.length}개 문단을 원문으로 남겼어요.</p>
@@ -890,16 +901,25 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       <BottomSheet open={qualityOpen} title="번역 확인 결과" onClose={() => setQualityOpen(false)}>
         <div className="nr-reader-sheet-body">
           <p>
+            {ownsPendingSave ? '저장 대기 결과 · ' : ''}
             가나가 남은 문단 {heuristic.length}개 ·{' '}
-            {version?.quality ? `확정 표기 미발견 ${missingTerms.length}개` : '용어 확인 기록 없음'}
+            {displayVersion?.quality
+              ? `확정 표기 미발견 ${missingTerms.length}개`
+              : '용어 확인 기록 없음'}
           </p>
           <p>
             가나 잔존과 확정 표기의 전체 부재만 확인해요. 한자만 남은 일본어, 일부 등장분의 다른
             표기, 의미·말투는 원문과 직접 비교해 주세요. 번역 본문은 자동으로 고치거나 다시 요청하지
             않아요.
           </p>
-          {!version?.quality && <p>이 저장본은 용어 확인 기록이 없어 가나 잔존만 확인했어요.</p>}
-          {version?.quality && !heuristic.length && !missingTerms.length && (
+          {ownsPendingSave && <p>이 결과는 아직 기기에 저장되지 않았어요.</p>}
+          {!displayVersion?.quality && (
+            <p>
+              {ownsPendingSave ? '이 저장 대기 결과는' : '이 저장본은'} 용어 확인 기록이 없어 가나
+              잔존만 확인했어요.
+            </p>
+          )}
+          {displayVersion?.quality && !heuristic.length && !missingTerms.length && (
             <p>이 확인 규칙에서 발견한 항목이 없어요. 번역 품질의 합격 판정은 아니에요.</p>
           )}
           {heuristic.map((index) => (
@@ -925,17 +945,20 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       </BottomSheet>
       <BottomSheet open={infoOpen} title="번역 정보" onClose={() => setInfoOpen(false)}>
         <div className="nr-reader-sheet-body">
+          <p>저장 상태: {ownsPendingSave ? '저장 대기' : '저장 완료'}</p>
           <p>
             제공자:{' '}
-            {version
-              ? version.provenance.provider === 'gemini'
+            {displayVersion
+              ? displayVersion.provenance.provider === 'gemini'
                 ? 'Google Gemini'
                 : 'OpenAI 호환'
               : '기록 없음'}
           </p>
-          <p>모델: {version?.provenance.modelId ?? '기록 없음'}</p>
+          <p>모델: {displayVersion?.provenance.modelId ?? '기록 없음'}</p>
           <p>경과 시간: 기록 없음</p>
-          {version?.provenance.generation && <p>번역 방식: {version.provenance.generation.mode}</p>}
+          {displayVersion?.provenance.generation && (
+            <p>번역 방식: {displayVersion.provenance.generation.mode}</p>
+          )}
         </div>
       </BottomSheet>
       <BottomSheet

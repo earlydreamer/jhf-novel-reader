@@ -160,6 +160,62 @@ test('a valid saved translation with mismatched source paragraph count remains r
   expect(onPosition).toHaveBeenCalledTimes(callsBeforeOriginalScroll);
 });
 
+test.each([
+  [
+    'foreign work',
+    completed({
+      versionId: 'pending-foreign-work',
+      source: { ...source, workId: 'foreign-work' },
+    }),
+  ],
+  [
+    'foreign repair base',
+    completed({
+      versionId: 'pending-foreign-base',
+      provenance: {
+        ...completed().provenance,
+        repair: { baseVersionId: 'other-base', paragraphIndexes: [0] },
+      },
+    }),
+  ],
+])(
+  'a %s pending-save cannot lend its live preview to the current translation',
+  (_label, foreignPending) => {
+    const pendingSave = {
+      ...foreignPending,
+      text: 'foreign pending result',
+      blocks: [{ id: 'foreign-block', text: 'foreign pending result' }],
+    };
+    render(
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          translationActive: false,
+          version: completed(),
+          translation: {
+            phase: 'failed',
+            elapsedMs: 0,
+            token: {
+              requestId: 'current-request',
+              chapterId: chapter.chapterId,
+              settingsRevision: 1,
+            },
+            preview: 'foreign pending result',
+            pendingSave,
+          },
+        })}
+      />,
+    );
+
+    const article = screen.getByRole('article', { name: '번역 본문' });
+    expect(article).toHaveTextContent('첫 번역');
+    expect(article).not.toHaveTextContent('foreign pending result');
+    expect(
+      screen.queryByText('저장 전 미리보기 · 도착한 문단부터 읽을 수 있어요.'),
+    ).not.toBeInTheDocument();
+  },
+);
+
 test('font size is expressed in rem and quality heuristics stay distinct from confirmed failed paragraphs', () => {
   const value = completed({
     blocks: [
