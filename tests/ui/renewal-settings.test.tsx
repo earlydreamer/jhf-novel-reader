@@ -406,7 +406,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     expect(screen.getByLabelText('포트')).toHaveAttribute('placeholder', '1234');
     expect(
       screen.getByText(
-        'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 예: 192.168.0.10 · 1234',
+        'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.',
       ),
     ).toBeVisible();
     value.controller.dispose();
@@ -432,6 +432,21 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     expect(value.controller.getSnapshot().connection.baseUrl).toBe('http://192.168.0.10:11434/v1');
     expect(screen.getByLabelText('포트')).toHaveValue('11434');
     expect(screen.getByRole('button', { name: 'Ollama 11434' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    value.controller.dispose();
+  });
+
+  it('llama.cpp 8080 칩을 누르면 포트를 채우고 선택 상태를 보여 줘요', async () => {
+    const value = await setup();
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '100.73.103.1' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'llama.cpp 8080' }));
+
+    expect(value.controller.getSnapshot().connection.baseUrl).toBe('http://100.73.103.1:8080/v1');
+    expect(screen.getByLabelText('포트')).toHaveValue('8080');
+    expect(screen.getByRole('button', { name: 'llama.cpp 8080' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
