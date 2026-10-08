@@ -397,17 +397,17 @@ public class SourceBrowserInstrumentedTest {
             AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
                 .getUiAutomation().getRootInActiveWindow();
             if (root != null && "app.narou.reader".contentEquals(root.getPackageName())
-                && !root.findAccessibilityNodeInfosByText("외부 링크").isEmpty()
+                && !root.findAccessibilityNodeInfosByText("외부 브라우저에서 열까요?").isEmpty()
                 && !root.findAccessibilityNodeInfosByText(destination).isEmpty()) {
-                for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText("취소")) {
+                for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText("닫기")) {
                     if ("app.narou.reader".contentEquals(node.getPackageName())
-                        && "취소".contentEquals(node.getText()) && node.isEnabled() && node.isClickable()) {
+                        && "닫기".contentEquals(node.getText()) && node.isEnabled() && node.isClickable()) {
                         assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK));
                         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
                         AccessibilityNodeInfo active = InstrumentationRegistry.getInstrumentation()
                             .getUiAutomation().getRootInActiveWindow();
                         assertTrue("External dialog must be dismissed by its cancel button",
-                            active == null || active.findAccessibilityNodeInfosByText("외부 링크").isEmpty());
+                            active == null || active.findAccessibilityNodeInfosByText("외부 브라우저에서 열까요?").isEmpty());
                         return;
                     }
                 }
