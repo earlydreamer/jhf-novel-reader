@@ -85,10 +85,7 @@ function RadioList({
               value={choice.value}
               checked={choice.value === value}
               disabled={choice.disabled}
-              onClick={() => {
-                if (choice.disabled) return;
-                onSelect(choice.value);
-              }}
+              onClick={choice.value === value ? () => onSelect(choice.value) : undefined}
               onChange={() => {
                 if (choice.disabled) return;
                 onSelect(choice.value);

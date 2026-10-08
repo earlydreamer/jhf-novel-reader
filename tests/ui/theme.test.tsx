@@ -40,4 +40,59 @@ describe('SettingsScreen theme section', () => {
     fireEvent.click(screen.getByRole('radio', { name: '다크' }));
     expect(onTheme).toHaveBeenCalledWith('dark');
   });
+
+  it('새 테마를 라디오 클릭으로 고르면 onTheme을 한 번만 불러요', () => {
+    const state = createRenewalController().getSnapshot();
+    const onTheme = vi.fn();
+    render(
+      <SettingsScreen
+        state={state}
+        onChange={() => {}}
+        onCheck={async () => {}}
+        onSelect={() => {}}
+        onTheme={onTheme}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '테마 시스템 설정 따르기' }));
+    fireEvent.click(screen.getByRole('radio', { name: '다크' }));
+    expect(onTheme).toHaveBeenCalledTimes(1);
+    expect(onTheme).toHaveBeenLastCalledWith('dark');
+  });
+
+  it('새 테마를 라벨 텍스트 클릭으로 고르면 onTheme을 한 번만 불러요', () => {
+    const state = createRenewalController().getSnapshot();
+    const onTheme = vi.fn();
+    render(
+      <SettingsScreen
+        state={state}
+        onChange={() => {}}
+        onCheck={async () => {}}
+        onSelect={() => {}}
+        onTheme={onTheme}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '테마 시스템 설정 따르기' }));
+    fireEvent.click(screen.getByText('라이트'));
+    expect(onTheme).toHaveBeenCalledTimes(1);
+    expect(onTheme).toHaveBeenLastCalledWith('light');
+  });
+
+  it('이미 선택된 테마를 다시 누르면 onTheme을 한 번 부르고 대화상자를 닫아요', () => {
+    const state = createRenewalController().getSnapshot();
+    const onTheme = vi.fn();
+    render(
+      <SettingsScreen
+        state={state}
+        onChange={() => {}}
+        onCheck={async () => {}}
+        onSelect={() => {}}
+        onTheme={onTheme}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '테마 시스템 설정 따르기' }));
+    fireEvent.click(screen.getByRole('radio', { name: '시스템 설정 따르기' }));
+    expect(onTheme).toHaveBeenCalledTimes(1);
+    expect(onTheme).toHaveBeenLastCalledWith('system');
+    expect(screen.queryByRole('radiogroup', { name: '테마 선택' })).not.toBeInTheDocument();
+  });
 });

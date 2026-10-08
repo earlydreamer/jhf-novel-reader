@@ -285,6 +285,28 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
+  it('제공자를 Gemini에서 LM Studio로 바꾸면 연결 변경을 한 번만 기록해요', async () => {
+    const value = await setup({
+      saved: {
+        schemaVersion: 2,
+        fontSize: 18,
+        selection: {
+          connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 4 },
+          modelId: 'generation',
+          translationMode: 'stream',
+        },
+      },
+    });
+    const before = value.controller.getSnapshot().connection.revision;
+
+    fireEvent.click(screen.getByRole('button', { name: '제공자 Google Gemini' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'LM Studio / Ollama' }));
+
+    expect(value.controller.getSnapshot().connection.provider).toBe('openai-compatible');
+    expect(value.controller.getSnapshot().connection.revision).toBe(before + 1);
+    value.controller.dispose();
+  });
+
   it('번역 방식 대화상자에서 저장본 호환성을 안내해요', async () => {
     const value = await setup();
     fireEvent.click(screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' }));
