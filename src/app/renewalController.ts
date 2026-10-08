@@ -60,6 +60,30 @@ export type CatalogStatus =
   | 'empty'
   | 'model_missing'
   | 'unavailable';
+/** 연결 확인이 실패한 구체적인 이유. 화면 문구는 SettingsScreen이 정한다. */
+export type CatalogProblemReason =
+  | 'invalid_url' // 주소 형식 오류: 요청을 보내지 않음
+  | 'network' // 서버에 닿지 못함(시간 초과·연결 거부·이름 해석 실패 등)
+  | 'http' // 서버가 2xx가 아닌 상태로 응답
+  | 'redirect' // 서버가 3xx로 다른 주소를 가리킴
+  | 'auth_rejected' // 서버가 인증을 거부(401·403)
+  | 'auth_missing' // 인증값이 없거나 형식이 잘못돼 요청 전에 막음
+  | 'storage' // 보안 저장소 읽기·쓰기 실패
+  | 'bad_response' // 응답이 모델 목록 형식이 아님
+  | 'unknown';
+export interface CatalogProblem {
+  readonly reason: CatalogProblemReason;
+  readonly httpStatus?: number;
+}
+export type ConnectionCheckResult =
+  | {
+      readonly kind: 'done';
+      readonly status: CatalogStatus;
+      readonly modelCount: number;
+      readonly problem: CatalogProblem | null;
+    }
+  | { readonly kind: 'skipped'; readonly reason: 'busy' | 'not_ready' | 'unavailable' }
+  | { readonly kind: 'superseded' };
 export type SourceChangeStatus = 'idle' | 'checking' | 'unchanged' | 'changed' | 'unavailable';
 export type WorkRecentSnapshot =
   | { workId: string; status: 'loading' }
@@ -145,6 +169,7 @@ export interface RenewalSnapshot {
   readonly selectedModelId: string | null;
   readonly localLimits?: LocalTranslationLimits;
   readonly catalogStatus: CatalogStatus;
+  readonly catalogProblem: CatalogProblem | null;
   readonly fontSize: number;
   readonly theme: ThemePreference;
   readonly readingBackground: ReadingBackground;
@@ -194,6 +219,31 @@ function errorLabel(error: unknown): CatalogStatus {
     return 'connection';
   return 'model_list';
 }
+function problemOf(error: unknown): CatalogProblem {
+  if (!(error instanceof ReaderError)) return { reason: 'unknown' };
+  const httpStatus = error.status;
+  switch (error.code) {
+    case 'auth':
+      return error.outcome === 'received'
+        ? { reason: 'auth_rejected', ...(httpStatus ? { httpStatus } : {}) }
+        : { reason: 'auth_missing' };
+    case 'storage':
+      return { reason: 'storage' };
+    case 'timeout_unknown':
+      return { reason: 'network' };
+    case 'connection':
+      if (error.outcome !== 'received')
+        return { reason: error.outcome === 'unknown' ? 'network' : 'invalid_url' };
+      if (httpStatus && httpStatus >= 300 && httpStatus < 400)
+        return { reason: 'redirect', httpStatus };
+      return httpStatus ? { reason: 'http', httpStatus } : { reason: 'network' };
+    case 'model_list':
+    case 'invalid_output':
+      return error.outcome === 'received' ? { reason: 'bad_response' } : { reason: 'unknown' };
+    default:
+      return { reason: 'unknown' };
+  }
+}
 export interface RenewalController {
   translateTitles(key?: string): Promise<void>;
   saveTitle(key: string, target: string): Promise<void>;
@@ -226,7 +276,7 @@ export interface RenewalController {
   continueReadingFromWork(workId: string): Promise<void>;
   retryWorkRecent(workId: string): Promise<void>;
   changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
-  checkConnection(secret?: string): Promise<void>;
+  checkConnection(secret?: string): Promise<ConnectionCheckResult>;
   chooseModel(modelId: string): void;
   prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void>;
   runBatch(retryUncertain?: boolean): Promise<void>;
@@ -284,6 +334,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     models: [],
     selectedModelId: null,
     catalogStatus: dependencies.connect || dependencies.catalog ? 'idle' : 'unavailable',
+    catalogProblem: null,
     fontSize: 18,
     theme: 'system',
     readingBackground: 'theme',
@@ -1729,18 +1780,16 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       models: [],
       selectedModelId: null,
       catalogStatus: dependencies.connect || dependencies.catalog ? 'idle' : 'unavailable',
+      catalogProblem: null,
       localLimits: undefined,
     });
     persistSettings();
   }
-  async function checkConnection(secret = ''): Promise<void> {
-    if (
-      (!dependencies.connect && !dependencies.catalog) ||
-      disposed ||
-      !initialized ||
-      dependencies.batch?.active
-    )
-      return;
+  async function checkConnection(secret = ''): Promise<ConnectionCheckResult> {
+    if (!dependencies.connect && !dependencies.catalog)
+      return { kind: 'skipped', reason: 'unavailable' };
+    if (disposed || !initialized) return { kind: 'skipped', reason: 'not_ready' };
+    if (dependencies.batch?.active) return { kind: 'skipped', reason: 'busy' };
     const operation = ++catalogOperation;
     catalogAbort?.abort();
     catalogAbort = new AbortController();
@@ -1748,6 +1797,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     session = null;
     publish({
       catalogStatus: 'checking',
+      catalogProblem: null,
       error: null,
       selectedModelId: null,
       connection: { ...snapshot.connection, revision: snapshot.connection.revision + 1 },
@@ -1767,7 +1817,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         nextSession = await dependencies.connect!(connection, secret, catalogAbort.signal);
         models = await nextSession.listModels(catalogAbort.signal);
       }
-      if (operation !== catalogOperation || disposed) return;
+      if (operation !== catalogOperation || disposed) return { kind: 'superseded' };
       session = nextSession;
       const selectedChoice = models.find(
         (model) => model.id === previousModelId && model.supportsGeneration,
@@ -1785,19 +1835,29 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             ? limitsForModel(selectedChoice.id, selectedChoice.contextTokens)
             : undefined,
         catalogStatus,
+        catalogProblem: null,
       });
       persistSettings();
       runAutomaticTranslation();
+      return {
+        kind: 'done',
+        status: catalogStatus,
+        modelCount: models.filter((model) => model.supportsGeneration).length,
+        problem: null,
+      };
     } catch (error) {
-      if (operation === catalogOperation) {
-        session = null;
-        publish({
-          catalogStatus: errorLabel(error),
-          models: [],
-          selectedModelId: previousModelId,
-          localLimits: undefined,
-        });
-      }
+      if (operation !== catalogOperation) return { kind: 'superseded' };
+      session = null;
+      const status = errorLabel(error);
+      const problem = problemOf(error);
+      publish({
+        catalogStatus: status,
+        catalogProblem: problem,
+        models: [],
+        selectedModelId: previousModelId,
+        localLimits: undefined,
+      });
+      return { kind: 'done', status, modelCount: 0, problem };
     }
   }
   function chooseModel(modelId: string): void {

@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
 import * as controllers from '../../src/app/renewalController';
 import type { RenewalDependencies } from '../../src/app/renewalController';
-import type { CompletedTranslation, WorkPage } from '../../src/contracts/reading';
+import { ReaderError } from '../../src/contracts';
+import type { CompletedTranslation, ModelChoice, WorkPage } from '../../src/contracts/reading';
+import { StorageError } from '../../src/storage/errors';
 
 function chooseShellMenu(item: string) {
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
@@ -1119,6 +1121,206 @@ describe('renewal connection failures', () => {
     expect(start).not.toHaveBeenCalled();
     release?.();
     await refreshing;
+  });
+});
+
+describe('renewal connection check result', () => {
+  const url = 'http://192.168.1.2:1234/v1';
+  const generation = { id: 'generation', displayName: 'Generation', supportsGeneration: true };
+  const embedding = { id: 'embedding', displayName: 'Embedding', supportsGeneration: false };
+
+  it('returns the generation model count without a problem on success', async () => {
+    const value = fixture();
+    const controller = manualController({
+      ...value.dependencies,
+      connect: async () => ({
+        listModels: async () => [
+          generation,
+          embedding,
+          { id: 'second', displayName: 'Second', supportsGeneration: true },
+        ],
+        translateChapter: value.generate,
+      }),
+    });
+    controller.changeConnection({ provider: 'openai-compatible', baseUrl: url });
+
+    await expect(controller.checkConnection()).resolves.toEqual({
+      kind: 'done',
+      status: 'connected',
+      modelCount: 2,
+      problem: null,
+    });
+    expect(controller.getSnapshot().catalogProblem).toBeNull();
+  });
+
+  it.each([
+    [
+      'invalid address',
+      () => new ReaderError('connection'),
+      'connection',
+      { reason: 'invalid_url' },
+    ],
+    [
+      'network timeout',
+      () => new ReaderError('timeout_unknown', 'unknown'),
+      'connection',
+      { reason: 'network' },
+    ],
+    [
+      'HTTP 404',
+      () => new ReaderError('connection', 'received', 404),
+      'connection',
+      { reason: 'http', httpStatus: 404 },
+    ],
+    [
+      'redirect',
+      () => new ReaderError('connection', 'received', 302),
+      'connection',
+      { reason: 'redirect', httpStatus: 302 },
+    ],
+    [
+      'HTTP 503',
+      () => new ReaderError('connection', 'received', 503),
+      'connection',
+      { reason: 'http', httpStatus: 503 },
+    ],
+    [
+      'auth rejected',
+      () => new ReaderError('auth', 'received', 401),
+      'auth',
+      { reason: 'auth_rejected', httpStatus: 401 },
+    ],
+    ['auth missing', () => new ReaderError('auth'), 'auth', { reason: 'auth_missing' }],
+    ['secure storage', () => new StorageError('secure'), 'storage', { reason: 'storage' }],
+    [
+      'bad model list',
+      () => new ReaderError('model_list', 'received'),
+      'model_list',
+      { reason: 'bad_response' },
+    ],
+    ['unexpected error', () => new Error('synthetic'), 'model_list', { reason: 'unknown' }],
+  ] as const)(
+    'classifies the %s failure without exposing the address or secret',
+    async (_label, error, status, problem) => {
+      const value = fixture();
+      const controller = manualController({
+        ...value.dependencies,
+        connect: async () => {
+          throw error();
+        },
+      });
+      controller.changeConnection({ provider: 'openai-compatible', baseUrl: url });
+
+      await expect(controller.checkConnection('private-secret-canary')).resolves.toEqual({
+        kind: 'done',
+        status,
+        modelCount: 0,
+        problem,
+      });
+      expect(controller.getSnapshot().catalogProblem).toEqual(problem);
+      expect(JSON.stringify(controller.getSnapshot())).not.toContain('private-secret-canary');
+    },
+  );
+
+  it('rejects a malformed address before sending a request', async () => {
+    const connect = vi.fn();
+    const controller = manualController({ connect });
+    controller.changeConnection({ provider: 'openai-compatible', baseUrl: 'not a url' });
+
+    await expect(controller.checkConnection()).resolves.toEqual({
+      kind: 'done',
+      status: 'connection',
+      modelCount: 0,
+      problem: { reason: 'invalid_url' },
+    });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it.each(['success', 'failure'] as const)(
+    'reports a superseded check when a newer connection replaces a %s',
+    async (mode) => {
+      const value = fixture();
+      let settle!: (models: readonly ModelChoice[]) => void;
+      let fail!: (error: unknown) => void;
+      const listing = new Promise<readonly ModelChoice[]>((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      });
+      const controller = manualController({
+        ...value.dependencies,
+        connect: async () => ({
+          listModels: async () => listing,
+          translateChapter: value.generate,
+        }),
+      });
+      controller.changeConnection({ provider: 'openai-compatible', baseUrl: url });
+      const pending = controller.checkConnection();
+      controller.changeConnection({
+        provider: 'openai-compatible',
+        baseUrl: 'http://192.168.1.3:1234/v1',
+      });
+      if (mode === 'success') settle([generation]);
+      else fail(new ReaderError('connection', 'received', 503));
+
+      await expect(pending).resolves.toEqual({ kind: 'superseded' });
+    },
+  );
+
+  it('reports why a check was skipped instead of starting one', async () => {
+    await expect(controllers.createRenewalController().checkConnection()).resolves.toEqual({
+      kind: 'skipped',
+      reason: 'unavailable',
+    });
+
+    const connect = vi.fn(async () => {
+      throw new ReaderError('connection', 'received', 500);
+    });
+    const waiting = controllers.createRenewalController({
+      connect,
+      lifecycle: { isActive: async () => true, subscribe: async () => async () => {} },
+    });
+    await expect(waiting.checkConnection()).resolves.toEqual({
+      kind: 'skipped',
+      reason: 'not_ready',
+    });
+
+    const batch = {
+      active: true,
+      initialize: async () => {},
+      setForeground: () => {},
+      getSnapshot: () => ({ active: true }),
+      subscribe: () => () => {},
+      clearWork: () => true,
+      dispose: () => {},
+    } as unknown as NonNullable<RenewalDependencies['batch']>;
+    const busy = controllers.createRenewalController({ connect, batch });
+    await expect(busy.checkConnection()).resolves.toEqual({ kind: 'skipped', reason: 'busy' });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('clears the failure reason when a new check starts or the connection changes', async () => {
+    const value = fixture();
+    let attempts = 0;
+    const controller = manualController({
+      ...value.dependencies,
+      connect: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new ReaderError('auth', 'received', 401);
+        return new Promise<never>(() => {});
+      },
+    });
+    controller.changeConnection({ provider: 'openai-compatible', baseUrl: url });
+    await controller.checkConnection();
+    expect(controller.getSnapshot().catalogProblem).toEqual({
+      reason: 'auth_rejected',
+      httpStatus: 401,
+    });
+
+    void controller.checkConnection();
+    expect(controller.getSnapshot().catalogProblem).toBeNull();
+
+    controller.changeConnection({ provider: 'openai-compatible', baseUrl: url });
+    expect(controller.getSnapshot().catalogProblem).toBeNull();
   });
 });
 
