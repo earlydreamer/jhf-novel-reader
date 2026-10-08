@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test } from 'vitest';
 import { createRenewalApplication } from '../../src/app/compose';
 import { Application } from '../../src/app/Application';
+import { runTopBackHandler } from '../../src/ui/shell/backStack';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 import { createLibraryStore } from '../../src/storage/library';
 import { createBatchRepository } from '../../src/translation/batch';
@@ -24,14 +25,17 @@ async function finishScan(app: RenewalController): Promise<void> {
 
 afterEach(cleanup);
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
+const otherWorkUrl = 'https://ncode.syosetu.com/n9999zz/';
 function fixture() {
   const bytes = new Map<string, string>();
   const preferences = new Map<string, string>();
   const requests: NativeHttpRequest[] = [];
   let failSave = false;
+  let failGuidance = false;
   let failSecond = false;
   let holdFirst = false;
   let badPage = false;
+  let failOtherWorkPage = false;
   let failQueueAdvance = false;
   let chapterExtra = '';
   let failScanChapter = 0;
@@ -45,6 +49,7 @@ function fixture() {
   const files = {
     read: async (path: string) => bytes.get(path) ?? null,
     write: async (path: string, value: string) => {
+      if (failGuidance && path.startsWith('guidance/')) throw Error('synthetic guidance rejection');
       if (failQueueAdvance && path.startsWith('batches/') && JSON.parse(value).payload.cursor > 0)
         throw Error('synthetic queue write rejection');
       if (failSave && path.startsWith('versions/')) throw Error('synthetic disk rejection');
@@ -78,18 +83,26 @@ function fixture() {
         });
       } else if (request.url.endsWith('/models')) {
         data = JSON.stringify({ data: [{ id: 'synthetic-model', meta: { n_ctx: 8192 } }] });
-      } else if (request.url === workUrl || request.url === workUrl + '?p=2') {
-        const ordinals = request.url === workUrl ? [1, 2] : [3, 4];
+      } else if (
+        request.url === workUrl ||
+        request.url === workUrl + '?p=2' ||
+        request.url === otherWorkUrl ||
+        request.url === otherWorkUrl + '?p=2'
+      ) {
+        const workId = new URL(request.url).pathname.split('/')[1]!;
+        if (failOtherWorkPage && workId === 'n9999zz') throw Error('synthetic work page failure');
+        const isFirstPage = !request.url.endsWith('?p=2');
+        const ordinals = isFirstPage ? [1, 2] : [3, 4];
         if (badPage && request.url.endsWith('?p=2')) ordinals.splice(0, 1);
         data =
           '<h1 class="p-novel__title">합성 작품</h1>' +
           ordinals
             .map(
               (ordinal) =>
-                `<div class="p-eplist__sublist"><a href="/n1234ab/${ordinal}/">합성 ${ordinal}화</a></div>`,
+                `<div class="p-eplist__sublist"><a href="/${workId}/${ordinal}/">합성 ${ordinal}화</a></div>`,
             )
             .join('') +
-          (request.url === workUrl
+          (isFirstPage
             ? '<a rel="next" href="?p=2">다음</a>'
             : '<span class="c-pager__item c-pager__item--next">다음</span>');
       } else {
@@ -147,6 +160,9 @@ function fixture() {
     set failSave(value: boolean) {
       failSave = value;
     },
+    set failGuidance(value: boolean) {
+      failGuidance = value;
+    },
     set failSecond(value: boolean) {
       failSecond = value;
     },
@@ -155,6 +171,9 @@ function fixture() {
     },
     set badPage(value: boolean) {
       badPage = value;
+    },
+    set failOtherWorkPage(value: boolean) {
+      failOtherWorkPage = value;
     },
     set failQueueAdvance(value: boolean) {
       failQueueAdvance = value;
@@ -312,6 +331,8 @@ test('UI offers range and all preview with a separate explicit start action', as
   const harness = fixture();
   await harness.setup();
   render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
   fireEvent.change(screen.getByLabelText('끝 회차'), { target: { value: '2' } });
   fireEvent.click(screen.getByRole('button', { name: '범위 확인' }));
   await screen.findByText('확정 범위: 1–2화 · 총 2화');
@@ -324,9 +345,52 @@ test('UI offers range and all preview with a separate explicit start action', as
   fireEvent.click(screen.getByRole('button', { name: '후보 확인 완료' }));
   await screen.findByRole('button', { name: '확인한 회차 번역 시작' });
   fireEvent.click(screen.getByRole('button', { name: '확인한 회차 번역 시작' }));
-  await screen.findByText('일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.');
+  await waitFor(() => expect(harness.app.getSnapshot().batch?.record?.phase).toBe('complete'), {
+    timeout: 10_000,
+  });
+  await screen.findByText(
+    '일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.',
+    {},
+    { timeout: 10_000 },
+  );
   expect(harness.posts()).toHaveLength(4);
   expect(screen.getByRole('heading', { name: '합성 작품' })).toBeInTheDocument();
+  harness.app.dispose();
+});
+
+test('keeps a failed preparation error on B while preserving A as the latest record owner', async () => {
+  const harness = fixture();
+  await harness.setup();
+  await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  expect(harness.app.getSnapshot().batch?.record?.work.workId).toBe('n1234ab');
+  await harness.app.openWork(otherWorkUrl);
+  expect(harness.app.getSnapshot().work?.workId).toBe('n9999zz');
+  harness.failOtherWorkPage = true;
+  await harness.app.prepareBatch(null, false);
+  expect(harness.app.getSnapshot().batch).toMatchObject({
+    preparing: false,
+    active: false,
+    preparingWorkId: undefined,
+    errorWorkId: 'n9999zz',
+    record: { work: { workId: 'n1234ab' } },
+  });
+  expect(harness.posts()).toHaveLength(0);
+
+  render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
+  expect(
+    await screen.findByText(/전체 목차와 지정 범위를 확인하지 못했습니다/),
+  ).toBeInTheDocument();
+  expect(screen.queryByText('확정 범위: 1–1화 · 총 1화')).toBeNull();
+
+  harness.app.back();
+  await waitFor(() => expect(harness.app.getSnapshot().work?.workId).toBe('n1234ab'));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
+  expect(await screen.findByText('확정 범위: 1–1화 · 총 1화')).toBeInTheDocument();
+  expect(screen.queryByText(/전체 목차와 지정 범위를 확인하지 못했습니다/)).toBeNull();
+  expect(harness.posts()).toHaveLength(0);
   harness.app.dispose();
 });
 test('restart recovers a durable unsent boundary without automatically sending or marking it uncertain', async () => {
@@ -516,6 +580,8 @@ test('the work editor only applies explicitly saved terms and supports multiple 
   const harness = fixture();
   await harness.setup();
   render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
   fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
   await waitFor(() => expect(screen.getByRole('button', { name: '용어 추가' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '용어 추가' }));
@@ -532,6 +598,42 @@ test('the work editor only applies explicitly saved terms and supports multiple 
   fireEvent.click(screen.getByRole('button', { name: '용어 1 삭제' }));
   fireEvent.click(screen.getByRole('button', { name: '용어집·말투 저장' }));
   await waitFor(async () => expect((await harness.app.readGuidance('n1234ab'))?.terms).toEqual([]));
+  harness.app.dispose();
+});
+test('the work glossary keeps a failed draft across Back and resets it for another work', async () => {
+  const harness = fixture();
+  await harness.setup();
+  render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
+  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
+  const sourceField = await screen.findByLabelText('이전 이야기 요약 (선택, 이름 없이 400자 이내)');
+  fireEvent.change(sourceField, { target: { value: '초안은 저장 실패 뒤에도 남아야 해요.' } });
+  harness.failGuidance = true;
+  fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
+  await screen.findByText(/저장하지 못했습니다/);
+  expect(sourceField).toHaveValue('초안은 저장 실패 뒤에도 남아야 해요.');
+  let handled = false;
+  act(() => {
+    handled = runTopBackHandler();
+  });
+  expect(handled).toBe(true);
+  expect(screen.queryByRole('dialog', { name: '작품 용어집' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
+  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
+  expect(await screen.findByLabelText('이전 이야기 요약 (선택, 이름 없이 400자 이내)')).toHaveValue(
+    '초안은 저장 실패 뒤에도 남아야 해요.',
+  );
+
+  await harness.app.openWork(otherWorkUrl);
+  await waitFor(() => expect(harness.app.getSnapshot().work?.workId).toBe('n9999zz'));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
+  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
+  expect(await screen.findByLabelText('이전 이야기 요약 (선택, 이름 없이 400자 이내)')).toHaveValue(
+    '',
+  );
   harness.app.dispose();
 });
 test('reference matching includes aliases and excludes unrelated entries and never changes source text', async () => {
@@ -644,6 +746,8 @@ test('candidate UI requires a checked item and spelling, refreshes the editor af
   await harness.setup();
   harness.chapterExtra = 'アルベルトとアルベルト。';
   render(<Application controller={harness.app} />);
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
   fireEvent.change(screen.getByLabelText('끝 회차'), { target: { value: '1' } });
   fireEvent.click(screen.getByRole('button', { name: '범위 확인' }));
   fireEvent.click(await screen.findByRole('button', { name: '범위 고유명사 후보 스캔' }));

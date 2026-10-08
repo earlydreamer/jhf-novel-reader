@@ -39,7 +39,7 @@ export function TitleHeading({
       await controls.onSave(titleKey, draft.trim());
       setEditing(false);
     } catch {
-      setError('제목을 저장하지 못했어. 입력한 내용은 그대로 남겨 뒀어.');
+      setError('제목을 저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.');
     } finally {
       setSaving(false);
     }

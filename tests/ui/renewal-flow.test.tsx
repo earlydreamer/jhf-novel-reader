@@ -132,6 +132,366 @@ async function setup(hasSaved = false, translationAvailable = false) {
 afterEach(cleanup);
 
 describe('automatic chapter dispatch and position writes', () => {
+  it('continues from this work only after verifying recent ownership and restores its exact position', async () => {
+    const value = fixture(true);
+    const position = {
+      workId: page.workId,
+      chapterId: saved.source.chapterId,
+      versionId: saved.versionId,
+      blockId: 'translated-1',
+      offset: 37,
+    };
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn(async () => [
+        {
+          workId: page.workId,
+          chapterId: saved.source.chapterId,
+          versionId: saved.versionId,
+          updatedAt: '2026-10-08T00:00:00Z',
+        },
+      ]),
+      readPosition: vi.fn(async () => position),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('reader');
+    expect(controller.getSnapshot().version?.versionId).toBe(saved.versionId);
+    expect(controller.getSnapshot().position).toEqual(position);
+    controller.dispose();
+  });
+
+  it('refreshes the actual recent chapter after opening a saved chapter and returning to its TOC', async () => {
+    const value = fixture(true);
+    const savedB: CompletedTranslation = {
+      ...saved,
+      versionId: 'saved-v2',
+      source: { ...saved.source, ...chapters[1]! } as CompletedTranslation['source'],
+    };
+    const recentA = {
+      workId: page.workId,
+      chapterId: saved.source.chapterId,
+      versionId: saved.versionId,
+      updatedAt: '2026-10-08T00:00:00Z',
+    };
+    const recentB = {
+      workId: page.workId,
+      chapterId: savedB.source.chapterId,
+      versionId: savedB.versionId,
+      updatedAt: '2026-10-08T00:01:00Z',
+    };
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn(async () => [recentA]),
+      listVersions: vi.fn(async (chapterId: string) =>
+        chapterId === saved.source.chapterId
+          ? [saved]
+          : chapterId === savedB.source.chapterId
+            ? [savedB]
+            : [],
+      ),
+      readVersion: vi.fn(async (versionId: string) =>
+        versionId === saved.versionId ? saved : versionId === savedB.versionId ? savedB : null,
+      ),
+      readPosition: vi.fn(async () => null),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
+    await controller.selectChapter(chapters[1]!);
+    expect(controller.getSnapshot().route.kind).toBe('reader');
+    expect(controller.getSnapshot().version?.versionId).toBe(savedB.versionId);
+    vi.mocked(value.dependencies.library!.listRecent).mockResolvedValue([recentB]);
+    controller.back();
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot().workRecent).toMatchObject({
+        status: 'verified',
+        chapterId: savedB.source.chapterId,
+        versionId: savedB.versionId,
+      }),
+    );
+    expect(controller.getSnapshot().route.kind).toBe('work');
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('reader');
+    expect(controller.getSnapshot().version?.versionId).toBe(savedB.versionId);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('treats a recent source mismatch as absent and selects the loaded minimum ordinal', async () => {
+    const value = fixture(true);
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn(async () => [
+        {
+          workId: page.workId,
+          chapterId: chapters[1]!.chapterId,
+          versionId: saved.versionId,
+          updatedAt: '2026-10-08T00:00:00Z',
+        },
+      ]),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('none'));
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('reader');
+    expect(controller.getSnapshot().chapter?.chapterId).toBe(chapters[0]!.chapterId);
+    controller.dispose();
+  });
+
+  it.each([
+    ['workId', { workId: 'other-work' }],
+    ['chapterId', { chapterId: 'n9999aa/1' }],
+    ['versionId', { versionId: 'other-version' }],
+    ['blockId', { blockId: 'missing-block' }],
+  ])(
+    'classifies a stored position with a foreign %s as an error without fallback',
+    async (_field, mismatch) => {
+      const value = fixture(true);
+      const position = {
+        workId: page.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        blockId: 'translated-1',
+        offset: 5,
+        ...mismatch,
+      };
+      Object.assign(value.dependencies.library!, {
+        listRecent: vi.fn(async () => [
+          {
+            workId: page.workId,
+            chapterId: saved.source.chapterId,
+            versionId: saved.versionId,
+            updatedAt: '2026-10-08T00:00:00Z',
+          },
+        ]),
+        readPosition: vi.fn(async () => position),
+      });
+      const controller = manualController(value.dependencies);
+      await controller.openWork(page.canonicalUrl);
+      await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('error'));
+      await controller.continueReadingFromWork(page.workId);
+      expect(controller.getSnapshot().route.kind).toBe('work');
+      expect(controller.getSnapshot().chapter).toBeNull();
+      expect(value.generate).not.toHaveBeenCalled();
+      controller.dispose();
+    },
+  );
+
+  it.each([
+    [
+      'recent list read',
+      (value: ReturnType<typeof fixture>) => {
+        vi.mocked(value.dependencies.library!.listRecent).mockRejectedValue(
+          new Error('recent read failed'),
+        );
+      },
+    ],
+    [
+      'version read',
+      (value: ReturnType<typeof fixture>) => {
+        vi.mocked(value.dependencies.library!.listRecent).mockResolvedValue([
+          {
+            workId: page.workId,
+            chapterId: saved.source.chapterId,
+            versionId: saved.versionId,
+            updatedAt: '2026-10-08T00:00:00Z',
+          },
+        ]);
+        vi.mocked(value.dependencies.library!.readVersion).mockRejectedValue(
+          new Error('version read failed'),
+        );
+      },
+    ],
+  ])('classifies %s failures as error without fallback or translation', async (_name, failRead) => {
+    const value = fixture(true);
+    failRead(value);
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('error'));
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('work');
+    expect(controller.getSnapshot().chapter).toBeNull();
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('ignores a late missing version after leaving the work route', async () => {
+    const value = fixture(true);
+    const recent = [
+      {
+        workId: page.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        updatedAt: '2026-10-08T00:00:00Z',
+      },
+    ];
+    let resolveLate!: (version: CompletedTranslation | null) => void;
+    const lateRead = new Promise<CompletedTranslation | null>((resolve) => {
+      resolveLate = resolve;
+    });
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn(async () => recent),
+      readVersion: vi.fn().mockResolvedValueOnce(saved).mockReturnValueOnce(lateRead),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
+    const continuing = controller.continueReadingFromWork(page.workId);
+    await vi.waitFor(() =>
+      expect(value.dependencies.library!.readVersion).toHaveBeenCalledTimes(2),
+    );
+    controller.navigate({ kind: 'home' });
+    resolveLate(null);
+    await continuing;
+    expect(controller.getSnapshot().route.kind).toBe('home');
+    expect(controller.getSnapshot().chapter).toBeNull();
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('uses ordinal 101 as the first loaded chapter for a partial TOC fallback', async () => {
+    const value = fixture();
+    const chapter101 = { ...chapters[0]!, chapterId: `${page.workId}/101`, ordinal: 101 };
+    const partialPage: WorkPage = {
+      ...page,
+      chapters: [chapter101],
+      nextPageUrl: `${page.canonicalUrl}?p=2`,
+      complete: false,
+    };
+    vi.mocked(value.dependencies.source!.getWorkPage).mockResolvedValue(partialPage);
+    Object.assign(value.dependencies.library!, { listRecent: vi.fn(async () => []) });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('none'));
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('translation');
+    expect(controller.getSnapshot().chapter?.chapterId).toBe(chapter101.chapterId);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('retries recent verification without navigation or translation, then permits the next continue action', async () => {
+    const value = fixture(true);
+    const recentRow = [
+      {
+        workId: page.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        updatedAt: '2026-10-08T00:00:00Z',
+      },
+    ];
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn(async () => recentRow),
+      readPosition: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('storage read failed'))
+        .mockResolvedValue(null),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('error'));
+    const originalRoute = controller.getSnapshot().route;
+    const originalChapter = controller.getSnapshot().chapter;
+    const readPosition = value.dependencies.library!.readPosition as ReturnType<typeof vi.fn>;
+    expect(value.generate).not.toHaveBeenCalled();
+    await controller.retryWorkRecent(page.workId);
+    expect(readPosition).toHaveBeenCalledTimes(2);
+    expect(controller.getSnapshot().workRecent?.status).toBe('verified');
+    expect(controller.getSnapshot().route).toEqual(originalRoute);
+    expect(controller.getSnapshot().chapter).toEqual(originalChapter);
+    expect(value.generate).not.toHaveBeenCalled();
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('reader');
+    expect(controller.getSnapshot().version?.versionId).toBe(saved.versionId);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('does not let a late recent read overwrite a newer visit to the same work', async () => {
+    const value = fixture(true);
+    let releaseOld!: (
+      rows: { workId: string; chapterId: string; versionId: string; updatedAt: string }[],
+    ) => void;
+    const oldRead = new Promise<
+      { workId: string; chapterId: string; versionId: string; updatedAt: string }[]
+    >((resolve) => {
+      releaseOld = resolve;
+    });
+    const recent = [
+      {
+        workId: page.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        updatedAt: '2026-10-08T00:00:00Z',
+      },
+    ];
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn().mockReturnValueOnce(oldRead).mockResolvedValue(recent),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    controller.navigate({ kind: 'home' });
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
+    releaseOld([]);
+    await Promise.resolve();
+    expect(controller.getSnapshot().workRecent?.status).toBe('verified');
+    const verifiedRecent = controller.getSnapshot().workRecent;
+    expect(verifiedRecent?.status).toBe('verified');
+    if (verifiedRecent?.status === 'verified')
+      expect(verifiedRecent.versionId).toBe(saved.versionId);
+    controller.dispose();
+  });
+
+  it('keeps the CTA disabled while recent verification is loading, then uses the none fallback', async () => {
+    const value = fixture();
+    let releaseRecent!: (rows: []) => void;
+    const pendingRecent = new Promise<[]>((resolve) => {
+      releaseRecent = resolve;
+    });
+    Object.assign(value.dependencies.library!, { listRecent: vi.fn(async () => []) });
+    const controller = manualController(value.dependencies);
+    await controller.initialize();
+    vi.mocked(value.dependencies.library!.listRecent).mockReturnValueOnce(pendingRecent);
+    render(<Application controller={controller} />);
+    await controller.openWork(page.canonicalUrl);
+    const continueButton = screen.getByRole('button', { name: '이어서 읽기' });
+    expect(continueButton).toBeDisabled();
+    fireEvent.click(continueButton);
+    expect(controller.getSnapshot().route.kind).toBe('work');
+    releaseRecent([]);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('none'));
+    fireEvent.click(continueButton);
+    await vi.waitFor(() => expect(controller.getSnapshot().route.kind).toBe('translation'));
+    expect(controller.getSnapshot().chapter?.chapterId).toBe(chapters[0]!.chapterId);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('opens a verified version at its beginning when its valid stored position is null', async () => {
+    const value = fixture(true);
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn(async () => [
+        {
+          workId: page.workId,
+          chapterId: saved.source.chapterId,
+          versionId: saved.versionId,
+          updatedAt: '2026-10-08T00:00:00Z',
+        },
+      ]),
+      readPosition: vi.fn(async () => null),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('reader');
+    expect(controller.getSnapshot().version?.versionId).toBe(saved.versionId);
+    expect(controller.getSnapshot().position).toBeNull();
+    controller.dispose();
+  });
+
   it('defaults to automatic start but never starts on initialization, catalog or opening a saved version', async () => {
     const value = fixture(true);
     const start = vi.fn(async () => {});
@@ -309,7 +669,7 @@ describe('renewal first reading screens', () => {
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await waitFor(() => expect(screen.getByRole('button', { name: '이 화 번역' })).toBeEnabled());
     expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
     expect(value.dependencies.connect).toHaveBeenCalledTimes(1);
@@ -323,7 +683,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '다음 화' }));
@@ -341,7 +701,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connection'));
     expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
     expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
@@ -371,7 +731,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await screen.findByText('저장된 연결의 서버와 모델 목록을 확인하고 있습니다.');
     expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
@@ -395,7 +755,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('model_missing'));
     expect(controller.getSnapshot().selectedModelId).toBeNull();
     expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
@@ -405,21 +765,21 @@ describe('renewal first reading screens', () => {
   it('open_work_does_not_translate', async () => {
     const value = await setup();
     expect(value.generate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
     expect(value.generate).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '이 화 번역' })).toBeDisabled();
   });
   it('saved_chapter_opens_without_settings', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     expect(value.generate).not.toHaveBeenCalled();
   });
   it('settings_returns_to_selected_chapter', async () => {
     await setup();
-    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await screen.findByRole('heading', { name: '2화 제목' });
     fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
     await screen.findByRole('heading', { name: '연결 설정' });
@@ -428,7 +788,7 @@ describe('renewal first reading screens', () => {
   });
   it('reader_has_no_settings_panel', async () => {
     await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(screen.queryByLabelText('API 기본 주소')).toBeNull();
     expect(screen.getByRole('button', { name: '목차' })).toBeVisible();
@@ -442,7 +802,7 @@ describe('renewal first reading screens', () => {
   });
   it('uses_real_catalog_selection_and_explicit_translation_action', async () => {
     const value = await setup(false, true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
     fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
     fireEvent.change(screen.getByLabelText('API 기본 주소'), {
@@ -574,11 +934,13 @@ describe('renewal reading affordances', () => {
   });
   it('shows saved status in the work contents before choosing a chapter', async () => {
     await setup(true);
-    expect(screen.getByText('번역 저장됨')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: '1화 1화 제목' }).closest('.nr-list-item'),
+    ).toHaveTextContent('저장됨');
   });
   it('reader defaults to 18px and clamps font controls to 10 through 48px', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
     expect(article).toHaveStyle({ fontSize: '18px' });
     expect(screen.getByLabelText('글자 크기')).toHaveAttribute('min', '10');
@@ -590,7 +952,7 @@ describe('renewal reading affordances', () => {
   });
   it('returns to the top when no translation position has been saved', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
     fireEvent.click(screen.getByRole('button', { name: '원문 확인' }));
     article.scrollTop = 300;
@@ -602,7 +964,7 @@ describe('renewal reading affordances', () => {
   it('returns to the latest translation position after scrolling the original', async () => {
     const offsetTop = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(20);
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
     article.scrollTop = 357;
     fireEvent.scroll(article);
@@ -622,7 +984,7 @@ describe('renewal reading affordances', () => {
   });
   it('next unsaved chapter enters a waiting screen without a model request', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     fireEvent.click(screen.getByRole('button', { name: '다음 화' }));
     await screen.findByRole('heading', { name: '2화 제목' });
@@ -752,7 +1114,9 @@ describe('route restoration across works', () => {
     expect(controller.getSnapshot().chapter?.chapterId).toBe(saved.source.chapterId);
     render(<Application controller={controller} />);
     fireEvent.click(screen.getByRole('button', { name: '목차' }));
-    expect(screen.getByText('번역 저장됨')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: '1화 1화 제목' }).closest('.nr-list-item'),
+    ).toHaveTextContent('저장됨');
     expect(controller.getSnapshot().savedChapterIds).toEqual([saved.source.chapterId]);
   });
 });
@@ -882,7 +1246,9 @@ describe('review P2: library-only continuation restores saved metadata', () => {
     await screen.findByText(saved.text);
     fireEvent.click(screen.getByRole('button', { name: '목차' }));
     expect(screen.getByRole('heading', { name: page.title })).toBeVisible();
-    expect(screen.getByText('번역 저장됨')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: '1화 1화 제목' }).closest('.nr-list-item'),
+    ).toHaveTextContent('저장됨');
     expect(controller.getSnapshot().savedChapterIds).toEqual([saved.source.chapterId]);
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     expect(value.dependencies.source?.getWorkPage).not.toHaveBeenCalled();

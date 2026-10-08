@@ -748,7 +748,7 @@ it('another chapter exposes a route back to save recovery and blocks generation 
   expect(h.posts()).toHaveLength(1);
   expect(screen.queryByRole('button', { name: '저장 화면으로 가기' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '목차' }));
-  fireEvent.click(screen.getByRole('button', { name: '1화' }));
+  fireEvent.click(screen.getByRole('button', { name: '1화 1화' }));
   await expect.poll(() => h.app.getSnapshot().route.kind).toBe('translation');
   expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(false);
   expect(h.posts()).toHaveLength(1);

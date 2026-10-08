@@ -134,6 +134,73 @@ it('Escape in a nested dialog closes only the inner dialog', () => {
   expect(outer).not.toHaveBeenCalled();
 });
 
+it('keeps opted-in content mounted while hiding it from roles, focus order and back handling', () => {
+  function Persistent() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          용어집 열기
+        </button>
+        <Dialog
+          open={open}
+          title="작품 용어집"
+          onClose={() => setOpen(false)}
+          keepMounted
+          fullScreen
+        >
+          <label>
+            용어 입력
+            <input aria-label="용어 입력" />
+          </label>
+        </Dialog>
+      </>
+    );
+  }
+  const { container } = render(<Persistent />);
+  const opener = screen.getByRole('button', { name: '용어집 열기' });
+  opener.focus();
+  fireEvent.click(opener);
+  fireEvent.change(screen.getByRole('textbox', { name: '용어 입력' }), {
+    target: { value: '왕도' },
+  });
+  const openDialog = screen.getByRole('dialog', { name: '작품 용어집' });
+  fireEvent.keyDown(openDialog, { key: 'Escape' });
+  const closed = container.querySelector('dialog')!;
+  expect(closed).toHaveAttribute('hidden');
+  expect(closed).toHaveAttribute('inert');
+  expect(closed).not.toHaveAttribute('open');
+  expect(closed).not.toHaveAttribute('aria-modal');
+  expect(screen.queryByRole('dialog', { name: '작품 용어집' })).toBeNull();
+  expect(screen.queryByRole('textbox', { name: '용어 입력' })).toBeNull();
+  expect(opener).toHaveFocus();
+  expect(runBackInAct()).toBe(false);
+  fireEvent.click(opener);
+  expect(screen.getByRole('textbox', { name: '용어 입력' })).toHaveValue('왕도');
+});
+
+it('full-screen close-only mode remains compatible and basic dialogs still unmount', () => {
+  const { rerender, container } = render(
+    <Dialog open title="대화상자" onClose={() => {}}>
+      <p>임시 내용</p>
+    </Dialog>,
+  );
+  expect(screen.getByRole('dialog', { name: '대화상자' })).toBeTruthy();
+  rerender(
+    <Dialog open={false} title="대화상자" onClose={() => {}}>
+      <p>임시 내용</p>
+    </Dialog>,
+  );
+  expect(container.querySelector('dialog')).toBeNull();
+  rerender(
+    <Dialog open title="전체 화면" onClose={() => {}} fullScreen>
+      <p>전체 화면 내용</p>
+    </Dialog>,
+  );
+  expect(screen.getByRole('dialog', { name: '전체 화면' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: '저장하기' })).toBeNull();
+});
+
 it('native cancel in a nested dialog closes only the inner dialog', () => {
   const outer = vi.fn();
   const inner = vi.fn();
