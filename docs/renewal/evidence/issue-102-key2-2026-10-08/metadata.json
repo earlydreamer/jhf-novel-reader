@@ -1,0 +1,195 @@
+{
+  "kind": "android-key2-webview-theme-validation",
+  "issue": 102,
+  "date": "2026-10-08",
+  "productSource": {
+    "commit": "a47f77163fde2be1d94602b6994416196c6ac40a",
+    "tree": "2cd9481597d7762c80088d29ad7b31b821dc5618",
+    "productFilesChanged": 5,
+    "changeSummary": "ReaderTheme bridge applies resolved app windowBackground/decor theme; existing SystemBars icon mode remains serialized with the bridge call",
+    "audit": "Sol 6.1 read-only code audit approved the committed five-file snapshot"
+  },
+  "buildEnvironment": {
+    "node": "24.19.0",
+    "jdk": "Temurin 21.0.12.1+1",
+    "gradle": "8.14.3",
+    "androidSdk": 36,
+    "buildTools": "35.0.0",
+    "minSdk": 24,
+    "targetSdk": 36
+  },
+  "artifacts": {
+    "cleanProductAudit": {
+      "applicationId": "app.narou.reader",
+      "sourceDirty": false,
+      "sha256": "c068bbea3f4efd46ab352b9dab78aadf8bc0d1e0c0a90c3d52eb776f45a0d3d6",
+      "bytes": 6485862,
+      "signerCertificateSha256": "8c5d8712374dff61e93c2ecbcc240a17d2db4759c97ee4ab11275322aa5fe0a6",
+      "verifyApk": "pass",
+      "installedOrLaunched": false,
+      "evidenceFile": "D:/projects/narou-reader/.superpowers/verification-102-key2/artifacts/product-fix-clean-a47f771.apk"
+    },
+    "installedDeviceCheck": {
+      "applicationId": "app.narou.reader.devicecheck2",
+      "sourceCommit": "a47f77163fde2be1d94602b6994416196c6ac40a",
+      "sourceTree": "2cd9481597d7762c80088d29ad7b31b821dc5618",
+      "nativeProvenanceDirty": true,
+      "nativeProvenanceDirtyReason": "temporary android/app/build.gradle debug applicationIdSuffix .devicecheck2 only",
+      "debugSuffixDiffBytes": 446,
+      "debugSuffixDiffSha256": "5d9ac2ccd4ebc5a372c050159964d6300d75b16907341ffd3bd8013a992de962",
+      "webProvenanceDirty": false,
+      "webAssetCount": 11,
+      "webAssetsByteIdenticalToDist": true,
+      "sha256": "258cc7d7f92171cc47e983c93bd8fc1516582dd03f2d1c72188bf5a3ab9a0fb8",
+      "bytes": 6485718,
+      "signerCertificateSha256": "8c5d8712374dff61e93c2ecbcc240a17d2db4759c97ee4ab11275322aa5fe0a6",
+      "installedOn": ["BlackBerry KEY2 / 5000337213 / user 0", "BlackShark 2 / 67f3906b / user 0"],
+      "leftInstalledForUserInspection": true,
+      "evidenceFile": "D:/projects/narou-reader/.superpowers/verification-102-key2/artifacts/product-fix-devicecheck2-a47f771.apk"
+    },
+    "previousBaseline": {
+      "sourceCommit": "f4b0e2f1b80dd854d790d1b7af6988bdefced9e2",
+      "productionApkSha256": "05c41659b20327b6764139b81d2e4ea6de1b31fde5f81a868cde1b117f99d691",
+      "devicecheck2ApkSha256": "250adbc8ecc93253a91e327e3d51043bc1a263c5c17d2b4dd0781ac1cacf4aec",
+      "observedIssue": "KEY2 app dark showed low status-bar icon contrast on a light bar",
+      "failureScreenshotRetained": false,
+      "runtimeErrorAggregation": "not retained; the f4 baseline establishes the visual contrast defect only, not WebView console or native crash status",
+      "failureScreenshotLimitation": "The original f4 PNG name was overwritten by later a47 capture; no separate failure copy was found in local issue evidence. Historical observation is recorded without presenting current screenshots as proof of the old failure."
+    }
+  },
+  "checks": {
+    "platformShellTests": { "passed": 13, "total": 13 },
+    "typecheck": "pass",
+    "webBuild": "pass",
+    "androidAssembleDebug": "pass",
+    "cleanApkVerifier": "pass",
+    "fullVitestParallel": {
+      "passed": 936,
+      "total": 937,
+      "failed": 1,
+      "failure": "existing batch-translation timeout flake; isolated file rerun passed 23/23; tracked separately in issue 101"
+    }
+  },
+  "devices": [
+    {
+      "model": "BlackBerry KEY2 / BBF100_6",
+      "serial": "5000337213",
+      "android": "8.1.0 / API 27",
+      "abi": "arm64-v8a",
+      "webView": "com.android.chrome 121.0.6167.178",
+      "systemNightModeBeforeAfter": ["no", "no"],
+      "fontScaleBeforeTemporaryTestAndAfter": [1.0, 1.0],
+      "fontScaleDuringTest": 2.0,
+      "fontMetrics": {
+        "htmlBodyPx": [16, 32, 16],
+        "h1Px": [24, 48, 24]
+      },
+      "rotationBeforeAfter": {
+        "accelerometerRotation": [1, 1],
+        "userRotation": [0, 0],
+        "temporaryLandscapeScreenshot": "1620x1080"
+      },
+      "results": {
+        "darkStatusBarAndContentRgb": "19,19,27",
+        "lightStatusBarAndContentRgb": "250,250,253",
+        "systemIconContrast": "pass by visual screenshot review",
+        "cssInsetTopBottom": ["0px", "0px"],
+        "rapidDarkLightDark": "pass; final dark",
+        "darkColdStart": "pass; theme and synthetic library fixture persisted",
+        "configurationRotationAndRestore": "pass; original settings restored",
+        "sourceBrowserActivityBack": "pass; SourceBrowserActivity returned to MainActivity with dark theme and fixture retained; no page content captured",
+        "rootSystemBack": "pass; launcher foregrounded, test process remained alive, returning to app retained dark theme",
+        "syntheticReader": "pass; one translated block, visible text length 17, snackbar count 0",
+        "physicalKeyboardTyping": "not tested",
+        "finalGlobalSettings": { "fontScale": 1.0, "accelerometerRotation": 1, "userRotation": 0 }
+      }
+    },
+    {
+      "model": "BlackShark 2 / SKW-H0",
+      "serial": "67f3906b",
+      "android": "10 / API 29",
+      "abi": "arm64-v8a",
+      "webView": "com.google.android.webview 153.0.8010.36",
+      "globalSettingsChanged": false,
+      "results": {
+        "darkStatusBarAndContentRgb": "19,19,27",
+        "lightStatusBarAndContentRgb": "250,250,253",
+        "systemIconContrast": "pass by visual screenshot review",
+        "cssInsetTopBottom": ["27px", "0px"],
+        "settingsBackToHome": "pass",
+        "rootSystemBackAndForeground": "pass; test process remained alive and synthetic library fixture remained",
+        "finalPackagesUser0": [
+          "app.narou.reader",
+          "app.narou.reader.test",
+          "app.narou.reader.devicecheck",
+          "app.narou.reader.devicecheck2"
+        ]
+      }
+    }
+  ],
+  "runtimeErrorSummary": {
+    "finalRecordedCdpEvaluationExceptions": 0,
+    "syntheticReaderSnackbarCount": 0,
+    "packageProcessSurvivedRootBack": true,
+    "nativeLogcatCrashAggregation": "not performed",
+    "webConsoleMessageAggregation": "not performed",
+    "resolvedHarnessIncidents": [
+      "initial theme probe ran before settings were open and made no theme change; rerun after opening settings",
+      "PowerShell reserved PID variable produced a stale CDP forward; reforwarded to the app WebView socket",
+      "PowerShell byte encoding option was unsupported for PNG capture; Node capture helper used instead"
+    ]
+  },
+  "preservation": {
+    "productionApkInstalledOrLaunched": false,
+    "productionOrOtherTestPackageWriteDeleteCommandIssued": false,
+    "productionPackageListsWereReadOnly": true,
+    "productionDataBeforeAfterFileHashOrListingCaptured": false,
+    "productionDataByteIdentityClaim": false,
+    "onlySyntheticFixtureUsedInDevicecheck2": true,
+    "sourceBrowserPageHtmlTextOrCaptureSaved": false,
+    "userSettingsRestored": true
+  },
+  "localEvidenceDirectory": "D:/projects/narou-reader/.superpowers/verification-102-key2/",
+  "sourceTaggedScreenshots": [
+    {
+      "file": "images/key2-a47f77163fde2be1d94602b6994416196c6ac40a-theme-dark.png",
+      "sha256": "d2ec72e9f70cc2c8e4619c633658f94d5d84348edb2f2369b3e4bc33f3ce1e3c",
+      "bytes": 146899
+    },
+    {
+      "file": "images/key2-a47f77163fde2be1d94602b6994416196c6ac40a-theme-light.png",
+      "sha256": "b7b3e7c42062b591509c6bb7357c1f65a990c51499a607dff3670e5988c8bc7f",
+      "bytes": 132441
+    },
+    {
+      "file": "images/key2-a47f77163fde2be1d94602b6994416196c6ac40a-coldstart-dark.png",
+      "sha256": "3066367e48fd91c7bfa1a80fcc963ea9ea21ee8762819f610b64e29f04f30e13",
+      "bytes": 90440
+    },
+    {
+      "file": "images/key2-a47f77163fde2be1d94602b6994416196c6ac40a-fontscale-200-dark.png",
+      "sha256": "eeebb311f436231d4bd57f6a16413eb1d1e2e6048054fdd52aa11ead48578258",
+      "bytes": 108701
+    },
+    {
+      "file": "images/key2-a47f77163fde2be1d94602b6994416196c6ac40a-rotation-landscape.png",
+      "sha256": "bbd3d12cfceb71b2a387038a6c6e6ecb23a3d3b1a7cb51536987159cd79c6948",
+      "bytes": 99613
+    },
+    {
+      "file": "images/key2-a47f77163fde2be1d94602b6994416196c6ac40a-sourcebrowser-back-dark.png",
+      "sha256": "36839f7c6fe3e2ab673171b13f83db085953a601cd737e6f16ee83139d50af01",
+      "bytes": 90454
+    },
+    {
+      "file": "images/blackshark-a47f77163fde2be1d94602b6994416196c6ac40a-theme-dark.png",
+      "sha256": "d0524760a06d57ca0084c556e3df2aeef6bdde1fb46b2777c2c8c6ae2c9dbd4b",
+      "bytes": 192672
+    },
+    {
+      "file": "images/blackshark-a47f77163fde2be1d94602b6994416196c6ac40a-theme-light.png",
+      "sha256": "c142c361c4700d536f6f3e5bc7b000f37910e958db93ae94f90daf5aef359509",
+      "bytes": 192626
+    }
+  ]
+}

@@ -7,13 +7,24 @@ import { capacitorShell } from '../../src/platform/shell';
 // 그래서 addListener는 테스트마다 구현을 바꿀 수 있는 평범한 함수로 둔다.
 const app = vi.hoisted(() => ({
   registered: [] as string[],
+  order: [] as string[],
+  theme: {
+    applyResolvedTheme: vi.fn(async ({ theme }: { theme: string }) => {
+      app.order.push(`theme:${theme}`);
+    }),
+  },
   addListener: (_event: string, _listener: () => void): Promise<{ remove(): Promise<void> }> =>
     Promise.resolve({ remove: async () => {} }),
 }));
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: { isNativePlatform: () => true },
-  SystemBars: { setStyle: vi.fn(async () => {}) },
+  registerPlugin: vi.fn(() => app.theme),
+  SystemBars: {
+    setStyle: vi.fn(async ({ style }: { style: string }) => {
+      app.order.push(`bars:${style}`);
+    }),
+  },
   SystemBarsStyle: { Dark: 'DARK', Light: 'LIGHT' },
 }));
 vi.mock('@capacitor/app', () => ({
@@ -43,6 +54,7 @@ async function expectNoUnhandledRejection(run: () => void): Promise<void> {
 
 beforeEach(() => {
   app.registered.length = 0;
+  app.order.length = 0;
   app.addListener = () => Promise.resolve({ remove: async () => {} });
 });
 
@@ -91,10 +103,84 @@ describe('capacitorShell native branches', () => {
     expect(App.minimizeApp).toHaveBeenCalledTimes(1);
   });
 
-  it('sets the system bar style for the resolved theme', () => {
+  it('applies the resolved window theme before setting system bar icons', async () => {
     capacitorShell.setSystemBarsTheme('dark');
+    await flush();
+    expect(app.theme.applyResolvedTheme).toHaveBeenLastCalledWith({ theme: 'dark' });
     expect(SystemBars.setStyle).toHaveBeenLastCalledWith({ style: 'DARK' });
     capacitorShell.setSystemBarsTheme('light');
+    await flush();
+    expect(app.theme.applyResolvedTheme).toHaveBeenLastCalledWith({ theme: 'light' });
+    expect(SystemBars.setStyle).toHaveBeenLastCalledWith({ style: 'LIGHT' });
+    expect(app.order).toEqual(['theme:dark', 'bars:DARK', 'theme:light', 'bars:LIGHT']);
+  });
+
+  it('skips stale theme requests that have not started yet', async () => {
+    capacitorShell.setSystemBarsTheme('light');
+    capacitorShell.setSystemBarsTheme('dark');
+    capacitorShell.setSystemBarsTheme('light');
+    await flush();
+    await flush();
+    expect(app.theme.applyResolvedTheme).toHaveBeenCalledTimes(1);
+    expect(app.theme.applyResolvedTheme).toHaveBeenCalledWith({ theme: 'light' });
+    expect(SystemBars.setStyle).toHaveBeenCalledTimes(1);
+    expect(SystemBars.setStyle).toHaveBeenCalledWith({ style: 'LIGHT' });
+  });
+
+  it('does not let an in-flight stale theme update overwrite the latest icon style', async () => {
+    let finishFirst: (() => void) | undefined;
+    app.theme.applyResolvedTheme.mockImplementationOnce(({ theme }) => {
+      app.order.push(`theme-start:${theme}`);
+      return new Promise<void>((resolve) => {
+        finishFirst = () => {
+          app.order.push(`theme-finish:${theme}`);
+          resolve();
+        };
+      });
+    });
+
+    capacitorShell.setSystemBarsTheme('dark');
+    await flush();
+    capacitorShell.setSystemBarsTheme('light');
+    capacitorShell.setSystemBarsTheme('dark');
+    finishFirst?.();
+    await flush();
+    await flush();
+
+    expect(app.order).toEqual([
+      'theme-start:dark',
+      'theme-finish:dark',
+      'bars:DARK',
+      'theme:dark',
+      'bars:DARK',
+    ]);
+    expect(SystemBars.setStyle).toHaveBeenCalledTimes(2);
+    expect(SystemBars.setStyle).toHaveBeenCalledWith({ style: 'DARK' });
+  });
+
+  it('does not change icon style when the background bridge rejects and recovers for the next theme', async () => {
+    app.theme.applyResolvedTheme.mockRejectedValueOnce(new Error('bridge unavailable'));
+    capacitorShell.setSystemBarsTheme('dark');
+    await flush();
+    capacitorShell.setSystemBarsTheme('light');
+    await flush();
+    await flush();
+
+    expect(SystemBars.setStyle).toHaveBeenCalledTimes(1);
+    expect(SystemBars.setStyle).toHaveBeenCalledWith({ style: 'LIGHT' });
+    expect(app.order).toEqual(['theme:light', 'bars:LIGHT']);
+  });
+
+  it('recovers the theme queue when SystemBars rejects', async () => {
+    vi.mocked(SystemBars.setStyle).mockRejectedValueOnce(new Error('SystemBars unavailable'));
+    capacitorShell.setSystemBarsTheme('dark');
+    await flush();
+    capacitorShell.setSystemBarsTheme('light');
+    await flush();
+    await flush();
+
+    expect(app.theme.applyResolvedTheme).toHaveBeenCalledTimes(2);
+    expect(SystemBars.setStyle).toHaveBeenCalledTimes(2);
     expect(SystemBars.setStyle).toHaveBeenLastCalledWith({ style: 'LIGHT' });
   });
 });

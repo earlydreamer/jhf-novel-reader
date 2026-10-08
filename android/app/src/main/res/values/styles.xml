@@ -19,4 +19,12 @@
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
+
+    <style name="ReaderThemeOverlayLight">
+        <item name="android:windowBackground">#fafafd</item>
+    </style>
+
+    <style name="ReaderThemeOverlayDark">
+        <item name="android:windowBackground">#13131b</item>
+    </style>
 </resources>

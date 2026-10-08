@@ -1,6 +1,16 @@
 import { App } from '@capacitor/app';
-import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
+import { Capacitor, registerPlugin, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import type { ResolvedTheme } from '../ui/theme/theme';
+
+interface ReaderThemePlugin {
+  applyResolvedTheme(options: { theme: ResolvedTheme }): Promise<void>;
+}
+
+const ReaderTheme = registerPlugin<ReaderThemePlugin>('ReaderTheme', {
+  web: () => ({ applyResolvedTheme: async () => {} }),
+});
+let systemBarsThemeQueue: Promise<void> = Promise.resolve();
+let systemBarsThemeOperation = 0;
 
 export interface ShellPlatform {
   onBackButton(listener: () => void): () => void;
@@ -30,9 +40,17 @@ export const capacitorShell: ShellPlatform = {
   },
   setSystemBarsTheme(theme) {
     if (!Capacitor.isNativePlatform()) return;
-    // Dark = 어두운 배경 위 밝은 아이콘.
-    void SystemBars.setStyle({
-      style: theme === 'dark' ? SystemBarsStyle.Dark : SystemBarsStyle.Light,
-    }).catch(() => {});
+    const operation = ++systemBarsThemeOperation;
+    systemBarsThemeQueue = systemBarsThemeQueue
+      .catch(() => {})
+      .then(async () => {
+        if (operation !== systemBarsThemeOperation) return;
+        await ReaderTheme.applyResolvedTheme({ theme });
+        // Dark = 어두운 배경 위 밝은 아이콘. Keep Capacitor's style and lifecycle handling.
+        await SystemBars.setStyle({
+          style: theme === 'dark' ? SystemBarsStyle.Dark : SystemBarsStyle.Light,
+        });
+      })
+      .catch(() => {});
   },
 };
