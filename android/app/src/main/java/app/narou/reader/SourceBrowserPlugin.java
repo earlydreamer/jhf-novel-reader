@@ -22,6 +22,10 @@ public final class SourceBrowserPlugin extends Plugin {
         }
         active = true;
         Intent intent = new Intent(getContext(), SourceBrowserActivity.class).putExtra(SourceBrowserActivity.START_URL, start);
+        if (getActivity() instanceof MainActivity) {
+            String theme = ((MainActivity) getActivity()).resolvedTheme();
+            if (theme != null) intent.putExtra(SourceBrowserTheme.EXTRA, theme);
+        }
         try { startActivityForResult(call, intent, "browserResult"); }
         catch (RuntimeException unavailable) {
             active = false;

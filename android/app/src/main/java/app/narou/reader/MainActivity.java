@@ -18,6 +18,11 @@ public class MainActivity extends BridgeActivity {
         WindowCompat.enableEdgeToEdge(getWindow());
     }
 
+    /** 앱이 마지막으로 적용한 테마(light/dark). 아직 없으면 null. */
+    String resolvedTheme() {
+        return resolvedTheme;
+    }
+
     void applyResolvedTheme(String theme) {
         if (!"light".equals(theme) && !"dark".equals(theme)) {
             throw new IllegalArgumentException("Unsupported resolved theme");
