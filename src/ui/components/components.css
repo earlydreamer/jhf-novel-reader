@@ -294,6 +294,19 @@ label.nr-list-item__main {
   flex: none;
   padding-inline-end: 4px;
 }
+.nr-list-item__main:disabled,
+label.nr-list-item__main:has(> input:disabled) {
+  cursor: default;
+  color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+}
+.nr-list-item__main:disabled .nr-list-item__supporting,
+label.nr-list-item__main:has(> input:disabled) .nr-list-item__supporting {
+  color: inherit;
+}
+.nr-list-item__main:disabled::before,
+label.nr-list-item__main:has(> input:disabled)::before {
+  display: none;
+}
 
 /* Dialog · BottomSheet */
 .nr-modal {
