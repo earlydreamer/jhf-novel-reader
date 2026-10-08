@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createRenewalSource,
   normalizeSourceInput,
@@ -193,5 +193,69 @@ describe('renewal work metadata and explicit source selection', () => {
       `${workUrl}?p=2`,
     );
     expect(() => normalizeSourceInput(`${chapterUrl}?p=2`)).toThrow();
+  });
+});
+
+describe('renewal source transport boundaries', () => {
+  const chapterRef = {
+    workId: 'n1234ab',
+    chapterId: 'n1234ab/2',
+    canonicalUrl: chapterUrl,
+    title: '第二話',
+    ordinal: 2,
+  };
+  it.each([401, 403, 429, 302, 404])('maps HTTP %s without parsing or retries', async (status) => {
+    const get = vi.fn().mockResolvedValue({
+      status,
+      headers: { 'content-type': 'text/html' },
+      data: fixture(),
+      url: chapterUrl,
+    });
+    await expect(createRenewalSource({ get }).getChapter(chapterRef, signal)).rejects.toMatchObject(
+      { code: 'source_access', status },
+    );
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    { url: 'https://evil.test/' },
+    { headers: { 'content-type': 'application/json' } },
+    { data: {} },
+    { headers: {} },
+  ])('rejects invalid response %j', async (override) => {
+    const get = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+      data: fixture(),
+      url: chapterUrl,
+      ...override,
+    });
+    await expect(createRenewalSource({ get }).getChapter(chapterRef, signal)).rejects.toMatchObject(
+      { code: 'source_access' },
+    );
+  });
+  it('validates before GET and ignores response after cancellation', async () => {
+    const controller = new AbortController();
+    const get = vi.fn().mockImplementation(async () => {
+      controller.abort();
+      return {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        data: fixture(),
+        url: chapterUrl,
+      };
+    });
+    const renewal = createRenewalSource({ get });
+    await expect(
+      renewal.getChapter({ ...chapterRef, canonicalUrl: 'https://evil.test/' }, controller.signal),
+    ).rejects.toMatchObject({ code: 'source_access' });
+    expect(get).not.toHaveBeenCalled();
+    await expect(renewal.getChapter(chapterRef, controller.signal)).rejects.toMatchObject({
+      code: 'cancelled',
+    });
+    expect(get).toHaveBeenCalledTimes(1);
+    await expect(renewal.getChapter(chapterRef, controller.signal)).rejects.toMatchObject({
+      code: 'cancelled',
+    });
+    expect(get).toHaveBeenCalledTimes(1);
   });
 });

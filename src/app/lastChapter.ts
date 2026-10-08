@@ -1,6 +1,11 @@
 import { ReaderError } from '../contracts';
 import type { PreferenceBackend } from '../storage/settings';
-import type { LastChapterRepository } from './legacy/controller';
+export interface LastChapterRepository {
+  read(): Promise<string | null>;
+  save(key: string): Promise<void>;
+  clear?(): Promise<void>;
+  clearIfMatches?(key: string): Promise<boolean>;
+}
 const KEY = 'narou-reader.last-chapter.v1';
 const queues = new WeakMap<PreferenceBackend, Promise<unknown>>();
 function validKey(value: unknown): value is string {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { parseChapter, parseWork, normalizeSourceUrl } from '../../src/source';
+import { parseChapter, parseWork, normalizeSourceUrl } from '../../src/source/parse';
 import { createParagraphId } from '../../src/contracts';
 export const url = 'https://ncode.syosetu.com/n1234ab/2/';
 export const fixture = (body = '<p>　光と<ruby>空<rp>（</rp><rt>そら</rt><rp>）</rp></ruby>。</p><p><br></p><p>二行<br>続き &amp; 三</p>') => `<h1 class="p-novel__title"> 合成の題 </h1><div class="p-novel__body"><div class="p-novel__text p-novel__text--preface">前書き</div><div class="p-novel__text">${body}</div><div class="p-novel__text p-novel__text--afterword">後書き</div></div><a class="c-pager__item--before" href="../1/">前へ</a><a class="c-pager__item--next" href="../3/">次へ</a>`;
