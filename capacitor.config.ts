@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
- appId: 'app.narou.reader', appName: 'narou-reader', webDir: 'dist',
+ appId: 'app.narou.reader', appName: 'JHF Novel Reader', webDir: 'dist',
  // Default debug bridge logging exposes plugin arguments (auth/body/secrets).
  loggingBehavior: 'none',
  // Bundled UI stays HTTPS; direct native HTTP can reach the chosen model server.

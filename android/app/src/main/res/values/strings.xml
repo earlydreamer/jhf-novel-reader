@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">narou-reader</string>
-    <string name="title_activity_main">narou-reader</string>
+    <string name="app_name">JHF Reader</string>
+    <string name="title_activity_main">JHF Novel Reader</string>
     <string name="package_name">app.narou.reader</string>
     <string name="custom_url_scheme">app.narou.reader</string>
 </resources>

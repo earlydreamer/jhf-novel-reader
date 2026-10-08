@@ -124,7 +124,7 @@ it('재시작 뒤 저장 번역이 없는 작품도 서재에 보이고 source �
 
   const row = (await screen.findByText('오프라인 작품')).closest('button')!;
   expect(row).toHaveTextContent('아직 번역하지 않았어요');
-  expect(screen.queryByRole('img', { name: 'JHF novel reader' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('img', { name: 'JHF Novel Reader' })).not.toBeInTheDocument();
   fireEvent.click(row);
   await screen.findByRole('heading', { name: cached.title });
   expect(controller.getSnapshot().route).toEqual({ kind: 'work', workId: cached.workId });
@@ -144,7 +144,7 @@ it('새 작품을 URL로 열고 서재로 돌아오면 즉시 목록에 등록�
   });
   render(<Application controller={controller} />);
   await screen.findByRole('heading', { name: '읽고 싶은 작품을 찾아보세요' });
-  expect(screen.getByRole('img', { name: 'JHF novel reader' })).toHaveAttribute(
+  expect(screen.getByRole('img', { name: 'JHF Novel Reader' })).toHaveAttribute(
     'src',
     expect.stringMatching(/\S/),
   );

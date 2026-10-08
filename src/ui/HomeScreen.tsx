@@ -99,7 +99,7 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
           <img
             className="nr-library__brand"
             src={brandLogo}
-            alt="JHF novel reader"
+            alt="JHF Novel Reader"
             width={160}
             height={160}
           />

@@ -1,6 +1,8 @@
-# narou-reader
+# JHF Novel Reader
 
-<p align="center"><img src="docs/assets/brand-logo.png" alt="JHF novel reader" width="160"></p>
+<p align="center"><img src="docs/assets/brand-logo.png" alt="JHF Novel Reader" width="160"></p>
+
+저장소 이름 `narou-reader`는 가제이며, 정식 배포 때 저장소·패키지 이름과 함께 바꿉니다.
 
 나로우 작품을 앱 안에서 찾고, 목차에서 고른 한 화를 통째로 번역한 다음 저장된 한국어 본문을 읽는 Android 리더입니다.
 
