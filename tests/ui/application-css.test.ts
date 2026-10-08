@@ -93,4 +93,10 @@ describe('application.css screen defaults', () => {
     expect(block).toMatch(/align-items:\s*center;/);
     expect(block).toMatch(/gap:\s*8px;/);
   });
+
+  it('회차 메뉴 시트는 리더 시트와 같은 좌우 여백을 두고 항목을 왼쪽에 맞춘다', () => {
+    const menu = rules(css).find((rule) => rule.selector === '.nr-work-chapter-menu');
+    expect(menu?.body).toMatch(/padding:\s*8px 24px 16px;/);
+    expect(menu?.body).toMatch(/justify-items:\s*start;/);
+  });
 });

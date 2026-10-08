@@ -101,9 +101,12 @@
   font: var(--type-body-small);
   padding-inline-start: 16px;
 }
+/* 회차 메뉴 시트 내용. BottomSheet 면은 좌우 여백이 없으므로 리더 시트와 같은 여백을 준다. */
 .nr-work-chapter-menu {
   display: grid;
   gap: 8px;
+  justify-items: start;
+  padding: 8px 24px 16px;
 }
 .nr-work-chapter-menu > a {
   display: flex;
