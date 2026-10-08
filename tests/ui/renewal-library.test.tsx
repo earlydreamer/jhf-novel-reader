@@ -830,13 +830,15 @@ it('작품 제목 저장 중에는 대상 제거가 저장 완료를 기다린�
 it('제목 저장 writer가 실패해도 settle한 뒤 작품 제거를 계속한다', async () => {
   const target = work('n1727pp', '실패한 제목 저장 작품');
   const { library } = libraryHarness([target]);
+  let rejectSave!: (error: Error) => void;
+  const savePending = new Promise<never>((_resolve, reject) => {
+    rejectSave = reject;
+  });
   const titles = {
     read: vi.fn(async () => []),
     readAttempts: vi.fn(async () => []),
     recordAttempt: vi.fn(async () => {}),
-    save: vi.fn(async () => {
-      throw new Error('synthetic title I/O failure');
-    }),
+    save: vi.fn(async () => await savePending),
   } as unknown as NonNullable<RenewalDependencies['titles']>;
   const controller = createRenewalController({ library, titles });
   await controller.openLibraryWork(target.workId);
@@ -847,12 +849,26 @@ it('제목 저장 writer가 실패해도 settle한 뒤 작품 제거를 계속�
   );
   await waitFor(() => expect(titles.save).toHaveBeenCalledOnce());
 
-  const removal = controller.removeWork(target.workId);
+  let removalSettled = false;
+  const removal = controller.removeWork(target.workId).then((result) => {
+    removalSettled = true;
+    return result;
+  });
+  await Promise.resolve();
+  expect(removalSettled).toBe(false);
+  expect(library.removeWork).not.toHaveBeenCalled();
 
+  rejectSave(new Error('synthetic title I/O failure'));
   expect(await saveFailed).toBe(true);
   await expect(removal).resolves.toMatchObject({ removed: true, cleanupComplete: true });
   expect(library.removeWork).toHaveBeenCalledOnce();
   expect(controller.getSnapshot().libraryWorks).toEqual([]);
+
+  await expect(controller.removeWork(target.workId)).resolves.toMatchObject({
+    removed: true,
+    cleanupComplete: true,
+  });
+  expect(library.removeWork).toHaveBeenCalledTimes(2);
   controller.dispose();
 });
 
