@@ -10,7 +10,7 @@ function controllerWith(saved: ReadingSettings) {
   return { controller, saveReadingSettings };
 }
 
-it('defaults to the system theme and default reading view', async () => {
+it('시스템 테마와 기본 읽기 화면으로 시작해요', async () => {
   const { controller } = controllerWith({ schemaVersion: 2, selection: null, fontSize: 18 });
   await controller.initialize();
   expect(controller.getSnapshot()).toMatchObject({
@@ -21,7 +21,7 @@ it('defaults to the system theme and default reading view', async () => {
   controller.dispose();
 });
 
-it('restores saved preferences and persists changes without default keys', async () => {
+it('저장한 테마를 복원하고 기본값 키는 생략해요', async () => {
   const { controller, saveReadingSettings } = controllerWith({
     schemaVersion: 2,
     selection: null,
@@ -40,7 +40,7 @@ it('restores saved preferences and persists changes without default keys', async
   controller.dispose();
 });
 
-it('ignores values outside the allowed preferences', async () => {
+it('허용하지 않은 테마 값은 적용하거나 저장하지 않아요', async () => {
   const { controller, saveReadingSettings } = controllerWith({
     schemaVersion: 2,
     selection: null,
@@ -59,7 +59,7 @@ it('ignores values outside the allowed preferences', async () => {
   controller.dispose();
 });
 
-it('preserves an odd legacy reading size on restore and persists only the explicit two-pixel adjustment', async () => {
+it('기존 홀수 글자 크기를 보존하고 명시한 2픽셀 조정만 저장해요', async () => {
   let persisted: ReadingSettings = { schemaVersion: 2, selection: null, fontSize: 19 };
   const saveReadingSettings = vi.fn(async (value: ReadingSettings) => {
     persisted = value;

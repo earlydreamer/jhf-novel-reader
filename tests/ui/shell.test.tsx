@@ -65,7 +65,7 @@ describe('application shell', () => {
     const controller = createRenewalController();
     render(<Application controller={controller} platform={platform()} />);
     fireEvent.click(screen.getByRole('button', { name: '설정' }));
-    expect(screen.getByRole('heading', { level: 1, name: '연결 설정' })).toHaveFocus();
+    expect(screen.getByRole('heading', { level: 1, name: '설정' })).toHaveFocus();
     controller.dispose();
   });
 });

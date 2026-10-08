@@ -248,7 +248,7 @@ it('FAB은 source_access 실패 이유를 알리고 서재에서만 snackbar를 
   const region = document.querySelector<HTMLElement>('.nr-snackbar-region')!;
   expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('64px');
   fireEvent.click(screen.getByRole('button', { name: '설정' }));
-  await screen.findByRole('heading', { name: '연결 설정' });
+  await screen.findByRole('heading', { name: '설정' });
   expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
   controller.dispose();
 });
