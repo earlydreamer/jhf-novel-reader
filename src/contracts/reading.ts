@@ -146,6 +146,10 @@ export interface LibraryStore {
   readRemovalInventory?(): Promise<readonly WorkRemovalInventory[]>;
   isWorkRemovalPending?(workId: string): Promise<boolean>;
   removeWork?(workId: string, runtime?: { activeBatchWorkId?: string }): Promise<WorkRemovalResult>;
+  removeChapterVersions?(
+    chapterId: string,
+    runtime?: { activeBatchWorkId?: string },
+  ): Promise<ChapterRemovalResult>;
 }
 export interface WorkRemovalInventory {
   workId: string;
@@ -160,6 +164,10 @@ export interface WorkRemovalResult {
   cleanupComplete: boolean;
   remainingInventory: readonly string[];
   blockedBy?: 'translation' | 'pending_save' | 'batch' | 'unfinished_attempt';
+}
+export interface ChapterRemovalResult extends WorkRemovalResult {
+  /** 색인에서 뺀 저장본 ID. removed가 true가 아니면 빈 배열이다. */
+  versionIds: readonly string[];
 }
 
 export type { ProviderId } from './index';
