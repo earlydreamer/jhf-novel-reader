@@ -1,7 +1,9 @@
 .nr-library {
-  min-block-size: calc(100dvh - var(--app-bar));
   overflow: visible;
-  padding-block-end: calc(88px + var(--inset-bottom));
+  /* 최소 높이를 두지 않는다. 앱 루트가 이미 100dvh라 목록이 짧으면 스크롤되지 않는다(#139).
+     아래 여백은 작품 추가 버튼(--fab, 아래 16px)에 마지막 행이 가리지 않을 만큼만 둔다.
+     화면 공통 아래 여백(32px + inset)과 합쳐 버튼 위로 32px이 남는다. */
+  padding-block-end: calc(var(--fab) + 16px);
 }
 .nr-library__empty {
   display: grid;
