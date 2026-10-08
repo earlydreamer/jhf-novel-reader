@@ -485,8 +485,13 @@ test('long press opens paragraph actions, swallows its follow-up click, and retr
 
   fireEvent.pointerDown(paragraph, { clientX: 10, clientY: 10, pointerId: 1 });
   await act(async () => vi.advanceTimersByTimeAsync(500));
-  expect(screen.getByRole('dialog', { name: '문단 작업' })).toBeInTheDocument();
+  const paragraphDialog = screen.getByRole('dialog', { name: '문단 작업' });
+  expect(paragraphDialog).toBeInTheDocument();
   fireEvent.pointerUp(paragraph, { pointerId: 1 });
+  fireEvent.mouseDown(paragraphDialog);
+  fireEvent.mouseUp(paragraphDialog);
+  fireEvent.click(paragraphDialog, { detail: 1, pointerId: 1 });
+  expect(screen.getByRole('dialog', { name: '문단 작업' })).toBeVisible();
   fireEvent.click(paragraph, { clientX: 50 });
   expect(appbar).toHaveAttribute('inert');
   fireEvent.click(screen.getByRole('button', { name: '이 문단 다시 번역하기' }));

@@ -55,6 +55,30 @@ function runBackInAct(): boolean {
   return handled;
 }
 
+function mockHitTarget(target: Element): () => void {
+  const previous = document.elementFromPoint;
+  Object.defineProperty(document, 'elementFromPoint', {
+    configurable: true,
+    value: () => target,
+  });
+  return () => {
+    if (previous) {
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: previous,
+      });
+    } else Reflect.deleteProperty(document, 'elementFromPoint');
+  };
+}
+
+function fireBackdropTap(dialog: HTMLElement, hit: Element = dialog, pointerId = 7): void {
+  const restoreHitTarget = mockHitTarget(hit);
+  fireEvent.pointerDown(dialog, { pointerId, clientX: 1, clientY: 1 });
+  fireEvent.pointerUp(dialog, { pointerId, clientX: 1, clientY: 1 });
+  fireEvent.click(dialog, { detail: 1, pointerId });
+  restoreHitTarget();
+}
+
 describe('backStack', () => {
   it('runs the most recent handler first and unregisters', () => {
     const calls: string[] = [];
@@ -92,11 +116,103 @@ describe.each([false, true])('modal surface (sheet=%s)', (sheet) => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(runBackInAct()).toBe(false);
   });
-  it('closes when the scrim (the dialog element itself) is clicked', () => {
-    render(<Harness sheet={sheet} />);
+  it('closes once when a pointer starts and ends on the scrim', () => {
+    const onClose = vi.fn();
+    render(<Harness sheet={sheet} onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: '열기' }));
-    fireEvent.click(screen.getByRole('dialog', { name: title }));
+    const dialog = screen.getByRole('dialog', { name: title });
+    fireBackdropTap(dialog);
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not treat a click without a pointer gesture as a scrim dismissal', () => {
+    const onClose = vi.fn();
+    render(<Harness sheet={sheet} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: '열기' }));
+    const dialog = screen.getByRole('dialog', { name: title });
+    fireEvent.click(dialog);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(dialog).toBeVisible();
+  });
+
+  it('ignores the compatibility click retargeted from an outside long-press', () => {
+    const onClose = vi.fn();
+    render(<Harness sheet={sheet} onClose={onClose} />);
+    const opener = screen.getByRole('button', { name: '열기' });
+    fireEvent.pointerDown(opener, { pointerId: 11, clientX: 12, clientY: 12 });
+    fireEvent.click(opener);
+    const dialog = screen.getByRole('dialog', { name: title });
+
+    // 롱프레스의 pointerdown은 article/opener에서 시작했고, 새 dialog에는 release/click만 도착한다.
+    fireEvent.pointerUp(dialog, { pointerId: 11, clientX: 12, clientY: 12 });
+    fireEvent.mouseDown(dialog);
+    fireEvent.mouseUp(dialog);
+    fireEvent.click(dialog, { detail: 1, pointerId: 11 });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: title })).toBeVisible();
+  });
+
+  it('does not close when a pointer starts inside and releases on the scrim', () => {
+    const onClose = vi.fn();
+    render(<Harness sheet={sheet} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: '열기' }));
+    const dialog = screen.getByRole('dialog', { name: title });
+    const surface = dialog.querySelector('.nr-modal__surface')!;
+    const restoreHitTarget = mockHitTarget(dialog);
+    fireEvent.pointerDown(surface, { pointerId: 12 });
+    fireEvent.pointerUp(dialog, { pointerId: 12, clientX: 1, clientY: 1 });
+    fireEvent.click(dialog, { detail: 1, pointerId: 12 });
+    restoreHitTarget();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: title })).toBeVisible();
+  });
+
+  it('does not close when a scrim gesture releases inside the surface', () => {
+    const onClose = vi.fn();
+    render(<Harness sheet={sheet} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: '열기' }));
+    const dialog = screen.getByRole('dialog', { name: title });
+    const surface = dialog.querySelector('.nr-modal__surface')!;
+    const restoreHitTarget = mockHitTarget(surface);
+    fireEvent.pointerDown(dialog, { pointerId: 13 });
+    fireEvent.pointerUp(dialog, { pointerId: 13, clientX: 1, clientY: 1 });
+    fireEvent.click(dialog, { detail: 1, pointerId: 13 });
+    restoreHitTarget();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: title })).toBeVisible();
+  });
+
+  it('clears a canceled backdrop gesture before a later click', () => {
+    const onClose = vi.fn();
+    render(<Harness sheet={sheet} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: '열기' }));
+    const dialog = screen.getByRole('dialog', { name: title });
+    fireEvent.pointerDown(dialog, { pointerId: 14 });
+    fireEvent.pointerCancel(dialog, { pointerId: 14 });
+    fireEvent.click(dialog, { detail: 1, pointerId: 14 });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not carry a backdrop gesture across close and reopen', () => {
+    const onClose = vi.fn();
+    render(<Harness sheet={sheet} onClose={onClose} />);
+    const opener = screen.getByRole('button', { name: '열기' });
+    fireEvent.click(opener);
+    const dialog = screen.getByRole('dialog', { name: title });
+    const restoreHitTarget = mockHitTarget(dialog);
+    fireEvent.pointerDown(dialog, { pointerId: 15 });
+    fireEvent.pointerUp(dialog, { pointerId: 15, clientX: 1, clientY: 1 });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole('dialog', { name: title }), {
+      detail: 1,
+      pointerId: 15,
+    });
+    restoreHitTarget();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog', { name: title })).toBeVisible();
   });
 });
 
