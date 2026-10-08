@@ -3,7 +3,12 @@ import { Capacitor } from '@capacitor/core';
 import type { JSX } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import packageInfo from '../../package.json';
-import type { CatalogStatus, RenewalSnapshot } from '../app/renewalController';
+import type {
+  CatalogProblem,
+  CatalogStatus,
+  ConnectionCheckResult,
+  RenewalSnapshot,
+} from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
 import { GEMINI_BASE_URL } from '../providers/gemini';
 import type { ThemePreference } from '../storage/settings';
@@ -11,11 +16,12 @@ import { Button } from './components/Button';
 import { Dialog } from './components/Modal';
 import { ListItem } from './components/ListItem';
 import { Switch } from './components/Switch';
+import { useSnackbar } from './components/Snackbar';
 
 export interface SettingsScreenProps {
   state: RenewalSnapshot;
   onChange(value: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
-  onCheck(secret: string): Promise<void>;
+  onCheck(secret: string): Promise<ConnectionCheckResult>;
   onSelect(modelId: string): void;
   onMode?(mode: 'stream' | 'legacy'): void;
   onAutoTranslate?(enabled: boolean): void;
@@ -35,6 +41,50 @@ const catalogLabels: Record<CatalogStatus, string> = {
   model_missing: '선택한 모델이 목록에서 사라졌어요. 다른 모델을 골라 주세요.',
   unavailable: '이 환경에서는 모델 서버 연결을 아직 사용할 수 없어요.',
 };
+
+function problemMessage(problem: CatalogProblem): string {
+  const code = problem.httpStatus ? `(HTTP ${problem.httpStatus})` : '';
+  switch (problem.reason) {
+    case 'invalid_url':
+      return 'API 주소 형식이 올바르지 않아요. http:// 또는 https://로 시작하고 /v1까지만 적어 주세요.';
+    case 'network':
+      return '서버에 연결하지 못했어요. 주소와 포트, 서버가 켜져 있는지, 같은 네트워크(또는 VPN)에 있는지 확인해 주세요.';
+    case 'redirect':
+      return `서버가 다른 주소로 보내려고 했어요${code}. 최종 API 주소를 직접 적어 주세요.`;
+    case 'http':
+      if (problem.httpStatus === 404)
+        return '서버가 이 주소를 찾지 못했어요(HTTP 404). API 주소가 /v1로 끝나는지 확인해 주세요.';
+      if (problem.httpStatus && problem.httpStatus >= 500)
+        return `서버 내부에서 오류가 났어요${code}. 서버 상태를 확인해 주세요.`;
+      return `서버가 요청을 처리하지 못했어요${code}. API 주소와 서버 설정을 확인해 주세요.`;
+    case 'auth_rejected':
+      return `서버가 인증값을 거부했어요${code}. 인증값을 다시 확인해 주세요.`;
+    case 'auth_missing':
+      return '인증값이 없거나 올바르지 않아요. 인증값을 다시 입력해 주세요.';
+    case 'storage':
+      return catalogLabels.storage;
+    case 'bad_response':
+      return '서버 응답에서 모델 목록을 읽지 못했어요. API 주소와 제공자 설정을 확인해 주세요.';
+    default:
+      return catalogLabels.model_list;
+  }
+}
+
+function checkResultMessage(result: ConnectionCheckResult): string | null {
+  if (result.kind === 'superseded') return null;
+  if (result.kind === 'skipped')
+    return result.reason === 'busy'
+      ? '미리 번역 중에는 연결을 확인할 수 없어요. 번역이 끝난 뒤 다시 확인해 주세요.'
+      : result.reason === 'not_ready'
+        ? '앱을 준비하고 있어요. 잠시 뒤 다시 확인해 주세요.'
+        : catalogLabels.unavailable;
+  if (result.problem) return problemMessage(result.problem);
+  if (result.status === 'empty')
+    return '서버에 연결했지만 번역에 쓸 수 있는 생성 모델이 없어요. 서버에서 모델을 불러와 주세요.';
+  if (result.status === 'model_missing')
+    return '서버에 연결했지만 선택한 모델이 목록에 없어요. 다른 모델을 골라 주세요.';
+  return `서버에 연결했어요. 번역에 쓸 수 있는 모델이 ${result.modelCount}개 있어요.`;
+}
 
 const providerLabels = {
   'openai-compatible': 'LM Studio / Ollama',
@@ -115,6 +165,7 @@ export function SettingsScreen({
   onTheme,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
+  const showSnackbar = useSnackbar();
   const secretHelpId = useId();
   const [providerOpen, setProviderOpen] = useState(false);
   const [geminiOpen, setGeminiOpen] = useState(false);
@@ -156,14 +207,26 @@ export function SettingsScreen({
     onChange({ provider: state.connection.provider, baseUrl: state.connection.baseUrl, ...value });
   }
 
+  async function runCheck(secret: string): Promise<void> {
+    let result: ConnectionCheckResult;
+    try {
+      result = await onCheck(secret);
+    } catch (error) {
+      showSnackbar(catalogLabels.model_list);
+      throw error;
+    }
+    const message = checkResultMessage(result);
+    if (message) showSnackbar(message);
+  }
+
   async function check(): Promise<void> {
-    await onCheck(clearSecret());
+    await runCheck(clearSecret());
   }
 
   async function saveAuth(): Promise<void> {
     const value = clearSecret();
     setAuthOpen(false);
-    await onCheck(value);
+    await runCheck(value);
   }
 
   function closeAuth(): void {
@@ -200,7 +263,11 @@ export function SettingsScreen({
           <div className="nr-list-item__main" role="status">
             <span className="nr-list-item__text">
               <span className="nr-list-item__headline">연결 상태</span>
-              <span className="nr-list-item__supporting">{catalogLabels[state.catalogStatus]}</span>
+              <span className="nr-list-item__supporting">
+                {state.catalogProblem
+                  ? problemMessage(state.catalogProblem)
+                  : catalogLabels[state.catalogStatus]}
+              </span>
             </span>
           </div>
         </div>
@@ -252,7 +319,7 @@ export function SettingsScreen({
           disabled={!state.connectionAvailable || checking || !state.connection.baseUrl}
           onClick={() => void check()}
         >
-          연결 확인하기
+          {checking ? '확인하는 중…' : '연결 확인하기'}
         </Button>
         <ListItem
           headline="모델"

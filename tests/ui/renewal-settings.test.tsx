@@ -4,10 +4,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
 import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
+import { ReaderError } from '../../src/contracts';
 import type { ConnectionConfig, ModelChoice } from '../../src/contracts/reading';
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
 import type { ShellPlatform } from '../../src/platform/shell';
 import type { ReadingSettings } from '../../src/storage/settings';
+import { SettingsScreen } from '../../src/ui/SettingsScreen';
+import { SnackbarProvider } from '../../src/ui/components/Snackbar';
 
 const models: readonly ModelChoice[] = [
   { id: 'generation', displayName: 'Generation model', supportsGeneration: true },
@@ -377,6 +380,208 @@ describe('Android 목록형 설정', () => {
     act(() => value.shell.pressBack());
     expect(screen.queryByRole('dialog', { name: '제공자 선택' })).toBeNull();
     expect(provider).toHaveFocus();
+    value.controller.dispose();
+  });
+});
+
+describe('연결 확인 결과 알림', () => {
+  const baseUrl = 'http://192.0.2.1/v1';
+  const messages = {
+    success: '서버에 연결했어요. 번역에 쓸 수 있는 모델이 2개 있어요.',
+    invalid:
+      'API 주소 형식이 올바르지 않아요. http:// 또는 https://로 시작하고 /v1까지만 적어 주세요.',
+    network:
+      '서버에 연결하지 못했어요. 주소와 포트, 서버가 켜져 있는지, 같은 네트워크(또는 VPN)에 있는지 확인해 주세요.',
+    notFound: '서버가 이 주소를 찾지 못했어요(HTTP 404). API 주소가 /v1로 끝나는지 확인해 주세요.',
+    serverError: '서버 내부에서 오류가 났어요(HTTP 503). 서버 상태를 확인해 주세요.',
+    authRejected: '서버가 인증값을 거부했어요(HTTP 401). 인증값을 다시 확인해 주세요.',
+    badResponse: '서버 응답에서 모델 목록을 읽지 못했어요. API 주소와 제공자 설정을 확인해 주세요.',
+    busy: '미리 번역 중에는 연결을 확인할 수 없어요. 번역이 끝난 뒤 다시 확인해 주세요.',
+  };
+  const snackbarText = () => document.querySelector('.nr-snackbar__text')?.textContent;
+  const connectionStatusText = () =>
+    screen.getByRole('status').querySelector('.nr-list-item__supporting')?.textContent;
+  const generation = (id: string): ModelChoice => ({
+    id,
+    displayName: id,
+    supportsGeneration: true,
+  });
+
+  async function checkWith(
+    catalog: NonNullable<RenewalDependencies['catalog']>,
+    address = baseUrl,
+  ) {
+    const value = await setup({ catalog });
+    fireEvent.change(screen.getByLabelText('API 기본 주소'), { target: { value: address } });
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+    return value;
+  }
+
+  async function expectFailure(message: string) {
+    await waitFor(() => expect(snackbarText()).toBe(message));
+    await waitFor(() => expect(connectionStatusText()).toBe(message));
+  }
+
+  it('성공하면 번역에 쓸 수 있는 생성 모델 수를 스낵바로 알려요', async () => {
+    const value = await checkWith(
+      vi.fn(async (connection: ConnectionConfig) => ({
+        connection,
+        models: [
+          generation('a'),
+          generation('b'),
+          { ...generation('c'), supportsGeneration: false },
+        ],
+      })),
+    );
+
+    await waitFor(() => expect(snackbarText()).toBe(messages.success));
+    value.controller.dispose();
+  });
+
+  it('주소 형식이 틀리면 정확한 안내를 스낵바와 연결 상태에 보여 줘요', async () => {
+    const value = await checkWith(
+      vi.fn(async () => {
+        throw new ReaderError('connection');
+      }),
+    );
+
+    await expectFailure(messages.invalid);
+    value.controller.dispose();
+  });
+
+  it('서버에 닿지 못하면 네트워크 안내를 보여 줘요', async () => {
+    const value = await checkWith(
+      vi.fn(async () => {
+        throw new ReaderError('timeout_unknown', 'unknown');
+      }),
+    );
+
+    await expectFailure(messages.network);
+    value.controller.dispose();
+  });
+
+  it('HTTP 404와 503은 상태 코드를 포함한 안내를 보여 줘요', async () => {
+    const notFound = await checkWith(
+      vi.fn(async () => {
+        throw new ReaderError('connection', 'received', 404);
+      }),
+    );
+    await expectFailure(messages.notFound);
+    notFound.controller.dispose();
+    cleanup();
+
+    const serverError = await checkWith(
+      vi.fn(async () => {
+        throw new ReaderError('connection', 'received', 503);
+      }),
+    );
+    await expectFailure(messages.serverError);
+    serverError.controller.dispose();
+  });
+
+  it('인증 거부는 상태 코드를 포함한 안내를 보여 줘요', async () => {
+    const value = await checkWith(
+      vi.fn(async () => {
+        throw new ReaderError('auth', 'received', 401);
+      }),
+    );
+
+    await expectFailure(messages.authRejected);
+    value.controller.dispose();
+  });
+
+  it('인증값 저장 확인도 같은 방식으로 실패 이유를 알려요', async () => {
+    const value = await setup({
+      saved: savedSettings('provider.existing'),
+      catalog: vi.fn(async () => {
+        throw new ReaderError('auth', 'received', 401);
+      }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: '변경' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
+
+    await expectFailure(messages.authRejected);
+    value.controller.dispose();
+  });
+
+  it('응답이 모델 목록 형식이 아니면 응답 형식 안내를 보여 줘요', async () => {
+    const value = await checkWith(
+      vi.fn(async () => {
+        throw new ReaderError('model_list', 'received');
+      }),
+    );
+
+    await expectFailure(messages.badResponse);
+    value.controller.dispose();
+  });
+
+  it('미리 번역 중이면 확인을 건너뛰고 그 이유를 스낵바로 알려요', async () => {
+    const base = createRenewalController().getSnapshot();
+    const state = {
+      ...base,
+      connectionAvailable: true,
+      connection: { ...base.connection, baseUrl },
+    };
+    const onCheck = vi.fn(async () => ({ kind: 'skipped' as const, reason: 'busy' as const }));
+    render(
+      <SnackbarProvider>
+        <SettingsScreen state={state} onChange={() => {}} onCheck={onCheck} onSelect={() => {}} />
+      </SnackbarProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+
+    await waitFor(() => expect(snackbarText()).toBe(messages.busy));
+  });
+
+  it('확인하는 동안 버튼 문구를 확인하는 중으로 바꾸고 끝나면 되돌려요', async () => {
+    let release!: () => void;
+    const catalog = vi.fn(
+      (connection: ConnectionConfig) =>
+        new Promise<{ connection: ConnectionConfig; models: readonly ModelChoice[] }>((resolve) => {
+          release = () => resolve({ connection, models: [generation('a')] });
+        }),
+    );
+    const value = await checkWith(catalog);
+
+    expect(await screen.findByRole('button', { name: '확인하는 중…' })).toBeDisabled();
+    await act(async () => release());
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '연결 확인하기' })).toBeEnabled(),
+    );
+    value.controller.dispose();
+  });
+
+  it.each([
+    [
+      '성공',
+      vi.fn(async (connection: ConnectionConfig) => ({
+        connection,
+        models: [generation('a'), generation('b')],
+      })),
+      messages.success,
+    ],
+    [
+      '실패',
+      vi.fn(async () => {
+        throw new ReaderError('connection', 'received', 404);
+      }),
+      messages.notFound,
+    ],
+  ])('%s 메시지에는 주소와 인증값이 나오지 않아요', async (_label, catalog, message) => {
+    const host = 'private-host.example.test';
+    const canary = 'private-auth-canary';
+    const value = await setup({ catalog });
+    fireEvent.change(screen.getByLabelText('API 기본 주소'), {
+      target: { value: `http://${host}:1234/v1` },
+    });
+    fireEvent.change(screen.getByLabelText('인증값 (선택)'), { target: { value: canary } });
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+
+    await waitFor(() => expect(snackbarText()).toBe(message));
+    expect(document.body.textContent).not.toContain(host);
+    expect(document.body.textContent).not.toContain(canary);
     value.controller.dispose();
   });
 });
