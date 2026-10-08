@@ -1,10 +1,12 @@
-# #106 하단 inset 진단 probe 계획
+# #106 하단 inset 진단과 수정 기록
+
+이 문서의 앞부분은 test-only 계측을 준비할 때 정한 실행 계약이고, 마지막 절은 실행 결과와 이어진 제품 수정 범위를 기록해.
 
 ## 목적과 범위
 
-Black Shark 2의 기존 `app.narou.reader.devicecheck2`에서 WindowManager가 보고한 하단 navigation frame은 130 물리 px인데, WebView의 `env(safe-area-inset-bottom)`, Capacitor 주입 변수, `--inset-bottom`은 모두 0px이야. KEY2는 WebView 121이라 Capacitor 8.5.2의 구형 WebView padding 분기를 타는 별도 대조군이야. 이번 단계는 두 기기의 실제 root insets 전달 경계를 읽기 전용 instrumented test로 관측해 원인을 더 좁혀. 제품 코드는 수정하지 않아.
+Black Shark 2의 기존 `app.narou.reader.devicecheck2`에서 WindowManager가 보고한 하단 navigation frame은 130 물리 px인데, WebView의 `env(safe-area-inset-bottom)`, Capacitor 주입 변수, `--inset-bottom`은 모두 0px이야. KEY2는 WebView 121이라 Capacitor 8.5.2의 구형 WebView padding 분기를 타는 별도 대조군이야. 첫 단계에서는 두 기기의 실제 root insets 전달 경계를 읽기 전용 instrumented test로 관측해 원인을 좁혔고, 그 뒤 확인된 원인에 대한 버그 수정을 진행 중이야.
 
-변경 파일은 이 계획과 `android/app/src/androidTest/java/app/narou/reader/InsetsProbeInstrumentedTest.java` 두 개뿐이야. 제품 Java, 플러그인, manifest, 의존성, CSS, Gradle 파일은 이 단계에서 바꾸지 않아. build 때만 `android/app/build.gradle`의 debug suffix를 임시로 `.devicecheck2`로 두고 `testApplicationId`를 `app.narou.reader.devicecheck2.insetsprobe.test`로 설정할 예정이며, 그 파일은 원래 바이트로 복원해. 현재는 build/install/run/commit을 하지 않아.
+test-only 계측 구현에서는 이 계획과 `android/app/src/androidTest/java/app/narou/reader/InsetsProbeInstrumentedTest.java`만 변경했어. 계측 APK 빌드 때 `android/app/build.gradle`에 임시 debug suffix와 `testApplicationId`를 설정한 뒤 원래 바이트로 복원했어. 이어진 제품 수정은 이 문서의 마지막 절에 범위와 검증 상태를 따로 기록해.
 
 ## 실행 guard와 대상
 
@@ -35,12 +37,24 @@ native view frame 좌표는 Android `getLocationOnScreen()` 기준 화면 좌표
 
 각 테스트 snapshot에는 `SystemClock.elapsedRealtime()`을 기록해. 요청 비교는 같은 Activity 실행 안에서 native·JS baseline이 준비된 것을 확인하고, 선택한 하나의 view에 요청을 한 번 보낸 다음 after를 관측해. 요청 뒤 test thread에서 최대 3초 동안 100ms 간격으로 native snapshot을 읽어. root insets와 layout이 준비된 상태에서 native inset/frame/padding 값이 세 번 연속 같으면 `nativeSettled=true`로 판정해. JS readiness는 별도로 bounded polling하며 native 안정 판정에 섞지 않아. after의 native 안정 판정과 JS callback은 서로 다른 시각의 순차 관측이고 원자 snapshot이 아니야. 각 native 읽기는 `ActivityScenario.onActivity`의 UI thread에서 실행하지만 sleep/wait는 test thread에만 있어. JS callback도 UI thread에서 값을 반환하고 test thread latch가 받으므로 UI thread를 막지 않아. `requestApplyInsets()`는 재계산 요청을 보낼 뿐, 특정 native listener callback이 호출·완료됐다는 보장은 아니야. 테스트는 listener를 설치하지 않으므로 callback delivery 자체는 증명하지 않아. `requestCount`는 실제 호출 0회 또는 1회를 기록해. 결과는 “요청 뒤 동일한 native 값 snapshot 세 번을 관측함”으로만 표현해.
 
-각 phase의 `capturedUptimeMs`, request target/count, baseline/after native·JS 값, stable sample 수, 동일 여부를 allowlist JSON에 넣어. display real size는 관측 메타일 뿐 safe-area 보정 기준으로 사용하지 않아. 별도 screenshot, 전체 instrument suite, 제품 APK build, target APK 교체, `connectedDebugAndroidTest`는 하지 않아.
+각 phase의 `capturedUptimeMs`, request target/count, baseline/after native·JS 값, stable sample 수, 동일 여부를 allowlist JSON에 넣어. display real size는 관측 메타일 뿐 safe-area 보정 기준으로 사용하지 않아. 선택 계측에서는 별도 screenshot이나 전체 instrument suite를 실행하지 않았고 `connectedDebugAndroidTest`도 실행하지 않았어. 뒤이은 수정의 compile 확인으로 `:app:assembleDebug :app:assembleDebugAndroidTest`를 실행해 로컬 APK 두 개를 만들었지만, 이 task에서는 설치하지 않았어.
 
-## 다음 수동 실행 준비와 보존 경계
+## 초기 실행 준비·보존 계약
 
-검토 승인 후에만 임시 suffix/testApplicationId 설정을 적용해 `:app:assembleDebugAndroidTest`로 test APK만 빌드할 거야. target `.devicecheck2` APK는 교체하지 않아. test APK manifest의 target package와 test certificate가 기존 설치 앱과 instrumentation 목적에 맞는지 먼저 정적으로 확인한 다음, 승인된 test APK만 설치해 선택 메서드를 `am instrument`로 호출해. 생산, `.test`, 기존 `.devicecheck`에는 접근하지 않아.
+test APK는 임시 suffix/testApplicationId 설정을 적용해 `:app:assembleDebugAndroidTest`로만 빌드했어. target `.devicecheck2` APK는 교체하지 않았어. test APK manifest의 target package와 인증서를 확인한 다음 계측 패키지만 설치해 선택 메서드를 `am instrument`로 호출했어. 생산, `.test`, 기존 `.devicecheck`에는 접근하지 않았어.
 
-AndroidJUnitRunner는 target process를 재시작할 수 있고 ActivityScenario는 MainActivity를 닫아. 실행 전후 각 기기의 `.devicecheck2` synthetic library index/file summary, 테마 선택과 `font_scale`을 값이나 private data 없이 비교하고, 테스트 뒤 앱을 Home 서재 화면으로 다시 열어. 저장 요약이 바뀌거나 target ID가 다르면 기기 실행을 중단해.
+AndroidJUnitRunner는 target process를 재시작할 수 있고 ActivityScenario는 MainActivity를 닫아. 실행 전후 각 기기의 `.devicecheck2` synthetic library index/file summary, 테마 선택과 `font_scale`을 값이나 private data 없이 비교하고, 테스트 뒤 앱을 Home 서재 화면으로 다시 열었어. 비교 결과는 아래 실행 기록에 있어.
 
-현재 가설은 Black Shark의 nav bottom이 root platform/Compat raw inset에는 양수지만 Capacitor safe-area 주입에서만 0이 된다는 것이야. 이번 관측 결과가 이걸 입증하지 않으면 결과를 그대로 보고하고 CSS 수정이나 다른 기기 설정 변경을 하지 않아. `numeric-measurements.json`과 `env-probe.json`은 기존 `D:/projects/narou-reader/.superpowers/verification-106-bottom-insets/`의 선행 읽기 전용 근거야.
+실행 전 가설은 Black Shark의 nav bottom이 root platform/Compat raw inset에는 양수지만 Capacitor safe-area 주입에서만 0이 된다는 것이었어. 아래 계측에서 플랫폼/Compat 값은 양수로 관측됐고, decor 및 WebView에 단발 `requestApplyInsets()`를 보내도 native나 JS 값은 바뀌지 않았어. `numeric-measurements.json`과 `env-probe.json`은 `D:/projects/narou-reader/.superpowers/verification-106-bottom-insets/`의 선행 읽기 전용 근거야.
+
+## 실기 계측 결과와 현재 수정
+
+test-only 계측 source는 `76f10235dccc79c71599c6d41daa4107a7c9a846`이고 계측 APK SHA-256은 `9d321acb60295313f057cb5b948bb11610cfc2015ce130f5246cf8df99a7cbe8`, 인증서 SHA-256은 `8c5d8712374dff61e93c2ecbcc240a17d2db4759c97ee4ab11275322aa5fe0a6`이야. 설치된 target 앱은 제품 source `6cbc56a56ba3587c588fd7c7973c2257065ded4b`의 `.devicecheck2` APK였고 SHA-256 `4b13e6a7c2ad7603784bb512c0e30c1baca8fe4127808d2af3b569afe2a1af81`을 실행 전후 확인했어. 두 기기에서 계측 APK만 설치했고, 생산·`.test`·기존 `.devicecheck` 패키지는 설치·교체·실행하지 않았어.
+
+Black Shark에서 system window 및 stable insets bottom은 각각 130px, Compat `navigationBars` current 및 ignoring-visibility bottom도 130px이었어. 상단 status inset은 75px, IME는 숨김, decor와 WebView padding은 0이었고 WebView는 화면 전체 1080×2340px이었어. CSS `env(safe-area-inset-bottom)`, 주입된 `--safe-area-inset-bottom`, `--inset-bottom`은 모두 0px이었고 FAB의 CSS bottom은 16px이었어. KEY2에서는 navigation bar가 숨겨져 있고 platform/Compat navigation bottom이 0px이었어. status inset은 63px, decor padding top도 63px, WebView frame은 y=63px부터 화면 하단까지였으며 JS의 하단 env/토큰은 0px이었어.
+
+두 기기에서 선택한 세 메서드가 각각 1/1로 성공했어. decor와 WebView에 각각 한 번 요청한 뒤 native 값은 3회 연속 동일했고, baseline/after native 값 및 CSS/FAB 값도 같았어. 이는 해당 요청 이후 측정값이 바뀌지 않았다는 뜻이며 특정 listener callback delivery를 증명하지 않아. Black Shark와 KEY2의 보존 요약은 `D:/projects/narou-reader/.superpowers/verification-106-bottom-insets/blackshark-67f3906b-76f10235/after-run-20261008T020527Z/runtime-preservation-summary.json` 및 `D:/projects/narou-reader/.superpowers/verification-106-bottom-insets/key2-5000337213-76f10235/after-run-20261008T020611Z/runtime-preservation-summary.json`에 있어. 각 요약에서 허용된 19개 앱 private 경로 해시, 테마 의미값, 설정값, synthetic fixture의 2개 work/2개 version/2개 recent 항목, B의 5개 private payload hash, 기존 n1020aa 인덱스 보존, Home readiness가 모두 baseline과 같았어. 허용된 경로에는 `CapWebViewSettings.xml`, `WebViewChromiumPrefs.xml`, `AwOriginVisitLoggerPrefs.xml` shared preference hash도 포함되어 동일했어. `app_webview/cache` 등 허용 경로 밖의 WebView 전체 상태는 비교하지 않았어.
+
+원인은 Capacitor `@capacitor/android@8.5.2` `SystemBars.java`에서 새 `WindowInsetsCompat.Builder(insets).build()` 객체로 CSS 주입을 호출한 뒤 그 객체에서 IME visibility를 다시 읽는 경로야. 독립 DEX/소스 대조에서 이 새 객체는 root insets cache를 보유하지 않고, AndroidX의 visibility 추정은 Black Shark에서 nav/system inset 130px과 root stable bottom 0을 바탕으로 IME를 표시 중으로 오판할 수 있음을 확인했어. 실기 baseline은 실제 IME hidden인데 주입 bottom이 0px인 결과와 일치해. 현재 수정은 `patches/@capacitor+android+8.5.2.patch` 한 파일로 제한해. 두 `injectSafeAreaCSS(newInsets)` 호출에 원본 listener의 `keyboardVisible`을 전달하고 private 메서드에 boolean 인자를 추가해 그 값으로 하단 CSS를 계산해. 기존 `getBottomInset`, insets builder/반환, padding, listener, viewport 및 테마 동작은 바꾸지 않아.
+
+의존성은 `patch-package` 8.0.1로 정확히 고정하고 `postinstall`에 `patch-package --error-on-fail`을 걸었어. `npm ci`를 실행해 clean install에서 patch가 자동 복원되는 것을 확인했어. 현재 수정된 제품 APK는 아직 실기 검증하지 않았어. 다음 검증에서는 patched clean install/build, 웹/Android 필수 검사를 먼저 완료하고 새 source commit/APK 출처를 고정한 뒤, Black Shark에서 130px nav inset일 때 CSS bottom의 복원과 실제 FAB 좌표/터치, 두 기기 IME show/hide 및 테마·설정·저장소 회귀를 확인해야 해.

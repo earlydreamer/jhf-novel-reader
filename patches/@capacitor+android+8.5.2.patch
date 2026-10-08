@@ -1,0 +1,16 @@
+diff --git a/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/plugin/SystemBars.java b/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/plugin/SystemBars.java
+index 8b9de88..a6a004c 100644
+--- a/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/plugin/SystemBars.java
++++ b/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/plugin/SystemBars.java
+@@ -216,1 +216,1 @@
+-                injectSafeAreaCSS(newInsets);
++                injectSafeAreaCSS(newInsets, keyboardVisible);
+@@ -236,1 +236,1 @@
+-            injectSafeAreaCSS(newInsets);
++            injectSafeAreaCSS(newInsets, keyboardVisible);
+@@ -242,1 +242,1 @@
+-    private void injectSafeAreaCSS(WindowInsetsCompat insets) {
++    private void injectSafeAreaCSS(WindowInsetsCompat insets, boolean keyboardVisible) {
+@@ -248,2 +248,0 @@
+-        boolean keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime());
+-
