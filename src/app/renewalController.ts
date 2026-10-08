@@ -441,7 +441,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         publish({
           titles: entries,
           titlesError: unresolved
-            ? '이전에 완료되지 않은 제목 번역이 있습니다. 해당 제목은 자동 재요청하지 않습니다. 제목 옆에서 다시 번역할 수 있습니다.'
+            ? '끝나지 않은 제목 번역이 있어요. 그 제목은 자동으로 다시 요청하지 않아요. 제목 옆에서 다시 번역할 수 있어요.'
             : null,
         });
       }
@@ -451,7 +451,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (snapshot.work?.workId === workId)
         publish({
           titles: [],
-          titlesError: '제목 저장본을 읽지 못했습니다. 자동 제목 번역을 중단했습니다.',
+          titlesError: '저장한 제목을 읽지 못해서 제목 자동 번역을 멈췄어요.',
         });
     }
   }
@@ -518,7 +518,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         if (control.signal.aborted || disposed) return;
         if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
           if (!automatic)
-            publish({ titlesError: '설정에서 서버를 연결하고 번역 모델을 선택하세요.' });
+            publish({ titlesError: '설정에서 서버를 연결하고 번역 모델을 골라 주세요.' });
           return;
         }
         const selected: SelectedModel = {
@@ -569,7 +569,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           if (results.some((result) => !result))
             publish({
               titlesError:
-                '일부 제목을 번역하지 못했습니다. 기존 제목을 유지했습니다. 제목 옆에서 다시 번역할 수 있습니다.',
+                '일부 제목을 번역하지 못해 기존 제목을 그대로 두었어요. 제목 옆에서 다시 번역할 수 있어요.',
             });
         }
       } catch (error) {
@@ -577,8 +577,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           publish({
             titlesError:
               error instanceof ReaderError && error.code === 'timeout_unknown'
-                ? '제목 요청 결과를 확인하지 못했습니다. 자동으로 재전송하지 않습니다. 제목 옆에서 다시 번역할 수 있습니다.'
-                : '제목 번역 또는 저장에 실패했습니다. 기존 제목을 유지했습니다. 제목 옆에서 다시 번역할 수 있습니다.',
+                ? '제목 요청 결과를 확인하지 못했어요. 자동으로 다시 보내지 않아요. 제목 옆에서 다시 번역할 수 있어요.'
+                : '제목을 번역하거나 저장하지 못해 기존 제목을 그대로 두었어요. 제목 옆에서 다시 번역할 수 있어요.',
           });
       }
     });
@@ -1096,7 +1096,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         dependencies.flow?.setForeground(false);
         dependencies.batch?.setForeground(false);
         publish({
-          error: '저장된 기록 또는 요청 상태를 확인하지 못했습니다. 새 번역을 차단했습니다.',
+          error: '저장된 기록이나 요청 상태를 확인하지 못해 새 번역을 막았어요.',
         });
       } finally {
         // Saved reading does not depend on lifecycle, settings or request recovery.
@@ -1444,7 +1444,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (operation === sourceOperation)
         publish({
           busy: false,
-          error: '작품 제목과 목차를 불러오지 못했습니다. 원문 주소를 확인하고 다시 시도하세요.',
+          error: '작품 제목과 목차를 불러오지 못했어요. 원문 주소를 확인하고 다시 시도해 주세요.',
         });
     }
   }
@@ -1493,7 +1493,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       requestTitleTranslation();
     } catch {
       if (operation === sourceOperation)
-        publish({ busy: false, error: '다음 목차 페이지를 불러오지 못했습니다. 다시 시도하세요.' });
+        publish({
+          busy: false,
+          error: '다음 목차 페이지를 불러오지 못했어요. 다시 시도해 주세요.',
+        });
     }
   }
   function translationForChapter(chapterId: string): TranslationState {
@@ -1567,7 +1570,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (operation === selectionOperation)
         publish({
           busy: false,
-          error: '저장된 번역을 불러오지 못했습니다. 새 번역을 자동 요청하지 않습니다.',
+          error: '저장된 번역을 불러오지 못했어요. 새 번역은 자동으로 요청하지 않아요.',
         });
     }
   }
@@ -1578,7 +1581,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       const version = await dependencies.library.readVersion(versionId);
       if (!version) {
         if (operation !== selectionOperation || disposed) return;
-        publish({ error: '저장된 번역을 찾지 못했습니다.' });
+        publish({ error: '저장된 번역을 찾지 못했어요.' });
         return;
       }
       if (operation !== selectionOperation || disposed) return;
@@ -1614,7 +1617,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (snapshot.catalogStatus === 'connected') requestTitleTranslation();
     } catch {
       if (operation === selectionOperation && !disposed)
-        publish({ error: '저장된 번역을 불러오지 못했습니다.' });
+        publish({ error: '저장된 번역을 불러오지 못했어요.' });
     }
   }
   async function continueReadingFromWork(workId: string): Promise<void> {
@@ -1944,8 +1947,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (['ready', 'failed', 'unknown'].includes(state.phase)) {
       publish({
         translation: state,
-        error:
-          '이전 요청의 결과를 자동으로 열지 않습니다. 저장본 열기 또는 명시적 재시도를 선택하세요.',
+        error: '이전 요청 결과는 자동으로 열지 않아요. 저장본을 열거나 다시 시도해 주세요.',
       });
     }
   }
@@ -2041,7 +2043,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       snapshot.connection.provider !== 'openai-compatible'
     ) {
       publish({
-        error: '문단별 재번역은 원문과 문단이 대응되는 로컬 번역본에서 사용할 수 있습니다.',
+        error: '문단 재번역은 원문과 문단이 맞는 로컬 번역본에서만 쓸 수 있어요.',
       });
       return;
     }
@@ -2063,7 +2065,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (snapshot.catalogStatus === 'idle' && snapshot.selectedModelId) await checkConnection();
     if (operation !== selectionOperation || snapshot.version?.versionId !== base.versionId) return;
     if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
-      publish({ error: '문단을 재번역하려면 연결 설정에서 서버와 생성 모델을 먼저 확인하세요.' });
+      publish({
+        error: '문단을 다시 번역하려면 연결 설정에서 서버와 생성 모델을 먼저 확인해 주세요.',
+      });
       return;
     }
     const chapter = chaptersById.get(base.source.chapterId);
@@ -2130,7 +2134,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (value) updateSavedMetadata(value);
       if (value && ownsVisibleTranslation(request)) await adoptCompleted(value, request);
     } catch {
-      publish({ error: '기기 저장을 완료하지 못했습니다.' });
+      publish({ error: '기기에 저장하지 못했어요.' });
     } finally {
       if (activeTranslation === request) {
         if (!ownsVisibleTranslation(request)) showNonAdoptingOutcome(request);
@@ -2154,7 +2158,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         ? (retryableRepair ?? undefined)
         : undefined;
     if (repair && snapshot.connection.provider !== 'openai-compatible') {
-      publish({ error: '문단 재번역 재시도는 로컬 모델 연결을 확인한 뒤 사용할 수 있습니다.' });
+      publish({ error: '로컬 모델 연결을 확인한 뒤 문단 재번역을 다시 시도할 수 있어요.' });
       return;
     }
     publish({ translation: { phase: 'idle', elapsedMs: 0 } });
@@ -2303,7 +2307,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return;
     if (!batchSelectionIsCurrent()) {
       publish({
-        error: '확인한 대상의 연결·모델 설정이 바뀌었습니다. 번역 범위를 다시 확인하세요.',
+        error: '연결이나 모델 설정이 바뀌었어요. 번역 범위를 다시 확인해 주세요.',
       });
       return;
     }
@@ -2316,7 +2320,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (!initialized || disposed || !foreground || activeTranslation) return;
     if (!batchSelectionIsCurrent()) {
       publish({
-        error: '확인한 대상의 연결·모델 설정이 바뀌었습니다. 번역 범위를 다시 확인하세요.',
+        error: '연결이나 모델 설정이 바뀌었어요. 번역 범위를 다시 확인해 주세요.',
       });
       return;
     }
@@ -2326,7 +2330,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (!initialized || disposed || !foreground || activeTranslation) return;
     if (!batchSelectionIsCurrent()) {
       publish({
-        error: '확인한 대상의 연결·모델 설정이 바뀌었습니다. 번역 범위를 다시 확인하세요.',
+        error: '연결이나 모델 설정이 바뀌었어요. 번역 범위를 다시 확인해 주세요.',
       });
       return;
     }

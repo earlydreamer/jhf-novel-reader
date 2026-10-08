@@ -383,9 +383,7 @@ test('keeps a failed preparation error on B while preserving A as the latest rec
   render(<Application controller={harness.app} />);
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
-  expect(
-    await screen.findByText(/전체 목차와 지정 범위를 확인하지 못했습니다/),
-  ).toBeInTheDocument();
+  expect(await screen.findByText(/전체 목차와 고른 범위를 확인하지 못했어요/)).toBeInTheDocument();
   expect(screen.queryByText('확정 범위: 1–1화 · 총 1화')).toBeNull();
 
   harness.app.back();
@@ -393,7 +391,7 @@ test('keeps a failed preparation error on B while preserving A as the latest rec
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
   expect(await screen.findByText('확정 범위: 1–1화 · 총 1화')).toBeInTheDocument();
-  expect(screen.queryByText(/전체 목차와 지정 범위를 확인하지 못했습니다/)).toBeNull();
+  expect(screen.queryByText(/전체 목차와 고른 범위를 확인하지 못했어요/)).toBeNull();
   expect(harness.posts()).toHaveLength(0);
   harness.app.dispose();
 });
@@ -466,7 +464,7 @@ test('corrupt queue metadata blocks generation after restart', async () => {
   harness.bytes.set('batches/current.1.json', '{');
   const restarted = createRenewalApplication(harness.adapters);
   await restarted.initialize();
-  expect(restarted.getSnapshot().error).toContain('새 번역을 차단');
+  expect(restarted.getSnapshot().error).toContain('새 번역을 막았어요');
   await restarted.checkConnection();
   await restarted.runBatch(true);
   expect(harness.posts()).toHaveLength(0);
@@ -562,7 +560,7 @@ test('editing context after a batch preview requires a fresh preview and makes n
   await finishScan(harness.app);
   await harness.app.runBatch();
   expect(harness.posts()).toHaveLength(0);
-  expect(harness.app.getSnapshot().batch?.error).toContain('용어집·말투가 바뀌었습니다');
+  expect(harness.app.getSnapshot().batch?.error).toContain('용어집이나 말투가 바뀌었어요');
   harness.app.dispose();
 });
 test('oversized approved context fails before generation without silently dropping terms', async () => {

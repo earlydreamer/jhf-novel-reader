@@ -302,7 +302,7 @@ export function createBatchTranslation(dependencies: {
         range.first < 1 ||
         range.last < range.first)
     ) {
-      publish({ error: '시작·끝 회차를 올바르게 입력하세요.', errorWorkId: work.workId });
+      publish({ error: '시작·끝 회차를 올바르게 입력해 주세요.', errorWorkId: work.workId });
       return;
     }
     const control = new AbortController();
@@ -361,8 +361,8 @@ export function createBatchTranslation(dependencies: {
     } catch {
       publish({
         error: cancelled
-          ? '번역 대상 확인을 중단했습니다.'
-          : '전체 목차와 지정 범위를 확인하지 못했습니다. 누락 회차나 범위를 확인하세요. 한 작업에는 최대 10,000화를 담을 수 있습니다.',
+          ? '번역 대상 확인을 멈췄어요.'
+          : '전체 목차와 고른 범위를 확인하지 못했어요. 빠진 회차나 범위를 확인해 주세요. 한 번에 최대 10,000화까지 번역할 수 있어요.',
         errorWorkId: preparingWorkId,
       });
     } finally {
@@ -421,8 +421,8 @@ export function createBatchTranslation(dependencies: {
       scannedSources.clear();
       publish({
         error: cancelled
-          ? '후보 스캔을 중단했습니다. 범위 전체를 다시 스캔하세요.'
-          : '범위 전체의 원문을 확인하지 못했습니다. 일부 후보를 확정하지 않고 스캔을 다시 시도할 수 있습니다.',
+          ? '후보 스캔을 멈췄어요. 범위 전체를 다시 스캔해 주세요.'
+          : '범위 전체의 원문을 확인하지 못했어요. 일부 후보만 확정하지 않고 스캔을 다시 시도할 수 있어요.',
       });
     } finally {
       preparation = null;
@@ -501,7 +501,7 @@ export function createBatchTranslation(dependencies: {
     } catch {
       publish({
         error:
-          '후보를 확정하지 못했습니다. 한국어 표기(80자 이내)와 저장 상태를 확인한 뒤 다시 시도하세요.',
+          '후보를 확정하지 못했어요. 한국어 표기(80자 이내)와 저장 상태를 확인한 뒤 다시 시도해 주세요.',
       });
     } finally {
       publish({ active: false });
@@ -534,7 +534,7 @@ export function createBatchTranslation(dependencies: {
       return;
     if (record.phase === 'unknown' && !retryUncertain) return;
     if (record.scan && record.scan.status !== 'confirmed') {
-      publish({ error: '범위의 후보를 스캔하고 표기를 확정한 뒤 번역을 시작하세요.' });
+      publish({ error: '범위의 후보를 스캔하고 표기를 확정한 뒤 번역을 시작해 주세요.' });
       return;
     }
     cancelled = false;
@@ -542,7 +542,7 @@ export function createBatchTranslation(dependencies: {
     try {
       const currentGuidance = (await dependencies.guidance?.read(record.work.workId)) ?? null;
       if (guidanceHash(currentGuidance) !== guidanceHash(record.guidance)) {
-        publish({ error: '작품의 용어집·말투가 바뀌었습니다. 번역 범위를 다시 확인하세요.' });
+        publish({ error: '작품 용어집이나 말투가 바뀌었어요. 번역 범위를 다시 확인해 주세요.' });
         return;
       }
       while (record.cursor < record.chapters.length && !cancelled && foreground && !disposed) {
@@ -599,18 +599,18 @@ export function createBatchTranslation(dependencies: {
         else if (chapterState.phase === 'unknown') phase = 'unknown';
         await persist({ ...record, phase });
         if (chapterState.phase === 'failed' && !chapterState.pendingSave) {
-          let error = '현재 회차를 번역하지 못했습니다. 이후 회차는 요청하지 않았습니다.';
+          let error = '현재 회차를 번역하지 못해서 다음 회차는 요청하지 않았어요.';
           if (chapterState.error?.code === 'output_limit')
             error =
-              '현재 회차의 출력이 길이 제한으로 잘렸습니다. 완료본으로 저장하거나 이후 회차를 요청하지 않았습니다.';
+              '현재 회차의 번역이 길이 제한으로 잘렸어요. 완료본으로 저장하지 않았고 다음 회차도 요청하지 않았어요.';
           else if (chapterState.error?.code === 'guidance_unsupported')
             error =
-              '용어집·말투 적용은 로컬 모델의 구간 번역에서 사용할 수 있습니다. 로컬 모델을 선택하거나 이 작품의 항목을 비운 뒤 저장하세요.';
+              '용어집·말투는 로컬 모델의 구간 번역에서만 쓸 수 있어요. 로컬 모델을 고르거나 이 작품의 항목을 비우고 저장해 주세요.';
           else if (chapterState.error?.code === 'input_limit')
             error =
-              '현재 회차가 선택한 모델의 입력 한도를 넘었습니다. 용어집·말투가 길면 항목을 줄이고 번역 범위를 다시 확인하세요. 연결 설정에서 모델 목록도 확인할 수 있습니다.';
+              '현재 회차가 선택한 모델의 입력 한도를 넘었어요. 용어집·말투가 길면 항목을 줄이고 번역 범위를 다시 확인해 주세요. 연결 설정에서 모델 목록도 확인할 수 있어요.';
           else if (['source_access', 'source_parse'].includes(chapterState.error?.code ?? ''))
-            error = '현재 회차의 원문을 읽지 못했습니다. 원문을 확인한 뒤 재개하세요.';
+            error = '현재 회차의 원문을 읽지 못했어요. 원문을 확인한 뒤 다시 시작해 주세요.';
           publish({ error });
         }
         break;
@@ -624,7 +624,7 @@ export function createBatchTranslation(dependencies: {
     } catch {
       publish({
         record: state.record ? { ...state.record, phase: 'unknown' } : null,
-        error: '일괄 번역 상태를 저장하지 못했습니다. 저장본을 확인한 뒤 다시 시도하세요.',
+        error: '일괄 번역 상태를 저장하지 못했어요. 저장본을 확인한 뒤 다시 시도해 주세요.',
       });
     } finally {
       publish({ active: false, chapterProgress: undefined });
@@ -650,7 +650,7 @@ export function createBatchTranslation(dependencies: {
         if (next.phase !== 'complete') await persist({ ...next, phase: 'paused' });
       }
     } catch {
-      publish({ error: '완료한 번역을 저장하지 못했습니다. 새 생성 요청은 보내지 않았습니다.' });
+      publish({ error: '완료한 번역을 저장하지 못했어요. 새 번역 요청은 보내지 않았어요.' });
     } finally {
       publish({ active: false });
     }
