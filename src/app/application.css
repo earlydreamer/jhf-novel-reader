@@ -213,19 +213,6 @@
 :where(.nr-screen) ul {
   padding-inline-start: 24px;
 }
-.nr-theme-choice [role='radiogroup'] {
-  display: grid;
-  gap: 4px;
-}
-.nr-theme-choice label {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-block-size: var(--touch-target);
-  margin: 0;
-  color: var(--on-surface);
-  font: var(--type-body-large);
-}
 /* 기존 독서·번역 화면의 본문 영역 */
 .nr-reading-body {
   position: relative;
@@ -274,12 +261,4 @@
 .nr-title {
   min-inline-size: 0;
   overflow-wrap: anywhere;
-}
-.nr-setting-toggle {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
-}
-.nr-setting-toggle span {
-  grid-column: 2;
 }
