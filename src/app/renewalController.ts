@@ -17,6 +17,7 @@ import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/
 import { ReaderError } from '../contracts';
 import type {
   ChapterRef,
+  ChapterRemovalResult,
   CompletedTranslation,
   ConnectionConfig,
   LibraryStore,
@@ -208,6 +209,7 @@ export interface RenewalController {
   back(): void;
   goHome(): void;
   removeWork(workId: string): Promise<WorkRemovalResult>;
+  removeChapterVersions(chapter: ChapterRef): Promise<ChapterRemovalResult>;
   canGoBack(): boolean;
   browse(startUrl?: string): Promise<void>;
   cancelTranslation(): void;
@@ -308,6 +310,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   const versionsById = new Map<string, CompletedTranslation>();
   const positionsByVersion = new Map<string, ReadingPosition | null>();
   const removingWorkIds = new Set<string>();
+  // 저장본 삭제 중인 회차. 삭제가 끝날 때까지 같은 회차의 위치 저장이 끼어들지 않게 막는다.
+  const removingChapterIds = new Set<string>();
   const removedWorkIds = new Set<string>();
   const retiredBatchRecordIds = new Set<string>();
   const retiredCompletedVersionIds = new Set<string>();
@@ -919,6 +923,121 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       error: '제거 결과를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
     });
     return result;
+  }
+  async function removeChapterVersions(chapter: ChapterRef): Promise<ChapterRemovalResult> {
+    const { chapterId, workId } = chapter;
+    const library = dependencies.library;
+    const refused = (blockedBy?: ChapterRemovalResult['blockedBy']): ChapterRemovalResult => ({
+      removed: false,
+      cleanupComplete: false,
+      remainingInventory: [],
+      versionIds: [],
+      ...(blockedBy ? { blockedBy } : {}),
+    });
+    if (
+      !library?.removeChapterVersions ||
+      disposed ||
+      removingWorkIds.has(workId) ||
+      removingChapterIds.has(chapterId)
+    )
+      return refused();
+    const flowState = dependencies.flow?.getSnapshot();
+    if (
+      snapshot.pendingSaveChapter?.chapterId === chapterId ||
+      flowState?.pendingSave?.source.chapterId === chapterId
+    )
+      return refused('pending_save');
+    if (
+      activeTranslation?.chapterId === chapterId ||
+      (flowState?.token?.chapterId === chapterId && dependencies.flow?.active)
+    )
+      return refused('translation');
+    const batchState = dependencies.batch?.getSnapshot();
+    const batchRuntimeOwner = batchState?.preparing
+      ? batchState.preparingWorkId
+      : batchState?.active
+        ? batchState.record?.work.workId
+        : undefined;
+    if (
+      batchState &&
+      ((batchState.active && batchRuntimeOwner === workId) ||
+        (batchState.record?.work.workId === workId && batchState.record.phase !== 'complete'))
+    )
+      return refused('batch');
+    if (dependencies.flow?.getUnfinished().some((token) => token.chapterId === chapterId))
+      return refused('unfinished_attempt');
+
+    removingChapterIds.add(chapterId);
+    try {
+      for (const [versionId, position] of pendingPositions)
+        if (position.chapterId === chapterId) pendingPositions.delete(versionId);
+      const activeWriters = [...(workWriters.get(workId) ?? [])];
+      if (activeWriters.length) await Promise.allSettled(activeWriters);
+
+      let result: ChapterRemovalResult;
+      try {
+        result = await library.removeChapterVersions(chapterId, {
+          activeBatchWorkId: batchRuntimeOwner,
+        });
+      } catch {
+        result = {
+          removed: null,
+          cleanupComplete: false,
+          remainingInventory: ['library/index'],
+          versionIds: [],
+        };
+      }
+      if (result.removed !== true) return result;
+
+      // 저장소가 색인에서 뺀 저장본과 메모리에 남은 같은 회차 저장본을 함께 지운다.
+      const removedVersionIds = new Set(result.versionIds);
+      for (const [versionId, value] of versionsById)
+        if (value.source.chapterId === chapterId) removedVersionIds.add(versionId);
+      removedVersionIds.forEach((versionId) => {
+        versionsById.delete(versionId);
+        positionsByVersion.delete(versionId);
+        observedSavedVersionIds.delete(versionId);
+      });
+      const completedBeforeRemoval = dependencies.flow?.getCompleted();
+      if (completedBeforeRemoval?.source.chapterId === chapterId)
+        retiredCompletedVersionIds.add(completedBeforeRemoval.versionId);
+      dependencies.flow?.clearChapter(chapterId);
+      if (livePosition?.chapterId === chapterId) livePosition = null;
+      if (retryableRepair?.base.source.chapterId === chapterId) retryableRepair = null;
+      for (let index = history.length - 1; index >= 0; index--) {
+        const route = history[index]!;
+        if (route.kind === 'reader' && removedVersionIds.has(route.versionId))
+          history.splice(index, 1);
+      }
+      const savedChapterIds = (savedChaptersByWork.get(workId) ?? []).filter(
+        (id) => id !== chapterId,
+      );
+      savedChaptersByWork.set(workId, savedChapterIds);
+      const showing = snapshot.version?.source.chapterId === chapterId;
+      publish({
+        ...(snapshot.work?.workId === workId ? { savedChapterIds } : {}),
+        ...(showing ? { version: null, position: null } : {}),
+        recent: snapshot.recent.filter((entry) => !removedVersionIds.has(entry.versionId)),
+        libraryWorks: snapshot.libraryWorks.map((entry) =>
+          entry.work.workId === workId
+            ? {
+                ...entry,
+                savedChapterIds: entry.savedChapterIds.filter((id) => id !== chapterId),
+                recent:
+                  entry.recent && removedVersionIds.has(entry.recent.versionId)
+                    ? null
+                    : entry.recent,
+              }
+            : entry,
+        ),
+      });
+      if (snapshot.route.kind === 'work' && snapshot.route.workId === workId)
+        void verifyWorkRecent(workId);
+      void refreshLibrary();
+      return result;
+    } finally {
+      removingChapterIds.delete(chapterId);
+    }
   }
   function canGoBack(): boolean {
     return history.length > 0;
@@ -2090,6 +2209,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       !dependencies.library ||
       !version ||
       removingWorkIds.has(version.source.workId) ||
+      removingChapterIds.has(version.source.chapterId) ||
       !version.blocks.some((block) => block.id === blockId) ||
       !Number.isFinite(offset) ||
       offset < 0 ||
@@ -2111,7 +2231,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         while (pendingPositions.size) {
           const next = pendingPositions.values().next().value!;
           pendingPositions.delete(next.versionId);
-          if (removingWorkIds.has(next.workId)) continue;
+          if (removingWorkIds.has(next.workId) || removingChapterIds.has(next.chapterId)) continue;
           try {
             await trackWorkWrite(next.workId, () => dependencies.library!.savePosition(next));
           } catch {
@@ -2323,6 +2443,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     back,
     goHome,
     removeWork,
+    removeChapterVersions,
     canGoBack,
     browse,
     cancelTranslation,
@@ -2341,7 +2462,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     },
     async openSavedTranslation() {
       const value = dependencies.flow?.getCompleted();
-      if (value && value.source.chapterId === snapshot.chapter?.chapterId) {
+      if (
+        value &&
+        !retiredCompletedVersionIds.has(value.versionId) &&
+        value.source.chapterId === snapshot.chapter?.chapterId
+      ) {
         if (livePosition?.chapterId === value.source.chapterId) {
           const block = value.blocks[livePosition.index];
           if (block && dependencies.library)

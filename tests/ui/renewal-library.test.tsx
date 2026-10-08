@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Application } from '../../src/app/Application';
 import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
 import { ReaderError } from '../../src/contracts';
 import type {
+  ChapterRemovalResult,
   CompletedTranslation,
   WorkPage,
   WorkRemovalResult,
@@ -71,6 +72,16 @@ function libraryHarness(initial: readonly WorkPage[] = []) {
       for (const chapterId of [...versions.keys()])
         if (chapterId.startsWith(`${workId}/`)) versions.delete(chapterId);
       return { removed: true as const, cleanupComplete: true, remainingInventory: [] };
+    }),
+    removeChapterVersions: vi.fn(async (chapterId: string): Promise<ChapterRemovalResult> => {
+      const removedVersions = versions.get(chapterId) ?? [];
+      versions.delete(chapterId);
+      return {
+        removed: true,
+        cleanupComplete: true,
+        remainingInventory: [],
+        versionIds: removedVersions.map((version) => version.versionId),
+      };
     }),
   };
   return { library, works, versions };
@@ -968,4 +979,220 @@ it('제거 여부가 불명확하면 목차에서 머물며 확인 실패를 대
   expect(screen.getByRole('dialog')).toBeVisible();
   expect(controller.getSnapshot().route).toEqual({ kind: 'work', workId: target.workId });
   controller.dispose();
+});
+
+describe('회차 저장본 삭제 컨트롤러', () => {
+  function twoChapterWork(workId: string, title: string): WorkPage {
+    const base = `https://ncode.syosetu.com/${workId}/`;
+    return {
+      workId,
+      canonicalUrl: base,
+      title,
+      chapters: [1, 2].map((ordinal) => ({
+        workId,
+        chapterId: `${workId}/${ordinal}`,
+        canonicalUrl: `${base}${ordinal}/`,
+        title: `${ordinal}화 제목`,
+        ordinal,
+      })),
+      pageUrl: base,
+      nextPageUrl: null,
+      complete: true,
+    };
+  }
+  function savedVersionOf(
+    page: WorkPage,
+    chapterIndex: number,
+    versionId: string,
+  ): CompletedTranslation {
+    return {
+      ...savedVersion({ ...page, chapters: [page.chapters[chapterIndex]!] }),
+      versionId,
+    };
+  }
+  function flowFake(state: {
+    active?: boolean;
+    token?: { requestId: string; chapterId: string; settingsRevision: number };
+    pendingSave?: CompletedTranslation;
+    unfinished?: readonly { requestId: string; chapterId: string; settingsRevision: number }[];
+  }) {
+    return {
+      getSnapshot: () => ({
+        phase: 'idle',
+        elapsedMs: 0,
+        token: state.token,
+        pendingSave: state.pendingSave,
+      }),
+      getUnfinished: () => state.unfinished ?? [],
+      getCompleted: () => null,
+      clearChapter: vi.fn(() => true),
+      subscribe: vi.fn(() => () => {}),
+      setForeground: vi.fn(),
+      initialize: vi.fn(async () => {}),
+      dispose: vi.fn(),
+      active: state.active ?? false,
+    } as unknown as NonNullable<RenewalDependencies['flow']>;
+  }
+  function batchFake(state: Record<string, unknown>) {
+    return {
+      initialize: vi.fn(async () => {}),
+      setForeground: vi.fn(),
+      getSnapshot: () => state,
+      subscribe: vi.fn(() => () => {}),
+      clearWork: vi.fn(() => true),
+      dispose: vi.fn(),
+    } as unknown as NonNullable<RenewalDependencies['batch']>;
+  }
+
+  it('저장된 회차를 지우면 savedChapterIds와 서재 행에서 빠지고 다른 회차는 남는다', async () => {
+    const target = twoChapterWork('n1919aa', '두 화 작품');
+    const [first, second] = [target.chapters[0]!, target.chapters[1]!];
+    const { library, versions } = libraryHarness([target]);
+    versions.set(first.chapterId, [savedVersionOf(target, 0, 'saved-first')]);
+    versions.set(second.chapterId, [savedVersionOf(target, 1, 'saved-second')]);
+    const controller = createRenewalController({ library });
+    await controller.openLibraryWork(target.workId);
+    expect(controller.getSnapshot().savedChapterIds).toEqual([first.chapterId, second.chapterId]);
+
+    await expect(controller.removeChapterVersions(first)).resolves.toMatchObject({
+      removed: true,
+      cleanupComplete: true,
+      versionIds: ['saved-first'],
+    });
+    expect(library.removeChapterVersions).toHaveBeenCalledExactlyOnceWith(first.chapterId, {
+      activeBatchWorkId: undefined,
+    });
+    expect(controller.getSnapshot().savedChapterIds).toEqual([second.chapterId]);
+    controller.goHome();
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot().libraryWorks[0]?.savedChapterIds).toEqual([second.chapterId]),
+    );
+    controller.dispose();
+  });
+
+  it('읽는 중 회차를 지우면 workRecent가 none으로 다시 확인된다', async () => {
+    const target = work('n2020bb', '읽던 회차 작품');
+    const saved = savedVersion(target);
+    const { library, versions } = libraryHarness([target]);
+    versions.set(saved.source.chapterId, [saved]);
+    library.listRecent.mockResolvedValue([
+      {
+        workId: target.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        updatedAt: saved.createdAt,
+      },
+    ]);
+    const controller = createRenewalController({ library });
+    await controller.openLibraryWork(target.workId);
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot().workRecent).toMatchObject({
+        status: 'verified',
+        versionId: saved.versionId,
+      }),
+    );
+
+    library.listRecent.mockResolvedValue([]);
+    await expect(controller.removeChapterVersions(target.chapters[0]!)).resolves.toMatchObject({
+      removed: true,
+    });
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot().workRecent).toMatchObject({
+        workId: target.workId,
+        status: 'none',
+      }),
+    );
+    expect(controller.getSnapshot().recent.some((entry) => entry.workId === target.workId)).toBe(
+      false,
+    );
+    controller.dispose();
+  });
+
+  it('저장 대기·번역 중·미확인 요청·일괄 번역은 막고 저장소를 부르지 않는다', async () => {
+    const target = work('n2121cc', '막히는 회차 작품');
+    const chapter = target.chapters[0]!;
+    const saved = savedVersion(target);
+    const { library } = libraryHarness([target]);
+    const token = { requestId: 'request-1', chapterId: chapter.chapterId, settingsRevision: 0 };
+    const cases: {
+      blockedBy: NonNullable<ChapterRemovalResult['blockedBy']>;
+      flow?: RenewalDependencies['flow'];
+      batch?: RenewalDependencies['batch'];
+    }[] = [
+      { blockedBy: 'pending_save', flow: flowFake({ pendingSave: saved }) },
+      { blockedBy: 'translation', flow: flowFake({ token, active: true }) },
+      { blockedBy: 'unfinished_attempt', flow: flowFake({ unfinished: [token] }) },
+      {
+        blockedBy: 'batch',
+        batch: batchFake({
+          record: null,
+          active: true,
+          preparing: true,
+          preparingWorkId: target.workId,
+          error: null,
+        }),
+      },
+      {
+        blockedBy: 'batch',
+        batch: batchFake({
+          record: { work: { workId: target.workId }, phase: 'paused' },
+          active: false,
+          preparing: false,
+          error: null,
+        }),
+      },
+    ];
+    for (const { blockedBy, flow, batch } of cases) {
+      const controller = createRenewalController({ library, flow, batch });
+      await expect(controller.removeChapterVersions(chapter)).resolves.toMatchObject({
+        removed: false,
+        cleanupComplete: false,
+        blockedBy,
+      });
+      controller.dispose();
+    }
+    expect(library.removeChapterVersions).not.toHaveBeenCalled();
+  });
+
+  it('같은 작품의 다른 회차 번역 중에는 이 회차 저장본 삭제를 막지 않는다', async () => {
+    const target = twoChapterWork('n2323dd', '다른 회차 번역 작품');
+    const [first, second] = [target.chapters[0]!, target.chapters[1]!];
+    const { library } = libraryHarness([target]);
+    const flow = flowFake({
+      active: true,
+      token: { requestId: 'request-2', chapterId: second.chapterId, settingsRevision: 0 },
+    });
+    const controller = createRenewalController({ library, flow });
+
+    await expect(controller.removeChapterVersions(first)).resolves.toMatchObject({
+      removed: true,
+      cleanupComplete: true,
+    });
+    expect(library.removeChapterVersions).toHaveBeenCalledExactlyOnceWith(first.chapterId, {
+      activeBatchWorkId: undefined,
+    });
+    expect(flow.clearChapter).toHaveBeenCalledWith(first.chapterId);
+    controller.dispose();
+  });
+
+  it('지운 저장본으로 가는 reader 기록을 뒤로 가기에서 건너뛴다', async () => {
+    const target = work('n2222dd', '뒤로 가기 작품');
+    const saved = savedVersion(target);
+    const { library, versions } = libraryHarness([target]);
+    versions.set(saved.source.chapterId, [saved]);
+    const controller = createRenewalController({ library });
+    await controller.openLibraryWork(target.workId);
+    await controller.continueReading(saved.versionId);
+    controller.navigate({ kind: 'work', workId: target.workId });
+
+    await controller.removeChapterVersions(target.chapters[0]!);
+    const visited: unknown[] = [];
+    while (controller.canGoBack()) {
+      controller.back();
+      visited.push(controller.getSnapshot().route);
+    }
+    expect(visited).not.toContainEqual({ kind: 'reader', versionId: saved.versionId });
+    expect(visited).toEqual([{ kind: 'work', workId: target.workId }, { kind: 'home' }]);
+    controller.dispose();
+  });
 });

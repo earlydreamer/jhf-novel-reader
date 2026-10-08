@@ -368,6 +368,17 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
       }
       return true;
     },
+    clearChapter(chapterId: string): boolean {
+      if (slot.occupied && state.token?.chapterId === chapterId) return false;
+      if (state.pendingSave?.source.chapterId === chapterId) return false;
+      if (unfinished.some((token) => token.chapterId === chapterId)) return false;
+      if (completed?.source.chapterId === chapterId) completed = null;
+      if (state.token?.chapterId === chapterId) {
+        state = { phase: 'idle', elapsedMs: 0 };
+        if (!disposed) listeners.forEach((listener) => listener(state));
+      }
+      return true;
+    },
     getTimings: () => ({ ...timings }),
     get active() {
       return slot.occupied;
