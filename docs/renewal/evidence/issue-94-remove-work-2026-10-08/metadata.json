@@ -117,7 +117,7 @@
         "BReader": "one synthetic translated block",
         "themeLightDarkAndSystemRestore": "PASS",
         "systemBack": "reader to table of contents to library",
-        "insets": "visual only: content clear of status/navigation bars",
+        "insets": "상단 상태 표시줄/툴바 분리와 바 배경·아이콘 대비는 캡처로 확인; 하단 전체 콘텐츠 비겹침 및 최대 스크롤 말단 도달은 미검증; CSS inset 수치 미측정; 정상 edge-to-edge 여부나 접근성 결함은 판정하지 않음",
         "systemStatusBarSamples": {
           "lightRgb": "250,250,253",
           "darkRgb": "19,19,27"
@@ -209,7 +209,7 @@
         "BReader": "one synthetic translated block",
         "themeLightDarkAndSystemRestore": "PASS",
         "systemBack": "confirmation only dismissed; table of contents remained",
-        "insets": "visual only: content clear of status/navigation bars",
+        "insets": "상단 상태 표시줄/툴바 분리와 바 배경·아이콘 대비는 캡처로 확인; 하단 전체 콘텐츠 비겹침 및 최대 스크롤 말단 도달은 미검증; CSS inset 수치 미측정; 정상 edge-to-edge 여부나 접근성 결함은 판정하지 않음",
         "systemStatusBarSamples": {
           "lightRgb": "250,250,253",
           "darkRgb": "19,19,27"
@@ -218,7 +218,8 @@
           "scope": "current devicecheck2 PID only, filtered after runtime checks",
           "errorOrFatalLines": 0,
           "fatalExceptionLines": 0
-        }
+        },
+        "bottomNavigationObservation": "BlackShark home-after-remove 캡처에서 고정 FAB와 시스템 내비게이션 □ 아이콘의 시각적 겹침이 관찰됨; 최대 스크롤 및 상호작용은 검증하지 않아 결함 여부 미판정"
       },
       "evidence": [
         {
@@ -309,7 +310,7 @@
   "limitations": [
     "Physical keyboard not tested",
     "Real model requests and external source browsing not performed",
-    "Insets judged visually; no CSS inset numeric measurement",
+    "상단 상태 표시줄/툴바 분리와 바 배경·아이콘 대비는 캡처로 확인했으나, 하단 전체 콘텐츠 비겹침과 최대 스크롤 말단 도달은 미검증; CSS inset 수치 미측정; 정상 edge-to-edge 여부나 접근성 결함은 판정하지 않음. BlackShark home-after-remove 캡처에서는 고정 FAB와 시스템 내비게이션 □ 아이콘의 시각적 겹침이 관찰됐으며, 최대 스크롤·상호작용 미검증으로 결함 여부는 판정하지 않음.",
     "Current-PID logcat count does not represent all app history or device logs",
     "Production data byte identity was not measured",
     "Raw screenshots are local ignored evidence only and include system status-bar icons"
