@@ -137,6 +137,16 @@ function zIndex(body: string | undefined): number {
   return Number(body?.match(/z-index:\s*(\d+);/)?.[1]);
 }
 
+describe('immersive-reader.css blank paragraph spacing', () => {
+  it('원문 빈 줄 문단은 앞 문단 아래 여백과 합쳐 한 줄 높이만 차지한다(#137)', () => {
+    const blank = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-immersive-article > p.nr-reader-blank',
+    );
+    expect(blank?.body).toMatch(/block-size:\s*0\.4em;/);
+    expect(blank?.body).toMatch(/margin-block:\s*0;/);
+  });
+});
+
 describe('immersive-reader.css system bars', () => {
   it('몰입 리더는 상태바와 내비게이션 바 자리를 독서 배경으로 덮는다', () => {
     const sheet = rules(readerCss);
@@ -154,8 +164,15 @@ describe('immersive-reader.css system bars', () => {
     expect(shared?.body).toMatch(/z-index:\s*10;/);
     const top = sheet.find((rule) => rule.selector === '.nr-immersive-reader::before');
     const bottom = sheet.find((rule) => rule.selector === '.nr-immersive-reader::after');
-    expect(top?.body).toMatch(/block-size:\s*var\(--inset-top\);/);
-    expect(bottom?.body).toMatch(/block-size:\s*var\(--inset-bottom\);/);
+    // 띠 끝 16px은 독서 배경에서 투명으로 흐려, 잘린 글자 조각이 경계에 남지 않게 한다(#137).
+    expect(top?.body).toMatch(/block-size:\s*calc\(var\(--inset-top\) \+ 16px\);/);
+    expect(top?.body).toMatch(
+      /background:\s*linear-gradient\(to bottom, var\(--reading-surface\) calc\(100% - 16px\), transparent\);/,
+    );
+    expect(bottom?.body).toMatch(/block-size:\s*calc\(var\(--inset-bottom\) \+ 16px\);/);
+    expect(bottom?.body).toMatch(
+      /background:\s*linear-gradient\(to top, var\(--reading-surface\) calc\(100% - 16px\), transparent\);/,
+    );
     const above = [
       rules(componentsCss).find((rule) => rule.selector === '.nr-toolbar')?.body,
       sheet.find((rule) => rule.selector === '.nr-immersive-appbar')?.body,

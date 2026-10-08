@@ -758,7 +758,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
                 data-reader-index={index}
                 data-preview-index={props.route === 'translation' ? index : undefined}
                 data-block-id={version?.blocks[index]?.id}
-                className={`nr-reader-paragraph${isFailed ? ' nr-reader-paragraph--failed' : ''}${selected ? ' nr-reader-paragraph--selected' : ''}`}
+                className={`nr-reader-paragraph${isFailed ? ' nr-reader-paragraph--failed' : ''}${selected ? ' nr-reader-paragraph--selected' : ''}${!text.trim() && !isFailed ? ' nr-reader-blank' : ''}`}
                 role={selectionMode ? 'button' : undefined}
                 tabIndex={selectionMode ? 0 : undefined}
                 aria-pressed={selectionMode ? selected : undefined}
