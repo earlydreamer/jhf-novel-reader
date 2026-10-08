@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { createRenewalApplication } from '../../src/app/compose';
 import { Application } from '../../src/app/Application';
 import { runTopBackHandler } from '../../src/ui/shell/backStack';
@@ -327,40 +327,48 @@ test('cancel blocks duplicate starts, individual requests and later dispatch; re
   expect(restarted.getSnapshot().batch?.record?.phase).toBe('complete');
   restarted.dispose();
 });
+// 이 UI 흐름은 jsdom에서 Application 전체를 다시 그리느라 단독 약 0.9초, 전체 병렬 실행에서 3초 넘게 걸린다(#101).
+// 벽시계 폴링 대신 버튼이 시작한 컨트롤러 작업의 Promise가 끝나기를 기다려 부하와 무관하게 판정한다.
 test('UI offers range and all preview with a separate explicit start action', async () => {
   const harness = fixture();
   await harness.setup();
+  const prepare = vi.spyOn(harness.app, 'prepareBatch');
+  const scan = vi.spyOn(harness.app, 'scanBatch');
+  const confirm = vi.spyOn(harness.app, 'confirmBatchCandidates');
+  const run = vi.spyOn(harness.app, 'runBatch');
+  const settle = async (spy: { mock: { results: { value: unknown }[] } }, calls: number) => {
+    expect(spy.mock.results).toHaveLength(calls);
+    await act(async () => {
+      await spy.mock.results.at(-1)!.value;
+    });
+  };
   render(<Application controller={harness.app} />);
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '미리 번역하기' }));
   fireEvent.change(screen.getByLabelText('끝 회차'), { target: { value: '2' } });
   fireEvent.click(screen.getByRole('button', { name: '범위 확인' }));
-  await screen.findByText('확정 범위: 1–2화 · 총 2화');
+  await settle(prepare, 1);
+  expect(screen.getByText('확정 범위: 1–2화 · 총 2화')).toBeInTheDocument();
   expect(harness.posts()).toHaveLength(0);
   fireEvent.click(screen.getByRole('button', { name: '전체 회차 확인' }));
-  await screen.findByText('확정 범위: 1–4화 · 총 4화');
+  await settle(prepare, 2);
+  expect(screen.getByText('확정 범위: 1–4화 · 총 4화')).toBeInTheDocument();
   expect(harness.posts()).toHaveLength(0);
   fireEvent.click(screen.getByRole('button', { name: '범위 고유명사 후보 스캔' }));
-  await waitFor(
-    () => expect(harness.app.getSnapshot().batch?.record?.scan?.status).toBe('review'),
-    { timeout: 10_000 },
-  );
-  const confirmCandidates = await screen.findByRole('button', { name: /확인 완료/ });
-  fireEvent.click(confirmCandidates);
-  await screen.findByRole('button', { name: '확인한 회차 번역 시작' });
+  await settle(scan, 1);
+  expect(harness.app.getSnapshot().batch?.record?.scan?.status).toBe('review');
+  fireEvent.click(screen.getByRole('button', { name: /확인 완료/ }));
+  await settle(confirm, 1);
   fireEvent.click(screen.getByRole('button', { name: '확인한 회차 번역 시작' }));
-  await waitFor(() => expect(harness.app.getSnapshot().batch?.record?.phase).toBe('complete'), {
-    timeout: 10_000,
-  });
-  await screen.findByText(
-    '일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.',
-    {},
-    { timeout: 10_000 },
-  );
+  await settle(run, 1);
+  expect(harness.app.getSnapshot().batch?.record?.phase).toBe('complete');
+  expect(
+    screen.getByText('일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.'),
+  ).toBeInTheDocument();
   expect(harness.posts()).toHaveLength(4);
   expect(screen.getByRole('heading', { name: '합성 작품' })).toBeInTheDocument();
   harness.app.dispose();
-});
+}, 20_000);
 
 test('keeps a failed preparation error on B while preserving A as the latest record owner', async () => {
   const harness = fixture();
