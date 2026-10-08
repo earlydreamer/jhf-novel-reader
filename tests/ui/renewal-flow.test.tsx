@@ -828,9 +828,8 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
     fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
-    fireEvent.change(screen.getByLabelText('API 기본 주소'), {
-      target: { value: 'http://192.168.1.2:1234/v1' },
-    });
+    fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.168.1.2' } });
+    fireEvent.change(screen.getByLabelText('포트'), { target: { value: '1234' } });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
     await screen.findByText('모델 목록을 확인했어요. 번역 호환성은 아직 확인하지 않았어요.');
     fireEvent.click(screen.getByRole('button', { name: '모델 선택 전' }));

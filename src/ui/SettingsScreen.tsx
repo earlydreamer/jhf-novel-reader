@@ -13,6 +13,7 @@ import type { ConnectionConfig } from '../contracts/reading';
 import { GEMINI_BASE_URL } from '../providers/gemini';
 import type { ThemePreference } from '../storage/settings';
 import { Button } from './components/Button';
+import { Chip } from './components/Chip';
 import { Dialog } from './components/Modal';
 import { ListItem } from './components/ListItem';
 import { Switch } from './components/Switch';
@@ -154,6 +155,20 @@ function timingLabel(state: RenewalSnapshot): string {
   return `원문 준비 ${Math.round(timings.sourceMs)}ms · 모델 대기 ${Math.round(timings.modelMs)}ms · 결과 확인·저장 ${Math.round(timings.validationStorageMs)}ms · 리더 표시 ${Math.round(timings.readerDisplayMs)}ms`;
 }
 
+/** `http://주소[:포트]/v1` 형식이면 주소와 포트로 나눈다. 다른 형식이면 null. */
+export function parsePresetAddress(baseUrl: string): { host: string; port: string } | null {
+  const match = /^http:\/\/([^/:?#\s@]+)(?::(\d{1,5}))?\/v1\/?$/i.exec(baseUrl.trim());
+  return match ? { host: match[1]!, port: match[2] ?? '' } : null;
+}
+
+/** 주소·포트 입력으로 OpenAI 호환 기본 주소를 만든다. 주소가 비면 빈 문자열. */
+export function composePresetAddress(host: string, port: string): string {
+  const trimmedHost = host.trim();
+  if (!trimmedHost) return '';
+  const trimmedPort = port.trim();
+  return `http://${trimmedHost}${trimmedPort ? `:${trimmedPort}` : ''}/v1`;
+}
+
 export function SettingsScreen({
   state,
   onChange,
@@ -167,6 +182,14 @@ export function SettingsScreen({
   const secret = useRef<HTMLInputElement>(null);
   const showSnackbar = useSnackbar();
   const secretHelpId = useId();
+  const addressHelpId = useId();
+  const [manualAddress, setManualAddress] = useState(
+    () =>
+      state.connection.baseUrl.trim() !== '' &&
+      parsePresetAddress(state.connection.baseUrl) === null,
+  );
+  const [host, setHost] = useState(() => parsePresetAddress(state.connection.baseUrl)?.host ?? '');
+  const [port, setPort] = useState(() => parsePresetAddress(state.connection.baseUrl)?.port ?? '');
   const [providerOpen, setProviderOpen] = useState(false);
   const [geminiOpen, setGeminiOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -241,7 +264,11 @@ export function SettingsScreen({
       setGeminiOpen(true);
       return;
     }
-    update({ provider: 'openai-compatible' });
+    // Gemini 고정 주소는 OpenAI 호환 서버에 쓸 수 없으므로 함께 비운다.
+    update({ provider: 'openai-compatible', baseUrl: '' });
+    setManualAddress(false);
+    setHost('');
+    setPort('');
   }
 
   const checking = state.catalogStatus === 'checking';
@@ -276,15 +303,107 @@ export function SettingsScreen({
           supporting={providerLabels[state.connection.provider]}
           onClick={() => setProviderOpen(true)}
         />
-        <label>
-          API 기본 주소
-          <input
-            type="url"
-            value={state.connection.baseUrl}
-            onChange={(event) => update({ baseUrl: event.target.value })}
-            placeholder="http://100.x.x.x:1234/v1"
-          />
-        </label>
+        {state.connection.provider === 'openai-compatible' ? (
+          <>
+            <Switch
+              label="전체 주소 직접 입력"
+              description="API 형식이 다르면 켜고 주소 전체를 그대로 적어 주세요."
+              checked={manualAddress}
+              onChange={(checked) => {
+                setManualAddress(checked);
+                if (!checked) {
+                  const parsed = parsePresetAddress(state.connection.baseUrl);
+                  setHost(parsed?.host ?? '');
+                  setPort(parsed?.port ?? '');
+                  // 해석할 수 없는 주소는 지우지 않는다. 사용자가 서버 주소를 적으면 그때 바뀐다.
+                }
+              }}
+            />
+            {manualAddress ? (
+              <label>
+                API 기본 주소
+                <input
+                  type="url"
+                  value={state.connection.baseUrl}
+                  onChange={(event) => update({ baseUrl: event.target.value })}
+                  placeholder="http://192.168.0.10:1234/v1"
+                />
+              </label>
+            ) : (
+              <>
+                <div className="nr-address-preset">
+                  <label>
+                    서버 주소
+                    <input
+                      type="text"
+                      inputMode="url"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={host}
+                      placeholder="192.168.0.10"
+                      aria-describedby={addressHelpId}
+                      onChange={(event) => {
+                        setHost(event.target.value);
+                        update({ baseUrl: composePresetAddress(event.target.value, port) });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    포트
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={5}
+                      value={port}
+                      placeholder="1234"
+                      aria-describedby={addressHelpId}
+                      onChange={(event) => {
+                        const next = event.target.value.replace(/\D/g, '').slice(0, 5);
+                        setPort(next);
+                        update({ baseUrl: composePresetAddress(host, next) });
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="nr-address-ports" role="group" aria-label="자주 쓰는 포트">
+                  <Chip
+                    label="LM Studio 1234"
+                    selected={port === '1234'}
+                    onClick={() => {
+                      setPort('1234');
+                      update({ baseUrl: composePresetAddress(host, '1234') });
+                    }}
+                  />
+                  <Chip
+                    label="Ollama 11434"
+                    selected={port === '11434'}
+                    onClick={() => {
+                      setPort('11434');
+                      update({ baseUrl: composePresetAddress(host, '11434') });
+                    }}
+                  />
+                </div>
+                <p id={addressHelpId}>
+                  {composePresetAddress(host, port)
+                    ? `완성 주소: ${composePresetAddress(host, port)}`
+                    : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 예: 192.168.0.10 · 1234'}
+                </p>
+              </>
+            )}
+          </>
+        ) : (
+          <label>
+            API 기본 주소
+            <input
+              type="url"
+              value={state.connection.baseUrl}
+              onChange={(event) => update({ baseUrl: event.target.value })}
+              placeholder="http://100.x.x.x:1234/v1"
+            />
+          </label>
+        )}
         {state.connection.authRef ? (
           <ListItem
             headline="인증값"
