@@ -24,7 +24,7 @@ describe('SettingsScreen theme section', () => {
       <SettingsScreen
         state={state}
         onChange={() => {}}
-        onCheck={async () => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
         onSelect={() => {}}
         onTheme={onTheme}
       />,
@@ -48,7 +48,7 @@ describe('SettingsScreen theme section', () => {
       <SettingsScreen
         state={state}
         onChange={() => {}}
-        onCheck={async () => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
         onSelect={() => {}}
         onTheme={onTheme}
       />,
@@ -66,7 +66,7 @@ describe('SettingsScreen theme section', () => {
       <SettingsScreen
         state={state}
         onChange={() => {}}
-        onCheck={async () => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
         onSelect={() => {}}
         onTheme={onTheme}
       />,
@@ -84,7 +84,7 @@ describe('SettingsScreen theme section', () => {
       <SettingsScreen
         state={state}
         onChange={() => {}}
-        onCheck={async () => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
         onSelect={() => {}}
         onTheme={onTheme}
       />,
