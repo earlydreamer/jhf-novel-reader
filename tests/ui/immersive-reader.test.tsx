@@ -580,3 +580,24 @@ test('안내가 없으면 리더 안내 컨테이너를 렌더하지 않는다',
 
   expect(document.querySelector('.nr-reader-notices')).toBeNull();
 });
+
+test('번역 화면에서 서버 연결이 확인되지 않으면 연결 안내와 다시 확인 버튼을 보여 준다', () => {
+  render(<ImmersiveReader {...props({ route: 'translation', catalogStatus: 'connection' })} />);
+
+  expect(
+    screen.getByText('서버 연결이 확인되지 않았어요. 서버 주소와 상태를 확인해 주세요.'),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeInTheDocument();
+});
+
+test('연결은 됐지만 생성 모델이 없으면 모델 선택 안내를 보여 준다', () => {
+  render(
+    <ImmersiveReader
+      {...props({ route: 'translation', catalogStatus: 'connected', selectedModelId: null })}
+    />,
+  );
+
+  expect(
+    screen.getByText('생성 모델이 선택되지 않았어요. 연결 설정에서 모델을 선택해 주세요.'),
+  ).toBeInTheDocument();
+});
