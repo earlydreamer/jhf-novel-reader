@@ -1179,6 +1179,12 @@ describe('renewal connection check result', () => {
       { reason: 'redirect', httpStatus: 302 },
     ],
     [
+      'mismatched response address',
+      () => new ReaderError('connection', 'received', 200),
+      'connection',
+      { reason: 'redirect' },
+    ],
+    [
       'HTTP 503',
       () => new ReaderError('connection', 'received', 503),
       'connection',

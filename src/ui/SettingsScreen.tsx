@@ -211,9 +211,9 @@ export function SettingsScreen({
     let result: ConnectionCheckResult;
     try {
       result = await onCheck(secret);
-    } catch (error) {
+    } catch {
       showSnackbar(catalogLabels.model_list);
-      throw error;
+      return;
     }
     const message = checkResultMessage(result);
     if (message) showSnackbar(message);

@@ -397,6 +397,8 @@ describe('연결 확인 결과 알림', () => {
     authRejected: '서버가 인증값을 거부했어요(HTTP 401). 인증값을 다시 확인해 주세요.',
     badResponse: '서버 응답에서 모델 목록을 읽지 못했어요. API 주소와 제공자 설정을 확인해 주세요.',
     busy: '미리 번역 중에는 연결을 확인할 수 없어요. 번역이 끝난 뒤 다시 확인해 주세요.',
+    modelList: '모델 목록을 불러오지 못했어요. 잠시 뒤 다시 확인해 주세요.',
+    redirect: '서버가 다른 주소로 보내려고 했어요. 최종 API 주소를 직접 적어 주세요.',
   };
   const snackbarText = () => document.querySelector('.nr-snackbar__text')?.textContent;
   const connectionStatusText = () =>
@@ -479,6 +481,17 @@ describe('연결 확인 결과 알림', () => {
     serverError.controller.dispose();
   });
 
+  it('응답 주소가 요청과 달라 2xx가 막히면 리다이렉트 안내를 괄호 없이 보여 줘요', async () => {
+    const value = await checkWith(
+      vi.fn(async () => {
+        throw new ReaderError('connection', 'received', 200);
+      }),
+    );
+
+    await expectFailure(messages.redirect);
+    value.controller.dispose();
+  });
+
   it('인증 거부는 상태 코드를 포함한 안내를 보여 줘요', async () => {
     const value = await checkWith(
       vi.fn(async () => {
@@ -513,6 +526,28 @@ describe('연결 확인 결과 알림', () => {
 
     await expectFailure(messages.badResponse);
     value.controller.dispose();
+  });
+
+  it('확인 중 예외가 나도 스낵바로 알리고 처리되지 않은 rejection을 남기지 않아요', async () => {
+    const base = createRenewalController().getSnapshot();
+    const state = {
+      ...base,
+      connectionAvailable: true,
+      connection: { ...base.connection, baseUrl },
+    };
+    const onCheck = vi.fn(async (): Promise<never> => {
+      throw new Error('synthetic check failure');
+    });
+    render(
+      <SnackbarProvider>
+        <SettingsScreen state={state} onChange={() => {}} onCheck={onCheck} onSelect={() => {}} />
+      </SnackbarProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+
+    await waitFor(() => expect(snackbarText()).toBe(messages.modelList));
+    expect(onCheck).toHaveBeenCalledTimes(1);
   });
 
   it('미리 번역 중이면 확인을 건너뛰고 그 이유를 스낵바로 알려요', async () => {

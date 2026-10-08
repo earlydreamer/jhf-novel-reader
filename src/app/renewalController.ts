@@ -234,6 +234,8 @@ function problemOf(error: unknown): CatalogProblem {
     case 'connection':
       if (error.outcome !== 'received')
         return { reason: error.outcome === 'unknown' ? 'network' : 'invalid_url' };
+      // dispatch는 응답 주소가 요청과 다르면 2xx 상태 그대로 던진다. 리다이렉트로 분류한다.
+      if (httpStatus && httpStatus >= 200 && httpStatus < 300) return { reason: 'redirect' };
       if (httpStatus && httpStatus >= 300 && httpStatus < 400)
         return { reason: 'redirect', httpStatus };
       return httpStatus ? { reason: 'http', httpStatus } : { reason: 'network' };
