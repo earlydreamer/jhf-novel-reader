@@ -222,6 +222,9 @@ describe('Android 목록형 설정', () => {
 
     expect(screen.getByRole('radio', { name: 'Embedding model' })).toBeDisabled();
     expect(screen.getByRole('radio', { name: 'Generation model' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Embedding model' }));
+    expect(screen.getByRole('dialog', { name: '모델 선택' })).toBeVisible();
+    expect(value.controller.getSnapshot().selectedModelId).toBe('generation');
     expect(value.post).not.toHaveBeenCalled();
     value.controller.dispose();
   });
@@ -287,6 +290,16 @@ describe('Android 목록형 설정', () => {
     fireEvent.click(screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' }));
 
     expect(screen.getByText('저장된 번역은 어느 방식에서나 읽을 수 있어요.')).toBeVisible();
+    value.controller.dispose();
+  });
+
+  it('현재 테마를 다시 누르면 선택 대화상자를 닫아요', async () => {
+    const value = await setup();
+    fireEvent.click(screen.getByRole('button', { name: '테마 시스템 설정 따르기' }));
+
+    fireEvent.click(screen.getByRole('radio', { name: '시스템 설정 따르기' }));
+
+    expect(screen.queryByRole('dialog', { name: '테마 선택' })).not.toBeInTheDocument();
     value.controller.dispose();
   });
 
