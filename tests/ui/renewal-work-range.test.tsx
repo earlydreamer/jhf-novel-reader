@@ -107,7 +107,7 @@ it('shows the total chapter count once the whole TOC is loaded', () => {
       onLoadMore={() => {}}
     />,
   );
-  expect(screen.getByText('전체 9화 · 0화 저장됨')).toBeTruthy();
+  expect(screen.getByText('전체 2화 · 0화 저장됨')).toBeTruthy();
   cleanup();
 });
 

@@ -239,6 +239,138 @@ describe('automatic chapter dispatch and position writes', () => {
     controller.dispose();
   });
 
+  it.each([
+    ['workId', { workId: 'other-work' }],
+    ['chapterId', { chapterId: 'n9999aa/1' }],
+    ['versionId', { versionId: 'other-version' }],
+    ['blockId', { blockId: 'missing-block' }],
+  ])(
+    'classifies a stored position with a foreign %s as an error without fallback',
+    async (_field, mismatch) => {
+      const value = fixture(true);
+      const position = {
+        workId: page.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        blockId: 'translated-1',
+        offset: 5,
+        ...mismatch,
+      };
+      Object.assign(value.dependencies.library!, {
+        listRecent: vi.fn(async () => [
+          {
+            workId: page.workId,
+            chapterId: saved.source.chapterId,
+            versionId: saved.versionId,
+            updatedAt: '2026-10-08T00:00:00Z',
+          },
+        ]),
+        readPosition: vi.fn(async () => position),
+      });
+      const controller = manualController(value.dependencies);
+      await controller.openWork(page.canonicalUrl);
+      await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('error'));
+      await controller.continueReadingFromWork(page.workId);
+      expect(controller.getSnapshot().route.kind).toBe('work');
+      expect(controller.getSnapshot().chapter).toBeNull();
+      expect(value.generate).not.toHaveBeenCalled();
+      controller.dispose();
+    },
+  );
+
+  it.each([
+    [
+      'recent list read',
+      (value: ReturnType<typeof fixture>) => {
+        vi.mocked(value.dependencies.library!.listRecent).mockRejectedValue(
+          new Error('recent read failed'),
+        );
+      },
+    ],
+    [
+      'version read',
+      (value: ReturnType<typeof fixture>) => {
+        vi.mocked(value.dependencies.library!.listRecent).mockResolvedValue([
+          {
+            workId: page.workId,
+            chapterId: saved.source.chapterId,
+            versionId: saved.versionId,
+            updatedAt: '2026-10-08T00:00:00Z',
+          },
+        ]);
+        vi.mocked(value.dependencies.library!.readVersion).mockRejectedValue(
+          new Error('version read failed'),
+        );
+      },
+    ],
+  ])('classifies %s failures as error without fallback or translation', async (_name, failRead) => {
+    const value = fixture(true);
+    failRead(value);
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('error'));
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('work');
+    expect(controller.getSnapshot().chapter).toBeNull();
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('ignores a late missing version after leaving the work route', async () => {
+    const value = fixture(true);
+    const recent = [
+      {
+        workId: page.workId,
+        chapterId: saved.source.chapterId,
+        versionId: saved.versionId,
+        updatedAt: '2026-10-08T00:00:00Z',
+      },
+    ];
+    let resolveLate!: (version: CompletedTranslation | null) => void;
+    const lateRead = new Promise<CompletedTranslation | null>((resolve) => {
+      resolveLate = resolve;
+    });
+    Object.assign(value.dependencies.library!, {
+      listRecent: vi.fn(async () => recent),
+      readVersion: vi.fn().mockResolvedValueOnce(saved).mockReturnValueOnce(lateRead),
+    });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
+    const continuing = controller.continueReadingFromWork(page.workId);
+    await vi.waitFor(() =>
+      expect(value.dependencies.library!.readVersion).toHaveBeenCalledTimes(2),
+    );
+    controller.navigate({ kind: 'home' });
+    resolveLate(null);
+    await continuing;
+    expect(controller.getSnapshot().route.kind).toBe('home');
+    expect(controller.getSnapshot().chapter).toBeNull();
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  it('uses ordinal 101 as the first loaded chapter for a partial TOC fallback', async () => {
+    const value = fixture();
+    const chapter101 = { ...chapters[0]!, chapterId: `${page.workId}/101`, ordinal: 101 };
+    const partialPage: WorkPage = {
+      ...page,
+      chapters: [chapter101],
+      nextPageUrl: `${page.canonicalUrl}?p=2`,
+      complete: false,
+    };
+    vi.mocked(value.dependencies.source!.getWorkPage).mockResolvedValue(partialPage);
+    Object.assign(value.dependencies.library!, { listRecent: vi.fn(async () => []) });
+    const controller = manualController(value.dependencies);
+    await controller.openWork(page.canonicalUrl);
+    await vi.waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('none'));
+    await controller.continueReadingFromWork(page.workId);
+    expect(controller.getSnapshot().route.kind).toBe('translation');
+    expect(controller.getSnapshot().chapter?.chapterId).toBe(chapter101.chapterId);
+    expect(value.generate).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
   it('retries recent verification without navigation or translation, then permits the next continue action', async () => {
     const value = fixture(true);
     const recentRow = [
