@@ -1,4 +1,5 @@
 import type { JSX, MouseEvent, ReactNode } from 'react';
+import { Icon } from './Icon';
 
 export function ListItem({
   headline,
@@ -12,6 +13,7 @@ export function ListItem({
   onContextMenu,
   mainLabel,
   supportingId,
+  navigates = false,
 }: {
   headline: ReactNode;
   supporting?: ReactNode;
@@ -24,10 +26,12 @@ export function ListItem({
   onContextMenu?(event: MouseEvent<HTMLDivElement>): void;
   mainLabel?: string;
   supportingId?: string;
+  navigates?: boolean;
 }): JSX.Element {
   const classes = ['nr-list-item'];
   if (supporting) classes.push('nr-list-item--two-line');
   if (current) classes.push('nr-list-item--current');
+  if (navigates) classes.push('nr-list-item--navigates');
   return (
     <div className={classes.join(' ')} onContextMenu={onContextMenu}>
       <button
@@ -53,6 +57,11 @@ export function ListItem({
             </>
           )}
         </span>
+        {navigates && (
+          <span className="nr-list-item__chevron">
+            <Icon name="chevron_right" />
+          </span>
+        )}
       </button>
       {trailing && <span className="nr-list-item__trailing">{trailing}</span>}
     </div>

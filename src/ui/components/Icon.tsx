@@ -1,6 +1,7 @@
 import type { CSSProperties, JSX } from 'react';
 import arrowBack from '../icons/arrow_back.svg';
 import check from '../icons/check.svg';
+import chevronRight from '../icons/chevron_right.svg';
 import close from '../icons/close.svg';
 import deleteIcon from '../icons/delete.svg';
 import moreVert from '../icons/more_vert.svg';
@@ -13,6 +14,7 @@ import './components.css';
 const icons = {
   arrow_back: arrowBack,
   check,
+  chevron_right: chevronRight,
   close,
   delete: deleteIcon,
   link,

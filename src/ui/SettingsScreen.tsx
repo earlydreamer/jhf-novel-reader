@@ -301,6 +301,7 @@ export function SettingsScreen({
         <ListItem
           headline="제공자"
           supporting={providerLabels[state.connection.provider]}
+          navigates
           onClick={() => setProviderOpen(true)}
         />
         {state.connection.provider === 'openai-compatible' ? (
@@ -451,6 +452,7 @@ export function SettingsScreen({
         <ListItem
           headline="모델"
           supporting={modelLabel}
+          navigates
           disabled={checking || state.models.length === 0}
           onClick={() => setModelOpen(true)}
         />
@@ -462,6 +464,7 @@ export function SettingsScreen({
           <ListItem
             headline="로컬 번역 방식"
             supporting={modeLabels[state.translationMode]}
+            navigates
             disabled={modeDisabled}
             onClick={() => setModeOpen(true)}
           />
@@ -490,6 +493,7 @@ export function SettingsScreen({
           <ListItem
             headline="테마"
             supporting={themeLabels[state.theme]}
+            navigates
             onClick={() => setThemeOpen(true)}
           />
         </section>
@@ -508,6 +512,7 @@ export function SettingsScreen({
         <ListItem
           headline="오픈소스 라이선스"
           supporting="THIRD_PARTY_NOTICES.md · android/NOTICE"
+          navigates
           onClick={() => setLicensesOpen(true)}
         />
         <div className="nr-list-item nr-list-item--two-line">

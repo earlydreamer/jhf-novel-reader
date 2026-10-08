@@ -286,6 +286,16 @@ label.nr-list-item__main {
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
 }
+/* 대화상자·다른 화면으로 이어지는 행(#140): 현재 값을 강조색으로(One UI 설정 관례), 끝에 › 아이콘(M3 이동 행 관례). */
+.nr-list-item--navigates .nr-list-item__supporting {
+  color: var(--primary);
+}
+.nr-list-item__chevron {
+  display: flex;
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--on-surface-variant);
+}
 .nr-list-item--current .nr-list-item__supporting {
   color: inherit;
 }
@@ -301,6 +311,9 @@ label.nr-list-item__main:has(> input:disabled) {
 }
 .nr-list-item__main:disabled .nr-list-item__supporting,
 label.nr-list-item__main:has(> input:disabled) .nr-list-item__supporting {
+  color: inherit;
+}
+.nr-list-item__main:disabled .nr-list-item__chevron {
   color: inherit;
 }
 .nr-list-item__main:disabled::before,

@@ -100,4 +100,25 @@ describe('ListItem', () => {
     fireEvent.click(main);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+
+  it('shows a trailing chevron inside the main button when it navigates (#140)', () => {
+    const { container } = render(
+      <ListItem headline="테마" supporting="시스템 설정 따르기" navigates onClick={() => {}} />,
+    );
+    const row = container.querySelector('.nr-list-item') as HTMLElement;
+    expect(row).toHaveClass('nr-list-item--navigates');
+    const main = screen.getByRole('button', { name: '테마 시스템 설정 따르기' });
+    const chevron = main.querySelector('[data-icon="chevron_right"]');
+    expect(chevron).not.toBeNull();
+    expect(chevron?.closest('.nr-list-item__main')).toBe(main);
+    expect(main).toHaveAccessibleName('테마 시스템 설정 따르기');
+  });
+
+  it('has no chevron or navigation class by default', () => {
+    const { container } = render(
+      <ListItem headline="버전" supporting="0.1.0" onClick={() => {}} />,
+    );
+    expect(container.querySelector('.nr-list-item')).not.toHaveClass('nr-list-item--navigates');
+    expect(container.querySelector('[data-icon="chevron_right"]')).toBeNull();
+  });
 });
