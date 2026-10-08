@@ -31,7 +31,7 @@ export function ParagraphRetryPanel(props: {
       )}
       <details>
         <summary>문단을 골라 다시 번역</summary>
-        <p>선택한 문단만 현재 로컬 모델로 다시 번역하고 새 저장본으로 남깁니다.</p>
+        <p>선택한 문단만 현재 로컬 모델로 다시 번역하고 새 저장본으로 남겨요.</p>
         <label>
           재번역할 문단
           <select

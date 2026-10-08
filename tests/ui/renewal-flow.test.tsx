@@ -749,7 +749,7 @@ describe('renewal first reading screens', () => {
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
     fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
-    await screen.findByText('저장된 연결의 서버와 모델 목록을 확인하고 있습니다.');
+    await screen.findByText('저장된 연결의 서버와 모델 목록을 확인하고 있어요.');
     expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
     chooseReaderMenu('서재로 가기');

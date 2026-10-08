@@ -23,7 +23,7 @@ export function CandidateReview({
         루비와 반복되는 카타카나에서 후보를 찾았어요. 일반 단어도 섞일 수 있어요. 사용할 항목만
         선택하고 한국어 표기를 직접 입력해 주세요. 선택하지 않은 후보는 번역에 적용하지 않아요.
       </p>
-      {!candidates.length && <p>새 후보가 없습니다. 확인을 마치면 번역을 시작할 수 있습니다.</p>}
+      {!candidates.length && <p>새 후보가 없어요. 확인을 마치면 번역을 시작할 수 있어요.</p>}
       <fieldset disabled={disabled}>
         <legend>이번 범위에서 확정할 표기</legend>
         {candidates.slice(page * pageSize, (page + 1) * pageSize).map((candidate) => (

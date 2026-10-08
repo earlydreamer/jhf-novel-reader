@@ -36,8 +36,7 @@ export function GuidancePanel({
         setLoadedKey(loadKey);
       })
       .catch(() => {
-        if (mounted)
-          setMessage('저장한 용어집을 읽지 못했습니다. 기존 데이터를 덮어쓰지 않습니다.');
+        if (mounted) setMessage('저장한 용어집을 읽지 못했어요. 기존 데이터는 덮어쓰지 않아요.');
       })
       .finally(() => {
         if (mounted) setBusy(false);
@@ -48,7 +47,7 @@ export function GuidancePanel({
   }, [workId, onRead, loadKey]);
   function change(next: GuidanceDraft) {
     setDraft(next);
-    setMessage('변경 사항을 저장해야 번역에 적용됩니다.');
+    setMessage('변경 사항을 저장해야 번역에 적용돼요.');
   }
   async function save() {
     if (busy || locked || !available || loadedKey !== loadKey) return;
@@ -64,10 +63,10 @@ export function GuidancePanel({
         voices: value.voices,
         ...(value.plotSummary !== undefined ? { plotSummary: value.plotSummary } : {}),
       });
-      setMessage('저장했습니다. 다음 번역에 적용되며 기존 번역은 그대로 남습니다.');
+      setMessage('저장했어요. 다음 번역부터 적용되고 기존 번역은 그대로 남아요.');
     } catch {
       setMessage(
-        '저장하지 못했습니다. 필수 항목, 글자 수·별칭 수, 중복된 이름을 확인하세요. 입력은 그대로 남아 있습니다.',
+        '저장하지 못했어요. 필수 항목, 글자 수·별칭 수, 중복된 이름을 확인해 주세요. 입력한 내용은 그대로 남아 있어요.',
       );
     } finally {
       setBusy(false);
@@ -77,14 +76,14 @@ export function GuidancePanel({
     <details className="nr-guidance-panel">
       <summary>작품 용어집·캐릭터 말투</summary>
       <p>
-        이 작품에서 직접 저장한 항목 중 원문에 이름·별칭이 등장하는 항목만 적용합니다. 로컬 모델
-        번역에 사용하며, 화자가 불확실한 대사는 추측하지 않도록 전달합니다. 긴 용어집으로 입력
-        예산이 부족하면 항목을 줄인 뒤 다시 시작하세요.
+        이 작품에서 직접 저장한 항목 중 원문에 이름·별칭이 나오는 항목만 적용해요. 로컬 모델 번역에
+        쓰고, 화자가 불확실한 대사는 추측하지 않도록 전달해요. 용어집이 길어 입력 예산이 부족하면
+        항목을 줄인 뒤 다시 시작해 주세요.
       </p>
       <p>
-        저장 개수에는 제한이 없고, 번역 구간에 등장한 항목만 전달합니다. 원문·표기·이름은 80자,
-        분류는 40자, 설명은 300자, 말투 지침은 400자까지 입력하세요. 같은 이름(전각·반각 차이
-        포함)은 한 번만 등록할 수 있습니다.
+        저장 개수에는 제한이 없고, 번역 구간에 나온 항목만 전달해요. 원문·표기·이름은 80자, 분류는
+        40자, 설명은 300자, 말투 지침은 400자까지 입력할 수 있어요. 같은 이름(전각·반각 차이 포함)은
+        한 번만 등록할 수 있어요.
       </p>
       <fieldset disabled={busy || locked || !available || loadedKey !== loadKey}>
         <legend>용어집</legend>
@@ -226,7 +225,7 @@ export function GuidancePanel({
         >
           캐릭터 추가
         </button>
-      <button type="button" data-guidance-save onClick={() => void save()}>
+        <button type="button" data-guidance-save onClick={() => void save()}>
           용어집·말투 저장
         </button>
       </fieldset>

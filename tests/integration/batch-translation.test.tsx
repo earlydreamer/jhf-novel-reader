@@ -353,7 +353,7 @@ test('UI offers range and all preview with a separate explicit start action', as
     timeout: 10_000,
   });
   await screen.findByText(
-    '일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.',
+    '일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.',
     {},
     { timeout: 10_000 },
   );
@@ -592,7 +592,7 @@ test('the work editor only applies explicitly saved terms and supports multiple 
   fireEvent.change(screen.getByLabelText('용어 1 별칭'), { target: { value: '合成君, 先生' } });
   expect(await harness.app.readGuidance('n1234ab')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '용어집·말투 저장' }));
-  await screen.findByText(/저장했습니다. 다음 번역에 적용/);
+  await screen.findByText(/저장했어요. 다음 번역부터 적용/);
   expect((await harness.app.readGuidance('n1234ab'))?.terms[0]?.aliases).toEqual([
     '合成君',
     '先生',
@@ -613,7 +613,7 @@ test('the work glossary keeps a failed draft across Back and resets it for anoth
   fireEvent.change(sourceField, { target: { value: '초안은 저장 실패 뒤에도 남아야 해요.' } });
   harness.failGuidance = true;
   fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
-  await screen.findByText(/저장하지 못했습니다/);
+  await screen.findByText(/저장하지 못했어요/);
   expect(sourceField).toHaveValue('초안은 저장 실패 뒤에도 남아야 해요.');
   let handled = false;
   act(() => {
@@ -765,7 +765,7 @@ test('candidate UI requires a checked item and spelling, refreshes the editor af
   await waitFor(() => expect(screen.getByLabelText('용어 1 한국어 표기')).toHaveValue('알베르트'));
   expect(harness.posts()).toHaveLength(0);
   fireEvent.click(start);
-  await screen.findByText('일괄 번역 처리를 마쳤습니다. 목차에서 저장된 회차를 열어 읽으세요.');
+  await screen.findByText('일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.');
   await harness.app.continueReading(
     (await harness.library.listVersions('n1234ab/1'))[0]!.versionId,
   );
