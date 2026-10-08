@@ -76,25 +76,44 @@ export function WorkScreen({
     if (requestedDialog && dialogRequest) onDialogRequestHandled?.(dialogRequest.id);
   };
   const savedCount = new Set(savedChapterIds).size;
+  const uniqueChapterCount = new Set(work.chapters.map((chapter) => chapter.chapterId)).size;
   const maximumOrdinal = Math.max(0, ...work.chapters.map((chapter) => chapter.ordinal));
-  const recentOwnsWork = batch?.preparing
-    ? batch.preparingWorkId === work.workId
-    : batch?.record?.work.workId === work.workId;
+  const recordWorkId = batch?.record?.work.workId;
+  const batchOwner = batch?.preparing
+    ? batch.preparingWorkId
+    : batch?.active
+      ? recordWorkId
+      : (batch?.errorWorkId ?? recordWorkId);
+  const recentOwnsWork = batchOwner === work.workId;
   const currentBatchActive = Boolean(recentOwnsWork && batch?.active);
-  const batchRecord =
-    recentOwnsWork && batch?.record?.work.workId === work.workId ? batch.record : null;
-  const visibleBatch =
-    !recentOwnsWork || !batch
-      ? null
-      : batch.preparing && batch.record?.work.workId !== work.workId
+  const batchRecord = recordWorkId === work.workId ? (batch?.record ?? null) : null;
+  const visibleBatch = !batch
+    ? null
+    : batch.preparing
+      ? batch.preparingWorkId !== work.workId
+        ? null
+        : recordWorkId === work.workId
+          ? batch
+          : {
+              ...batch,
+              record: null,
+              error: null,
+              scanProgress: undefined,
+              chapterProgress: undefined,
+            }
+      : batchRecord
         ? {
             ...batch,
-            record: null,
-            error: null,
-            scanProgress: undefined,
-            chapterProgress: undefined,
+            error: batch.errorWorkId && batch.errorWorkId !== work.workId ? null : batch.error,
           }
-        : batch;
+        : batch.errorWorkId === work.workId
+          ? {
+              ...batch,
+              record: null,
+              scanProgress: undefined,
+              chapterProgress: undefined,
+            }
+          : null;
   const selectedTitles = titles?.entries ?? [];
   const chapterSavedTitle = (chapter: ChapterRef) =>
     selectedTitles.find(
@@ -118,7 +137,7 @@ export function WorkScreen({
         </p>
         <p className="nr-work-heading__meta">
           {work.complete
-            ? `전체 ${maximumOrdinal}화 · ${savedCount}화 저장됨`
+            ? `전체 ${uniqueChapterCount}화 · ${savedCount}화 저장됨`
             : `${maximumOrdinal}화까지 확인했어요 · ${savedCount}화 저장됨`}
         </p>
         <Button

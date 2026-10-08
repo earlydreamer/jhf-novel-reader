@@ -51,6 +51,7 @@ export type BatchState = {
   active: boolean;
   preparing: boolean;
   preparingWorkId?: string;
+  errorWorkId?: string;
   error: string | null;
   chapterProgress?: TranslationState['progress'];
   scanProgress?: { completed: number; total: number };
@@ -200,12 +201,19 @@ export function createBatchTranslation(dependencies: {
   const scannedSources = new Map<string, SourceSnapshot>();
   const listeners = new Set<(state: BatchState) => void>();
   function publish(update: Partial<BatchState>): void {
-    state = { ...state, ...update };
+    const next = { ...state, ...update };
+    if ('error' in update) {
+      if (update.error === null) next.errorWorkId = undefined;
+      else if (update.error !== undefined && update.errorWorkId === undefined)
+        next.errorWorkId = state.record?.work.workId;
+    }
+    if (next.errorWorkId === undefined) delete next.errorWorkId;
+    state = next;
     if (!disposed) listeners.forEach((listener) => listener(state));
   }
   async function persist(record: BatchRecord): Promise<void> {
     await dependencies.repository.write(record);
-    publish({ record, error: null });
+    publish({ record, error: null, errorWorkId: undefined });
   }
   async function matchesSelection(
     version: Awaited<ReturnType<LibraryStore['listVersions']>>[number],
@@ -294,7 +302,7 @@ export function createBatchTranslation(dependencies: {
         range.first < 1 ||
         range.last < range.first)
     ) {
-      publish({ error: '시작·끝 회차를 올바르게 입력하세요.' });
+      publish({ error: '시작·끝 회차를 올바르게 입력하세요.', errorWorkId: work.workId });
       return;
     }
     const control = new AbortController();
@@ -302,7 +310,13 @@ export function createBatchTranslation(dependencies: {
     const preparingWorkId = work.workId;
     cancelled = false;
     const frozenSelection = structuredClone(selection);
-    publish({ active: true, preparing: true, preparingWorkId, error: null });
+    publish({
+      active: true,
+      preparing: true,
+      preparingWorkId,
+      error: null,
+      errorWorkId: undefined,
+    });
     try {
       const completeWork = await collectWork(work, control.signal);
       const guidance = (await dependencies.guidance?.read(work.workId)) ?? null;
@@ -349,6 +363,7 @@ export function createBatchTranslation(dependencies: {
         error: cancelled
           ? '번역 대상 확인을 중단했습니다.'
           : '전체 목차와 지정 범위를 확인하지 못했습니다. 누락 회차나 범위를 확인하세요. 한 작업에는 최대 10,000화를 담을 수 있습니다.',
+        errorWorkId: preparingWorkId,
       });
     } finally {
       preparation = null;
@@ -653,7 +668,15 @@ export function createBatchTranslation(dependencies: {
         : undefined;
     if (activeOwner === workId) return false;
     if (state.record?.work.workId === workId) {
-      publish({ record: null, error: null, chapterProgress: undefined, scanProgress: undefined });
+      const clearError = state.errorWorkId === undefined || state.errorWorkId === workId;
+      publish({
+        record: null,
+        ...(clearError ? { error: null, errorWorkId: undefined } : {}),
+        chapterProgress: undefined,
+        scanProgress: undefined,
+      });
+    } else if (state.errorWorkId === workId) {
+      publish({ error: null, errorWorkId: undefined });
     }
     for (const [chapterId, source] of scannedSources)
       if (source.workId === workId) scannedSources.delete(chapterId);
