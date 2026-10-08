@@ -20,16 +20,17 @@ function privatePath(path: string): string {
   return `narou-reader/${path}`;
 }
 export function createNativePrivateFiles(
-  backend: Pick<FilesystemPlugin, 'readFile' | 'writeFile' | 'readdir'> = Filesystem,
+  backend: Pick<FilesystemPlugin, 'readFile' | 'writeFile' | 'readdir'> &
+    Partial<Pick<FilesystemPlugin, 'deleteFile'>> = Filesystem,
   getPlatform: () => string = platform,
 ): PrivateFiles {
   return {
     async list(directory) {
       native(getPlatform);
-      check(directory === 'chapters');
+      check(directory === 'chapters' || directory === 'versions' || directory === 'reading');
       try {
         const result = await backend.readdir({
-          path: 'narou-reader/chapters',
+          path: `narou-reader/${directory}`,
           directory: Directory.LibraryNoCloud,
         });
         return result.files.filter((file) => file.type === 'file').map((file) => file.name);
@@ -91,6 +92,25 @@ export function createNativePrivateFiles(
         throw storageError(error);
       }
     },
+    async remove(path) {
+      native(getPlatform);
+      if (!backend.deleteFile) throw new StorageError('unsupported_platform');
+      try {
+        await backend.deleteFile({
+          path: privatePath(path),
+          directory: Directory.LibraryNoCloud,
+        });
+      } catch (error) {
+        if (
+          error &&
+          typeof error === 'object' &&
+          'code' in error &&
+          error.code === 'OS-PLUG-FILE-0008'
+        )
+          return;
+        throw storageError(error);
+      }
+    },
   };
 }
 export function createNativePreferences(
@@ -110,6 +130,15 @@ export function createNativePreferences(
       native(getPlatform);
       try {
         await backend.set(options);
+      } catch (error) {
+        throw storageError(error);
+      }
+    },
+    async remove(options) {
+      native(getPlatform);
+      if (!backend.remove) throw new StorageError('unsupported_platform');
+      try {
+        await backend.remove(options);
       } catch (error) {
         throw storageError(error);
       }

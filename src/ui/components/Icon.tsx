@@ -2,6 +2,7 @@ import type { CSSProperties, JSX } from 'react';
 import arrowBack from '../icons/arrow_back.svg';
 import check from '../icons/check.svg';
 import close from '../icons/close.svg';
+import deleteIcon from '../icons/delete.svg';
 import moreVert from '../icons/more_vert.svg';
 import settings from '../icons/settings.svg';
 import link from '../icons/link.svg';
@@ -13,6 +14,7 @@ const icons = {
   arrow_back: arrowBack,
   check,
   close,
+  delete: deleteIcon,
   link,
   more_vert: moreVert,
   search,

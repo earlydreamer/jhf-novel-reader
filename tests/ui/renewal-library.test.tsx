@@ -5,7 +5,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { Application } from '../../src/app/Application';
 import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
 import { ReaderError } from '../../src/contracts';
-import type { CompletedTranslation, WorkPage } from '../../src/contracts/reading';
+import type {
+  CompletedTranslation,
+  WorkPage,
+  WorkRemovalResult,
+} from '../../src/contracts/reading';
 import type { BatchState } from '../../src/translation/batch';
 
 afterEach(() => {
@@ -60,6 +64,14 @@ function libraryHarness(initial: readonly WorkPage[] = []) {
     commitVersion: vi.fn(async () => {}),
     savePosition: vi.fn(async () => {}),
     readPosition: vi.fn(async () => null),
+    removeWork: vi.fn(async (workId: string): Promise<WorkRemovalResult> => {
+      const index = ids.indexOf(workId);
+      if (index >= 0) ids.splice(index, 1);
+      works.delete(workId);
+      for (const chapterId of [...versions.keys()])
+        if (chapterId.startsWith(`${workId}/`)) versions.delete(chapterId);
+      return { removed: true as const, cleanupComplete: true, remainingInventory: [] };
+    }),
   };
   return { library, works, versions };
 }
@@ -367,5 +379,523 @@ it('손상된 작품 하나가 있어도 다른 작품 행과 최근 저장본�
   expect(await screen.findByText('일부 작품 정보를 불러오지 못했어요.')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /이어서 읽기/ }));
   await waitFor(() => expect(controller.getSnapshot().route.kind).toBe('reader'));
+  controller.dispose();
+});
+
+it('서재 작품 메뉴는 확인 전에는 삭제하지 않고 확인 뒤 행을 제거한다', async () => {
+  const cached = work('n1234aa', '제거할 작품');
+  const { library } = libraryHarness([cached]);
+  const controller = createRenewalController({ library });
+  render(<Application controller={controller} />);
+  await screen.findByText('제거할 작품', { selector: '.nr-list-item__headline' });
+
+  fireEvent.click(screen.getByRole('button', { name: '제거할 작품 메뉴' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('번역 0화');
+  fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+  expect(library.removeWork).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: '제거할 작품 메뉴' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+  await waitFor(() =>
+    expect(library.removeWork).toHaveBeenCalledExactlyOnceWith(cached.workId, {
+      activeBatchWorkId: undefined,
+    }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByText('제거할 작품', { selector: '.nr-list-item__headline' })).toBeNull(),
+  );
+  expect(await screen.findByText('서재에서 제거했어요.')).toBeVisible();
+  controller.dispose();
+});
+
+it.each([
+  {
+    title: '부분 정리',
+    result: {
+      removed: true as const,
+      cleanupComplete: false,
+      remainingInventory: ['library/index.removalInventory'],
+    },
+    expected: '서재 목록에서는 제거했지만 저장 데이터 정리를 끝내지 못했어요.',
+  },
+  {
+    title: '결과 불명',
+    result: { removed: null, cleanupComplete: false, remainingInventory: ['library/index'] },
+    expected: '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+  },
+])(
+  '서재에서 제거의 $title 결과는 확인 대화상자에서 정확히 안내한다',
+  async ({ result, expected }) => {
+    const target = work('n1313xy', '서재 결과 작품');
+    const { library } = libraryHarness([target]);
+    library.removeWork.mockResolvedValue(result);
+    const controller = createRenewalController({ library });
+    render(<Application controller={controller} />);
+    await screen.findByText('서재 결과 작품', { selector: '.nr-list-item__headline' });
+
+    fireEvent.click(screen.getByRole('button', { name: '서재 결과 작품 메뉴' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+    fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+    if (result.removed === true) {
+      expect(
+        await screen.findByRole('dialog', { name: '일부 데이터를 정리하지 못했어요' }),
+      ).toHaveTextContent(expected);
+      expect(controller.getSnapshot().libraryWorks).toEqual([]);
+    } else {
+      expect(await screen.findByRole('alert')).toHaveTextContent(expected);
+      expect(screen.getByRole('dialog')).toBeVisible();
+      expect(controller.getSnapshot().libraryWorks).toHaveLength(1);
+    }
+    controller.dispose();
+  },
+);
+
+it('새 batch 준비 중에는 이전 완료 기록 대신 preparingWorkId를 실제 guard로 쓴다', async () => {
+  const target = work('n1234aa', '완료 기록 작품');
+  const preparing = work('n5678bb', '준비 중 작품');
+  const { library } = libraryHarness([target]);
+  let batchSnapshot: BatchState = {
+    record: {
+      schemaVersion: 1,
+      id: 'old-complete',
+      createdAt: '2026-10-08T00:00:00Z',
+      work: target,
+      selection: {
+        connection: { provider: 'openai-compatible', baseUrl: '', revision: 0 },
+        modelId: 'fixture-model',
+        translationMode: 'legacy',
+      },
+      chapters: target.chapters,
+      retranslate: false,
+      alreadySaved: 0,
+      cursor: 1,
+      completed: 1,
+      skipped: 0,
+      phase: 'complete' as const,
+    },
+    active: true,
+    preparing: true,
+    preparingWorkId: preparing.workId,
+    error: null,
+  };
+  const staleBatchSnapshot = batchSnapshot;
+  const batchListeners: ((state: BatchState) => void)[] = [];
+  let flowCompleted: CompletedTranslation | null = savedVersion(target);
+  const flow = {
+    getSnapshot: () => ({ phase: 'idle', elapsedMs: 0 }),
+    getUnfinished: () => [],
+    getCompleted: () => flowCompleted,
+    clearWork: vi.fn(() => {
+      flowCompleted = null;
+      return true;
+    }),
+    subscribe: vi.fn(() => () => {}),
+    setForeground: vi.fn(),
+    initialize: vi.fn(async () => {}),
+    dispose: vi.fn(),
+    active: false,
+  } as unknown as NonNullable<RenewalDependencies['flow']>;
+  const batch = {
+    initialize: vi.fn(async () => {}),
+    setForeground: vi.fn(),
+    getSnapshot: () => batchSnapshot,
+    clearWork: vi.fn((workId: string) => {
+      if (batchSnapshot.record?.work.workId === workId)
+        batchSnapshot = { ...batchSnapshot, record: null };
+      return true;
+    }),
+    subscribe: vi.fn((listener: (state: BatchState) => void) => {
+      batchListeners.push(listener);
+      return () => {};
+    }),
+    dispose: vi.fn(),
+  } as unknown as NonNullable<RenewalDependencies['batch']>;
+  const controller = createRenewalController({
+    library,
+    batch,
+    flow,
+    source: { getWorkPage: vi.fn(async () => target), getChapter: vi.fn() },
+  });
+  render(<Application controller={controller} />);
+  fireEvent.click(await screen.findByRole('button', { name: '완료 기록 작품 메뉴' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+  await waitFor(() =>
+    expect(library.removeWork).toHaveBeenCalledWith(target.workId, {
+      activeBatchWorkId: preparing.workId,
+    }),
+  );
+  expect(batch.clearWork).toHaveBeenCalledWith(target.workId);
+  expect(controller.getSnapshot().batch).toMatchObject({
+    record: null,
+    active: true,
+    preparing: true,
+    preparingWorkId: preparing.workId,
+  });
+  act(() => batchListeners.forEach((listener) => listener(staleBatchSnapshot)));
+  expect(controller.getSnapshot().libraryWorks).toEqual([]);
+  expect(controller.getSnapshot().batch?.record).toBeNull();
+  await controller.openWork(target.canonicalUrl);
+  expect(controller.getSnapshot().route).toMatchObject({ kind: 'work', workId: target.workId });
+  act(() => batchListeners.forEach((listener) => listener(staleBatchSnapshot)));
+  expect(controller.getSnapshot().route).toMatchObject({ kind: 'work', workId: target.workId });
+  expect(controller.getSnapshot().batch?.record).toBeNull();
+  flowCompleted = savedVersion(target);
+  const newerOtherWorkState: BatchState = {
+    ...staleBatchSnapshot,
+    record: {
+      ...staleBatchSnapshot.record!,
+      id: 'new-other-work',
+      work: preparing,
+      chapters: preparing.chapters,
+    },
+  };
+  act(() => batchListeners.forEach((listener) => listener(newerOtherWorkState)));
+  expect(controller.getSnapshot().libraryWorks).toEqual([]);
+  controller.goHome();
+  await screen.findByText('완료 기록 작품', { selector: '.nr-list-item__headline' });
+  expect(controller.getSnapshot().libraryWorks.map((entry) => entry.work.workId)).toEqual([
+    target.workId,
+  ]);
+  expect(controller.getSnapshot().libraryWorks[0]?.savedChapterIds).toEqual([]);
+  expect(controller.getSnapshot().recent).toEqual([]);
+  controller.dispose();
+});
+
+it('preparingWorkId 대상 제거는 이전 작품 record가 달라도 차단한다', async () => {
+  const target = work('n1234aa', '준비 중인 작품');
+  const previous = work('n5678bb', '이전 batch 작품');
+  const { library } = libraryHarness([target]);
+  const batch = {
+    initialize: vi.fn(async () => {}),
+    setForeground: vi.fn(),
+    getSnapshot: () => ({
+      record: {
+        schemaVersion: 1,
+        id: 'old-paused',
+        createdAt: '2026-10-08T00:00:00Z',
+        work: previous,
+        selection: {
+          connection: {
+            provider: 'openai-compatible',
+            baseUrl: 'https://example.com/v1',
+            revision: 0,
+          },
+          modelId: 'fixture-model',
+          translationMode: 'legacy',
+        },
+        chapters: previous.chapters,
+        retranslate: false,
+        alreadySaved: 0,
+        cursor: 0,
+        completed: 0,
+        skipped: 0,
+        phase: 'paused',
+      },
+      active: true,
+      preparing: true,
+      preparingWorkId: target.workId,
+      error: null,
+    }),
+    clearWork: vi.fn(() => true),
+    subscribe: vi.fn(() => () => {}),
+    dispose: vi.fn(),
+  } as unknown as NonNullable<RenewalDependencies['batch']>;
+  const controller = createRenewalController({ library, batch });
+  render(<Application controller={controller} />);
+  fireEvent.click(await screen.findByRole('button', { name: '준비 중인 작품 메뉴' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '이 작품의 일괄 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 제거해 주세요.',
+  );
+  expect(library.removeWork).not.toHaveBeenCalled();
+  controller.dispose();
+});
+
+it('제거보다 늦게 끝난 URL 목차 요청은 작품을 다시 등록하지 않는다', async () => {
+  const target = work('n1515nn', '늦게 열린 작품');
+  const { library } = libraryHarness([target]);
+  let finishFetch!: (page: WorkPage) => void;
+  const fetchPending = new Promise<WorkPage>((resolve) => {
+    finishFetch = resolve;
+  });
+  const controller = createRenewalController({
+    library,
+    source: { getWorkPage: vi.fn(() => fetchPending), getChapter: vi.fn() },
+    normalizeInput: (url) => url,
+  });
+  const opening = controller.openWork(target.canonicalUrl);
+  await waitFor(() => expect(controller.getSnapshot().busy).toBe(true));
+  const removed = await controller.removeWork(target.workId);
+  expect(removed).toMatchObject({ removed: true, cleanupComplete: true });
+  finishFetch(target);
+  await opening;
+
+  expect(library.saveWorkPage).not.toHaveBeenCalled();
+  expect(controller.getSnapshot().route.kind).toBe('home');
+  controller.dispose();
+});
+
+it('제거보다 늦게 끝난 이어읽기 조회는 삭제된 작품을 다시 열지 않는다', async () => {
+  const target = work('n1414xz', '늦게 이어읽는 작품');
+  const saved = savedVersion(target);
+  const { library } = libraryHarness([target]);
+  let finishRead!: (value: CompletedTranslation) => void;
+  library.readVersion.mockImplementation(
+    () => new Promise<CompletedTranslation>((resolve) => (finishRead = resolve)),
+  );
+  const controller = createRenewalController({ library });
+  const opening = controller.continueReading(saved.versionId);
+  expect(await controller.removeWork(target.workId)).toMatchObject({
+    removed: true,
+    cleanupComplete: true,
+  });
+  finishRead(saved);
+  await opening;
+
+  expect(controller.getSnapshot().route).toEqual({ kind: 'home' });
+  expect(controller.getSnapshot().version).toBeNull();
+  expect(library.readWork).not.toHaveBeenCalled();
+  controller.dispose();
+});
+
+it('같은 작품을 다시 등록해도 제거 전 livePosition을 새 번역에 적용하지 않는다', async () => {
+  const target = work('n1515xy', '위치 초기화 작품');
+  const oldVersion = savedVersion(target);
+  const nextVersion: CompletedTranslation = {
+    ...oldVersion,
+    versionId: 'new-after-removal',
+    provenance: {
+      ...oldVersion.provenance,
+      promptVersion: 'colomo-local-v1',
+      generation: {
+        mode: 'colomo-local-v1',
+        segments: 1,
+        contextTokens: 2048,
+        inputBudgetTokens: 1024,
+        maxOutputTokens: 1024,
+      },
+    },
+  };
+  const { library, versions: versionsByChapter } = libraryHarness([target]);
+  let removed = false;
+  library.listVersions.mockImplementation(async (chapterId: string) =>
+    chapterId === oldVersion.source.chapterId && !removed ? [oldVersion] : [],
+  );
+  library.removeWork.mockImplementation(async (workId: string) => {
+    removed = true;
+    return { removed: true, cleanupComplete: true, remainingInventory: [] };
+  });
+  let completed: CompletedTranslation | null = null;
+  const flow = {
+    initialize: vi.fn(async () => {}),
+    setForeground: vi.fn(),
+    getSnapshot: () => ({ phase: 'idle', elapsedMs: 0 }),
+    getUnfinished: () => [],
+    getCompleted: () => completed,
+    getTimings: () => ({ sourceMs: 0, modelMs: 0, validationStorageMs: 0 }),
+    clearWork: vi.fn(() => {
+      completed = null;
+      return true;
+    }),
+    start: vi.fn(async () => {
+      completed = nextVersion;
+    }),
+    subscribe: vi.fn(() => () => {}),
+    dispose: vi.fn(),
+    active: false,
+  } as unknown as NonNullable<RenewalDependencies['flow']>;
+  const controller = createRenewalController({
+    library,
+    flow,
+    streamingAvailable: true,
+    source: { getWorkPage: vi.fn(async () => target), getChapter: vi.fn() },
+    connect: vi.fn(async () => ({
+      listModels: vi.fn(async () => [
+        { id: 'fixture-hymt2', displayName: 'Fixture', supportsGeneration: true },
+      ]),
+      translateChapter: vi.fn(async () => ({
+        text: 'translated',
+        finishReason: 'complete' as const,
+      })),
+    })),
+  });
+  versionsByChapter.set(oldVersion.source.chapterId, [oldVersion]);
+  await controller.initialize();
+  await controller.continueReading(oldVersion.versionId);
+  await controller.refreshSource();
+  controller.previewPosition(0, 37);
+  expect(await controller.removeWork(target.workId)).toMatchObject({
+    removed: true,
+    cleanupComplete: true,
+  });
+
+  await controller.openWork(target.canonicalUrl);
+  controller.changeConnection({ provider: 'openai-compatible', baseUrl: 'http://localhost:1234' });
+  await controller.checkConnection();
+  expect(controller.getSnapshot().catalogStatus).toBe('connected');
+  controller.chooseModel('fixture-hymt2');
+  expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
+  await controller.selectChapter(target.chapters[0]!);
+  expect(controller.getSnapshot().route).toMatchObject({ kind: 'translation' });
+  await controller.translate();
+
+  expect(flow.start).toHaveBeenCalledOnce();
+  expect(library.savePosition).not.toHaveBeenCalled();
+  controller.dispose();
+});
+
+it('제거는 이미 시작된 대상 작품 제목·용어집 저장이 끝날 때까지 기다린다', async () => {
+  const target = work('n1616oo', '용어집 저장 작품');
+  const { library } = libraryHarness([target]);
+  let finishSave!: () => void;
+  const savePending = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  const guidance = {
+    read: vi.fn(async () => null),
+    save: vi.fn(async (workId: string, draft: { terms: []; voices: [] }) => {
+      await savePending;
+      return { workId, ...draft, updatedAt: '2026-10-08T00:00:00Z' };
+    }),
+  } as unknown as NonNullable<RenewalDependencies['guidance']>;
+  const controller = createRenewalController({ library, guidance });
+  await controller.openLibraryWork(target.workId);
+  const saving = controller.saveGuidance(target.workId, { terms: [], voices: [] });
+  await waitFor(() => expect(guidance.save).toHaveBeenCalledOnce());
+  let removalSettled = false;
+  const removing = controller.removeWork(target.workId).then((result) => {
+    removalSettled = true;
+    return result;
+  });
+  await Promise.resolve();
+  expect(removalSettled).toBe(false);
+  expect(library.removeWork).not.toHaveBeenCalled();
+  finishSave();
+  await saving;
+
+  expect(await removing).toMatchObject({ removed: true, cleanupComplete: true });
+  expect(library.removeWork).toHaveBeenCalledOnce();
+  controller.dispose();
+});
+
+it('작품 제목 저장 중에는 대상 제거가 저장 완료를 기다린다', async () => {
+  const target = work('n1717pp', '제목 저장 작품');
+  const { library } = libraryHarness([target]);
+  let finishSave!: () => void;
+  const savePending = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  const titles = {
+    read: vi.fn(async () => []),
+    readAttempts: vi.fn(async () => []),
+    recordAttempt: vi.fn(async () => {}),
+    save: vi.fn(
+      async (
+        _workId: string,
+        entries: readonly {
+          key: string;
+          source: string;
+          target: string;
+          origin: 'user';
+          updatedAt: string;
+        }[],
+      ) => {
+        await savePending;
+        return entries;
+      },
+    ),
+  } as unknown as NonNullable<RenewalDependencies['titles']>;
+  const controller = createRenewalController({ library, titles });
+  await controller.openLibraryWork(target.workId);
+  const saving = controller.saveTitle(target.chapters[0]!.chapterId, '저장 제목');
+  await waitFor(() => expect(titles.save).toHaveBeenCalledOnce());
+  const removing = controller.removeWork(target.workId);
+  await Promise.resolve();
+  expect(library.removeWork).not.toHaveBeenCalled();
+  finishSave();
+  await saving;
+
+  expect(await removing).toMatchObject({ removed: true, cleanupComplete: true });
+  expect(library.removeWork).toHaveBeenCalledOnce();
+  controller.dispose();
+});
+
+it('읽기 위치 저장이 진행 중이면 제거가 저장 writer를 기다린다', async () => {
+  const target = work('n1818qq', '위치 저장 작품');
+  const saved = savedVersion(target);
+  const { library, versions } = libraryHarness([target]);
+  versions.set(saved.source.chapterId, [saved]);
+  let finishSave!: () => void;
+  const savePending = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  library.savePosition.mockImplementation(async () => savePending);
+  const controller = createRenewalController({ library });
+  await controller.continueReading(saved.versionId);
+  const saving = controller.savePosition(saved.blocks[0]!.id, 12);
+  await waitFor(() => expect(library.savePosition).toHaveBeenCalledOnce());
+  const removing = controller.removeWork(target.workId);
+  await Promise.resolve();
+  expect(library.removeWork).not.toHaveBeenCalled();
+  finishSave();
+  await saving;
+
+  expect(await removing).toMatchObject({ removed: true, cleanupComplete: true });
+  expect(library.removeWork).toHaveBeenCalledOnce();
+  controller.dispose();
+});
+
+it('목차 appbar 제거에서 부분 정리 결과를 목록 제거와 별도로 알린다', async () => {
+  const target = work('n2828aa', '부분 정리 작품');
+  const { library } = libraryHarness([target]);
+  library.removeWork.mockResolvedValue({
+    removed: true,
+    cleanupComplete: false,
+    remainingInventory: ['versions/saved-partial.0.json'],
+  });
+  const controller = createRenewalController({ library });
+  render(<Application controller={controller} />);
+  await controller.openLibraryWork(target.workId);
+  await screen.findByRole('heading', { name: target.title });
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+  expect(
+    await screen.findByRole('dialog', { name: '일부 데이터를 정리하지 못했어요' }),
+  ).toHaveTextContent('서재 목록에서는 제거했지만 저장 데이터 정리를 끝내지 못했어요.');
+  expect(controller.getSnapshot().route.kind).toBe('home');
+  expect(controller.getSnapshot().libraryWorks).toEqual([]);
+  controller.dispose();
+});
+
+it('제거 여부가 불명확하면 목차에서 머물며 확인 실패를 대화상자에 알린다', async () => {
+  const target = work('n2929bb', '결과 불명 작품');
+  const { library } = libraryHarness([target]);
+  library.removeWork.mockResolvedValue({
+    removed: null,
+    cleanupComplete: false,
+    remainingInventory: ['library/index'],
+  });
+  const controller = createRenewalController({ library });
+  render(<Application controller={controller} />);
+  await controller.openLibraryWork(target.workId);
+  await screen.findByRole('heading', { name: target.title });
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+  );
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(controller.getSnapshot().route).toEqual({ kind: 'work', workId: target.workId });
   controller.dispose();
 });

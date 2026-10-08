@@ -21,6 +21,7 @@ export type LegacyMigrationInput = {
   readonly cacheKeys: readonly string[];
   readonly legacy: ReaderStore;
   readonly library: LibraryStore;
+  readonly skipWorkIds?: readonly string[];
 };
 
 type PreparedMigration = {
@@ -116,6 +117,10 @@ export async function migrateLegacyData(
     if (!stored.chapter) {
       skipped++;
       warnings.push({ cacheKey, reason: 'unfinished' });
+      continue;
+    }
+    if (input.skipWorkIds?.includes(stored.chapter.source.workId)) {
+      skipped++;
       continue;
     }
     const prepared = await prepare(stored.chapter);

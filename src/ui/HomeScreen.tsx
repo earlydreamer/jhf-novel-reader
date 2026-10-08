@@ -15,6 +15,7 @@ export interface HomeScreenProps {
   onCloseUrlDialog(): void;
   onOpen(url: string): void;
   onOpenLibraryWork(workId: string): void;
+  onRequestRemove(workId: string, title: string): void;
   onBrowse(startUrl?: string): void;
   onContinue(versionId: string): void;
   onOpenPendingSave(): void;
@@ -120,6 +121,16 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
                           {
                             label: '원문 사이트에서 보기',
                             onSelect: () => props.onBrowse(work.canonicalUrl),
+                          },
+                          {
+                            label: '서재에서 제거하기',
+                            tone: 'danger',
+                            icon: 'delete',
+                            onSelect: () =>
+                              props.onRequestRemove(
+                                work.workId,
+                                state.recentTitles[work.workId] ?? work.title,
+                              ),
                           },
                         ]}
                       />

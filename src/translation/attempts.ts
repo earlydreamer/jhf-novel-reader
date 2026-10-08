@@ -7,7 +7,7 @@ export interface AttemptRepository {
   write(value: Attempt): Promise<void>;
   readUnfinished(): Promise<readonly TranslationToken[]>;
 }
-async function validate(value: unknown): Promise<Attempt[]> {
+export async function validateAttempts(value: unknown): Promise<Attempt[]> {
   check(Array.isArray(value));
   const ids = new Set<string>();
   for (const entry of value) {
@@ -25,7 +25,7 @@ async function validate(value: unknown): Promise<Attempt[]> {
 /** Fail closed on a damaged attempt journal: loss of evidence must never authorize a POST. */
 export function createAttemptRepository(files: PrivateFiles): AttemptRepository {
   const journal = new Journal(files);
-  const read = async () => (await journal.load('attempts/index', validate))?.value ?? [];
+  const read = async () => (await journal.load('attempts/index', validateAttempts))?.value ?? [];
   return {
     write(input) {
       const value = structuredClone(input);
@@ -33,7 +33,7 @@ export function createAttemptRepository(files: PrivateFiles): AttemptRepository 
         const entries = await read();
         const next = entries.filter((entry) => entry.token.requestId !== value.token.requestId);
         next.push(value);
-        await journal.save('attempts/index', next, validate);
+        await journal.save('attempts/index', next, validateAttempts);
       });
     },
     readUnfinished: () =>

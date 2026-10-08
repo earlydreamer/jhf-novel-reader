@@ -12,6 +12,7 @@ export function createV1Migration(
 ): () => Promise<LegacyMigrationSummary> {
   return async () => {
     const cacheKey = await createLastChapterRepository(preferences).read();
+    const removalInventory = (await library.readRemovalInventory?.()) ?? [];
     const cacheKeys = cacheKey ? [cacheKey] : [];
     for (const name of (await files.list?.('chapters')) ?? []) {
       const match = /^(v1-[a-f0-9]{64})\.[01]\.json$/.exec(name);
@@ -21,6 +22,7 @@ export function createV1Migration(
       cacheKeys,
       legacy: createReaderStore(files),
       library,
+      skipWorkIds: removalInventory.map((entry) => entry.workId),
     });
   };
 }

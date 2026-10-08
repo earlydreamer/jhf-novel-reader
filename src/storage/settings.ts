@@ -2,7 +2,8 @@ import { selected } from './readingValidation';
 import type { PreferencesPlugin } from '@capacitor/preferences';
 import { StorageError, storageError } from './errors';
 import { check, integer, object, snapshot as cloneInput } from './validation';
-export type PreferenceBackend = Pick<PreferencesPlugin, 'get' | 'set'>;
+export type PreferenceBackend = Pick<PreferencesPlugin, 'get' | 'set'> &
+  Partial<Pick<PreferencesPlugin, 'remove'>>;
 const queues = new WeakMap<PreferenceBackend, Promise<unknown>>();
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type ReadingBackground = 'theme' | 'sepia' | 'black';

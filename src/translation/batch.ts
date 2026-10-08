@@ -50,6 +50,7 @@ export type BatchState = {
   record: BatchRecord | null;
   active: boolean;
   preparing: boolean;
+  preparingWorkId?: string;
   error: string | null;
   chapterProgress?: TranslationState['progress'];
   scanProgress?: { completed: number; total: number };
@@ -70,6 +71,7 @@ export interface BatchTranslation {
   scan(): Promise<void>;
   confirmCandidates(choices: readonly CandidateChoice[]): Promise<void>;
   cancel(): void;
+  clearWork(workId: string): boolean;
   retrySave(): Promise<void>;
   getSnapshot(): BatchState;
   readonly active: boolean;
@@ -80,7 +82,8 @@ export interface BatchTranslation {
 const MAX_BATCH_CHAPTERS = 10000;
 // 범위가 커도 원문 전문은 처음 8화까지만 재사용한다. 나머지는 번역할 때 다시 가져온다.
 const SCANNED_SOURCE_CACHE_SIZE = 8;
-async function validateBatch(value: unknown): Promise<BatchRecord> {
+export async function validateBatch(value: unknown): Promise<BatchRecord | null> {
+  if (value === null) return null;
   if (
     value &&
     typeof value === 'object' &&
@@ -296,9 +299,10 @@ export function createBatchTranslation(dependencies: {
     }
     const control = new AbortController();
     preparation = control;
+    const preparingWorkId = work.workId;
     cancelled = false;
     const frozenSelection = structuredClone(selection);
-    publish({ active: true, preparing: true, error: null });
+    publish({ active: true, preparing: true, preparingWorkId, error: null });
     try {
       const completeWork = await collectWork(work, control.signal);
       const guidance = (await dependencies.guidance?.read(work.workId)) ?? null;
@@ -348,7 +352,7 @@ export function createBatchTranslation(dependencies: {
       });
     } finally {
       preparation = null;
-      publish({ active: false, preparing: false });
+      publish({ active: false, preparing: false, preparingWorkId: undefined });
     }
   }
   function canReview(): boolean {
@@ -641,6 +645,20 @@ export function createBatchTranslation(dependencies: {
     preparation?.abort();
     if (state.active && !state.preparing) dependencies.flow.cancel();
   }
+  function clearWork(workId: string): boolean {
+    const activeOwner = state.preparing
+      ? state.preparingWorkId
+      : state.active
+        ? state.record?.work.workId
+        : undefined;
+    if (activeOwner === workId) return false;
+    if (state.record?.work.workId === workId) {
+      publish({ record: null, error: null, chapterProgress: undefined, scanProgress: undefined });
+    }
+    for (const [chapterId, source] of scannedSources)
+      if (source.workId === workId) scannedSources.delete(chapterId);
+    return true;
+  }
   const unsubscribe = dependencies.flow.subscribe((chapterState) => {
     if (state.active && !state.preparing) publish({ chapterProgress: chapterState.progress });
   });
@@ -651,6 +669,7 @@ export function createBatchTranslation(dependencies: {
     confirmCandidates,
     run,
     cancel,
+    clearWork,
     retrySave,
     getSnapshot: (): BatchState => state,
     get active(): boolean {
