@@ -75,7 +75,7 @@ active/progress/error/scan/review/run/retry/stop의 모든 work-specific 표시�
 
 ### 공통 controller·제거 계약
 
-기존 selectChapter, continueReading, loadMoreWorkPage, translateTitles, saveTitle, readGuidance, saveGuidance, prepareBatch, scanBatch, confirmBatchCandidates, runBatch, retryBatchSave, cancelBatch, removeWork 및 snapshot을 우선 재사용한다. 추가 접점은 controller의 work별 recent verification snapshot(status loading/verified/none/error)과 continueReadingFromWork(workId) wrapper로 제한한다. Home의 continueReading(versionId) string 계약은 그대로 둔다. 저장소 API/schema 증설은 필요하지 않다.
+기존 selectChapter, continueReading, loadMoreWorkPage, translateTitles, saveTitle, readGuidance, saveGuidance, prepareBatch, scanBatch, confirmBatchCandidates, runBatch, retryBatchSave, cancelBatch, removeWork 및 snapshot을 우선 재사용한다. 추가 접점은 controller의 work별 recent verification snapshot(status loading/verified/none/error), continueReadingFromWork(workId) wrapper와 오류 후 검증만 다시 하는 retryWorkRecent(workId)로 제한한다. retryWorkRecent만으로 route/회차 선택/모델 POST를 실행하지 않고 검증된 snapshot을 새로 확인한 뒤 사용자가 이어 읽기를 눌러 이동한다. Home의 continueReading(versionId) string 계약은 그대로 둔다. 저장소 API/schema 증설은 필요하지 않다.
 
 #94의 공통 제거 Dialog에 연결해 차단, 결과 불명, partial cleanup, 완료를 구분한다. 진행 중 busy, 재시도, 제거 후 공통 안내도 그대로 쓴다. 모든 신규 문구는 해요체, 원인과 다음 행동을 한 문장으로 표현한다.
 
@@ -131,3 +131,6 @@ active/progress/error/scan/review/run/retry/stop의 모든 work-specific 표시�
 - Modal keepMounted는 닫힌 DOM의 CSS display override/접근성/focus 위험이 있으므로 opt-in 범위와 기본 unmount 동작을 회귀로 나눠 검증한다.
 - #94의 공통 remove dialog는 Application에 이미 있으므로 목차 화면도 같은 결과 처리 경로를 호출한다. 새 제거 UX/저장 계약을 만들지 않는다.
 
+## 최종 구현·검증 출처
+
+최종 제품과 설치 후보는 b7e3297358294f2ed1857b01ca81b52aba8de6af / tree874f2b128bf83e4508e74d5043f846c5810f5174다. 원본 승인 계획 SHA471b85ab414d4be3374838336d24d3329ee0b75ab03e3e641cd842d495660220은 root/Vault에 그대로 보존했다. recent 재검증 접점은 기존 오류/재시도 요구를 구현하면서 실제 동작 경계를 명시한 보정이며 저장소 API/schema나 Home 계약은 변경하지 않았다. Sol 코드·APK·Chromium 독립 감사와 최신78파일1003테스트/Android CI 성공, 전체 화면 Dialog 간격 및 링크48px 수정은 [실행 검증 보고서](issue-95-work-screen-verification-2026-10-08.md)에 기록한다. 양기기 최종 실기와 전달 상태는 별도 실행 보고서의 실제 결과를 따른다.
