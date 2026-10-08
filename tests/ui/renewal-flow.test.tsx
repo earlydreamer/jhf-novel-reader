@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
-import * as controllers from '../../src/app/controller';
+import * as controllers from '../../src/app/renewalController';
 import type { RenewalDependencies } from '../../src/app/renewalController';
 import type { CompletedTranslation, WorkPage } from '../../src/contracts/reading';
 

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { it, expect, vi } from 'vitest';
-import { parseChapter, normalizeSourceUrl, NarouSourceAdapter } from '../../src/source';
+import { parseChapter, normalizeSourceUrl } from '../../src/source/parse';
+import { NarouSourceAdapter } from '../../src/source';
 const url='https://ncode.syosetu.com/n1234ab/2/';
 const html='<h1 class="p-novel__title">合成</h1><div class="p-novel__body"><div class="p-novel__text"><p>本文</p></div></div>';
 it.each(['javascript:alert(1)','http://ncode.syosetu.com/n1234ab/2/','https://evil.test/n1234ab/2/','https://ncode.syosetu.com.evil.test/n1234ab/2/','https://user:secret@ncode.syosetu.com/n1234ab/2/','https://ncode.syosetu.com:444/n1234ab/2/','https://novel18.syosetu.com/n1234ab/2/','https://ncode.syosetu.com/login/','https://ncode.syosetu.com/n1234ab/0/','https://ncode.syosetu.com/n1234ab/2/?p=9','https://ncode.syosetu.com/n1234ab/%32/','https://ncode.syosetu.com/n1234ab/../n9999ab/2/'])('rejects unsupported or ambiguous URL %s',value=>expect(()=>normalizeSourceUrl(value)).toThrow('source_access'));

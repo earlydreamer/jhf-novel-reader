@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, test } from 'vitest';
-import { parseChapter } from '../../src/source';
+import { parseChapter } from '../../src/source/parse';
 import { createLibraryStore } from '../../src/storage/library';
 import type { CompletedTranslation, SourceSnapshot, WorkPage } from '../../src/contracts';
 const html =
