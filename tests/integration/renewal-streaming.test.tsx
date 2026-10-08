@@ -540,8 +540,10 @@ test('both options survive restart, and automatic start off keeps a manual start
   await prepareStreaming(h);
   h.app.navigate({ kind: 'settings' });
   render(<Application controller={h.app} />);
-  fireEvent.click(screen.getByRole('checkbox', { name: /저장본이 없으면 자동 번역 시작/ }));
-  fireEvent.click(screen.getByRole('checkbox', { name: /실패 문단 자동 재시도/ }));
+  fireEvent.click(
+    screen.getByRole('switch', { name: /저장본이 없으면 자동으로 번역 시작/ }),
+  );
+  fireEvent.click(screen.getByRole('switch', { name: /실패한 문단 자동으로 다시 번역/ }));
   await vi.waitFor(async () => {
     const restored = createRenewalApplication(h.adapters);
     await restored.initialize();
@@ -658,7 +660,8 @@ test('legacy mode is selectable and survives restart without changing stored ver
   h.app.chooseModel('gemma-4-E4B');
   h.app.navigate({ kind: 'settings' });
   render(<Application controller={h.app} />);
-  fireEvent.change(screen.getByLabelText('로컬 번역 방식'), { target: { value: 'legacy' } });
+  fireEvent.click(screen.getByRole('button', { name: '로컬 번역 방식' }));
+  fireEvent.click(screen.getByRole('radio', { name: '기존 묶음 방식' }));
   expect(h.app.getSnapshot().translationMode).toBe('legacy');
   await vi.waitFor(async () => {
     const restored = createRenewalApplication(h.adapters);

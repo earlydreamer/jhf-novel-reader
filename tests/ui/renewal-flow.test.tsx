@@ -799,7 +799,7 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
     await screen.findByRole('heading', { name: '2화 제목' });
     fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
-    await screen.findByRole('heading', { name: '연결 설정' });
+    await screen.findByRole('heading', { name: '설정' });
     fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
     expect(screen.getByRole('heading', { name: '2화 제목' })).toBeVisible();
   });
@@ -819,7 +819,7 @@ describe('renewal first reading screens', () => {
     chooseShellMenu('설정');
     expect(screen.queryByText(/예산|미리 번역/)).toBeNull();
     expect(screen.queryByLabelText('모델 이름')).toBeNull();
-    expect(screen.getByLabelText('모델 선택')).toHaveValue('');
+    expect(screen.getByRole('button', { name: '모델' })).toHaveTextContent('선택 전');
   });
   it('uses_real_catalog_selection_and_explicit_translation_action', async () => {
     const value = await setup(false, true);
@@ -829,9 +829,10 @@ describe('renewal first reading screens', () => {
     fireEvent.change(screen.getByLabelText('API 기본 주소'), {
       target: { value: 'http://192.168.1.2:1234/v1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '연결 확인' }));
-    await screen.findByRole('option', { name: 'HyMT2 synthetic' });
-    fireEvent.change(screen.getByLabelText('모델 선택'), { target: { value: 'fixture-hymt2' } });
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+    await screen.findByText('모델 목록을 확인했어요. 번역 호환성은 아직 확인하지 않았어요.');
+    fireEvent.click(screen.getByRole('button', { name: '모델' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'HyMT2 synthetic' }));
     fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
     revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '이 화 번역하기' }));
@@ -924,8 +925,8 @@ describe('renewal controller boundaries', () => {
       await screen.findByText('작품 찾기를 아직 사용할 수 없어요. URL로 열어 주세요.'),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '설정' }));
-    expect(screen.getByRole('button', { name: '연결 확인' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent('아직 사용할 수 없습니다');
+    expect(screen.getByRole('button', { name: '연결 확인하기' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('아직 사용할 수 없어요');
     expect(controller.getSnapshot().models).toEqual([]);
   });
 });
@@ -1067,7 +1068,7 @@ describe('renewal connection failures', () => {
     controller.navigate({ kind: 'settings' });
     render(<Application controller={controller} />);
     expect(
-      screen.getByText(/인증값을 기기의 보안 저장소에 저장하거나 읽지 못했습니다/),
+      screen.getByText(/인증값을 기기의 보안 저장소에 저장하거나 읽지 못했어요/),
     ).toBeVisible();
     expect(screen.queryByText('모델 목록을 불러오지 못했습니다.')).toBeNull();
     expect(screen.getByLabelText('인증값 (선택)')).toHaveValue('');

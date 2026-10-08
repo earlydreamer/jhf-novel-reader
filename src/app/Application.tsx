@@ -501,19 +501,6 @@ export function Application({
             workDialogRequest={workDialogRequest}
             onWorkDialogRequestHandled={handleWorkDialogRequestHandled}
           />
-          {state.route.kind !== 'translation' &&
-            state.route.kind !== 'reader' &&
-            state.translationTimings && (
-              <details>
-                <summary>최근 번역 단계별 시간</summary>
-                <p>
-                  원문 준비 {Math.round(state.translationTimings.sourceMs)}ms · 모델 대기{' '}
-                  {Math.round(state.translationTimings.modelMs)}ms · 결과 확인·저장{' '}
-                  {Math.round(state.translationTimings.validationStorageMs)}ms · 리더 표시{' '}
-                  {Math.round(state.translationTimings.readerDisplayMs)}ms
-                </p>
-              </details>
-            )}
         </main>
         <Dialog
           open={!!removeTarget}

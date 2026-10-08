@@ -29,7 +29,8 @@ describe('SettingsScreen theme section', () => {
         onTheme={onTheme}
       />,
     );
-    const group = screen.getByRole('radiogroup', { name: '화면 테마' });
+    fireEvent.click(screen.getByRole('button', { name: '테마' }));
+    const group = screen.getByRole('radiogroup', { name: '테마 선택' });
     expect(group).toBeVisible();
     expect(screen.getByRole('radio', { name: '시스템 설정 따르기' })).toBeChecked();
     fireEvent.click(screen.getByRole('radio', { name: '다크' }));
