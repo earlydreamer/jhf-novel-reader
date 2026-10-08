@@ -100,3 +100,51 @@ describe('application.css screen defaults', () => {
     expect(menu?.body).toMatch(/justify-items:\s*start;/);
   });
 });
+
+const readerCss = readFileSync('src/ui/immersive-reader.css', 'utf8');
+
+describe('immersive-reader.css progress bar', () => {
+  it('앱바가 숨으면 번역 진행 막대를 화면 맨 위로 올린다', () => {
+    const hidden = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-progress',
+    );
+    expect(hidden?.body).toMatch(/inset-block-start:\s*var\(--inset-top\);/);
+  });
+});
+
+const componentsCss = readFileSync('src/ui/components/components.css', 'utf8');
+
+function zIndex(body: string | undefined): number {
+  return Number(body?.match(/z-index:\s*(\d+);/)?.[1]);
+}
+
+describe('immersive-reader.css system bars', () => {
+  it('몰입 리더는 상태바와 내비게이션 바 자리를 독서 배경으로 덮는다', () => {
+    const sheet = rules(readerCss);
+    // 공통 선언(position·배경·z-index)은 ::before, ::after 선택자 목록 하나에 둔다.
+    const shared = sheet.find((rule) => {
+      const parts = selectorParts(rule.selector);
+      return (
+        parts.includes('.nr-immersive-reader::before') &&
+        parts.includes('.nr-immersive-reader::after')
+      );
+    });
+    expect(shared?.body).toMatch(/position:\s*fixed;/);
+    expect(shared?.body).toMatch(/background:\s*var\(--reading-surface\);/);
+    expect(shared?.body).toMatch(/pointer-events:\s*none;/);
+    expect(shared?.body).toMatch(/z-index:\s*10;/);
+    const top = sheet.find((rule) => rule.selector === '.nr-immersive-reader::before');
+    const bottom = sheet.find((rule) => rule.selector === '.nr-immersive-reader::after');
+    expect(top?.body).toMatch(/block-size:\s*var\(--inset-top\);/);
+    expect(bottom?.body).toMatch(/block-size:\s*var\(--inset-bottom\);/);
+    const above = [
+      rules(componentsCss).find((rule) => rule.selector === '.nr-toolbar')?.body,
+      sheet.find((rule) => rule.selector === '.nr-immersive-appbar')?.body,
+      sheet.find((rule) => rule.selector === '.nr-immersive-reader > .nr-progress')?.body,
+    ];
+    for (const body of above) {
+      expect(zIndex(shared?.body)).toBeLessThan(zIndex(body));
+    }
+  });
+});

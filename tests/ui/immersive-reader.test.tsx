@@ -601,3 +601,28 @@ test('연결은 됐지만 생성 모델이 없으면 모델 선택 안내를 보
     screen.getByText('생성 모델이 선택되지 않았어요. 연결 설정에서 모델을 선택해 주세요.'),
   ).toBeInTheDocument();
 });
+
+test('번역 진행 막대는 앱바 바로 뒤의 형제라 몰입 상태에서 같은 층에 놓인다', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'translating',
+          elapsedMs: 20,
+          token: { requestId: 'progress', chapterId: chapter.chapterId, settingsRevision: 1 },
+        },
+        translationActive: true,
+      })}
+    />,
+  );
+  const appbar = document.querySelector<HTMLElement>('.nr-immersive-appbar');
+  const progress = document.querySelector<HTMLElement>('.nr-progress');
+  expect(appbar).not.toBeNull();
+  expect(progress).not.toBeNull();
+  expect(appbar!.parentElement).toBe(progress!.parentElement);
+  expect(
+    appbar!.compareDocumentPosition(progress!) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
