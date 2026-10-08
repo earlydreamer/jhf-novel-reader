@@ -1,4 +1,5 @@
 import type {
+  ChapterRemovalResult,
   CompletedTranslation,
   LibraryStore,
   WorkPage,
@@ -494,6 +495,145 @@ async function removeWorkData(
   }
   return { removed, cleanupComplete: true, remainingInventory: [] };
 }
+async function removeChapterVersionData(
+  files: PrivateFiles,
+  journal: Journal,
+  chapterId: string,
+  activeBatchWorkId?: string,
+): Promise<ChapterRemovalResult> {
+  chapterIdentity(chapterId);
+  const kept = (extra: Partial<ChapterRemovalResult> = {}): ChapterRemovalResult => ({
+    removed: false,
+    cleanupComplete: false,
+    remainingInventory: [],
+    versionIds: [],
+    ...extra,
+  });
+  const unknown = (): ChapterRemovalResult => ({
+    ...kept(),
+    removed: null,
+    remainingInventory: ['library/index'],
+  });
+  const indexSlots = await journal.readSlots('library/index', index);
+  if (indexSlots.found && !indexSlots.entries.length) return unknown();
+  const current = indexSlots.entries[0]?.value ?? {
+    versions: [],
+    workIds: [],
+    recent: [],
+    removalInventory: [],
+  };
+  const targets = current.versions.filter((entry) => entry.chapterId === chapterId);
+  if (!targets.length)
+    return { removed: true, cleanupComplete: true, remainingInventory: [], versionIds: [] };
+  const workId = targets[0]!.workId;
+  // 작품 제거 정리가 남아 있으면 그 정리가 먼저다.
+  if (
+    indexSlots.entries.some((entry) =>
+      (entry.value.removalInventory ?? []).some((item) => item.workId === workId),
+    )
+  )
+    return kept();
+  const attemptSlots = await journal.readSlots('attempts/index', validateAttempts);
+  const latestAttempts = attemptSlots.entries[0];
+  if (attemptSlots.found && !latestAttempts)
+    return kept({ remainingInventory: ['attempts/index'] });
+  if (
+    (latestAttempts?.value ?? []).some(
+      (entry) => entry.token.chapterId === chapterId && entry.phase !== 'complete',
+    )
+  )
+    return kept({ blockedBy: 'unfinished_attempt' });
+  const batchSlots = await journal.readSlots('batches/current', validateBatch);
+  const latestBatch = batchSlots.entries[0];
+  if (batchSlots.found && !latestBatch) return kept({ remainingInventory: ['batches/current'] });
+  if (
+    activeBatchWorkId === workId ||
+    (latestBatch?.value?.work.workId === workId && latestBatch.value.phase !== 'complete')
+  )
+    return kept({ blockedBy: 'batch' });
+
+  const versionIds = targets.map((entry) => entry.versionId);
+  const paths: string[] = [],
+    preserved: string[] = [];
+  try {
+    for (const versionId of versionIds) {
+      const versionSlots = await journal.readSlots(`versions/${versionId}`, completedTranslation);
+      for (const entry of versionSlots.entries)
+        (entry.value.source.chapterId === chapterId && entry.value.versionId === versionId
+          ? paths
+          : preserved
+        ).push(slotPath(`versions/${versionId}`, entry.slot));
+      for (const slot of versionSlots.invalidSlots)
+        preserved.push(slotPath(`versions/${versionId}`, slot));
+      const readingSlots = await journal.readSlots(`reading/${versionId}`, readingPosition);
+      for (const entry of readingSlots.entries)
+        (entry.value.chapterId === chapterId && entry.value.versionId === versionId
+          ? paths
+          : preserved
+        ).push(slotPath(`reading/${versionId}`, entry.slot));
+      for (const slot of readingSlots.invalidSlots)
+        preserved.push(slotPath(`reading/${versionId}`, slot));
+    }
+  } catch {
+    return kept({ remainingInventory: ['versions'] });
+  }
+
+  const dropped = new Set(versionIds);
+  const next: Index = {
+    ...current,
+    versions: current.versions.filter((entry) => !dropped.has(entry.versionId)),
+    recent: current.recent.filter((entry) => !dropped.has(entry.versionId)),
+  };
+  try {
+    await journal.save('library/index', next, index);
+  } catch {
+    try {
+      const latest = (await journal.readSlots('library/index', index)).entries[0]?.value;
+      if (!latest) return unknown();
+      const gone = !latest.versions.some((entry) => dropped.has(entry.versionId));
+      return {
+        removed: gone,
+        cleanupComplete: false,
+        remainingInventory: ['library/index'],
+        versionIds: gone ? versionIds : [],
+      };
+    } catch {
+      return unknown();
+    }
+  }
+  try {
+    // 두 슬롯 모두 새 색인이 검증되기 전에는 파일을 지우지 않는다.
+    // 최신 슬롯이 나중에 손상돼 이전 슬롯으로 돌아가도 지운 파일을 가리키지 않게 한다.
+    await journal.save('library/index', next, index);
+  } catch {
+    return {
+      removed: true,
+      cleanupComplete: false,
+      remainingInventory: ['library/index'],
+      versionIds,
+    };
+  }
+  const remaining: string[] = [...preserved],
+    remove = files.remove;
+  for (const path of paths) {
+    if (!remove) {
+      remaining.push(path);
+      continue;
+    }
+    try {
+      await remove.call(files, path);
+      if ((await files.read(path)) !== null) remaining.push(path);
+    } catch {
+      remaining.push(path);
+    }
+  }
+  return {
+    removed: true,
+    cleanupComplete: remaining.length === 0,
+    remainingInventory: unique(remaining),
+    versionIds,
+  };
+}
 export function createLibraryStore(
   files: PrivateFiles,
   options: { preferences?: PreferenceBackend } = {},
@@ -575,6 +715,10 @@ export function createLibraryStore(
     removeWork: (workId, runtime) =>
       serial(files, () =>
         removeWorkData(files, journal, options, workId, runtime?.activeBatchWorkId),
+      ),
+    removeChapterVersions: (chapterId, runtime) =>
+      serial(files, () =>
+        removeChapterVersionData(files, journal, chapterId, runtime?.activeBatchWorkId),
       ),
     listRecent: () =>
       serial(files, async () => {

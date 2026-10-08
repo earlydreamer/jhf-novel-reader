@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import type { ChapterRef, WorkPage } from '../contracts/reading';
+import type { ChapterRef, ChapterRemovalResult, WorkPage } from '../contracts/reading';
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
 import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
@@ -8,6 +8,7 @@ import { displayedTitle } from '../translation/titles';
 import { BottomSheet, Dialog } from './components/Modal';
 import { Button } from './components/Button';
 import { ListItem } from './components/ListItem';
+import { useSnackbar } from './components/Snackbar';
 import type { WorkRecentSnapshot } from '../app/renewalController';
 
 export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
@@ -26,6 +27,7 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   onRetryContinue?(): void;
   guidance?: Omit<GuidancePanelProps, 'workId'>;
   titles?: TitleControls;
+  onRemoveChapter?(chapter: ChapterRef): Promise<ChapterRemovalResult>;
 }
 export function WorkScreen({
   work,
@@ -52,9 +54,14 @@ export function WorkScreen({
   onSettings,
   guidance,
   titles,
+  onRemoveChapter,
 }: WorkScreenProps): JSX.Element {
   const [sheetChapter, setSheetChapter] = useState<ChapterRef | null>(null);
   const [dialog, setDialog] = useState<'guidance' | 'batch' | null>(null);
+  const [removeChapter, setRemoveChapter] = useState<ChapterRef | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeFeedback, setRemoveFeedback] = useState<string | null>(null);
+  const showSnackbar = useSnackbar();
   const guidanceBody = useRef<HTMLDivElement>(null);
   const recentRow = useRef<HTMLDivElement>(null);
   const didScrollRecent = useRef(false);
@@ -122,6 +129,44 @@ export function WorkScreen({
   const openSheet = (chapter: ChapterRef) => setSheetChapter(chapter);
   const sheetTitle = sheetChapter ? chapterSavedTitle(sheetChapter) : undefined;
   const currentRecentStatus = recentStatus ?? 'none';
+  const confirmRemoveChapter = async () => {
+    if (!removeChapter || removeBusy || !onRemoveChapter) return;
+    const target = removeChapter;
+    setRemoveBusy(true);
+    try {
+      const result = await onRemoveChapter(target);
+      if (result.removed === true) {
+        setRemoveChapter(null);
+        showSnackbar(
+          result.cleanupComplete
+            ? `${target.ordinal}화 저장본을 삭제했어요.`
+            : `${target.ordinal}화 저장본을 삭제했어요. 일부 파일은 다음에 정리할게요.`,
+        );
+      } else if (result.removed === null) {
+        setRemoveFeedback(
+          '삭제 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+        );
+      } else {
+        setRemoveFeedback(
+          result.blockedBy === 'pending_save'
+            ? '저장하지 못한 번역이 있어요. 먼저 저장을 마친 뒤 다시 삭제해 주세요.'
+            : result.blockedBy === 'translation'
+              ? '이 화를 번역하고 있어요. 번역을 마치거나 중단한 뒤 다시 삭제해 주세요.'
+              : result.blockedBy === 'batch'
+                ? '이 작품의 미리 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 삭제해 주세요.'
+                : result.blockedBy === 'unfinished_attempt'
+                  ? '요청 결과를 확인하지 못했어요. 지금은 이 화 저장본을 삭제할 수 없어요.'
+                  : '저장본을 삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+        );
+      }
+    } catch {
+      setRemoveFeedback(
+        '삭제 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+      );
+    } finally {
+      setRemoveBusy(false);
+    }
+  };
   return (
     <section className="nr-work-screen" aria-label="작품 목차">
       <header className="nr-work-heading">
@@ -261,9 +306,52 @@ export function WorkScreen({
             <a href={sheetChapter.canonicalUrl} target="_blank" rel="noreferrer">
               원문 사이트에서 보기
             </a>
+            {onRemoveChapter && savedChapterIds.includes(sheetChapter.chapterId) && (
+              <Button
+                variant="text"
+                tone="danger"
+                disabled={busy}
+                onClick={() => {
+                  setRemoveChapter(sheetChapter);
+                  setRemoveFeedback(null);
+                  setSheetChapter(null);
+                }}
+              >
+                이 화 저장본 삭제하기
+              </Button>
+            )}
           </div>
         )}
       </BottomSheet>
+      <Dialog
+        open={!!removeChapter}
+        title={
+          removeChapter ? `${removeChapter.ordinal}화 저장본을 삭제할까요?` : '저장본을 삭제할까요?'
+        }
+        onClose={() => {
+          if (!removeBusy) setRemoveChapter(null);
+        }}
+        actions={
+          <>
+            <Button variant="text" disabled={removeBusy} onClick={() => setRemoveChapter(null)}>
+              닫기
+            </Button>
+            <Button
+              variant="filled"
+              tone="danger"
+              disabled={removeBusy}
+              onClick={() => void confirmRemoveChapter()}
+            >
+              삭제하기
+            </Button>
+          </>
+        }
+      >
+        <p>
+          이 화의 번역 저장본과 읽던 위치가 이 기기에서 삭제돼요. 삭제한 내용은 되돌릴 수 없어요.
+        </p>
+        {removeFeedback && <p role="alert">{removeFeedback}</p>}
+      </Dialog>
       <Dialog
         open={visibleDialog === 'guidance'}
         title="작품 용어집"
