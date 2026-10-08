@@ -31,6 +31,7 @@
   --shadow-color: rgb(26 26 40 / 0.16);
   --reading-surface: var(--surface);
   --reading-on-surface: var(--on-surface);
+  --reading-on-surface-variant: var(--on-surface-variant);
 
   --font-sans:
     'Pretendard Variable', Pretendard, system-ui, -apple-system, 'Noto Sans KR', sans-serif;
@@ -114,8 +115,10 @@
 [data-reading-background='sepia'] {
   --reading-surface: #f4ebd7;
   --reading-on-surface: #2b2116;
+  --reading-on-surface-variant: #514234;
 }
 [data-reading-background='black'] {
   --reading-surface: #000000;
   --reading-on-surface: #e4e4ee;
+  --reading-on-surface-variant: #bcbccd;
 }

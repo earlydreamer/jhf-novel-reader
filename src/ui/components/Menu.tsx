@@ -23,21 +23,27 @@ export function Menu({
   label,
   items,
   icon = 'more_vert',
+  onOpenChange,
 }: {
   label: string;
   items: readonly MenuItem[];
   icon?: IconName;
+  onOpenChange?(open: boolean): void;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [upward, setUpward] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const close = useCallback((restoreFocus = true) => {
-    setOpen(false);
-    // 다음에 열 때 아래로 먼저 펼쳐 실제 넘침을 다시 재도록 위치 상태를 되돌린다.
-    setUpward(false);
-    if (restoreFocus) trigger.current?.focus();
-  }, []);
+  const close = useCallback(
+    (restoreFocus = true) => {
+      setOpen(false);
+      onOpenChange?.(false);
+      // 다음에 열 때 아래로 먼저 펼쳐 실제 넘침을 다시 재도록 위치 상태를 되돌린다.
+      setUpward(false);
+      if (restoreFocus) trigger.current?.focus();
+    },
+    [onOpenChange],
+  );
   useBackHandler(open, () => close());
   useLayoutEffect(() => {
     if (!open || !list.current) return;
@@ -80,7 +86,13 @@ export function Menu({
         label={label}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => {
+          if (open) close();
+          else {
+            setOpen(true);
+            onOpenChange?.(true);
+          }
+        }}
       />
       {open && (
         <div

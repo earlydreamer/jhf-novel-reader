@@ -735,22 +735,28 @@ it('another chapter exposes a route back to save recovery and blocks generation 
   await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
   render(<Application controller={h.app} />);
 
-  expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(true);
+  expect(screen.getByRole('button', { name: '이 화 번역하기' }).hasAttribute('disabled')).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
   chooseShellMenu('서재로 가기');
   expect(h.app.getSnapshot().route.kind).toBe('home');
   fireEvent.click(screen.getByRole('button', { name: '저장 화면으로 가기' }));
   expect(h.app.getSnapshot().chapter?.chapterId).toBe(pending.source.chapterId);
   expect(h.app.getSnapshot().translation.pendingSave).toEqual(pending);
   h.setFailSave(false);
-  fireEvent.click(screen.getByRole('button', { name: '모델 요청 없이 저장 다시 시도' }));
+  fireEvent.click(screen.getByRole('button', { name: '저장 다시 하기' }));
   await expect.poll(() => h.app.getSnapshot().route.kind).toBe('reader');
   expect(await h.store.readVersion(pending.versionId)).toEqual(pending);
   expect(h.posts()).toHaveLength(1);
   expect(screen.queryByRole('button', { name: '저장 화면으로 가기' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
   fireEvent.click(screen.getByRole('button', { name: '목차' }));
   fireEvent.click(screen.getByRole('button', { name: '1화 1화' }));
   await expect.poll(() => h.app.getSnapshot().route.kind).toBe('translation');
-  expect(screen.getByRole('button', { name: '이 화 번역' }).hasAttribute('disabled')).toBe(false);
+  expect(screen.getByRole('button', { name: '이 화 번역하기' }).hasAttribute('disabled')).toBe(
+    false,
+  );
   expect(h.posts()).toHaveLength(1);
   cleanup();
   h.app.dispose();

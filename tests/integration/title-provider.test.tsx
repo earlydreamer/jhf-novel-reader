@@ -127,11 +127,13 @@ test('real compose translates titles, reads the same chapter heading, edits it a
   await screen.findByRole('article', { name: '번역 본문' });
   await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
   expect(h.requests).toHaveLength(2);
-  fireEvent.click(screen.getByRole('button', { name: '회차 제목 수정' }));
-  fireEvent.change(screen.getByLabelText('회차 제목 번역문'), { target: { value: '수정한 아침' } });
-  fireEvent.click(screen.getByRole('button', { name: '제목 저장' }));
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '제목 직접 수정하기' }));
+  fireEvent.change(screen.getByLabelText('제목 번역문'), { target: { value: '수정한 아침' } });
+  fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
   await screen.findByRole('heading', { name: '수정한 아침' });
-  fireEvent.click(screen.getByRole('button', { name: '원문 확인' }));
+  fireEvent.click(screen.getByRole('button', { name: '원문 보기' }));
   await screen.findByRole('heading', { name: '夏の朝' });
   fireEvent.click(screen.getByRole('button', { name: '목차' }));
   await screen.findByRole('button', { name: '1화 수정한 아침' });

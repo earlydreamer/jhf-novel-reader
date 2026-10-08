@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, type JSX, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type JSX, type ReactNode } from 'react';
 import { useBackHandler } from '../shell/backStack';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
@@ -24,12 +24,54 @@ function ModalSurface({
   keepMounted = false,
 }: SurfaceProps) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const backdropGesture = useRef<{ pointerId: number; releasedOnBackdrop: boolean } | null>(null);
   const titleId = useId();
   useBackHandler(open, onClose);
+  useEffect(() => {
+    const element = dialog.current;
+    if (!open || !element) return;
+    const modalElement = element;
+
+    function pointHitsBackdrop(event: PointerEvent): boolean {
+      const hit = document.elementFromPoint?.(event.clientX, event.clientY);
+      if (hit) return hit === modalElement;
+
+      const dialogRect = modalElement.getBoundingClientRect();
+      const surfaceRect = modalElement
+        .querySelector<HTMLElement>('.nr-modal__surface')
+        ?.getBoundingClientRect();
+      const inside = (rect: DOMRect) =>
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+      return inside(dialogRect) && (!surfaceRect || !inside(surfaceRect));
+    }
+
+    function onPointerUp(event: PointerEvent): void {
+      const gesture = backdropGesture.current;
+      if (!gesture || gesture.pointerId !== event.pointerId) return;
+      if (pointHitsBackdrop(event)) gesture.releasedOnBackdrop = true;
+      else backdropGesture.current = null;
+    }
+
+    function onPointerCancel(event: PointerEvent): void {
+      if (backdropGesture.current?.pointerId === event.pointerId) backdropGesture.current = null;
+    }
+
+    window.addEventListener('pointerup', onPointerUp, true);
+    window.addEventListener('pointercancel', onPointerCancel, true);
+    return () => {
+      window.removeEventListener('pointerup', onPointerUp, true);
+      window.removeEventListener('pointercancel', onPointerCancel, true);
+      backdropGesture.current = null;
+    };
+  }, [open]);
   useLayoutEffect(() => {
     const element = dialog.current;
     if (!element) return;
     if (!open) {
+      backdropGesture.current = null;
       if (element.open && typeof element.close === 'function') element.close();
       element.removeAttribute('open');
       element.setAttribute('hidden', '');
@@ -74,8 +116,23 @@ function ModalSurface({
           onClose();
         }
       }}
+      onPointerDown={(event) => {
+        backdropGesture.current =
+          event.target === event.currentTarget
+            ? { pointerId: event.pointerId, releasedOnBackdrop: false }
+            : null;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        const gesture = backdropGesture.current;
+        backdropGesture.current = null;
+        if (
+          event.target === event.currentTarget &&
+          event.detail > 0 &&
+          gesture?.releasedOnBackdrop &&
+          (!('pointerId' in event.nativeEvent) ||
+            (event.nativeEvent as PointerEvent).pointerId === gesture.pointerId)
+        )
+          onClose();
       }}
     >
       <div className="nr-modal__surface">
