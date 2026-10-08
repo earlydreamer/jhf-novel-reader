@@ -105,6 +105,11 @@
   display: grid;
   gap: 8px;
 }
+.nr-work-chapter-menu > a {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--touch-target);
+}
 .nr-batch-progress-card {
   display: flex;
   align-items: center;
