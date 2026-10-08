@@ -151,7 +151,7 @@
 }
 
 .nr-reader-failed-label {
-  color: var(--error);
+  color: var(--reading-on-surface);
 }
 
 .nr-reader-paragraph--selected {

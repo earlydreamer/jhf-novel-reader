@@ -30,17 +30,27 @@ function harness(fault = false, automatic = false) {
       autoTranslate: automatic,
     }),
   );
-  let release!: () => void;
-  const gate = new Promise<void>((r) => {
-    release = r;
-  });
+  let releaseStream!: () => void;
+  let streamGate: Promise<void>;
+  const holdNextStream = () => {
+    streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+  };
+  holdNextStream();
+  let streamCalls = 0;
   const requests: NativeHttpRequest[] = [];
   let failSave = false;
+  let failNextChapter = false;
   let broken = fault,
     unknown = false;
   const client = {
     request: async (options: NativeHttpRequest) => {
       requests.push(options);
+      if (failNextChapter && options.url !== url && !options.url.endsWith('/models')) {
+        failNextChapter = false;
+        throw new ReaderError('source_access');
+      }
       return {
         status: 200,
         url: options.url,
@@ -61,9 +71,17 @@ function harness(fault = false, automatic = false) {
     ) => {
       requests.push(options);
       if (unknown) throw new ReaderError('timeout_unknown', 'unknown');
-      onData(delta('<main><p id="A">빠르게 읽는 문단</p><p id="B">뒤를 이어'));
-      await gate;
       const input = (options.data!.messages as { content: string }[]).at(-1)!.content;
+      const streamIndex = streamCalls++;
+      if (streamIndex === 0) {
+        onData(delta('<main><p id="A">빠르게 읽는 문단</p><p id="B">뒤를 이어'));
+      } else {
+        const paragraphId = [...input.matchAll(/<p id="([A-Za-z]+)">([^]*?)<\/p>/g)]
+          .map((match) => match[1])
+          .at(-1);
+        onData(delta(`<main><p id="${paragraphId ?? 'C'}">재번역 중인 합성 미리보기`));
+      }
+      await streamGate;
       const lines = [...input.matchAll(/<p id="([A-Za-z]+)">([^]*?)<\/p>/g)];
       const data =
         delta(
@@ -107,10 +125,14 @@ function harness(fault = false, automatic = false) {
   return {
     adapters,
     app: createRenewalApplication(adapters),
-    release: () => release(),
+    release: () => releaseStream(),
+    holdNextStream,
     requests,
     setBroken: (value: boolean) => {
       broken = value;
+    },
+    failNextChapter: () => {
+      failNextChapter = true;
     },
     setUnknown: (value: boolean) => {
       unknown = value;
@@ -161,6 +183,159 @@ test('live reader updates before model settlement, keeps position on save and op
   expect(screen.getByText('뒤를 이어 읽는 문단')).toBeVisible();
   expect(h.app.getSnapshot().position).toMatchObject({ blockId: saved.blocks[2]!.id, offset: 25 });
   expect(h.requests.filter((r) => r.method === 'POST')).toHaveLength(1);
+  h.app.dispose();
+});
+
+test('source-access retry refetches the chapter and sends no model request before the explicit action', async () => {
+  const h = harness();
+  await h.app.initialize();
+  h.app.changeConnection({ provider: 'openai-compatible', baseUrl: 'http://localhost:1234' });
+  await h.app.checkConnection();
+  h.app.chooseModel('gemma-4-E4B');
+  await h.app.openWork(url);
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
+  render(<Application controller={h.app} />);
+  const chapterFetchesBeforeTranslation = h.requests.filter(
+    (request) => request.method === 'GET' && request.url !== url,
+  ).length;
+  h.failNextChapter();
+
+  fireEvent.click(screen.getByRole('button', { name: '이 화 번역하기' }));
+  await waitFor(() =>
+    expect(h.app.getSnapshot().translation).toMatchObject({
+      phase: 'failed',
+      error: { code: 'source_access' },
+    }),
+  );
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(0);
+  expect(
+    h.requests.filter((request) => request.method === 'GET' && request.url !== url),
+  ).toHaveLength(chapterFetchesBeforeTranslation + 1);
+
+  fireEvent.click(screen.getByRole('button', { name: '원문 다시 확인하고 번역하기' }));
+  await screen.findByText('빠르게 읽는 문단');
+  expect(
+    h.requests.filter((request) => request.method === 'GET' && request.url !== url),
+  ).toHaveLength(chapterFetchesBeforeTranslation + 2);
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(1);
+  h.release();
+  await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('ready'));
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(1);
+  h.app.dispose();
+});
+
+test('first-translation pending save keeps its owned body and retrying storage adds no model request', async () => {
+  const h = harness();
+  await prepareStreaming(h);
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
+  render(<Application controller={h.app} />);
+  h.failSave(true);
+
+  fireEvent.click(screen.getByRole('button', { name: '이 화 번역하기' }));
+  await screen.findByText('빠르게 읽는 문단');
+  h.release();
+  await waitFor(() =>
+    expect(h.app.getSnapshot().translation).toMatchObject({
+      phase: 'failed',
+      pendingSave: { source: { chapterId: 'n1234ab/1' } },
+    }),
+  );
+  const pendingSave = h.app.getSnapshot().translation.pendingSave!;
+  expect(h.app.getSnapshot().version).toBeNull();
+  const article = screen.getByRole('article', { name: '번역 미리보기' });
+  await waitFor(() => {
+    const rows = article.querySelectorAll<HTMLElement>('[data-reader-index]');
+    expect(rows).toHaveLength(pendingSave.blocks.length);
+    pendingSave.blocks.forEach((block, index) => expect(rows[index]).toHaveTextContent(block.text));
+  });
+  const modelPosts = h.requests.filter((request) => request.method === 'POST').length;
+  expect(modelPosts).toBe(1);
+
+  h.failSave(false);
+  fireEvent.click(screen.getByRole('button', { name: '저장 다시 하기' }));
+  await waitFor(() => expect(h.app.getSnapshot().version?.versionId).toBe(pendingSave.versionId));
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(modelPosts);
+  h.app.dispose();
+});
+
+test('paragraph repair keeps the owned live preview on the same article and adopts the saved position', async () => {
+  const h = harness(true);
+  await prepareStreaming(h);
+  const chapter = h.app.getSnapshot().work!.chapters[0]!;
+  await h.app.selectChapter(chapter);
+  const initial = h.app.translate();
+  await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('translating'));
+  h.release();
+  await initial;
+  const base = h.app.getSnapshot().version!;
+  expect(base.failedParagraphs).toEqual([2]);
+  await h.app.savePosition(base.blocks[0]!.id, 17);
+  render(<Application controller={h.app} />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  expect(article).toHaveTextContent(base.blocks[2]!.text);
+
+  h.setBroken(false);
+  h.holdNextStream();
+  const postsBeforeRepair = h.requests.filter((request) => request.method === 'POST').length;
+  fireEvent.click(screen.getByRole('button', { name: '실패한 문단 다시 번역하기' }));
+  await waitFor(() => {
+    expect(h.app.getSnapshot()).toMatchObject({
+      paragraphRepair: true,
+      translationActive: true,
+      translation: { phase: 'translating' },
+    });
+    expect(h.app.getSnapshot().translation.preview).toContain('재번역 중인 합성 미리보기');
+  });
+  expect(h.app.getSnapshot().version?.versionId).toBe(base.versionId);
+  expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+  expect(article).toHaveTextContent('재번역 중인 합성 미리보기');
+  expect(article).not.toHaveTextContent(base.blocks[2]!.text);
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(
+    postsBeforeRepair + 1,
+  );
+
+  h.failSave(true);
+  h.release();
+  await waitFor(() =>
+    expect(h.app.getSnapshot()).toMatchObject({
+      paragraphRepair: true,
+      translationActive: false,
+      translation: { phase: 'failed', pendingSave: { source: { chapterId: chapter.chapterId } } },
+    }),
+  );
+  const pendingSave = h.app.getSnapshot().translation.pendingSave!;
+  expect(pendingSave.source.workId).toBe(chapter.workId);
+  expect(pendingSave.source.chapterId).toBe(chapter.chapterId);
+  expect(pendingSave.provenance.repair?.baseVersionId).toBe(base.versionId);
+  expect(h.app.getSnapshot().route).toMatchObject({
+    kind: 'translation',
+    chapterId: chapter.chapterId,
+  });
+  expect(h.app.getSnapshot().translation.token?.chapterId).toBe(chapter.chapterId);
+  expect(h.app.getSnapshot().version?.versionId).toBe(base.versionId);
+  await waitFor(() => {
+    const rows = article.querySelectorAll<HTMLElement>('[data-reader-index]');
+    expect(rows).toHaveLength(pendingSave.blocks.length);
+    pendingSave.blocks.forEach((block, index) => expect(rows[index]).toHaveTextContent(block.text));
+  });
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(
+    postsBeforeRepair + 1,
+  );
+
+  h.failSave(false);
+  fireEvent.click(screen.getByRole('button', { name: '저장 다시 하기' }));
+  await waitFor(() => expect(h.app.getSnapshot().version?.versionId).not.toBe(base.versionId));
+  const repaired = h.app.getSnapshot().version!;
+  expect(repaired.provenance.repair?.paragraphIndexes).toEqual([2]);
+  expect(h.app.getSnapshot().position).toMatchObject({
+    versionId: repaired.versionId,
+    blockId: repaired.blocks[0]!.id,
+    offset: 17,
+  });
+  expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(
+    postsBeforeRepair + 1,
+  );
   h.app.dispose();
 });
 

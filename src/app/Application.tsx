@@ -126,6 +126,7 @@ function RouteScreen({
           position={state.position}
           translation={state.translation}
           translationActive={state.translationActive}
+          paragraphRepair={state.paragraphRepair}
           translationAvailable={state.translationAvailable}
           selectedModelId={state.selectedModelId}
           connected={state.catalogStatus === 'connected' && !!state.selectedModelId}
@@ -208,6 +209,7 @@ function RouteScreen({
           position={state.position}
           translation={state.translation}
           translationActive={state.translationActive}
+          paragraphRepair={state.paragraphRepair}
           translationAvailable={state.translationAvailable}
           selectedModelId={state.selectedModelId}
           connected={state.catalogStatus === 'connected' && !!state.selectedModelId}

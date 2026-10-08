@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(new URL('../../src/ui/theme/tokens.css', import.meta.url), 'utf8');
+const immersiveCss = readFileSync(
+  new URL('../../src/ui/immersive-reader.css', import.meta.url),
+  'utf8',
+);
 
 function block(selector: string): Record<string, string> {
   const start = css.indexOf(`${selector} {`);
@@ -143,6 +147,30 @@ const readingSubtext = [
     bg: block("[data-reading-background='black']")['reading-surface'],
   },
 ].map((value) => ({ ...value, gate: SUB }));
+const readingFailedLabel = [
+  { name: 'light 독서 실패 문구', fg: themes.light['on-surface'], bg: themes.light.surface },
+  { name: 'dark 독서 실패 문구', fg: themes.dark['on-surface'], bg: themes.dark.surface },
+  {
+    name: 'light 독서 세피아 실패 문구',
+    fg: block("[data-reading-background='sepia']")['reading-on-surface'],
+    bg: block("[data-reading-background='sepia']")['reading-surface'],
+  },
+  {
+    name: 'light 독서 검정 실패 문구',
+    fg: block("[data-reading-background='black']")['reading-on-surface'],
+    bg: block("[data-reading-background='black']")['reading-surface'],
+  },
+  {
+    name: 'dark 독서 세피아 실패 문구',
+    fg: block("[data-reading-background='sepia']")['reading-on-surface'],
+    bg: block("[data-reading-background='sepia']")['reading-surface'],
+  },
+  {
+    name: 'dark 독서 검정 실패 문구',
+    fg: block("[data-reading-background='black']")['reading-on-surface'],
+    bg: block("[data-reading-background='black']")['reading-surface'],
+  },
+].map((value) => ({ ...value, gate: TEXT }));
 
 describe('design token contrast', () => {
   it('gives every light color token a dark override so no value silently falls back to light', () => {
@@ -151,10 +179,22 @@ describe('design token contrast', () => {
     expect(Object.keys(block(':root')).filter((name) => !(name in dark))).toEqual([]);
   });
 
-  it.each([...cases, ...reading, ...readingSubtext])('$name', ({ fg, bg, gate }) => {
-    expect(fg, '전경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
-    expect(bg, '배경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
-    expect(wcag(fg!, bg!)).toBeGreaterThanOrEqual(gate[0]);
-    expect(Math.abs(apca(fg!, bg!))).toBeGreaterThanOrEqual(gate[1]);
+  it.each([...cases, ...reading, ...readingSubtext, ...readingFailedLabel])(
+    '$name',
+    ({ fg, bg, gate }) => {
+      expect(fg, '전경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
+      expect(bg, '배경 토큰 누락').toMatch(/^#[0-9A-F]{6}$/);
+      expect(wcag(fg!, bg!)).toBeGreaterThanOrEqual(gate[0]);
+      expect(Math.abs(apca(fg!, bg!))).toBeGreaterThanOrEqual(gate[1]);
+    },
+  );
+
+  it('keeps failed paragraph labels on the readable immersive foreground while retaining the error border', () => {
+    expect(immersiveCss).toMatch(
+      /\.nr-reader-failed-label\s*\{[^}]*color:\s*var\(--reading-on-surface\)/s,
+    );
+    expect(immersiveCss).toMatch(
+      /\.nr-reader-paragraph--failed\s*\{[^}]*border-inline-start:\s*3px solid var\(--error\)/s,
+    );
   });
 });

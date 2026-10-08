@@ -44,6 +44,7 @@ export interface ImmersiveReaderProps {
   position: ReadingPosition | null;
   translation: TranslationState;
   translationActive: boolean;
+  paragraphRepair: boolean;
   translationAvailable: boolean;
   selectedModelId: string | null;
   connected: boolean;
@@ -119,6 +120,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const lastMode = useRef(props.showOriginal);
   const translationAnchor = useRef<ParagraphAnchor | null>(null);
   const originalAnchor = useRef(0);
+  const pendingOriginalIndex = useRef<number | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerOrigin = useRef<{ x: number; y: number } | null>(null);
   const swallowClick = useRef(false);
@@ -143,13 +145,32 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   );
   const title = props.showOriginal ? (version?.source.title ?? chapter.title) : translatedTitle;
   const preview = props.translation.preview;
+  const pendingSave = props.translation.pendingSave;
+  const ownsPendingSave = Boolean(
+    props.route === 'translation' &&
+    pendingSave?.source.workId === chapter.workId &&
+    pendingSave.source.chapterId === chapter.chapterId &&
+    props.translation.token?.chapterId === chapter.chapterId &&
+    (!pendingSave.provenance.repair ||
+      pendingSave.provenance.repair.baseVersionId === version?.versionId),
+  );
+  const ownsLivePreview =
+    props.route === 'translation' &&
+    (props.translationActive || ['failed', 'unknown'].includes(props.translation.phase)) &&
+    props.translation.token?.chapterId === chapter.chapterId &&
+    (!version || props.paragraphRepair);
+  const livePreview = ownsPendingSave
+    ? pendingSave?.text
+    : ownsLivePreview && typeof preview === 'string'
+      ? preview
+      : undefined;
   const paragraphs =
     props.showOriginal && version
       ? version.source.paragraphs.map((paragraph) => paragraph.text)
-      : version
-        ? version.blocks.map((block) => block.text)
-        : preview
-          ? preview.split('\n\n')
+      : livePreview !== undefined
+        ? livePreview.split('\n\n')
+        : version
+          ? version.blocks.map((block) => block.text)
           : [];
   const originalAvailable = Boolean(version?.source.chapterId === chapter.chapterId);
   const chapterIndex =
@@ -188,9 +209,18 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     if (!element) return;
     if (lastMode.current !== props.showOriginal) {
       lastMode.current = props.showOriginal;
-      element.scrollTop = props.showOriginal
-        ? originalAnchor.current
-        : translatedScrollPosition(element, translationAnchor.current);
+      if (props.showOriginal) {
+        const pendingIndex = pendingOriginalIndex.current;
+        const target =
+          pendingIndex === null
+            ? null
+            : element.querySelector<HTMLElement>(`[data-reader-index="${pendingIndex}"]`);
+        element.scrollTop = target ? target.offsetTop : originalAnchor.current;
+        if (target) originalAnchor.current = element.scrollTop;
+        pendingOriginalIndex.current = null;
+      } else {
+        element.scrollTop = translatedScrollPosition(element, translationAnchor.current);
+      }
       previousScrollTop.current = element.scrollTop;
     }
   }, [props.showOriginal, version]);
@@ -201,6 +231,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     if (priorVersion && priorVersion !== version.versionId) {
       translationAnchor.current = null;
       originalAnchor.current = 0;
+      pendingOriginalIndex.current = null;
       shownVersionId.current = null;
       if (body.current) body.current.scrollTop = 0;
       previousScrollTop.current = 0;
@@ -570,8 +601,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
               연결 설정 열기
             </Button>
           ) : failureNeedsSourceRefresh ? (
-            <Button variant="outlined" onClick={props.onRefreshSource}>
-              원문 다시 확인하기
+            <Button variant="outlined" onClick={props.onRetry}>
+              원문 다시 확인하고 번역하기
             </Button>
           ) : (
             <Button
@@ -647,9 +678,11 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             </p>
           )}
         </header>
-        {props.translation.phase === 'translating' && paragraphs.length > 0 && (
-          <p className="nr-reader-caption">저장 전 미리보기 · 도착한 문단부터 읽을 수 있어요.</p>
-        )}
+        {props.translation.phase === 'translating' &&
+          livePreview !== undefined &&
+          paragraphs.length > 0 && (
+            <p className="nr-reader-caption">저장 전 미리보기 · 도착한 문단부터 읽을 수 있어요.</p>
+          )}
         {selectionMode && (
           <div className="nr-reader-selection" role="group" aria-label="문단 선택 재번역">
             <span>{selectedParagraphs.length}개 문단 선택</span>
@@ -857,10 +890,16 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       <BottomSheet open={qualityOpen} title="번역 확인 결과" onClose={() => setQualityOpen(false)}>
         <div className="nr-reader-sheet-body">
           <p>
-            가나가 남은 문단 {heuristic.length}개 · 확정 표기 미발견 {missingTerms.length}개
+            가나가 남은 문단 {heuristic.length}개 ·{' '}
+            {version?.quality ? `확정 표기 미발견 ${missingTerms.length}개` : '용어 확인 기록 없음'}
           </p>
-          <p>이 규칙에서 찾은 항목을 보여 줘요. 번역의 의미와 말투는 원문과 직접 비교해 주세요.</p>
-          {!heuristic.length && !missingTerms.length && (
+          <p>
+            가나 잔존과 확정 표기의 전체 부재만 확인해요. 한자만 남은 일본어, 일부 등장분의 다른
+            표기, 의미·말투는 원문과 직접 비교해 주세요. 번역 본문은 자동으로 고치거나 다시 요청하지
+            않아요.
+          </p>
+          {!version?.quality && <p>이 저장본은 용어 확인 기록이 없어 가나 잔존만 확인했어요.</p>}
+          {version?.quality && !heuristic.length && !missingTerms.length && (
             <p>이 확인 규칙에서 발견한 항목이 없어요. 번역 품질의 합격 판정은 아니에요.</p>
           )}
           {heuristic.map((index) => (
@@ -886,8 +925,16 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       </BottomSheet>
       <BottomSheet open={infoOpen} title="번역 정보" onClose={() => setInfoOpen(false)}>
         <div className="nr-reader-sheet-body">
-          <p>모델: {props.selectedModelId ?? '선택하지 않음'}</p>
-          <p>경과 시간: {Math.floor(props.translation.elapsedMs / 1000)}초</p>
+          <p>
+            제공자:{' '}
+            {version
+              ? version.provenance.provider === 'gemini'
+                ? 'Google Gemini'
+                : 'OpenAI 호환'
+              : '기록 없음'}
+          </p>
+          <p>모델: {version?.provenance.modelId ?? '기록 없음'}</p>
+          <p>경과 시간: 기록 없음</p>
           {version?.provenance.generation && <p>번역 방식: {version.provenance.generation.mode}</p>}
         </div>
       </BottomSheet>
@@ -916,10 +963,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
                 variant="text"
                 onClick={() => {
                   setParagraphSheet(null);
+                  pendingOriginalIndex.current = paragraphSheet;
                   if (!props.showOriginal) toggleOriginal();
-                  body.current
-                    ?.querySelector<HTMLElement>(`[data-reader-index="${paragraphSheet}"]`)
-                    ?.scrollIntoView({ block: 'start' });
                 }}
               >
                 이 문단 원문 보기

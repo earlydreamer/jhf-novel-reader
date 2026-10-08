@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { ReaderError } from '../../src/contracts';
 import type { CompletedTranslation, ChapterRef, WorkPage } from '../../src/contracts/reading';
@@ -63,6 +64,7 @@ function props(overrides: Partial<ImmersiveReaderProps> = {}): ImmersiveReaderPr
     position: null,
     translation: { phase: 'idle', elapsedMs: 0 },
     translationActive: false,
+    paragraphRepair: false,
     translationAvailable: true,
     selectedModelId: 'synthetic',
     connected: true,
@@ -181,6 +183,100 @@ test('font size is expressed in rem and quality heuristics stay distinct from co
   ).toBeInTheDocument();
 });
 
+test('paragraph original action scrolls after the original DOM commit and preserves both reader anchors', () => {
+  const version = completed({
+    blocks: [
+      { id: 'b1', text: '첫 번역' },
+      { id: 'b2', text: '빈 자리' },
+      { id: 'b3', text: '셋째 번역' },
+    ],
+  });
+  const onPosition = vi.fn();
+  const offsetTop = vi
+    .spyOn(HTMLElement.prototype, 'offsetTop', 'get')
+    .mockImplementation(function (this: HTMLElement) {
+      return Number(this.dataset.readerIndex ?? 0) * 100;
+    });
+  function ControlledReader() {
+    const [showOriginal, setShowOriginal] = useState(false);
+    return (
+      <ImmersiveReader
+        {...props({ version, showOriginal, onShowOriginal: setShowOriginal, onPosition })}
+      />
+    );
+  }
+  vi.useFakeTimers();
+  render(<ControlledReader />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  article.scrollTop = 225;
+  fireEvent.scroll(article);
+  expect(onPosition).toHaveBeenCalledWith('b3', 25);
+
+  fireEvent.pointerDown(article.querySelector('[data-reader-index="2"]')!, {
+    clientX: 20,
+    clientY: 20,
+  });
+  act(() => vi.advanceTimersByTime(500));
+  fireEvent.click(screen.getByRole('button', { name: '이 문단 원문 보기' }));
+
+  const original = screen.getByRole('article', { name: '원문 본문' });
+  expect(original).toBe(article);
+  expect(original.scrollTop).toBe(200);
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '번역 보기' }));
+  expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+  expect(article.scrollTop).toBe(225);
+  expect(onPosition).toHaveBeenCalledTimes(1);
+  offsetTop.mockRestore();
+});
+
+test('saved translation information uses the displayed version provenance and does not invent elapsed time', () => {
+  const version = completed({
+    provenance: {
+      provider: 'gemini',
+      connectionId: 'older-connection',
+      modelId: 'saved-model',
+      contractVersion: 'plain-v1',
+      promptVersion: 'hymt2-ko-v1',
+      languageDirection: 'ja-ko',
+    },
+  });
+  render(
+    <ImmersiveReader
+      {...props({
+        version,
+        selectedModelId: 'current-model',
+        translation: { phase: 'idle', elapsedMs: 987_000 },
+      })}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 정보 보기' }));
+  const info = screen.getByRole('dialog', { name: '번역 정보' });
+  expect(info).toHaveTextContent('제공자: Google Gemini');
+  expect(info).toHaveTextContent('모델: saved-model');
+  expect(info).toHaveTextContent('경과 시간: 기록 없음');
+  expect(info).not.toHaveTextContent('current-model');
+  expect(info).not.toHaveTextContent('987');
+});
+
+test('legacy saved quality without a quality record stays explicitly unrecorded and retains heuristic limits', () => {
+  const version = completed({ quality: undefined });
+  render(<ImmersiveReader {...props({ version })} />);
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 확인 결과 보기' }));
+  const sheet = screen.getByRole('dialog', { name: '번역 확인 결과' });
+  expect(sheet).toHaveTextContent('가나가 남은 문단 0개 · 용어 확인 기록 없음');
+  expect(sheet).toHaveTextContent('용어 확인 기록이 없어 가나 잔존만 확인했어요.');
+  expect(sheet).toHaveTextContent('한자만 남은 일본어');
+  expect(sheet).not.toHaveTextContent('확정 표기 미발견 0개');
+  expect(sheet).not.toHaveTextContent('이 확인 규칙에서 발견한 항목이 없어요.');
+});
+
 test('settings preserve legacy font values while changing the selected reading presentation', () => {
   const onFontSize = vi.fn();
   const onReadingBackground = vi.fn();
@@ -250,7 +346,12 @@ test('preview keeps empty paragraph indexes and reports the actual scrolled row 
       {...props({
         route: 'translation',
         version: null,
-        translation: { phase: 'translating', elapsedMs: 20, preview: '\n\n도착한 문단' },
+        translation: {
+          phase: 'translating',
+          elapsedMs: 20,
+          token: { requestId: 'preview', chapterId: chapter.chapterId, settingsRevision: 1 },
+          preview: '\n\n도착한 문단',
+        },
         translationActive: true,
         onPreviewPosition,
       })}
@@ -265,6 +366,31 @@ test('preview keeps empty paragraph indexes and reports the actual scrolled row 
   article.scrollTop = 135;
   fireEvent.scroll(article);
   expect(onPreviewPosition).toHaveBeenCalledWith(1, 15);
+});
+
+test('live preview from a different chapter is not rendered in the current translation route', () => {
+  const unrelatedSave = completed({
+    source: { ...source, workId: 'other-work', chapterId: 'other-work/9' },
+  });
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'failed',
+          elapsedMs: 20,
+          token: { requestId: 'stale', chapterId: 'another-work/9', settingsRevision: 1 },
+          preview: '다른 회차의 미리보기',
+          pendingSave: unrelatedSave,
+        },
+      })}
+    />,
+  );
+
+  const article = screen.getByRole('article', { name: '번역 미리보기' });
+  expect(article).not.toHaveTextContent('다른 회차의 미리보기');
+  expect(article).toHaveTextContent('번역을 시작하면 이 화면에서 읽을 수 있어요.');
 });
 
 test('a different saved version with no durable position does not reuse the prior original anchor', () => {
@@ -327,8 +453,9 @@ test('long press opens paragraph actions, swallows its follow-up click, and retr
   expect(onRetryParagraphs).toHaveBeenCalledTimes(1);
 });
 
-test('source access failures keep their specific guidance and explicit refresh action', () => {
+test('source access failures keep their specific guidance and explicit retry action', () => {
   const onRefreshSource = vi.fn();
+  const onRetry = vi.fn();
   render(
     <ImmersiveReader
       {...props({
@@ -339,11 +466,13 @@ test('source access failures keep their specific guidance and explicit refresh a
           elapsedMs: 0,
           error: new ReaderError('source_access', 'not_sent'),
         },
+        onRetry,
         onRefreshSource,
       })}
     />,
   );
   expect(screen.getByRole('alert')).toHaveTextContent('선택한 회차에 접근하지 못했어요.');
-  fireEvent.click(screen.getByRole('button', { name: '원문 다시 확인하기' }));
-  expect(onRefreshSource).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: '원문 다시 확인하고 번역하기' }));
+  expect(onRetry).toHaveBeenCalledOnce();
+  expect(onRefreshSource).not.toHaveBeenCalled();
 });
