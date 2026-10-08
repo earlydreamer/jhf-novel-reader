@@ -50,7 +50,6 @@ it('active bootstrap and composition have no legacy jobs, chunk engine or prefet
   for (const file of [
     'src/app/bootstrap.tsx',
     'src/app/compose.ts',
-    'src/app/controller.ts',
     'src/app/renewalController.ts',
     'src/translation/wholeChapter.ts',
   ]) {
