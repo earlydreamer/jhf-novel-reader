@@ -98,11 +98,21 @@ describe('Android 목록형 설정', () => {
       expect(screen.getByRole('heading', { name })).toBeVisible();
     }
     expect(screen.getByText('웹 미리보기 0.1.0')).toBeVisible();
+    expect(screen.queryByRole('button', { name: '버전' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '오픈소스 라이선스' })).toHaveTextContent(
       'THIRD_PARTY_NOTICES.md · android/NOTICE',
     );
     expect(screen.getByText('기록 없음')).toBeVisible();
+    expect(screen.queryByRole('button', { name: '최근 번역 시간' })).not.toBeInTheDocument();
     expect(document.querySelector('details')).toBeNull();
+    value.controller.dispose();
+  });
+
+  it('웹에서는 자동 설정 스위치를 유지하고 로컬 번역 방식만 숨겨요', async () => {
+    const value = await setup({ streamingAvailable: false });
+
+    expect(screen.getAllByRole('switch')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: '로컬 번역 방식' })).not.toBeInTheDocument();
     value.controller.dispose();
   });
 

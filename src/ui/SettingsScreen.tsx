@@ -251,9 +251,9 @@ export function SettingsScreen({
         />
       </section>
 
-      {state.streamingAvailable && onMode && (
-        <section aria-labelledby="settings-translation">
-          <h2 id="settings-translation">번역 방식</h2>
+      <section aria-labelledby="settings-translation">
+        <h2 id="settings-translation">번역 방식</h2>
+        {state.streamingAvailable && onMode && (
           <ListItem
             headline="로컬 번역 방식"
             supporting={modeLabels[state.translationMode]}
@@ -261,24 +261,24 @@ export function SettingsScreen({
             disabled={modeDisabled}
             onClick={() => setModeOpen(true)}
           />
-          {onAutoTranslate && (
-            <Switch
-              label="저장본이 없으면 자동으로 번역 시작"
-              description="회차를 열면 선택한 모델로 번역해요. 끄면 ‘이 화 번역하기’를 눌러 시작해요."
-              checked={state.autoTranslate}
-              onChange={onAutoTranslate}
-            />
-          )}
-          {onAutoRetryFailed && (
-            <Switch
-              label="실패한 문단 자동으로 다시 번역"
-              description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 연결이 끊긴 요청은 자동으로 다시 보내지 않아요."
-              checked={state.autoRetryFailed}
-              onChange={onAutoRetryFailed}
-            />
-          )}
-        </section>
-      )}
+        )}
+        {onAutoTranslate && (
+          <Switch
+            label="저장본이 없으면 자동으로 번역 시작"
+            description="회차를 열면 선택한 모델로 번역해요. 끄면 ‘이 화 번역하기’를 눌러 시작해요."
+            checked={state.autoTranslate}
+            onChange={onAutoTranslate}
+          />
+        )}
+        {onAutoRetryFailed && (
+          <Switch
+            label="실패한 문단 자동으로 다시 번역"
+            description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 연결이 끊긴 요청은 자동으로 다시 보내지 않아요."
+            checked={state.autoRetryFailed}
+            onChange={onAutoRetryFailed}
+          />
+        )}
+      </section>
 
       {onTheme && (
         <section aria-labelledby="settings-display">
@@ -294,19 +294,28 @@ export function SettingsScreen({
 
       <section aria-labelledby="settings-info">
         <h2 id="settings-info">정보</h2>
-        <ListItem headline="버전" supporting={version} mainLabel="버전" onClick={() => {}} />
+        <div className="nr-list-item nr-list-item--two-line">
+          <div className="nr-list-item__main">
+            <span className="nr-list-item__text">
+              <span className="nr-list-item__headline">버전</span>
+              <span className="nr-list-item__supporting">{version}</span>
+            </span>
+          </div>
+        </div>
         <ListItem
           headline="오픈소스 라이선스"
           supporting="THIRD_PARTY_NOTICES.md · android/NOTICE"
           mainLabel="오픈소스 라이선스"
           onClick={() => setLicensesOpen(true)}
         />
-        <ListItem
-          headline="최근 번역 시간"
-          supporting={timingLabel(state)}
-          mainLabel="최근 번역 시간"
-          onClick={() => {}}
-        />
+        <div className="nr-list-item nr-list-item--two-line">
+          <div className="nr-list-item__main">
+            <span className="nr-list-item__text">
+              <span className="nr-list-item__headline">최근 번역 시간</span>
+              <span className="nr-list-item__supporting">{timingLabel(state)}</span>
+            </span>
+          </div>
+        </div>
       </section>
 
       <Dialog
