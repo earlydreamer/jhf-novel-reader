@@ -1,7 +1,7 @@
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import type { JSX } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import packageInfo from '../../package.json';
 import type { CatalogStatus, RenewalSnapshot } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
@@ -85,10 +85,7 @@ function RadioList({
               value={choice.value}
               checked={choice.value === value}
               disabled={choice.disabled}
-              onClick={() => {
-                if (choice.disabled) return;
-                onSelect(choice.value);
-              }}
+              onClick={choice.value === value ? () => onSelect(choice.value) : undefined}
               onChange={() => {
                 if (choice.disabled) return;
                 onSelect(choice.value);
@@ -118,6 +115,7 @@ export function SettingsScreen({
   onTheme,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
+  const secretHelpId = useId();
   const [providerOpen, setProviderOpen] = useState(false);
   const [geminiOpen, setGeminiOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -232,15 +230,21 @@ export function SettingsScreen({
             }
           />
         ) : (
-          <label>
-            인증값 (선택)
-            <input
-              ref={secret}
-              type="password"
-              autoComplete="off"
-              disabled={!state.connectionAvailable || checking}
-            />
-          </label>
+          <>
+            <label>
+              인증값 (선택)
+              <input
+                ref={secret}
+                type="password"
+                autoComplete="off"
+                aria-describedby={secretHelpId}
+                disabled={!state.connectionAvailable || checking}
+              />
+            </label>
+            <p id={secretHelpId}>
+              인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.
+            </p>
+          </>
         )}
         <Button
           variant="tonal"
@@ -389,7 +393,9 @@ export function SettingsScreen({
           새 인증값
           <input ref={secret} type="password" autoComplete="off" disabled={authDisabled} />
         </label>
-        <p>인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.</p>
+        <p>
+          새 인증값은 이 기기의 보안 저장소에 저장해요. 비워 두고 저장하면 기존 인증값을 유지해요.
+        </p>
       </Dialog>
 
       <Dialog
