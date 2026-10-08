@@ -22,6 +22,28 @@
   color: var(--reading-on-surface);
 }
 
+/* 시스템 바 보호(#131): 본문이 상태바·내비게이션 바(폴드 작업 표시줄 포함) 밑으로 지나가며 가려지지 않게
+   그 자리를 독서 배경으로 덮는다. 스크롤 좌표는 그대로라 독서 위치 계산에 영향이 없다. */
+.nr-immersive-reader::before,
+.nr-immersive-reader::after {
+  content: '';
+  position: fixed;
+  z-index: 10;
+  inset-inline: 0;
+  background: var(--reading-surface);
+  pointer-events: none;
+}
+
+.nr-immersive-reader::before {
+  inset-block-start: 0;
+  block-size: var(--inset-top);
+}
+
+.nr-immersive-reader::after {
+  inset-block-end: 0;
+  block-size: var(--inset-bottom);
+}
+
 .nr-immersive-appbar {
   position: fixed;
   z-index: 30;
