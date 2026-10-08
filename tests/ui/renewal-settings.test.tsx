@@ -125,6 +125,29 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
+  it('대화상자로 이어지는 행만 › 표시와 강조색 값으로 구분하고 정보 행은 그대로 둬요(#140)', async () => {
+    const value = await setup();
+
+    const rowOf = (name: string) =>
+      screen
+        .getByText(name, { selector: '.nr-list-item__headline' })
+        .closest('.nr-list-item') as HTMLElement;
+    for (const name of ['제공자', '모델', '로컬 번역 방식', '테마', '오픈소스 라이선스']) {
+      const row = rowOf(name);
+      expect(row, name).toHaveClass('nr-list-item--navigates');
+      expect(
+        row.querySelector('.nr-list-item__main [data-icon="chevron_right"]'),
+        name,
+      ).not.toBeNull();
+    }
+    for (const name of ['버전', '최근 번역 시간']) {
+      const row = rowOf(name);
+      expect(row, name).not.toHaveClass('nr-list-item--navigates');
+      expect(row.querySelector('[data-icon="chevron_right"]'), name).toBeNull();
+    }
+    value.controller.dispose();
+  });
+
   it('설정 행의 접근성 이름에 현재 값을 포함해요', async () => {
     const value = await setup();
 

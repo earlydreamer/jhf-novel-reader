@@ -184,6 +184,30 @@ describe('immersive-reader.css system bars', () => {
   });
 });
 
+describe('components.css navigating list item affordance', () => {
+  it('강조색 값은 비활성 규칙보다 앞에 두어 비활성 색이 이기게 한다(#140)', () => {
+    const sheet = rules(componentsCss);
+    const navigates = sheet.findIndex(
+      (rule) => rule.selector === '.nr-list-item--navigates .nr-list-item__supporting',
+    );
+    const disabled = sheet.findIndex((rule) =>
+      selectorParts(rule.selector).includes(
+        '.nr-list-item__main:disabled .nr-list-item__supporting',
+      ),
+    );
+    expect(navigates).toBeGreaterThanOrEqual(0);
+    expect(disabled).toBeGreaterThan(navigates);
+    expect(sheet[navigates]?.body).toMatch(/color:\s*var\(--primary\);/);
+    const chevron = sheet.find((rule) => rule.selector === '.nr-list-item__chevron');
+    expect(chevron?.body).toMatch(/margin-inline-start:\s*auto;/);
+    expect(chevron?.body).toMatch(/color:\s*var\(--on-surface-variant\);/);
+    const disabledChevron = sheet.find(
+      (rule) => rule.selector === '.nr-list-item__main:disabled .nr-list-item__chevron',
+    );
+    expect(disabledChevron?.body).toMatch(/color:\s*inherit;/);
+  });
+});
+
 const homeCss = readFileSync('src/ui/home.css', 'utf8');
 
 describe('home.css library scroll', () => {
