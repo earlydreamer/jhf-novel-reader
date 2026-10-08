@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Application } from '../../src/app/Application';
 import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
 import { ReaderError } from '../../src/contracts';
@@ -1193,6 +1193,151 @@ describe('회차 저장본 삭제 컨트롤러', () => {
     }
     expect(visited).not.toContainEqual({ kind: 'reader', versionId: saved.versionId });
     expect(visited).toEqual([{ kind: 'work', workId: target.workId }, { kind: 'home' }]);
+    controller.dispose();
+  });
+});
+
+describe('목차 회차 시트의 저장본 삭제', () => {
+  function twoChapterPage(workId: string, title: string): WorkPage {
+    const base = `https://ncode.syosetu.com/${workId}/`;
+    return {
+      workId,
+      canonicalUrl: base,
+      title,
+      chapters: [1, 2].map((ordinal) => ({
+        workId,
+        chapterId: `${workId}/${ordinal}`,
+        canonicalUrl: `${base}${ordinal}/`,
+        title: `${ordinal}화 제목`,
+        ordinal,
+      })),
+      pageUrl: base,
+      nextPageUrl: null,
+      complete: true,
+    };
+  }
+  async function openFirstSavedWork(
+    workId: string,
+    title: string,
+    options: { remove?: ChapterRemovalResult } = {},
+  ) {
+    const target = twoChapterPage(workId, title);
+    const [first] = target.chapters;
+    const { library, versions } = libraryHarness([target]);
+    versions.set(first!.chapterId, [savedVersion({ ...target, chapters: [first!] })]);
+    const controller = createRenewalController({ library });
+    const removeSpy = options.remove
+      ? vi.spyOn(controller, 'removeChapterVersions').mockResolvedValue(options.remove)
+      : null;
+    render(<Application controller={controller} />);
+    await controller.openLibraryWork(target.workId);
+    await screen.findByRole('heading', { name: target.title });
+    return { target, library, controller, removeSpy };
+  }
+  function openChapterSheet(ordinal: number) {
+    fireEvent.click(screen.getByRole('button', { name: `${ordinal}화 메뉴` }));
+    return screen.findByRole('dialog', { name: `${ordinal}화 메뉴` });
+  }
+  async function confirmRemoveDialog(ordinal: number) {
+    const sheet = await openChapterSheet(ordinal);
+    fireEvent.click(within(sheet).getByRole('button', { name: '이 화 저장본 삭제하기' }));
+    return screen.findByRole('dialog', { name: `${ordinal}화 저장본을 삭제할까요?` });
+  }
+
+  it('저장된 회차 시트에만 저장본 삭제 항목이 있다', async () => {
+    const { controller } = await openFirstSavedWork('n3030ee', '시트 삭제 항목 작품');
+
+    const savedSheet = await openChapterSheet(1);
+    expect(within(savedSheet).getByRole('button', { name: '이 화 저장본 삭제하기' })).toBeVisible();
+    fireEvent.keyDown(savedSheet, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '1화 메뉴' })).toBeNull());
+
+    const unsavedSheet = await openChapterSheet(2);
+    expect(
+      within(unsavedSheet).queryByRole('button', { name: '이 화 저장본 삭제하기' }),
+    ).toBeNull();
+    controller.dispose();
+  });
+
+  it('확인하면 지우고 행 상태·저장 수가 바뀌고 알림이 뜬다', async () => {
+    const { target, library, controller } = await openFirstSavedWork('n3131ff', '확인 삭제 작품');
+    expect(screen.getByText(`전체 2화 · 1화 저장됨`)).toBeVisible();
+    expect(screen.getByRole('button', { name: '1화 1화 제목' })).toHaveAccessibleDescription(
+      /저장됨/,
+    );
+
+    const confirm = await confirmRemoveDialog(1);
+    expect(confirm).toHaveTextContent('되돌릴 수 없어요');
+    fireEvent.click(within(confirm).getByRole('button', { name: '삭제하기' }));
+
+    expect(await screen.findByText('1화 저장본을 삭제했어요.')).toBeVisible();
+    expect(library.removeChapterVersions).toHaveBeenCalledExactlyOnceWith(
+      target.chapters[0]!.chapterId,
+      { activeBatchWorkId: undefined },
+    );
+    expect(screen.queryByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeNull();
+    expect(screen.getByRole('button', { name: '1화 1화 제목' })).not.toHaveAccessibleDescription(
+      /저장됨/,
+    );
+    expect(screen.getByText(`전체 2화 · 0화 저장됨`)).toBeVisible();
+    controller.dispose();
+  });
+
+  it('닫기를 누르면 지우지 않는다', async () => {
+    const { library, controller } = await openFirstSavedWork('n3232gg', '닫기 작품');
+
+    const confirm = await confirmRemoveDialog(1);
+    fireEvent.click(within(confirm).getByRole('button', { name: '닫기' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeNull(),
+    );
+    expect(library.removeChapterVersions).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '1화 1화 제목' })).toHaveAccessibleDescription(
+      /저장됨/,
+    );
+    controller.dispose();
+  });
+
+  it('막히면 대화상자 안에 이유를 보여 주고 닫지 않는다', async () => {
+    const { controller, removeSpy } = await openFirstSavedWork('n3333hh', '막힘 작품', {
+      remove: {
+        removed: false,
+        cleanupComplete: false,
+        remainingInventory: [],
+        versionIds: [],
+        blockedBy: 'translation',
+      },
+    });
+
+    const confirm = await confirmRemoveDialog(1);
+    fireEvent.click(within(confirm).getByRole('button', { name: '삭제하기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '이 화를 번역하고 있어요. 번역을 마치거나 중단한 뒤 다시 삭제해 주세요.',
+    );
+    expect(removeSpy).toHaveBeenCalledOnce();
+    expect(screen.getByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeVisible();
+    controller.dispose();
+  });
+
+  it('정리가 일부 남으면 알림 문구가 다르다', async () => {
+    const { controller } = await openFirstSavedWork('n3434ii', '부분 정리 회차 작품', {
+      remove: {
+        removed: true,
+        cleanupComplete: false,
+        remainingInventory: ['versions/x.0.json'],
+        versionIds: ['x'],
+      },
+    });
+
+    const confirm = await confirmRemoveDialog(1);
+    fireEvent.click(within(confirm).getByRole('button', { name: '삭제하기' }));
+
+    expect(
+      await screen.findByText('1화 저장본을 삭제했어요. 일부 파일은 다음에 정리할게요.'),
+    ).toBeVisible();
+    expect(screen.queryByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeNull();
     controller.dispose();
   });
 });

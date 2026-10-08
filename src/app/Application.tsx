@@ -92,6 +92,7 @@ function RouteScreen({
               : undefined
           }
           onLoadMore={() => void controller.loadMoreWorkPage()}
+          onRemoveChapter={(chapter) => controller.removeChapterVersions(chapter)}
           batch={state.batch}
           batchGlobalBlocked={
             !!state.batch?.active ||
