@@ -384,11 +384,19 @@ export function SettingsScreen({
                       update({ baseUrl: composePresetAddress(host, '11434') });
                     }}
                   />
+                  <Chip
+                    label="llama.cpp 8080"
+                    selected={port === '8080'}
+                    onClick={() => {
+                      setPort('8080');
+                      update({ baseUrl: composePresetAddress(host, '8080') });
+                    }}
+                  />
                 </div>
                 <p id={addressHelpId}>
                   {composePresetAddress(host, port)
                     ? `완성 주소: ${composePresetAddress(host, port)}`
-                    : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 예: 192.168.0.10 · 1234'}
+                    : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.'}
                 </p>
               </>
             )}
