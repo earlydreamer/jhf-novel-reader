@@ -113,6 +113,24 @@ describe('immersive-reader.css progress bar', () => {
   });
 });
 
+describe('immersive-reader.css chapter end card', () => {
+  // .nr-reader-end 규칙은 여러 번 나오므로 같은 선택자를 가진 규칙 본문을 모두 모은다.
+  const endBody = rules(readerCss)
+    .filter((rule) => selectorParts(rule.selector).includes('.nr-reader-end'))
+    .map((rule) => rule.body)
+    .join('\n');
+
+  it('회차 끝 카드는 문구와 버튼을 한 줄에 펼치고 사이를 벌린다', () => {
+    expect(endBody).toMatch(/display:\s*flex;/);
+    expect(endBody).toMatch(/justify-content:\s*space-between;/);
+  });
+
+  it('행동 버튼은 카드의 끝(오른쪽)에 둔다', () => {
+    const button = rules(readerCss).find((rule) => rule.selector === '.nr-reader-end > .nr-button');
+    expect(button?.body).toMatch(/margin-inline-start:\s*auto;/);
+  });
+});
+
 const componentsCss = readFileSync('src/ui/components/components.css', 'utf8');
 
 function zIndex(body: string | undefined): number {

@@ -7,6 +7,7 @@ import { ReaderError } from '../../src/contracts';
 import type { CompletedTranslation, ChapterRef, WorkPage } from '../../src/contracts/reading';
 import { runTopBackHandler } from '../../src/ui/shell/backStack';
 import { ImmersiveReader, type ImmersiveReaderProps } from '../../src/ui/ImmersiveReader';
+import { SnackbarProvider } from '../../src/ui/components/Snackbar';
 import { source } from '../providers/wholeChapterFixture';
 
 afterEach(() => {
@@ -98,6 +99,45 @@ function props(overrides: Partial<ImmersiveReaderProps> = {}): ImmersiveReaderPr
     ...overrides,
   };
 }
+
+const savedNotice = '번역을 저장했어요. 저장된 번역을 읽고 있어요.';
+
+test('저장본으로 전환하면 스낵바로 한 번만 알리고 본문에는 안내 문구를 두지 않는다', () => {
+  const value = completed();
+  const ui = (overrides: Partial<ImmersiveReaderProps> = {}) => (
+    <SnackbarProvider>
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version: value,
+          translation: { phase: 'ready', elapsedMs: 0 },
+          ...overrides,
+        })}
+      />
+    </SnackbarProvider>
+  );
+  const view = render(ui());
+
+  expect(screen.getAllByText(savedNotice)).toHaveLength(1);
+  expect(screen.getByRole('article', { name: '번역 본문' })).not.toHaveTextContent(
+    '저장된 번역을 읽고 있어요',
+  );
+
+  view.rerender(ui());
+  expect(screen.getAllByText(savedNotice)).toHaveLength(1);
+});
+
+test('저장본을 그냥 연 경우에는 저장 전환 스낵바를 띄우지 않는다', () => {
+  render(
+    <SnackbarProvider>
+      <ImmersiveReader
+        {...props({ route: 'reader', translation: { phase: 'ready', elapsedMs: 0 } })}
+      />
+    </SnackbarProvider>,
+  );
+
+  expect(screen.queryByText(savedNotice)).not.toBeInTheDocument();
+});
 
 test('immersive bars are inert while hidden, keyboard reveal opens them, and Back closes an overlay before hiding bars', () => {
   render(<ImmersiveReader {...props()} />);
