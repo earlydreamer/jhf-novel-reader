@@ -300,6 +300,10 @@ export function Application({
       } else {
         setRemoveTarget(null);
       }
+    } catch {
+      setRemoveFeedback(
+        '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+      );
     } finally {
       setRemoveBusy(false);
     }

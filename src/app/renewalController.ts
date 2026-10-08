@@ -804,7 +804,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     selectionOperation++;
     automaticRequest = null;
     if (routeBelongsToWork(snapshot.route, workId)) sourceAbort?.abort();
-    if (titleWorkId === workId) await stopTitles();
+    if (titleWorkId === workId) {
+      try {
+        await stopTitles();
+      } catch {
+        // A failed title write is settled below; storage removal still owns the final cleanup.
+      }
+    }
     for (const [versionId, position] of pendingPositions)
       if (position.workId === workId) pendingPositions.delete(versionId);
     const activeWriters = [...(workWriters.get(workId) ?? [])];

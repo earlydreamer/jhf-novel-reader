@@ -827,6 +827,60 @@ it('작품 제목 저장 중에는 대상 제거가 저장 완료를 기다린�
   controller.dispose();
 });
 
+it('제목 저장 writer가 실패해도 settle한 뒤 작품 제거를 계속한다', async () => {
+  const target = work('n1727pp', '실패한 제목 저장 작품');
+  const { library } = libraryHarness([target]);
+  const titles = {
+    read: vi.fn(async () => []),
+    readAttempts: vi.fn(async () => []),
+    recordAttempt: vi.fn(async () => {}),
+    save: vi.fn(async () => {
+      throw new Error('synthetic title I/O failure');
+    }),
+  } as unknown as NonNullable<RenewalDependencies['titles']>;
+  const controller = createRenewalController({ library, titles });
+  await controller.openLibraryWork(target.workId);
+  const saving = controller.saveTitle(target.chapters[0]!.chapterId, '저장 실패 제목');
+  const saveFailed = saving.then(
+    () => false,
+    () => true,
+  );
+  await waitFor(() => expect(titles.save).toHaveBeenCalledOnce());
+
+  const removal = controller.removeWork(target.workId);
+
+  expect(await saveFailed).toBe(true);
+  await expect(removal).resolves.toMatchObject({ removed: true, cleanupComplete: true });
+  expect(library.removeWork).toHaveBeenCalledOnce();
+  expect(controller.getSnapshot().libraryWorks).toEqual([]);
+  controller.dispose();
+});
+
+it('제거 호출이 예기치 않게 reject되면 안내하고 busy를 풀어 재시도할 수 있다', async () => {
+  const target = work('n1737pp', '재시도 가능한 제거 작품');
+  const { library } = libraryHarness([target]);
+  const controller = createRenewalController({ library });
+  const removeWork = vi
+    .spyOn(controller, 'removeWork')
+    .mockRejectedValueOnce(new Error('unexpected removal rejection'))
+    .mockResolvedValueOnce({ removed: true, cleanupComplete: true, remainingInventory: [] });
+  render(<Application controller={controller} />);
+  await screen.findByText(target.title, { selector: '.nr-list-item__headline' });
+  fireEvent.click(screen.getByRole('button', { name: `${target.title} 메뉴` }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+  );
+  expect(screen.getByRole('button', { name: '제거하기' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+  await waitFor(() => expect(removeWork).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  controller.dispose();
+});
+
 it('읽기 위치 저장이 진행 중이면 제거가 저장 writer를 기다린다', async () => {
   const target = work('n1818qq', '위치 저장 작품');
   const saved = savedVersion(target);
