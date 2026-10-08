@@ -7,6 +7,7 @@ import { Dialog } from './components/Modal';
 import { Menu } from './components/Menu';
 import { ListItem } from './components/ListItem';
 import { ExtendedFab } from './components/ExtendedFab';
+import brandLogo from './assets/brand-logo.png';
 import './home.css';
 
 export interface HomeScreenProps {
@@ -95,6 +96,13 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
 
       {state.libraryWorks.length === 0 ? (
         <div className="nr-library__empty">
+          <img
+            className="nr-library__brand"
+            src={brandLogo}
+            alt="JHF Novel Reader"
+            width={160}
+            height={160}
+          />
           <h1>읽고 싶은 작품을 찾아보세요</h1>
           <p>나로우에서 작품을 고르면 서재에 담겨요.</p>
         </div>

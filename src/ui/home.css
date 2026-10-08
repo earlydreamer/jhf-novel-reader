@@ -13,6 +13,12 @@
 .nr-library__empty h1 {
   margin-block-end: 4px;
 }
+.nr-library__brand {
+  display: block;
+  inline-size: min(160px, 40vw);
+  block-size: auto;
+  margin: 0 auto 16px;
+}
 .nr-visually-hidden {
   position: absolute;
   inline-size: 1px;
