@@ -861,3 +861,26 @@ test('회차 이동 버튼은 화살표 대신 이전 화·다음 화 글자를 
   expect(buttons[0]!.textContent).toBe('이전 화');
   expect(buttons[buttons.length - 1]!.textContent).toBe('다음 화');
 });
+
+test('상단바 제목은 본문 머리와 같은 번역 제목을 쓰고 원문 보기면 원문 제목을 쓴다(#159)', () => {
+  const titles = {
+    entries: [
+      {
+        key: chapter.chapterId,
+        source: source.title,
+        target: '번역된 제목',
+        origin: 'model' as const,
+        updatedAt: '2026-10-09T00:00:00Z',
+      },
+    ],
+    busy: false,
+  };
+  const appBarTitle = () => document.querySelector('.nr-top-app-bar__title')!.textContent;
+  const view = render(<ImmersiveReader {...props({ titles })} />);
+  expect(appBarTitle()).toBe('번역된 제목');
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '원문 보기' }));
+  view.rerender(<ImmersiveReader {...props({ titles, showOriginal: true })} />);
+  expect(appBarTitle()).toBe(source.title);
+});

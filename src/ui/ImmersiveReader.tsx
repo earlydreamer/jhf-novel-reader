@@ -447,7 +447,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     failed: '번역 실패',
     unknown: '요청 결과 확인 필요',
   }[props.translation.phase];
-  const routeTitle = version?.source.title ?? chapter.title;
   const progress = props.translation.progress;
   const activeFlow = ['preparing', 'translating', 'validating', 'saving'].includes(
     props.translation.phase,
@@ -644,7 +643,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         className={`nr-immersive-appbar${barsVisible ? '' : ' nr-immersive-appbar--hidden'}`}
       >
         <TopAppBar
-          title={routeTitle}
+          title={title}
           titleAs="span"
           navigation={
             <IconButton icon="arrow_back" label="목차로 돌아가기" onClick={props.onBack} />
