@@ -411,15 +411,11 @@ export function Application({
       const result = await controller.removeWork(removeTarget.workId);
       if (result.removed === false) {
         setRemoveFeedback(
-          result.blockedBy === 'pending_save'
-            ? '저장하지 못한 번역이 있어요. 먼저 저장을 마친 뒤 다시 제거해 주세요.'
-            : result.blockedBy === 'batch'
-              ? '이 작품의 일괄 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 제거해 주세요.'
-              : result.blockedBy === 'unfinished_attempt'
-                ? '요청 결과를 확인하지 못한 회차가 있어요. 지금은 작품을 제거할 수 없어요.'
-                : result.blockedBy === 'translation'
-                  ? '이 작품을 번역 중이에요. 번역을 마치거나 중단한 뒤 다시 제거해 주세요.'
-                  : '작품을 제거하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+          result.blockedBy === 'batch'
+            ? '이 작품의 일괄 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 제거해 주세요.'
+            : result.blockedBy === 'translation'
+              ? '이 작품을 번역 중이에요. 번역을 마치거나 중단한 뒤 다시 제거해 주세요.'
+              : '작품을 제거하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
         );
       } else if (result.removed === null) {
         setRemoveFeedback(

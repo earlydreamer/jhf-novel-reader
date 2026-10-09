@@ -357,23 +357,28 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
     getSnapshot: () => state,
     getCompleted: () => completed,
     getUnfinished: () => unfinished,
+    // 실행 중인 번역만 막는다. 저장 대기·결과 불명 요청은 메모리에서 정리하고, 저장소 기록은 호출자가 지운다.
     clearWork(workId: string): boolean {
       if (slot.occupied && state.token?.chapterId.startsWith(`${workId}/`)) return false;
-      if (state.pendingSave?.source.workId === workId) return false;
-      if (unfinished.some((token) => token.chapterId.startsWith(`${workId}/`))) return false;
+      unfinished = unfinished.filter((token) => !token.chapterId.startsWith(`${workId}/`));
       if (completed?.source.workId === workId) completed = null;
-      if (state.token?.chapterId.startsWith(`${workId}/`)) {
+      if (
+        state.pendingSave?.source.workId === workId ||
+        state.token?.chapterId.startsWith(`${workId}/`)
+      ) {
         state = { phase: 'idle', elapsedMs: 0 };
         if (!disposed) listeners.forEach((listener) => listener(state));
       }
       return true;
     },
+    // 결과 불명 요청은 막지도 지우지도 않는다. 회차 삭제 뒤에도 다시 번역할 때 중복 경고가 남는다.
     clearChapter(chapterId: string): boolean {
       if (slot.occupied && state.token?.chapterId === chapterId) return false;
-      if (state.pendingSave?.source.chapterId === chapterId) return false;
-      if (unfinished.some((token) => token.chapterId === chapterId)) return false;
       if (completed?.source.chapterId === chapterId) completed = null;
-      if (state.token?.chapterId === chapterId) {
+      if (
+        state.pendingSave?.source.chapterId === chapterId ||
+        state.token?.chapterId === chapterId
+      ) {
         state = { phase: 'idle', elapsedMs: 0 };
         if (!disposed) listeners.forEach((listener) => listener(state));
       }

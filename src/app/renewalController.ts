@@ -831,16 +831,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return { removed: false, cleanupComplete: false, remainingInventory: [] };
     const flowState = dependencies.flow?.getSnapshot();
     if (
-      snapshot.pendingSaveChapter?.workId === workId ||
-      flowState?.pendingSave?.source.workId === workId
-    )
-      return {
-        removed: false,
-        cleanupComplete: false,
-        remainingInventory: [],
-        blockedBy: 'pending_save',
-      };
-    if (
       (activeTranslation?.chapterId.startsWith(`${workId}/`) ?? false) ||
       (flowState?.token?.chapterId.startsWith(`${workId}/`) && dependencies.flow?.active)
     )
@@ -856,21 +846,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       : batchState?.active
         ? batchState.record?.work.workId
         : undefined;
+    // 저장된 batch 기록은 실행 중이 아니면 막지 않는다. 실행 중인 owner만 막는다.
     if (
       batchState &&
       ((batchState.active && batchRuntimeOwner === workId) ||
-        (batchState.record?.work.workId === workId && batchState.record.phase !== 'complete'))
+        (batchState.preparing && batchState.preparingWorkId === workId))
     )
       return { removed: false, cleanupComplete: false, remainingInventory: [], blockedBy: 'batch' };
-    if (
-      dependencies.flow?.getUnfinished().some((token) => token.chapterId.startsWith(`${workId}/`))
-    )
-      return {
-        removed: false,
-        cleanupComplete: false,
-        remainingInventory: [],
-        blockedBy: 'unfinished_attempt',
-      };
 
     removingWorkIds.add(workId);
     removalGenerations.set(workId, removalGeneration(workId) + 1);
@@ -996,11 +978,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return refused();
     const flowState = dependencies.flow?.getSnapshot();
     if (
-      snapshot.pendingSaveChapter?.chapterId === chapterId ||
-      flowState?.pendingSave?.source.chapterId === chapterId
-    )
-      return refused('pending_save');
-    if (
       activeTranslation?.chapterId === chapterId ||
       (flowState?.token?.chapterId === chapterId && dependencies.flow?.active)
     )
@@ -1011,14 +988,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       : batchState?.active
         ? batchState.record?.work.workId
         : undefined;
+    // 저장된 batch 기록은 실행 중이 아니면 막지 않는다. 실행 중인 owner만 막는다.
     if (
       batchState &&
       ((batchState.active && batchRuntimeOwner === workId) ||
-        (batchState.record?.work.workId === workId && batchState.record.phase !== 'complete'))
+        (batchState.preparing && batchState.preparingWorkId === workId))
     )
       return refused('batch');
-    if (dependencies.flow?.getUnfinished().some((token) => token.chapterId === chapterId))
-      return refused('unfinished_attempt');
 
     removingChapterIds.add(chapterId);
     try {

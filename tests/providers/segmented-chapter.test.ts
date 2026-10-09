@@ -12,6 +12,7 @@ import { createWholeChapterFlow } from '../../src/translation/wholeChapter';
 import type {
   CompletedTranslation,
   ModelTransport,
+  TranslationToken,
   WholeChapterRequest,
 } from '../../src/contracts';
 import { source } from './wholeChapterFixture';
@@ -362,6 +363,7 @@ const ref = {
 function makeFlow(
   transport: ModelTransport,
   commitVersion: (value: CompletedTranslation) => Promise<void>,
+  unfinished: readonly TranslationToken[] = [],
 ) {
   const flow = createWholeChapterFlow({
     source: { getChapter: async () => longSource, getWorkPage: vi.fn() },
@@ -377,12 +379,62 @@ function makeFlow(
       savePosition: vi.fn(),
       readPosition: vi.fn(),
     },
-    attempts: { readUnfinished: async () => [], write: async () => {} },
+    attempts: { readUnfinished: async () => [...unfinished], write: async () => {} },
     clock: { now: () => 0 },
   });
   flow.setForeground(true);
   return flow;
 }
+test('clearWork은 저장 대기와 결과 불명 요청을 비우고 true를 돌려준다', async () => {
+  const post = vi.fn(async (input: { url: string; body: Record<string, unknown> }) => ({
+    status: 200,
+    url: input.url,
+    headers: {},
+    data: response(echo(contentOf(input.body))),
+  }));
+  const commit = vi.fn().mockRejectedValue(Error('disk fixture'));
+  const unfinished = [{ requestId: 'old', chapterId: 'n1234ab/9', settingsRevision: 0 }];
+  const flow = makeFlow({ get: vi.fn(), post }, commit, unfinished);
+  await flow.initialize();
+  await flow.start(ref, selection);
+  expect(flow.getSnapshot().pendingSave).toBeDefined();
+  expect(flow.getUnfinished()).toHaveLength(1);
+
+  expect(flow.clearWork('n1234ab')).toBe(true);
+
+  expect(flow.getSnapshot()).toMatchObject({ phase: 'idle' });
+  expect(flow.getSnapshot().pendingSave).toBeUndefined();
+  expect(flow.getUnfinished()).toEqual([]);
+});
+test('clearWork은 그 작품 번역이 실행 중이면 false를 돌려주고 상태를 두지 않는다', async () => {
+  const post = vi.fn(() => new Promise<never>(() => {}));
+  const flow = makeFlow({ get: vi.fn(), post }, vi.fn());
+  void flow.start(ref, selection);
+  await vi.waitFor(() => expect(flow.active).toBe(true));
+
+  expect(flow.clearWork('n1234ab')).toBe(false);
+  expect(flow.getSnapshot().phase).not.toBe('idle');
+  flow.dispose();
+});
+test('clearChapter는 그 회차의 저장 대기를 비우고 결과 불명 요청은 남긴다', async () => {
+  const post = vi.fn(async (input: { url: string; body: Record<string, unknown> }) => ({
+    status: 200,
+    url: input.url,
+    headers: {},
+    data: response(echo(contentOf(input.body))),
+  }));
+  const commit = vi.fn().mockRejectedValue(Error('disk fixture'));
+  const unfinished = [{ requestId: 'old', chapterId: 'n1234ab/1', settingsRevision: 0 }];
+  const flow = makeFlow({ get: vi.fn(), post }, commit, unfinished);
+  await flow.initialize();
+  await flow.start(ref, selection);
+  expect(flow.getSnapshot().pendingSave).toBeDefined();
+
+  expect(flow.clearChapter('n1234ab/1')).toBe(true);
+
+  expect(flow.getSnapshot().pendingSave).toBeUndefined();
+  expect(flow.getUnfinished()).toEqual(unfinished);
+});
 test('all batches are required for one saved version and storage-only retry never generates again', async () => {
   const post = vi.fn(async (input: { url: string; body: Record<string, unknown> }) => ({
     status: 200,

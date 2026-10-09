@@ -1030,6 +1030,7 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       }),
       getUnfinished: () => state.unfinished ?? [],
       getCompleted: () => null,
+      clearWork: vi.fn(() => true),
       clearChapter: vi.fn(() => true),
       subscribe: vi.fn(() => () => {}),
       setForeground: vi.fn(),
@@ -1113,10 +1114,9 @@ describe('회차 저장본 삭제 컨트롤러', () => {
     controller.dispose();
   });
 
-  it('저장 대기·번역 중·미확인 요청·일괄 번역은 막고 저장소를 부르지 않는다', async () => {
+  it('번역 중이거나 일괄 번역이 실행 중인 회차 저장본 삭제는 막고 저장소를 부르지 않는다', async () => {
     const target = work('n2121cc', '막히는 회차 작품');
     const chapter = target.chapters[0]!;
-    const saved = savedVersion(target);
     const { library } = libraryHarness([target]);
     const token = { requestId: 'request-1', chapterId: chapter.chapterId, settingsRevision: 0 };
     const cases: {
@@ -1124,9 +1124,7 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       flow?: RenewalDependencies['flow'];
       batch?: RenewalDependencies['batch'];
     }[] = [
-      { blockedBy: 'pending_save', flow: flowFake({ pendingSave: saved }) },
       { blockedBy: 'translation', flow: flowFake({ token, active: true }) },
-      { blockedBy: 'unfinished_attempt', flow: flowFake({ unfinished: [token] }) },
       {
         blockedBy: 'batch',
         batch: batchFake({
@@ -1140,8 +1138,8 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       {
         blockedBy: 'batch',
         batch: batchFake({
-          record: { work: { workId: target.workId }, phase: 'paused' },
-          active: false,
+          record: { work: { workId: target.workId }, phase: 'running' },
+          active: true,
           preparing: false,
           error: null,
         }),
@@ -1157,6 +1155,32 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       controller.dispose();
     }
     expect(library.removeChapterVersions).not.toHaveBeenCalled();
+  });
+
+  it('저장 대기·결과 불명 요청·멈춘 일괄 번역 기록은 회차 저장본 삭제를 막지 않고 저장 대기를 비운다', async () => {
+    const target = work('n2525ee', '정리되는 회차 작품');
+    const chapter = target.chapters[0]!;
+    const saved = savedVersion(target);
+    const { library } = libraryHarness([target]);
+    const token = { requestId: 'request-3', chapterId: chapter.chapterId, settingsRevision: 0 };
+    const flow = flowFake({ pendingSave: saved, unfinished: [token] });
+    const batch = batchFake({
+      record: { work: { workId: target.workId }, phase: 'paused' },
+      active: false,
+      preparing: false,
+      error: null,
+    });
+    const controller = createRenewalController({ library, flow, batch });
+
+    await expect(controller.removeChapterVersions(chapter)).resolves.toMatchObject({
+      removed: true,
+      cleanupComplete: true,
+    });
+    expect(library.removeChapterVersions).toHaveBeenCalledExactlyOnceWith(chapter.chapterId, {
+      activeBatchWorkId: undefined,
+    });
+    expect(flow.clearChapter).toHaveBeenCalledWith(chapter.chapterId);
+    controller.dispose();
   });
 
   it('같은 작품의 다른 회차 번역 중에는 이 회차 저장본 삭제를 막지 않는다', async () => {

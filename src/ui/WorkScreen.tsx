@@ -148,15 +148,11 @@ export function WorkScreen({
         );
       } else {
         setRemoveFeedback(
-          result.blockedBy === 'pending_save'
-            ? '저장하지 못한 번역이 있어요. 먼저 저장을 마친 뒤 다시 삭제해 주세요.'
-            : result.blockedBy === 'translation'
-              ? '이 화를 번역하고 있어요. 번역을 마치거나 중단한 뒤 다시 삭제해 주세요.'
-              : result.blockedBy === 'batch'
-                ? '이 작품의 미리 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 삭제해 주세요.'
-                : result.blockedBy === 'unfinished_attempt'
-                  ? '요청 결과를 확인하지 못했어요. 지금은 이 화 저장본을 삭제할 수 없어요.'
-                  : '저장본을 삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+          result.blockedBy === 'translation'
+            ? '이 화를 번역하고 있어요. 번역을 마치거나 중단한 뒤 다시 삭제해 주세요.'
+            : result.blockedBy === 'batch'
+              ? '이 작품의 미리 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 삭제해 주세요.'
+              : '저장본을 삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
         );
       }
     } catch {
