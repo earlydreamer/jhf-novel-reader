@@ -275,3 +275,33 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.nr-license {
+  border-block-end: 1px solid var(--outline-variant);
+}
+.nr-license > summary {
+  display: grid;
+  gap: 2px;
+  min-block-size: var(--touch-target);
+  padding-block: 12px;
+  cursor: pointer;
+}
+.nr-license__name {
+  color: var(--on-surface);
+  font: var(--type-body-large);
+  overflow-wrap: anywhere;
+}
+.nr-license__meta {
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
+}
+.nr-license__text {
+  max-inline-size: 100%;
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: var(--shape-sm);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  font: var(--type-body-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

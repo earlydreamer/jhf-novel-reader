@@ -1,0 +1,34 @@
+{
+  "rules": [
+    {
+      "match": "androidx.",
+      "license": "Apache-2.0"
+    },
+    {
+      "match": "org.jetbrains.",
+      "license": "Apache-2.0"
+    },
+    {
+      "match": "org.jetbrains:",
+      "license": "Apache-2.0"
+    },
+    {
+      "match": "org.jspecify:",
+      "license": "Apache-2.0"
+    },
+    {
+      "match": "org.apache.cordova:",
+      "license": "Apache-2.0"
+    },
+    {
+      "match": "com.google.guava:",
+      "license": "Apache-2.0",
+      "note": "listenablefuture POM에는 라이선스가 없고 Guava(Apache-2.0)에 속함"
+    },
+    {
+      "match": "io.ionic.libs:ionfilesystem-android",
+      "license": "MIT",
+      "text": "licenses/ionfilesystem-android-MIT.txt"
+    }
+  ]
+}
