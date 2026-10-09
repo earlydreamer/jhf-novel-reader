@@ -292,3 +292,16 @@ describe('CSS 토큰 참조', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('immersive-reader.css reader chapter buttons (#155)', () => {
+  it('회차 이동 버튼은 글자 폭에 맞는 알약으로 최소 폭과 좌우 여백만 둔다', () => {
+    const ends = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-toolbar > .nr-reader-symbol-button',
+    );
+    expect(ends?.body).toMatch(/min-inline-size:\s*56px;/);
+    expect(ends?.body).toMatch(/block-size:\s*56px;/);
+    expect(ends?.body).toMatch(/padding-inline:\s*20px;/);
+    expect(ends?.body).toMatch(/font:\s*var\(--type-label-large\);/);
+    expect(ends?.body).not.toMatch(/(?<![\w-])inline-size:\s*56px;/);
+  });
+});

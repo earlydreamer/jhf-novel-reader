@@ -854,3 +854,10 @@ test('바가 보이면 스낵바를 하단 툴바 위 72px로 올리고 숨으�
   act(() => expect(runTopBackHandler()).toBe(true));
   expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
 });
+
+test('회차 이동 버튼은 화살표 대신 이전 화·다음 화 글자를 보인다(#155)', () => {
+  render(<ImmersiveReader {...props()} />);
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('.nr-reader-toolbar button')];
+  expect(buttons[0]!.textContent).toBe('이전 화');
+  expect(buttons[buttons.length - 1]!.textContent).toBe('다음 화');
+});

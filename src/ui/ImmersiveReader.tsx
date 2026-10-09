@@ -860,7 +860,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           disabled={!previousAvailable || props.busy}
           onClick={() => props.onAdjacent(-1)}
         >
-          ‹
+          이전 화
         </button>
         <div className="nr-reader-toolbar__center">
           <button
@@ -887,7 +887,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           disabled={!nextAvailable || props.busy}
           onClick={() => props.onAdjacent(1)}
         >
-          ›
+          다음 화
         </button>
       </FloatingToolbar>
       <BottomSheet open={settingsOpen} title="보기 설정" onClose={() => setSettingsOpen(false)}>
