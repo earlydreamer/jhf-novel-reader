@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { ReaderError } from '../../src/contracts';
+import { ReaderError, type LookupTransport } from '../../src/contracts';
 import type {
   CompletedTranslation,
   ProviderSession,
@@ -129,11 +129,75 @@ function fakeLibrary(versions: Record<string, CompletedTranslation[]>) {
   return { listVersions: async (chapterId: string) => versions[chapterId] ?? [] };
 }
 
+type Entry = { wiki?: string; wikidata?: { id: string; ko: string }; namu?: string };
+/**
+ * 가짜 조회 통로. 입력(ja)별 표를 보고 응답하며, 호출은 `출처:입력` 꼴로 calls에 남긴다.
+ * fail에 든 출처 접두어의 호출은 connection 오류로 던진다.
+ */
+function fakeLookup(
+  table: Record<string, Entry>,
+  options: { fail?: string[]; onCall?(call: string): void } = {},
+) {
+  const calls: string[] = [];
+  const transport: LookupTransport = {
+    get: async (url) => {
+      const { hostname, searchParams } = new URL(url);
+      const call =
+        hostname === 'ja.wikipedia.org'
+          ? `wikipedia:${searchParams.get('titles')}`
+          : hostname === 'namu.wiki'
+            ? `namu:${searchParams.get('q')}`
+            : searchParams.has('search')
+              ? `wikidata:${searchParams.get('search')}`
+              : `wikidata-entity:${searchParams.get('ids')}`;
+      calls.push(call);
+      const kind = call.slice(0, call.indexOf(':'));
+      if (options.fail?.some((prefix) => kind.startsWith(prefix)))
+        throw new ReaderError('connection');
+      options.onCall?.(call);
+      let data: unknown;
+      if (kind === 'wikipedia') {
+        const ja = searchParams.get('titles') ?? '';
+        const ko = table[ja]?.wiki;
+        data = {
+          query: {
+            pages: [
+              ko === undefined
+                ? { title: ja, missing: true }
+                : { title: ja, langlinks: [{ lang: 'ko', title: ko }] },
+            ],
+          },
+        };
+      } else if (kind === 'namu') {
+        const ja = searchParams.get('q') ?? '';
+        const ko = table[ja]?.namu;
+        data = ko === undefined ? '<p>검색 결과가 없습니다</p>' : `<p>${ko} (${ja})</p>`;
+      } else if (kind === 'wikidata') {
+        const ja = searchParams.get('search') ?? '';
+        const entry = table[ja]?.wikidata;
+        data = { search: entry ? [{ id: entry.id, label: ja }] : [] };
+      } else {
+        const id = searchParams.get('ids') ?? '';
+        const ko = Object.values(table).find((item) => item.wikidata?.id === id)?.wikidata?.ko;
+        data = { entities: { [id]: { labels: { ko: { value: ko ?? '' } } } } };
+      }
+      return { status: 200, headers: {}, data, url };
+    },
+  };
+  return { transport, calls };
+}
+
+const LOOKUP_TABLE: Record<string, Entry> = {
+  カミラ: { wiki: '카미라', wikidata: { id: 'Q1', ko: '카미라-위키데이터' }, namu: '카미라' },
+  ハンナ: { wikidata: { id: 'Q2', ko: '한나' } },
+};
+
 function harness(input: {
   versions: Record<string, CompletedTranslation[]>;
   terms?: GuidanceTerm[];
   answers?: Record<string, Answer>;
   loadKanjidic?: () => Promise<Kanjidic>;
+  lookup?: ReturnType<typeof fakeLookup>;
 }) {
   const hooks: ProviderHooks = {};
   const provider = fakeProvider(input.answers ?? {}, hooks);
@@ -143,6 +207,7 @@ function harness(input: {
     guidance: guidance.repository,
     library: fakeLibrary(input.versions),
     loadKanjidic: input.loadKanjidic ?? (async () => kanjidic()),
+    ...(input.lookup ? { lookup: input.lookup.transport } : {}),
   });
   return { hooks, scan, requests: provider.requests, ...guidance };
 }
@@ -153,7 +218,8 @@ const run = (
   chapterIds = ['c1'],
   onProgress?: (progress: TermScanProgress) => void,
   signal = new AbortController().signal,
-) => h.scan({ workId: 'w1', chapterIds, selection, signal, onProgress });
+  sources?: { wikipedia?: boolean; namuwiki?: boolean },
+) => h.scan({ workId: 'w1', chapterIds, selection, signal, onProgress, sources });
 
 test('최신 저장본의 원문만 쓰고 저장본이 없는 회차는 건너뛴다', async () => {
   const h = harness({
@@ -526,4 +592,177 @@ test('기존 정밀스캔 항목은 신뢰도 높음일 때만 바꾸고, 그 �
     target: '루크',
     origin: 'scan',
   });
+});
+
+const KATAKANA_TEXT = 'カミラが笑う。カミラは去った。ハンナが笑う。ハンナは去った。';
+
+test('출처를 끄거나 조회 통로가 없으면 조회하지 않고 진행 단계에 lookup이 없다', async () => {
+  const text = 'カミラが笑う。カミラは去った。';
+  const answers = { カミラ: { target: '카미라' } };
+  const off = fakeLookup(LOOKUP_TABLE);
+  const none = harness({ versions: { c1: oneVersion(text) }, answers, lookup: off });
+  const noneProgress: TermScanProgress[] = [];
+  await run(none, ['c1'], (item) => noneProgress.push(item));
+  const disabled = harness({ versions: { c1: oneVersion(text) }, answers, lookup: off });
+  const disabledProgress: TermScanProgress[] = [];
+  await run(disabled, ['c1'], (item) => disabledProgress.push(item), undefined, {
+    wikipedia: false,
+    namuwiki: false,
+  });
+  const noPort = harness({ versions: { c1: oneVersion(text) }, answers });
+  const noPortProgress: TermScanProgress[] = [];
+  await run(noPort, ['c1'], (item) => noPortProgress.push(item), undefined, {
+    wikipedia: true,
+    namuwiki: true,
+  });
+
+  expect(off.calls).toEqual([]);
+  for (const progress of [noneProgress, disabledProgress, noPortProgress]) {
+    expect(progress.map((item) => item.stage)).toEqual([
+      'collect',
+      'judge',
+      'judge',
+      'judge',
+      'save',
+    ]);
+  }
+  expect(none.requests[0]!.user).not.toContain('lookup:');
+  expect(none.requests[0]!.system).not.toContain('Lookup lines come from');
+});
+
+test('위키백과만 켜면 위키백과 표기가 있을 때 위키데이터를 묻지 않고, 없을 때만 묻는다', async () => {
+  const lookup = fakeLookup(LOOKUP_TABLE);
+  const h = harness({
+    versions: { c1: oneVersion(KATAKANA_TEXT) },
+    answers: { カミラ: { target: '카미라' }, ハンナ: { target: '한나' } },
+    lookup,
+  });
+  const result = await run(h, ['c1'], undefined, undefined, { wikipedia: true });
+  expect(lookup.calls).toEqual(
+    expect.arrayContaining(['wikipedia:カミラ', 'wikipedia:ハンナ', 'wikidata:ハンナ']),
+  );
+  expect(lookup.calls).not.toContain('wikidata:カミラ');
+  expect(lookup.calls.some((call) => call.startsWith('namu'))).toBe(false);
+  expect(result).not.toHaveProperty('lookupFailed');
+});
+
+test('나무위키만 켜면 나무위키만 묻는다', async () => {
+  const lookup = fakeLookup(LOOKUP_TABLE);
+  const h = harness({
+    versions: { c1: oneVersion(KATAKANA_TEXT) },
+    answers: { カミラ: { target: '카미라' }, ハンナ: { target: '한나' } },
+    lookup,
+  });
+  await run(h, ['c1'], undefined, undefined, { namuwiki: true });
+  expect([...lookup.calls].sort()).toEqual(['namu:カミラ', 'namu:ハンナ']);
+});
+
+test('판정 요청에는 조회 줄과 고정 문장이 들어간다', async () => {
+  const h = harness({
+    versions: { c1: oneVersion('カミラが笑う。カミラは去った。') },
+    answers: { カミラ: { target: '카미라' } },
+    lookup: fakeLookup(LOOKUP_TABLE),
+  });
+  await run(h, ['c1'], undefined, undefined, { wikipedia: true });
+  expect(h.requests[0]!.user).toContain('lookup: 카미라 (wikipedia, exact link)');
+  expect(h.requests[0]!.system).toContain('Lookup lines come from Korean Wikipedia');
+});
+
+test('새 항목 근거에는 조회 hit의 kind·url·note가 model 앞에 들어가고 6개를 넘지 않는다', async () => {
+  const h = harness({
+    versions: {
+      c1: [
+        version(NOW, [
+          { text: 'カミラが笑う。', ruby: [{ start: 0, end: 3, reading: 'かみら' }] },
+          { text: 'カミラは去った。' },
+        ]),
+      ],
+    },
+    answers: {
+      カミラ: { kind: 'work', category: '인명', target: '카미라', reason: '카미라 표기' },
+    },
+    lookup: fakeLookup(LOOKUP_TABLE),
+  });
+  const result = await run(h, ['c1'], undefined, undefined, { wikipedia: true, namuwiki: true });
+  const evidence = result.applied[0]!.evidence;
+  expect(evidence).toEqual([
+    { kind: 'ruby', note: '루비: かみら' },
+    {
+      kind: 'wikipedia',
+      url: `https://ko.wikipedia.org/wiki/${encodeURIComponent('카미라')}`,
+      note: '위키백과: カミラ → 카미라',
+    },
+    {
+      kind: 'namuwiki',
+      url: `https://namu.wiki/Search?q=${encodeURIComponent('カミラ')}`,
+      note: '나무위키 검색: 카미라 (カミラ) 1회',
+    },
+    { kind: 'model', note: '판정 3/3 · 카미라 표기' },
+  ]);
+  expect(evidence.length).toBeLessThanOrEqual(6);
+});
+
+test('표기가 위키백과 정확 연결과 다르면 confidence를 low로 내리고, 위키데이터 hit는 신뢰도를 바꾸지 않는다', async () => {
+  const h = harness({
+    versions: { c1: oneVersion(KATAKANA_TEXT) },
+    answers: { カミラ: { target: '카밀라' }, ハンナ: { target: '하나' } },
+    lookup: fakeLookup(LOOKUP_TABLE),
+  });
+  const result = await run(h, ['c1'], undefined, undefined, { wikipedia: true });
+  expect(result.applied.map((item) => [item.source, item.confidence, item.kanaFlag])).toEqual([
+    ['カミラ', 'low', false],
+    ['ハンナ', 'high', false],
+  ]);
+});
+
+test('한 출처가 오류나면 lookupFailed에 넣고 그 출처는 더 묻지 않으며 판정은 계속한다', async () => {
+  const lookup = fakeLookup(LOOKUP_TABLE, { fail: ['wikipedia'] });
+  const h = harness({
+    versions: { c1: oneVersion(KATAKANA_TEXT) },
+    answers: { カミラ: { target: '카미라' }, ハンナ: { target: '한나' } },
+    lookup,
+  });
+  const result = await run(h, ['c1'], undefined, undefined, { wikipedia: true, namuwiki: true });
+  expect(result.lookupFailed).toEqual(['wikipedia']);
+  expect(lookup.calls.filter((call) => call.startsWith('wikipedia'))).toHaveLength(1);
+  expect(lookup.calls.some((call) => call.startsWith('wikidata'))).toBe(false);
+  expect(lookup.calls.filter((call) => call.startsWith('namu'))).toHaveLength(2);
+  expect(h.requests).toHaveLength(3);
+  expect(result.partial).toBe(false);
+  expect(result.applied.map((item) => item.source)).toEqual(['カミラ', 'ハンナ']);
+});
+
+test('조회 중 취소되면 cancelled로 끝나고 판정과 저장을 하지 않는다', async () => {
+  const controller = new AbortController();
+  const h = harness({
+    versions: { c1: oneVersion('カミラが笑う。カミラは去った。') },
+    answers: { カミラ: { target: '카미라' } },
+    lookup: fakeLookup(LOOKUP_TABLE, { onCall: () => controller.abort() }),
+  });
+  const error = await run(h, ['c1'], undefined, controller.signal, { wikipedia: true }).catch(
+    (item: unknown) => item,
+  );
+  expect(error).toBeInstanceOf(ReaderError);
+  expect((error as ReaderError).code).toBe('cancelled');
+  expect(h.requests).toEqual([]);
+  expect(h.saves).toEqual([]);
+});
+
+test('진행 단계는 수집, 조회, 판정, 저장 순서이고 조회는 후보마다 한 번씩 보고된다', async () => {
+  const progress: TermScanProgress[] = [];
+  const h = harness({
+    versions: { c1: oneVersion(KATAKANA_TEXT) },
+    answers: { カミラ: { target: '카미라' }, ハンナ: { target: '한나' } },
+    lookup: fakeLookup(LOOKUP_TABLE),
+  });
+  await run(h, ['c1'], (item) => progress.push(item), undefined, { wikipedia: true });
+  expect(progress).toEqual([
+    { stage: 'collect', done: 1, total: 1 },
+    { stage: 'lookup', done: 1, total: 2 },
+    { stage: 'lookup', done: 2, total: 2 },
+    { stage: 'judge', done: 1, total: 3 },
+    { stage: 'judge', done: 2, total: 3 },
+    { stage: 'judge', done: 3, total: 3 },
+    { stage: 'save', done: 1, total: 1 },
+  ]);
 });
