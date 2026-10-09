@@ -34,6 +34,29 @@ test('model_catalog_uses_authenticated_get', async () => {
     { url: 'http://localhost:1234/v1/models', authorization: 'Bearer secret' },
   ]);
 });
+test('model_catalog_shows_readable_name_and_keeps_raw_id', async () => {
+  const path = '/home/u/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf';
+  const transport: ModelTransport = {
+    get: async (request) => ({
+      status: 200,
+      url: request.url,
+      headers: {},
+      data: { data: [{ id: path }] },
+    }),
+    post: async () => {
+      throw Error('generation');
+    },
+  };
+  expect(
+    await listModels(
+      { provider: 'openai-compatible', baseUrl: 'http://localhost:1234', revision: 0 },
+      transport,
+      secrets,
+      new AbortController().signal,
+    ),
+  ).toEqual([{ id: path, displayName: 'gemma-4-E4B-it-UD-Q4_K_XL', supportsGeneration: true }]);
+});
+
 test('auth_empty_and_failed_catalog_are_distinct', async () => {
   for (const [status, data, code] of [
     [401, {}, 'auth'],
