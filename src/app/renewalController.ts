@@ -947,16 +947,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         busy: false,
         translationActive: false,
         pendingSaveChapter: null,
-        error: result.cleanupComplete
-          ? '서재에서 제거했어요.'
-          : '서재에서는 제거했지만 일부 저장 데이터를 지우지 못했어요.',
+        // 제거 결과 안내는 Application의 스낵바가 맡는다. 여기서 error로 또 알리면 두 번 뜬다.
+        error: null,
       });
       if (result.cleanupComplete) void refreshLibrary();
       return result;
     }
-    publish({
-      error: '제거 결과를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
-    });
     return result;
   }
   async function removeChapterVersions(chapter: ChapterRef): Promise<ChapterRemovalResult> {

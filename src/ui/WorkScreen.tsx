@@ -11,6 +11,21 @@ import { ListItem } from './components/ListItem';
 import { useSnackbar } from './components/Snackbar';
 import type { WorkRecentSnapshot } from '../app/renewalController';
 
+const CHAPTER_REMOVAL_UNKNOWN_MESSAGE =
+  '삭제 여부를 확인하지 못했어요. 앱을 다시 열어 확인해 주세요.';
+function chapterRemovalMessage(ordinal: number, result: ChapterRemovalResult): string {
+  if (result.removed === true)
+    return result.cleanupComplete
+      ? `${ordinal}화 저장본을 삭제했어요.`
+      : `${ordinal}화 저장본을 삭제했어요. 일부 파일은 다음에 정리할게요.`;
+  if (result.removed === null) return CHAPTER_REMOVAL_UNKNOWN_MESSAGE;
+  if (result.blockedBy === 'translation')
+    return '이 화를 번역하고 있어요. 번역을 중단한 뒤 다시 삭제해 주세요.';
+  if (result.blockedBy === 'batch')
+    return '이 작품을 미리 번역하고 있어요. 미리 번역을 중단한 뒤 다시 삭제해 주세요.';
+  return '저장본을 삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+}
+
 export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   work: WorkPage;
   selectedChapterId?: string;
@@ -60,7 +75,6 @@ export function WorkScreen({
   const [dialog, setDialog] = useState<'guidance' | 'batch' | null>(null);
   const [removeChapter, setRemoveChapter] = useState<ChapterRef | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
-  const [removeFeedback, setRemoveFeedback] = useState<string | null>(null);
   const showSnackbar = useSnackbar();
   const guidanceBody = useRef<HTMLDivElement>(null);
   const recentRow = useRef<HTMLDivElement>(null);
@@ -133,35 +147,15 @@ export function WorkScreen({
     if (!removeChapter || removeBusy || !onRemoveChapter) return;
     const target = removeChapter;
     setRemoveBusy(true);
+    let message: string;
     try {
-      const result = await onRemoveChapter(target);
-      if (result.removed === true) {
-        setRemoveChapter(null);
-        showSnackbar(
-          result.cleanupComplete
-            ? `${target.ordinal}화 저장본을 삭제했어요.`
-            : `${target.ordinal}화 저장본을 삭제했어요. 일부 파일은 다음에 정리할게요.`,
-        );
-      } else if (result.removed === null) {
-        setRemoveFeedback(
-          '삭제 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
-        );
-      } else {
-        setRemoveFeedback(
-          result.blockedBy === 'translation'
-            ? '이 화를 번역하고 있어요. 번역을 마치거나 중단한 뒤 다시 삭제해 주세요.'
-            : result.blockedBy === 'batch'
-              ? '이 작품의 미리 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 삭제해 주세요.'
-              : '저장본을 삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
-        );
-      }
+      message = chapterRemovalMessage(target.ordinal, await onRemoveChapter(target));
     } catch {
-      setRemoveFeedback(
-        '삭제 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
-      );
-    } finally {
-      setRemoveBusy(false);
+      message = CHAPTER_REMOVAL_UNKNOWN_MESSAGE;
     }
+    setRemoveBusy(false);
+    setRemoveChapter(null);
+    showSnackbar(message);
   };
   return (
     <section className="nr-work-screen" aria-label="작품 목차">
@@ -309,7 +303,6 @@ export function WorkScreen({
                 disabled={busy}
                 onClick={() => {
                   setRemoveChapter(sheetChapter);
-                  setRemoveFeedback(null);
                   setSheetChapter(null);
                 }}
               >
@@ -346,7 +339,6 @@ export function WorkScreen({
         <p>
           이 화의 번역 저장본과 읽던 위치가 이 기기에서 삭제돼요. 삭제한 내용은 되돌릴 수 없어요.
         </p>
-        {removeFeedback && <p role="alert">{removeFeedback}</p>}
       </Dialog>
       <Dialog
         open={visibleDialog === 'guidance'}
