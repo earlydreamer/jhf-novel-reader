@@ -1,8 +1,13 @@
 import type { Chapter } from '../../contracts';
-import { createCacheKey, type Checkpoint, type CompletedChapter, type ReadPosition } from '../../contracts/legacy';
+import {
+  createCacheKey,
+  type Checkpoint,
+  type CompletedChapter,
+  type ReadPosition,
+} from '../../contracts/legacy';
 import { check, object, text, integer, url } from '../validation';
 export function cacheKey(value: unknown): asserts value is string {
-  check(typeof value === "string" && /^v1-[a-f0-9]{64}$/.test(value));
+  check(typeof value === 'string' && /^v1-[a-f0-9]{64}$/.test(value));
 }
 function translations(
   value: unknown,
@@ -11,9 +16,9 @@ function translations(
   check(Array.isArray(value) && value.length > 0);
   const ids = new Set<string>();
   for (const item of value) {
-    object(item, ["id", "text"]);
+    object(item, ['id', 'text']);
     text(item.id);
-    check(typeof item.text === "string");
+    check(typeof item.text === 'string');
     const original = source.paragraphs.find((p) => p.id === item.id);
     if (original && !original.text.trim()) check(item.text === original.text);
     else text(item.text);
@@ -23,33 +28,32 @@ function translations(
 }
 function chapter(value: unknown): asserts value is Chapter {
   object(value, [
-    "canonicalUrl",
-    "workId",
-    "chapterId",
-    "title",
-    "prevUrl",
-    "nextUrl",
-    "sourceHash",
-    "paragraphs",
+    'canonicalUrl',
+    'workId',
+    'chapterId',
+    'title',
+    'prevUrl',
+    'nextUrl',
+    'sourceHash',
+    'paragraphs',
   ]);
   url(value.canonicalUrl, true);
   text(value.workId);
   text(value.chapterId);
   text(value.title);
   text(value.sourceHash);
-  for (const neighbor of [value.prevUrl, value.nextUrl])
-    if (neighbor !== null) url(neighbor, true);
+  for (const neighbor of [value.prevUrl, value.nextUrl]) if (neighbor !== null) url(neighbor, true);
   check(Array.isArray(value.paragraphs) && value.paragraphs.length > 0);
   const ids = new Set<string>();
   for (const p of value.paragraphs) {
-    object(p, ["id", "text", "ruby"]);
+    object(p, ['id', 'text', 'ruby']);
     text(p.id);
-    check(typeof p.text === "string");
+    check(typeof p.text === 'string');
     check(!ids.has(p.id));
     ids.add(p.id);
     check(Array.isArray(p.ruby));
     for (const r of p.ruby) {
-      object(r, ["start", "end", "reading"]);
+      object(r, ['start', 'end', 'reading']);
       integer(r.start);
       integer(r.end, 1);
       text(r.reading);
@@ -57,48 +61,32 @@ function chapter(value: unknown): asserts value is Chapter {
     }
   }
 }
-async function common(
-  value: Record<string, unknown>,
-  source: unknown,
-): Promise<void> {
+async function common(value: Record<string, unknown>, source: unknown): Promise<void> {
   check(value.schemaVersion === 1);
   cacheKey(value.cacheKey);
   object(value.identity, [
-    "canonicalUrl",
-    "sourceHash",
-    "provider",
-    "normalizedEndpoint",
-    "model",
-    "promptVersion",
-    "languageDirection",
+    'canonicalUrl',
+    'sourceHash',
+    'provider',
+    'normalizedEndpoint',
+    'model',
+    'promptVersion',
+    'languageDirection',
   ]);
   const id = value.identity;
   url(id.canonicalUrl, true);
   text(id.sourceHash);
-  check(id.provider === "openai-compatible" || id.provider === "gemini");
+  check(id.provider === 'openai-compatible' || id.provider === 'gemini');
   url(id.normalizedEndpoint);
   text(id.model);
   text(id.promptVersion);
-  check(id.languageDirection === "ja-ko");
+  check(id.languageDirection === 'ja-ko');
   chapter(source);
-  check(
-    source.canonicalUrl === id.canonicalUrl &&
-      source.sourceHash === id.sourceHash,
-  );
-  check(
-    (await createCacheKey(id as unknown as CompletedChapter["identity"])) ===
-      value.cacheKey,
-  );
+  check(source.canonicalUrl === id.canonicalUrl && source.sourceHash === id.sourceHash);
+  check((await createCacheKey(id as unknown as CompletedChapter['identity'])) === value.cacheKey);
 }
 export async function completed(value: unknown): Promise<CompletedChapter> {
-  object(value, [
-    "schemaVersion",
-    "cacheKey",
-    "identity",
-    "source",
-    "paragraphs",
-    "completedAt",
-  ]);
+  object(value, ['schemaVersion', 'cacheKey', 'identity', 'source', 'paragraphs', 'completedAt']);
   await common(value, value.source);
   translations(value.paragraphs, value.source as Chapter);
   text(value.completedAt);
@@ -109,16 +97,9 @@ export async function completed(value: unknown): Promise<CompletedChapter> {
   return value as unknown as CompletedChapter;
 }
 export async function checkpoint(value: unknown): Promise<Checkpoint> {
-  object(value, [
-    "schemaVersion",
-    "cacheKey",
-    "identity",
-    "chapter",
-    "token",
-    "chunks",
-  ]);
+  object(value, ['schemaVersion', 'cacheKey', 'identity', 'chapter', 'token', 'chunks']);
   await common(value, value.chapter);
-  object(value.token, ["jobId", "chapterId", "settingsRevision"]);
+  object(value.token, ['jobId', 'chapterId', 'settingsRevision']);
   text(value.token.jobId);
   integer(value.token.settingsRevision);
   check(value.token.chapterId === (value.chapter as Chapter).chapterId);
@@ -126,7 +107,7 @@ export async function checkpoint(value: unknown): Promise<Checkpoint> {
   const ids = new Set<string>(),
     paragraphs = new Set<string>();
   for (const chunk of value.chunks) {
-    object(chunk, ["chunkId", "paragraphs", "validated"]);
+    object(chunk, ['chunkId', 'paragraphs', 'validated']);
     text(chunk.chunkId);
     check(chunk.validated === true && !ids.has(chunk.chunkId));
     ids.add(chunk.chunkId);
@@ -139,9 +120,8 @@ export async function checkpoint(value: unknown): Promise<Checkpoint> {
   return value as unknown as Checkpoint;
 }
 export function position(value: unknown): asserts value is ReadPosition {
-  object(value, ["chapterId", "paragraphId", "offset"]);
+  object(value, ['chapterId', 'paragraphId', 'offset']);
   text(value.chapterId);
   text(value.paragraphId);
   integer(value.offset);
 }
-

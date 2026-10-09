@@ -102,7 +102,14 @@ export function createProviderSession(
         throw new ReaderError('invalid_output');
       if (snapshot.translationMode === 'stream') {
         if (request.promptVersion !== 'colomo-local-v1') throw new ReaderError('invalid_output');
-        return translateLocalStream(request,snapshot,transport,`${base}/chat/completions`,await authorization(connection,secrets,signal),signal);
+        return translateLocalStream(
+          request,
+          snapshot,
+          transport,
+          `${base}/chat/completions`,
+          await authorization(connection, secrets, signal),
+          signal,
+        );
       }
       if (limits && request.promptVersion !== 'lines-v1') throw new ReaderError('invalid_output');
       const chapterReference = request.reference?.(normalizeChapterInput(request.source)) ?? '';

@@ -4,3 +4,5 @@ dist
 .superpowers
 src/ui/legacy
 src/app/legacy
+THIRD_PARTY_NOTICES.md
+src/ui/licenses/notices.json
