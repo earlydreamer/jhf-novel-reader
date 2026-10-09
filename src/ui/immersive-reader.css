@@ -361,15 +361,27 @@
 .nr-reader-sheet-body legend {
   inline-size: 100%;
   margin-block-end: 8px;
+  padding-inline: 0;
   font: var(--type-title-medium);
 }
 
 .nr-reader-font-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   min-block-size: var(--touch-target);
+}
+
+/* 라벨은 시작 쪽, [– 값 +]는 끝 쪽에 묶고 –·+는 테두리 있는 원형 버튼으로 보인다(#171). */
+.nr-reader-font-control > span {
+  margin-inline-end: auto;
+  font: var(--type-title-medium);
+}
+
+.nr-reader-font-control > .nr-reader-symbol-button {
+  border: 1px solid var(--outline);
+  color: var(--primary);
 }
 
 .nr-reader-font-control output {
