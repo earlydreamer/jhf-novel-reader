@@ -110,8 +110,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* 앱바는 본문 위에 떠 있으므로 맨 위 여백에 앱바 높이를 항상 확보한다. 바 토글마다 바꾸면 본문이 들썩인다(#150). */
-  padding: calc(var(--app-bar) + 16px + var(--inset-top)) max(24px, var(--inset-right))
+  padding: calc(24px + var(--inset-top)) max(24px, var(--inset-right))
     calc(112px + var(--inset-bottom)) max(24px, var(--inset-left));
   background: var(--reading-surface);
   color: var(--reading-on-surface);
@@ -301,6 +300,44 @@
   inset-block-end: calc(16px + var(--inset-bottom));
 }
 
+/* 행동이 필요한 번역 안내(#150): 본문 흐름에서 분리해 상태 알림과 같은 자리에 띄운다. */
+.nr-immersive-reader > .nr-reader-float {
+  position: fixed;
+  z-index: 34;
+  inset-inline: 16px;
+  inset-block-end: calc(var(--toolbar) + 24px + var(--inset-bottom));
+  display: grid;
+  gap: 8px;
+  max-inline-size: min(560px, calc(100vw - 32px));
+  margin-inline: auto;
+  transition: inset-block-end var(--duration-enter) var(--ease-standard);
+}
+
+.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-reader-float {
+  inset-block-end: calc(16px + var(--inset-bottom));
+}
+
+/* 진행 중 상태 알림과 함께 있으면 그 위로 올린다. */
+.nr-immersive-reader > .nr-reader-float--above-pill {
+  inset-block-end: calc(var(--toolbar) + 96px + var(--inset-bottom));
+}
+
+.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-reader-float--above-pill {
+  inset-block-end: calc(88px + var(--inset-bottom));
+}
+
+.nr-reader-float > .nr-reader-notice {
+  padding-inline-end: 56px;
+  border-radius: var(--shape-lg);
+  box-shadow: var(--elevation-3);
+}
+
+.nr-reader-float > .nr-icon-button {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
+}
+
 .nr-reader-sheet-body {
   display: grid;
   gap: 8px;
@@ -407,6 +444,10 @@
   }
 
   .nr-immersive-reader > .nr-status-pill {
+    transition: none;
+  }
+
+  .nr-immersive-reader > .nr-reader-float {
     transition: none;
   }
 }

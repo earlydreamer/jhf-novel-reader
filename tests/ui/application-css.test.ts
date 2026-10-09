@@ -123,11 +123,30 @@ describe('immersive-reader.css status pill and first paragraph', () => {
     expect(hidden?.body).toMatch(/inset-block-end:\s*calc\(16px \+ var\(--inset-bottom\)\);/);
   });
 
-  it('첫 문단 위 여백은 앱바 높이를 항상 확보한다', () => {
-    const article = rules(readerCss).find((rule) => rule.selector === '.nr-immersive-article');
-    expect(article?.body).toMatch(
-      /padding:\s*calc\(var\(--app-bar\) \+ 16px \+ var\(--inset-top\)\)/,
+  it('행동 안내 카드는 본문 흐름에서 분리되어 고정 위치에 뜨고 닫기 버튼을 기준으로 둔다', () => {
+    const float = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-immersive-reader > .nr-reader-float',
     );
+    expect(float?.body).toMatch(/position:\s*fixed;/);
+    expect(float?.body).toMatch(/transition:\s*inset-block-end /);
+    const hidden = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-reader-float',
+    );
+    expect(hidden?.body).toMatch(/inset-block-end:\s*calc\(16px \+ var\(--inset-bottom\)\);/);
+    const close = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-float > .nr-icon-button',
+    );
+    expect(close?.body).toMatch(/position:\s*absolute;/);
+  });
+
+  it('감소된 모션에서는 행동 안내 카드의 위치 전환을 끈다', () => {
+    const reduced = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-reader-float' &&
+        /transition:\s*none;/.test(rule.body),
+    );
+    expect(reduced).toBeDefined();
   });
 });
 

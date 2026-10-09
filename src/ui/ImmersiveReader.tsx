@@ -141,6 +141,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const [titleDraft, setTitleDraft] = useState('');
   const [titleSaving, setTitleSaving] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [dismissedActionKey, setDismissedActionKey] = useState<string | null>(null);
   const translatedTitle = displayedTitle(
     props.titles?.entries ?? [],
     chapter.chapterId,
@@ -479,18 +480,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
 
   // 안내 카드는 본문 흐름 안(article 첫 자식)의 컨테이너에 모아 상태바·화면 가장자리에 붙지 않게 한다.
   const notices = [
-    props.sourceChange === 'changed' && (
-      <div
-        key="source-changed"
-        className="nr-reader-notice nr-reader-notice--warning"
-        role="status"
-      >
-        <span>원문이 바뀌었어요.</span>
-        <Button variant="text" onClick={props.onRefreshSource}>
-          새 원문으로 번역하기
-        </Button>
-      </div>
-    ),
     props.sourceChange === 'checking' && (
       <p key="source-checking" className="nr-reader-note" role="status">
         원문 변경을 확인하고 있어요.
@@ -558,6 +547,21 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         다음 문단을 번역하고 있어요…
       </p>
     ),
+  ];
+  // 버튼이 있는 행동 안내는 본문 흐름 밖의 떠 있는 카드로 띄운다(#150). 같은 상태에서 닫으면 상태가 바뀔 때까지 다시 나오지 않는다.
+  const actionNotices = [
+    props.sourceChange === 'changed' && (
+      <div
+        key="source-changed"
+        className="nr-reader-notice nr-reader-notice--warning"
+        role="status"
+      >
+        <span>원문이 바뀌었어요.</span>
+        <Button variant="text" onClick={props.onRefreshSource}>
+          새 원문으로 번역하기
+        </Button>
+      </div>
+    ),
     props.route === 'translation' && props.translation.phase === 'unknown' && (
       <div key="unknown-result" className="nr-reader-notice nr-reader-notice--warning" role="alert">
         <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
@@ -614,6 +618,10 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     ),
   ];
   const hasNotices = notices.some(Boolean);
+  const actionKey = `${chapter.chapterId}:${actionNotices
+    .flatMap((notice) => (notice ? [notice.key] : []))
+    .join('|')}`;
+  const actionVisible = actionNotices.some(Boolean) && actionKey !== dismissedActionKey;
 
   return (
     <section
@@ -669,6 +677,20 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             ? ` · ${progress.completed}/${progress.total}묶음`
             : ''}
         </StatusPill>
+      )}
+      {actionVisible && (
+        <div
+          className={`nr-reader-float${activeFlow ? ' nr-reader-float--above-pill' : ''}`}
+          role="region"
+          aria-label="번역 안내"
+        >
+          {actionNotices}
+          <IconButton
+            icon="close"
+            label="안내 닫기"
+            onClick={() => setDismissedActionKey(actionKey)}
+          />
+        </div>
       )}
       <article
         ref={body}
@@ -828,14 +850,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             </div>
           )}
       </article>
-      {barsVisible &&
-        props.route === 'translation' &&
-        props.translation.phase === 'ready' &&
-        !version && (
-          <StatusPill action={{ label: '저장된 번역 열기', onClick: props.onOpenSaved }}>
-            번역을 저장했어요.
-          </StatusPill>
-        )}
       <FloatingToolbar label="읽기 도구" hidden={!barsVisible}>
         <button
           type="button"
