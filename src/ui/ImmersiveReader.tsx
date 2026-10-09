@@ -100,6 +100,7 @@ const translationFailureMessages: Partial<Record<ErrorCode, string>> = {
     '현재 모델은 용어집·말투 적용을 지원하지 않아요. 로컬 번역 설정을 확인해 주세요.',
   model_missing: '생성 모델을 찾지 못했어요. 연결 설정에서 모델을 다시 선택해 주세요.',
   storage: '기기 저장소에 접근하지 못했어요. 저장 공간이나 앱 상태를 확인해 주세요.',
+  cancelled: '번역이 중단됐어요.',
 };
 
 function ownVersion(version: CompletedTranslation | null, chapter: ChapterRef): boolean {
@@ -120,8 +121,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const previousScrollTop = useRef(0);
   const lastMode = useRef(props.showOriginal);
   const translationAnchor = useRef<ParagraphAnchor | null>(null);
-  const originalAnchor = useRef(0);
   const pendingOriginalIndex = useRef<number | null>(null);
+  const pendingSwitch = useRef<{ index: number; ratio: number } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerOrigin = useRef<{ x: number; y: number } | null>(null);
   const swallowClick = useRef(false);
@@ -230,18 +231,26 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     if (!element) return;
     if (lastMode.current !== props.showOriginal) {
       lastMode.current = props.showOriginal;
+      // 번역→원문 전환은 화면 맨 위 문단을 대응 원문 문단으로 옮겨 읽던 위치를 유지한다(#160). 원문→번역은 최신 번역 위치로 돌아간다(#60).
       if (props.showOriginal) {
         const pendingIndex = pendingOriginalIndex.current;
         const target =
           pendingIndex === null
             ? null
             : element.querySelector<HTMLElement>(`[data-reader-index="${pendingIndex}"]`);
-        element.scrollTop = target ? target.offsetTop : originalAnchor.current;
-        if (target) originalAnchor.current = element.scrollTop;
+        const pending = pendingSwitch.current;
+        const pendingRow = pending
+          ? element.querySelector<HTMLElement>(`[data-reader-index="${pending.index}"]`)
+          : null;
+        if (target) element.scrollTop = target.offsetTop;
+        else if (pending && pendingRow)
+          element.scrollTop = pendingRow.offsetTop + pending.ratio * pendingRow.offsetHeight;
+        else element.scrollTop = 0;
         pendingOriginalIndex.current = null;
       } else {
         element.scrollTop = translatedScrollPosition(element, translationAnchor.current);
       }
+      pendingSwitch.current = null;
       previousScrollTop.current = element.scrollTop;
     }
   }, [props.showOriginal, version]);
@@ -251,8 +260,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     const priorVersion = trackedVersionId.current;
     if (priorVersion && priorVersion !== version.versionId) {
       translationAnchor.current = null;
-      originalAnchor.current = 0;
       pendingOriginalIndex.current = null;
+      pendingSwitch.current = null;
       shownVersionId.current = null;
       if (body.current) body.current.scrollTop = 0;
       previousScrollTop.current = 0;
@@ -299,8 +308,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const rememberTranslationPosition = useCallback(() => {
     const element = body.current;
     if (!element) return;
-    const rows = [...element.querySelectorAll<HTMLElement>('[data-reader-index]')];
-    const row = [...rows].reverse().find((item) => item.offsetTop <= element.scrollTop) ?? rows[0];
+    const row = topParagraphRow(element);
     if (!row) return;
     const index = Number(row.dataset.readerIndex);
     const offset = Math.max(0, element.scrollTop - row.offsetTop);
@@ -314,7 +322,11 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   }, [props, version]);
 
   function toggleOriginal(): void {
-    if (!originalAvailable) return;
+    if (!originalAvailable || !version) return;
+    const element = body.current;
+    // 번역→원문만 맨 위 문단을 대응 문단으로 옮긴다(#160). 원문→번역은 매핑 없이 저장된 번역 위치로 간다.
+    pendingSwitch.current =
+      element && !props.showOriginal ? paragraphSwitchTarget(element, version) : null;
     props.onShowOriginal(!props.showOriginal);
   }
 
@@ -380,8 +392,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   function scrollArticle(event: UIEvent<HTMLElement>): void {
     const element = event.currentTarget;
     const current = element.scrollTop;
-    if (props.showOriginal) originalAnchor.current = current;
-    else rememberTranslationPosition();
+    if (!props.showOriginal) rememberTranslationPosition();
     if (current > previousScrollTop.current + 8) setBarsVisible(false);
     else if (current < previousScrollTop.current - 8) setBarsVisible(true);
     previousScrollTop.current = current;
@@ -565,14 +576,29 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     ),
     props.route === 'translation' && props.translation.phase === 'unknown' && (
       <div key="unknown-result" className="nr-reader-notice nr-reader-notice--warning" role="alert">
-        <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
-        <Button
-          variant="outlined"
-          disabled={active || !props.connected || !props.selectedModelId}
-          onClick={props.onRetry}
-        >
-          확인하고 다시 번역하기
-        </Button>
+        {failureCode === 'cancelled' ? (
+          <>
+            <p>번역이 중단됐어요.</p>
+            <Button
+              variant="outlined"
+              disabled={active || !props.connected || !props.selectedModelId}
+              onClick={props.onRetry}
+            >
+              다시 번역하기
+            </Button>
+          </>
+        ) : (
+          <>
+            <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
+            <Button
+              variant="outlined"
+              disabled={active || !props.connected || !props.selectedModelId}
+              onClick={props.onRetry}
+            >
+              확인하고 다시 번역하기
+            </Button>
+          </>
+        )}
       </div>
     ),
     props.route === 'translation' && props.translation.phase === 'failed' && (
@@ -1075,6 +1101,29 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       </Dialog>
     </section>
   );
+}
+
+function topParagraphRow(element: HTMLElement): HTMLElement | undefined {
+  const rows = [...element.querySelectorAll<HTMLElement>('[data-reader-index]')];
+  return [...rows].reverse().find((row) => row.offsetTop <= element.scrollTop) ?? rows[0];
+}
+
+// 현재 모드의 맨 위 문단과 그 안의 비율을 대상 모드의 문단 번호로 옮긴다(#160).
+function paragraphSwitchTarget(
+  element: HTMLElement,
+  version: CompletedTranslation,
+): { index: number; ratio: number } | null {
+  const row = topParagraphRow(element);
+  if (!row) return null;
+  const index = Number(row.dataset.readerIndex);
+  const ratio =
+    row.offsetHeight > 0
+      ? Math.min(1, Math.max(0, (element.scrollTop - row.offsetTop) / row.offsetHeight))
+      : 0;
+  const from = version.blocks.length;
+  const to = version.source.paragraphs.length;
+  const target = from === to ? index : Math.round((index * (to - 1)) / Math.max(1, from - 1));
+  return { index: Math.min(Math.max(0, target), Math.max(0, to - 1)), ratio };
 }
 
 function translatedScrollPosition(body: HTMLElement, anchor: ParagraphAnchor | null): number {

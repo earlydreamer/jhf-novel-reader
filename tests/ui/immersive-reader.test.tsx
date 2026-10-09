@@ -884,3 +884,137 @@ test('상단바 제목은 본문 머리와 같은 번역 제목을 쓰고 원문
   view.rerender(<ImmersiveReader {...props({ titles, showOriginal: true })} />);
   expect(appBarTitle()).toBe(source.title);
 });
+
+const threeBlocks = [
+  { id: 'b1', text: '첫 번역' },
+  { id: 'b2', text: '둘째 번역' },
+  { id: 'b3', text: '셋째 번역' },
+];
+
+const fiveSourceParagraphs = [
+  ...source.paragraphs,
+  { id: 'p4', text: '四', ruby: [] },
+  { id: 'p5', text: '五', ruby: [] },
+];
+
+function ControlledReader({ version }: { version: CompletedTranslation }) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  return <ImmersiveReader {...props({ version, showOriginal, onShowOriginal: setShowOriginal })} />;
+}
+
+// 문단 행을 index * 100 위치, 높이 100으로 고정해 전환 위치를 계산 가능하게 한다.
+function spyParagraphRows() {
+  const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return Number(this.dataset.readerIndex ?? 0) * 100;
+  });
+  const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(100);
+  return () => {
+    top.mockRestore();
+    height.mockRestore();
+  };
+}
+
+function toggleMode(label: string): void {
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: label }));
+}
+
+test('원문 보기 전환은 화면 맨 위 문단의 위치를 같은 번호 문단에 옮긴다(#160)', () => {
+  const restore = spyParagraphRows();
+  render(<ControlledReader version={completed({ blocks: threeBlocks })} />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  article.scrollTop = 250;
+  fireEvent.scroll(article);
+
+  toggleMode('원문 보기');
+  expect(screen.getByRole('article', { name: '원문 본문' }).scrollTop).toBe(250);
+  restore();
+});
+
+test('문단 수가 다르면 맨 위 문단 번호를 비율로 옮긴다(#160)', () => {
+  const restore = spyParagraphRows();
+  const version = completed({
+    blocks: threeBlocks,
+    source: { ...source, paragraphs: fiveSourceParagraphs },
+  });
+  render(<ControlledReader version={version} />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  article.scrollTop = 200;
+  fireEvent.scroll(article);
+
+  toggleMode('원문 보기');
+  expect(screen.getByRole('article', { name: '원문 본문' }).scrollTop).toBe(400);
+  restore();
+});
+
+test('원문에 도착한 뒤 움직이지 않고 되돌아오면 원래 번역 위치로 돌아간다(#160)', () => {
+  const restore = spyParagraphRows();
+  render(<ControlledReader version={completed({ blocks: threeBlocks })} />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  article.scrollTop = 225;
+  fireEvent.scroll(article);
+
+  toggleMode('원문 보기');
+  expect(screen.getByRole('article', { name: '원문 본문' }).scrollTop).toBe(225);
+  toggleMode('번역 보기');
+  expect(screen.getByRole('article', { name: '번역 본문' }).scrollTop).toBe(225);
+  restore();
+});
+
+test('원문에서 스크롤한 뒤 번역으로 돌아가면 최신 번역 위치로 돌아간다(#160)', () => {
+  const restore = spyParagraphRows();
+  render(<ControlledReader version={completed({ blocks: threeBlocks })} />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  article.scrollTop = 225;
+  fireEvent.scroll(article);
+
+  toggleMode('원문 보기');
+  const original = screen.getByRole('article', { name: '원문 본문' });
+  original.scrollTop = 250;
+  fireEvent.scroll(original);
+  toggleMode('번역 보기');
+  expect(screen.getByRole('article', { name: '번역 본문' }).scrollTop).toBe(225);
+  restore();
+});
+
+test('사용자가 중단한 미확인 결과는 중단 안내와 다시 번역하기 버튼을 보인다(#161)', () => {
+  const onRetry = vi.fn();
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        onRetry,
+        translation: {
+          phase: 'unknown',
+          elapsedMs: 0,
+          error: new ReaderError('cancelled', 'unknown'),
+        },
+      })}
+    />,
+  );
+  const float = screen.getByRole('region', { name: '번역 안내' });
+  expect(float).toHaveTextContent('번역이 중단됐어요.');
+  expect(float).not.toHaveTextContent('요청이 이미 처리됐을 수 있어');
+  fireEvent.click(within(float).getByRole('button', { name: '다시 번역하기' }));
+  expect(onRetry).toHaveBeenCalledTimes(1);
+});
+
+test('중단으로 실패가 남은 경우에도 중단 안내를 보인다(#161)', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'failed',
+          elapsedMs: 0,
+          error: new ReaderError('cancelled', 'not_sent'),
+        },
+      })}
+    />,
+  );
+  expect(screen.getByText('번역이 중단됐어요.')).toBeInTheDocument();
+});
