@@ -101,17 +101,42 @@
   font: var(--type-body-small);
   padding-inline-start: 16px;
 }
-/* 회차 메뉴 시트 내용. BottomSheet 면은 좌우 여백이 없으므로 리더 시트와 같은 여백을 준다. */
+/* 회차 메뉴 시트 내용. 좌우 여백은 각 행(.nr-sheet-action)이 가진다. */
 .nr-work-chapter-menu {
   display: grid;
-  gap: 8px;
-  justify-items: start;
-  padding: 8px 24px 16px;
+  padding: 8px 0 16px;
 }
-.nr-work-chapter-menu > a {
-  display: flex;
-  align-items: center;
-  min-block-size: var(--touch-target);
+/* 시트 메뉴 행(#177): 같은 모양의 행으로 무엇을 누를지 분명하게 한다. */
+.nr-sheet-action {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 56px;
+  padding: 8px 24px;
+  border: 0;
+  background: transparent;
+  color: var(--on-surface);
+  font: var(--type-body-large);
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+.nr-sheet-action:hover,
+.nr-sheet-action:focus-visible {
+  background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+}
+.nr-sheet-action:disabled {
+  cursor: default;
+  color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+}
+.nr-sheet-action--danger {
+  color: var(--error);
+}
+.nr-sheet-action__supporting {
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
 }
 .nr-batch-progress-card {
   display: flex;

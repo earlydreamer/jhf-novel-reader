@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { useCallback, useState } from 'react';
 import { WorkScreen } from '../../src/ui/WorkScreen';
 import type { BatchState, BatchRecord } from '../../src/translation/batch';
@@ -111,7 +111,7 @@ it('shows the total chapter count once the whole TOC is loaded', () => {
   cleanup();
 });
 
-it('opens the same chapter action sheet from the sibling menu and a long press', () => {
+it('opens the same chapter action sheet from the sibling menu and a long press', async () => {
   const work = {
     workId: 'n1234ab',
     canonicalUrl: 'https://ncode.syosetu.com/n1234ab/',
@@ -143,26 +143,106 @@ it('opens the same chapter action sheet from the sibling menu and a long press',
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: '101화 메뉴' }));
-  expect(screen.getByRole('dialog', { name: '101화 메뉴' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: '101화 제목 번역' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: '101화 제목 수정' })).toBeTruthy();
+  const sheet = screen.getByRole('dialog', { name: '101화 메뉴' });
+  expect(within(sheet).getByRole('button', { name: '제목 번역하기' })).toBeTruthy();
+  expect(within(sheet).getByRole('button', { name: '제목 직접 수정하기' })).toBeTruthy();
   expect(screen.getByRole('link', { name: '원문 사이트에서 보기' }).getAttribute('href')).toBe(
     'https://ncode.syosetu.com/n1234ab/101/',
   );
-  fireEvent.click(screen.getByRole('button', { name: '101화 제목 번역' }));
+  fireEvent.click(screen.getByRole('button', { name: '제목 번역하기' }));
   expect(onTranslate).toHaveBeenCalledWith('n1234ab/101');
-  fireEvent.click(screen.getByRole('button', { name: '101화 제목 수정' }));
+  expect(screen.queryByRole('dialog', { name: '101화 메뉴' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '101화 메뉴' }));
+  fireEvent.click(screen.getByRole('button', { name: '제목 직접 수정하기' }));
+  expect(screen.queryByRole('dialog', { name: '101화 메뉴' })).toBeNull();
   fireEvent.change(screen.getByLabelText('101화 제목 번역문'), {
     target: { value: '직접 편집한 회차명' },
   });
-  fireEvent.click(screen.getByRole('button', { name: '제목 저장' }));
+  fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
   expect(onSave).toHaveBeenCalledWith('n1234ab/101', '직접 편집한 회차명');
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: '회차 제목 직접 수정하기' })).toBeNull(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: '101화 메뉴' }));
   fireEvent.keyDown(screen.getByRole('dialog', { name: '101화 메뉴' }), { key: 'Escape' });
   fireEvent.contextMenu(screen.getByText('101화').closest('.nr-list-item')!, {
     clientX: 200,
     clientY: 100,
   });
   expect(screen.getByRole('dialog', { name: '101화 메뉴' })).toBeTruthy();
+});
+
+it('shows every chapter sheet action as a sheet row with saved-title state and keeps input on save failure', async () => {
+  const work = {
+    workId: 'n1234ab',
+    canonicalUrl: 'https://ncode.syosetu.com/n1234ab/',
+    title: '合成作品',
+    pageUrl: 'https://ncode.syosetu.com/n1234ab/',
+    nextPageUrl: null,
+    complete: true,
+    chapters: [
+      {
+        workId: 'n1234ab',
+        chapterId: 'n1234ab/101',
+        canonicalUrl: 'https://ncode.syosetu.com/n1234ab/101/',
+        ordinal: 101,
+        title: '百一話',
+      },
+    ],
+  };
+  const onTranslate = vi.fn(async (_key?: string) => {});
+  const onSave = vi.fn(async (_key: string, _target: string) => {
+    throw new Error('save failed');
+  });
+  const titles = {
+    entries: [
+      {
+        key: 'n1234ab/101',
+        source: '百一話',
+        target: '직접 쓴 회차명',
+        origin: 'user' as const,
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ],
+    busy: false,
+    onTranslate,
+    onSave,
+  };
+  render(
+    <WorkScreen
+      work={work}
+      busy={false}
+      savedChapterIds={['n1234ab/101']}
+      onSelect={() => {}}
+      onLoadMore={() => {}}
+      titles={titles}
+      onRemoveChapter={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '101화 메뉴' }));
+  const sheet = screen.getByRole('dialog', { name: '101화 메뉴' });
+  const retranslate = within(sheet).getByRole('button', { name: '제목 다시 번역하기' });
+  const edit = within(sheet).getByRole('button', { name: /제목 직접 수정하기/ });
+  const source = within(sheet).getByRole('link', { name: '원문 사이트에서 보기' });
+  const remove = within(sheet).getByRole('button', { name: '이 화 저장본 삭제하기' });
+  for (const row of [retranslate, edit, source, remove]) {
+    expect(row.classList.contains('nr-sheet-action')).toBe(true);
+  }
+  expect(remove.classList.contains('nr-sheet-action--danger')).toBe(true);
+  expect(
+    within(sheet).getByText('직접 수정됨').classList.contains('nr-sheet-action__supporting'),
+  ).toBe(true);
+  fireEvent.click(edit);
+  const input = screen.getByLabelText('101화 제목 번역문') as HTMLInputElement;
+  expect(input.value).toBe('직접 쓴 회차명');
+  fireEvent.change(input, { target: { value: '실패할 입력' } });
+  fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    '제목을 저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.',
+  );
+  expect((screen.getByLabelText('101화 제목 번역문') as HTMLInputElement).value).toBe(
+    '실패할 입력',
+  );
 });
 
 it('marks only the verified actual recent chapter as current, never the selected route chapter', () => {
