@@ -18,6 +18,8 @@ export type ReadingSettings = {
   autoTranslate?: boolean;
   autoRetryFailed?: boolean;
   autoGlossary?: boolean;
+  lookupWikipedia?: boolean;
+  lookupNamuwiki?: boolean;
   theme?: ThemePreference;
   readingBackground?: ReadingBackground;
   lineHeight?: LineHeight;
@@ -30,6 +32,8 @@ function readingSettings(value: unknown): ReadingSettings {
     'autoTranslate',
     'autoRetryFailed',
     'autoGlossary',
+    'lookupWikipedia',
+    'lookupNamuwiki',
     'theme',
     'readingBackground',
     'lineHeight',
@@ -37,6 +41,8 @@ function readingSettings(value: unknown): ReadingSettings {
   check(value.autoTranslate === undefined || typeof value.autoTranslate === 'boolean');
   check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
   check(value.autoGlossary === undefined || typeof value.autoGlossary === 'boolean');
+  check(value.lookupWikipedia === undefined || typeof value.lookupWikipedia === 'boolean');
+  check(value.lookupNamuwiki === undefined || typeof value.lookupNamuwiki === 'boolean');
   check(value.theme === undefined || THEME_PREFERENCES.includes(value.theme as ThemePreference));
   check(
     value.readingBackground === undefined ||

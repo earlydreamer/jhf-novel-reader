@@ -435,3 +435,58 @@ it('스캔 중인 같은 작품은 삭제가 막히고 다른 작품 삭제는 �
   await pending;
   app.dispose();
 });
+
+it('외부 조회 설정은 기본으로 꺼져 있고 바꾸면 설정에 저장하며 끄면 키를 지운다', async () => {
+  const saveReadingSettings = vi.fn(async (_value: Record<string, unknown>) => {});
+  const app = await connectedApp({
+    termScan: vi.fn<TermScan>(async () => emptyResult),
+    settings: {
+      readReadingSettings: async () => ({ schemaVersion: 2, selection: null, fontSize: 18 }),
+      saveReadingSettings,
+    } as never,
+  });
+  expect(app.getSnapshot()).toMatchObject({ lookupWikipedia: false, lookupNamuwiki: false });
+
+  app.changeLookupWikipedia(true);
+  expect(app.getSnapshot().lookupWikipedia).toBe(true);
+  await vi.waitFor(() =>
+    expect(saveReadingSettings.mock.calls.at(-1)?.[0]).toMatchObject({ lookupWikipedia: true }),
+  );
+  app.changeLookupNamuwiki(true);
+  await vi.waitFor(() =>
+    expect(saveReadingSettings.mock.calls.at(-1)?.[0]).toMatchObject({
+      lookupWikipedia: true,
+      lookupNamuwiki: true,
+    }),
+  );
+
+  app.changeLookupWikipedia(false);
+  await vi.waitFor(() =>
+    expect(saveReadingSettings.mock.calls.at(-1)?.[0]).not.toHaveProperty('lookupWikipedia'),
+  );
+  expect(saveReadingSettings.mock.calls.at(-1)?.[0]).toMatchObject({ lookupNamuwiki: true });
+  app.dispose();
+});
+
+it('저장된 외부 조회 설정을 불러오고 정밀스캔에 출처를 엔진으로 넘긴다', async () => {
+  const scan = vi.fn<TermScan>(async () => emptyResult);
+  const app = await connectedApp({
+    termScan: scan,
+    settings: {
+      readReadingSettings: async () => ({
+        schemaVersion: 2,
+        selection: null,
+        fontSize: 18,
+        lookupNamuwiki: true,
+      }),
+      saveReadingSettings: async () => {},
+    } as never,
+  });
+  expect(app.getSnapshot()).toMatchObject({ lookupWikipedia: false, lookupNamuwiki: true });
+
+  await app.startTermScan(page.workId);
+  expect(scan.mock.calls[0]?.[0]).toMatchObject({
+    sources: { wikipedia: false, namuwiki: true },
+  });
+  app.dispose();
+});

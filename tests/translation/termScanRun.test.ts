@@ -695,7 +695,7 @@ test('새 항목 근거에는 조회 hit의 kind·url·note가 model 앞에 들�
     {
       kind: 'namuwiki',
       url: `https://namu.wiki/Search?q=${encodeURIComponent('カミラ')}`,
-      note: '나무위키 검색: 카미라 (カミラ) 1회',
+      note: '나무위키(CC BY-NC-SA 2.0 KR) 검색: 카미라 (カミラ) 1회',
     },
     { kind: 'model', note: '판정 3/3 · 카미라 표기' },
   ]);

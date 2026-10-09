@@ -93,3 +93,28 @@ test('v2 settings keep the automatic glossary preference and reject non-boolean 
     repository.saveReadingSettings({ ...settings, autoGlossary: 'off' as never }),
   ).rejects.toThrow();
 });
+
+test('v2 settings keep the term scan lookup preferences and reject non-boolean values', async () => {
+  const memory = new Map<string, string>();
+  const repository = createReadingSettingsRepository({
+    get: async ({ key }) => ({ value: memory.get(key) ?? null }),
+    set: async ({ key, value }) => {
+      memory.set(key, value);
+    },
+  });
+  const settings = {
+    schemaVersion: 2 as const,
+    selection: null,
+    fontSize: 18,
+    lookupWikipedia: true,
+    lookupNamuwiki: false,
+  };
+  await repository.saveReadingSettings(settings);
+  expect(await repository.readReadingSettings()).toEqual(settings);
+  await expect(
+    repository.saveReadingSettings({ ...settings, lookupWikipedia: 'on' as never }),
+  ).rejects.toThrow();
+  await expect(
+    repository.saveReadingSettings({ ...settings, lookupNamuwiki: 1 as never }),
+  ).rejects.toThrow();
+});

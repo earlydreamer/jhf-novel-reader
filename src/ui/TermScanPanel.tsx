@@ -12,6 +12,18 @@ export interface TermScanPanelProps {
   onCancel(): void;
   onRevert(source: string): void;
   onApplySuggestion(source: string): void;
+  sources: { wikipedia: boolean; namuwiki: boolean };
+}
+
+type LookupSource = 'wikipedia' | 'namuwiki';
+const LOOKUP_SOURCES: readonly LookupSource[] = ['wikipedia', 'namuwiki'];
+const LOOKUP_LABEL: Record<LookupSource, string> = {
+  wikipedia: '위키백과·위키데이터',
+  namuwiki: '나무위키',
+};
+
+function lookupLabel(sources: readonly LookupSource[]): string {
+  return sources.map((source) => LOOKUP_LABEL[source]).join(', ');
 }
 
 const CONFIDENCE_LABEL: Record<TermScanChange['confidence'], string> = {
@@ -20,13 +32,15 @@ const CONFIDENCE_LABEL: Record<TermScanChange['confidence'], string> = {
   high: '신뢰도 높음',
 };
 
-/** 엔진 단계 문구. 모르는 단계(예: 외부 조회 lookup)는 문구 없이 진행 막대만 보인다. */
+/** 엔진 단계 문구. 모르는 단계는 문구 없이 진행 막대만 보인다. */
 function progressText(progress: TermScanProgress | undefined): string | null {
   if (!progress) return null;
   if (progress.stage === 'collect')
     return `저장된 회차를 읽고 있어요 · ${progress.done}/${progress.total}`;
   if (progress.stage === 'judge')
     return `용어를 판정하고 있어요 · ${progress.done}/${progress.total}`;
+  if (progress.stage === 'lookup')
+    return `외부 사전에서 찾아보고 있어요 · ${progress.done}/${progress.total}`;
   if (progress.stage === 'save') return '용어집에 반영하고 있어요';
   return null;
 }
@@ -49,7 +63,15 @@ function EvidenceList({ evidence }: { evidence: TermScanChange['evidence'] }): J
   return (
     <ul className="nr-scan-evidence">
       {evidence.map((item, index) => (
-        <li key={index}>{item.note}</li>
+        <li key={index}>
+          {item.url ? (
+            <a href={item.url} target="_blank" rel="noreferrer">
+              {item.note}
+            </a>
+          ) : (
+            item.note
+          )}
+        </li>
       ))}
     </ul>
   );
@@ -63,8 +85,11 @@ export function TermScanPanel({
   onCancel,
   onRevert,
   onApplySuggestion,
+  sources,
 }: TermScanPanelProps): JSX.Element {
   const scan = state?.workId === workId ? state : null;
+
+  const enabledSources = LOOKUP_SOURCES.filter((source) => sources[source]);
 
   const startView = (
     <>
@@ -73,6 +98,13 @@ export function TermScanPanel({
         다시 정해요. 바뀐 용어는 용어집에 바로 반영되고, 직접 고친 용어는 바꾸지 않고 제안만 보여
         줘요.
       </p>
+      {enabledSources.length > 0 ? (
+        <p>{`켜 둔 외부 조회(${lookupLabel(enabledSources)})에는 용어 이름만 보내요.`}</p>
+      ) : (
+        <p>
+          설정에서 위키백과·나무위키 조회를 켜면 실존 인물과 작품 이름을 더 정확히 찾을 수 있어요.
+        </p>
+      )}
       <p>모델 요청이 여러 번 나가서 몇 분 걸릴 수 있어요.</p>
       <Button variant="filled" disabled={savedCount === 0} onClick={() => onStart()}>
         정밀스캔 시작하기
@@ -126,6 +158,11 @@ export function TermScanPanel({
     <>
       <p>{`바꾼 용어 ${result.applied.length}개 · 확인한 용어 ${result.confirmed}개 · 제안 ${result.suggestions.length}개`}</p>
       {result.partial && <p role="status">일부 판정 요청이 실패해서 나머지 결과만 반영했어요.</p>}
+      {result.lookupFailed && result.lookupFailed.length > 0 && (
+        <p role="status">
+          {`${lookupLabel(result.lookupFailed)} 조회가 안 돼서 그 근거 없이 판정했어요.`}
+        </p>
+      )}
       {result.applied.length > 0 && (
         <section>
           <h3>바꾼 용어</h3>

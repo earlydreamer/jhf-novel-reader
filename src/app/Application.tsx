@@ -123,6 +123,7 @@ function RouteScreen({
           onRevertTermScan={(source) => void controller.revertTermScanChange(source)}
           onApplyTermScanSuggestion={(source) => void controller.applyTermScanSuggestion(source)}
           onCloseTermScan={controller.closeTermScan}
+          sources={{ wikipedia: state.lookupWikipedia, namuwiki: state.lookupNamuwiki }}
         />
       ) : (
         <p>작품 목차를 찾지 못했어요.</p>
@@ -291,6 +292,8 @@ function RouteScreen({
           onAutoTranslate={controller.changeAutoTranslate}
           onAutoRetryFailed={controller.changeAutoRetryFailed}
           onAutoGlossary={controller.changeAutoGlossary}
+          onLookupWikipedia={controller.changeLookupWikipedia}
+          onLookupNamuwiki={controller.changeLookupNamuwiki}
           onTheme={controller.changeTheme}
         />
       );

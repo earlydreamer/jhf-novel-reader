@@ -31,8 +31,24 @@ export interface SettingsScreenProps {
   onAutoTranslate?(enabled: boolean): void;
   onAutoRetryFailed?(enabled: boolean): void;
   onAutoGlossary?(enabled: boolean): void;
+  onLookupWikipedia?(enabled: boolean): void;
+  onLookupNamuwiki?(enabled: boolean): void;
   onTheme?(theme: ThemePreference): void;
 }
+
+type LookupSourceKey = 'wikipedia' | 'namuwiki';
+
+/** 외부 조회를 켜기 전 확인 문구. 보내는 곳과 보내지 않는 것을 그대로 밝힌다. */
+const LOOKUP_CONFIRMS: Record<LookupSourceKey, { title: string; body: string }> = {
+  wikipedia: {
+    title: '위키백과·위키데이터 조회를 켤까요?',
+    body: '용어 정밀스캔을 실행할 때 일본어 용어 이름을 ja.wikipedia.org와 www.wikidata.org에 보내요. 회차 본문과 번역문은 보내지 않아요.',
+  },
+  namuwiki: {
+    title: '나무위키 조회를 켤까요?',
+    body: '용어 정밀스캔을 실행할 때 일본어 용어 이름을 namu.wiki 검색에 보내요. 회차 본문과 번역문은 보내지 않아요. 가져온 표기에는 나무위키(CC BY-NC-SA 2.0 KR) 출처를 함께 표시해요.',
+  },
+};
 
 const catalogLabels: Record<CatalogStatus, string> = {
   idle: '아직 연결을 확인하지 않았어요.',
@@ -181,6 +197,8 @@ export function SettingsScreen({
   onAutoTranslate,
   onAutoRetryFailed,
   onAutoGlossary,
+  onLookupWikipedia,
+  onLookupNamuwiki,
   onTheme,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
@@ -200,6 +218,16 @@ export function SettingsScreen({
   const [modelOpen, setModelOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [lookupConfirm, setLookupConfirm] = useState<LookupSourceKey | null>(null);
+  const lookupAvailable =
+    state.termScanAvailable &&
+    state.connection.provider === 'openai-compatible' &&
+    Boolean(onLookupWikipedia && onLookupNamuwiki);
+  function confirmLookup(): void {
+    if (lookupConfirm === 'wikipedia') onLookupWikipedia?.(true);
+    if (lookupConfirm === 'namuwiki') onLookupNamuwiki?.(true);
+    setLookupConfirm(null);
+  }
   const [licensesOpen, setLicensesOpen] = useState(false);
   const [version, setVersion] = useState(() =>
     Capacitor.isNativePlatform() ? '버전을 확인하고 있어요.' : `웹 미리보기 ${packageInfo.version}`,
@@ -515,6 +543,30 @@ export function SettingsScreen({
         </div>
       </section>
 
+      {lookupAvailable && (
+        <section aria-labelledby="settings-term-scan">
+          <h2 id="settings-term-scan">용어 정밀스캔</h2>
+          <Switch
+            label="위키백과·위키데이터에서 찾아보기"
+            description="실존 인물·지명의 한국어 표기를 찾아 판정 근거로 써요. 용어 이름만 보내고 회차 본문은 보내지 않아요."
+            checked={state.lookupWikipedia}
+            onChange={(checked) => {
+              if (checked) setLookupConfirm('wikipedia');
+              else onLookupWikipedia?.(false);
+            }}
+          />
+          <Switch
+            label="나무위키에서 찾아보기"
+            description="작품·캐릭터 이름의 한국어 표기를 찾아 판정 근거로 써요. 요청 사이를 띄워서 정밀스캔이 조금 더 걸려요."
+            checked={state.lookupNamuwiki}
+            onChange={(checked) => {
+              if (checked) setLookupConfirm('namuwiki');
+              else onLookupNamuwiki?.(false);
+            }}
+          />
+        </section>
+      )}
+
       {onTheme && (
         <section aria-labelledby="settings-display">
           <h2 id="settings-display">화면</h2>
@@ -691,6 +743,24 @@ export function SettingsScreen({
             setThemeOpen(false);
           }}
         />
+      </Dialog>
+
+      <Dialog
+        open={lookupConfirm !== null}
+        title={lookupConfirm ? LOOKUP_CONFIRMS[lookupConfirm].title : ''}
+        onClose={() => setLookupConfirm(null)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setLookupConfirm(null)}>
+              취소
+            </Button>
+            <Button variant="text" onClick={confirmLookup}>
+              켜기
+            </Button>
+          </>
+        }
+      >
+        <p>{lookupConfirm ? LOOKUP_CONFIRMS[lookupConfirm].body : ''}</p>
       </Dialog>
 
       <Dialog

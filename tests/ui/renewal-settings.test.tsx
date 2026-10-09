@@ -1065,3 +1065,91 @@ describe('번역 전 용어집 자동 생성 스위치 (#192)', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('정밀스캔 외부 조회 설정 (#203)', () => {
+  const WIKI_SWITCH = '위키백과·위키데이터에서 찾아보기';
+  const NAMU_SWITCH = '나무위키에서 찾아보기';
+
+  function scanState(
+    overrides: Partial<RenewalSnapshot> = {},
+    provider: ConnectionConfig['provider'] = 'openai-compatible',
+  ): RenewalSnapshot {
+    const state = createRenewalController().getSnapshot();
+    return {
+      ...state,
+      termScanAvailable: true,
+      connection: { ...state.connection, provider },
+      ...overrides,
+    };
+  }
+
+  function renderSettings(
+    state: RenewalSnapshot,
+    onLookupWikipedia = vi.fn(),
+    onLookupNamuwiki = vi.fn(),
+  ) {
+    render(
+      <SettingsScreen
+        state={state}
+        onChange={() => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
+        onSelect={() => {}}
+        onAutoRetryFailed={() => {}}
+        onLookupWikipedia={onLookupWikipedia}
+        onLookupNamuwiki={onLookupNamuwiki}
+      />,
+    );
+    return { onLookupWikipedia, onLookupNamuwiki };
+  }
+
+  it('정밀스캔이 가능한 OpenAI 호환 서버에서만 조회 섹션을 보여 준다', () => {
+    renderSettings(scanState());
+    expect(screen.getByRole('heading', { name: '용어 정밀스캔' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: WIKI_SWITCH })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: NAMU_SWITCH })).not.toBeChecked();
+    cleanup();
+
+    renderSettings(scanState({ termScanAvailable: false }));
+    expect(screen.queryByRole('switch', { name: WIKI_SWITCH })).not.toBeInTheDocument();
+    cleanup();
+
+    renderSettings(scanState({}, 'gemini'));
+    expect(screen.queryByRole('switch', { name: NAMU_SWITCH })).not.toBeInTheDocument();
+  });
+
+  it('끈 조회를 켜면 확인 대화상자를 열고 켜기를 누를 때만 켠다', () => {
+    const { onLookupWikipedia } = renderSettings(scanState());
+    fireEvent.click(screen.getByRole('switch', { name: WIKI_SWITCH }));
+    expect(onLookupWikipedia).not.toHaveBeenCalled();
+    expect(screen.getByText('위키백과·위키데이터 조회를 켤까요?')).toBeVisible();
+    expect(
+      screen.getByText(
+        '용어 정밀스캔을 실행할 때 일본어 용어 이름을 ja.wikipedia.org와 www.wikidata.org에 보내요. 회차 본문과 번역문은 보내지 않아요.',
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    expect(onLookupWikipedia).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('switch', { name: WIKI_SWITCH }));
+    fireEvent.click(screen.getByRole('button', { name: '켜기' }));
+    expect(onLookupWikipedia).toHaveBeenCalledTimes(1);
+    expect(onLookupWikipedia).toHaveBeenCalledWith(true);
+  });
+
+  it('나무위키 조회도 같은 확인을 거치고 끌 때는 확인 없이 바로 끈다', () => {
+    const { onLookupNamuwiki } = renderSettings(scanState({ lookupNamuwiki: true }));
+    expect(screen.getByRole('switch', { name: NAMU_SWITCH })).toBeChecked();
+
+    fireEvent.click(screen.getByRole('switch', { name: NAMU_SWITCH }));
+    expect(onLookupNamuwiki).toHaveBeenCalledWith(false);
+    expect(screen.queryByText('나무위키 조회를 켤까요?')).toBeNull();
+    cleanup();
+
+    const next = renderSettings(scanState());
+    fireEvent.click(screen.getByRole('switch', { name: NAMU_SWITCH }));
+    expect(screen.getByText('나무위키 조회를 켤까요?')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '켜기' }));
+    expect(next.onLookupNamuwiki).toHaveBeenCalledWith(true);
+  });
+});
