@@ -884,3 +884,43 @@ test('상단바 제목은 본문 머리와 같은 번역 제목을 쓰고 원문
   view.rerender(<ImmersiveReader {...props({ titles, showOriginal: true })} />);
   expect(appBarTitle()).toBe(source.title);
 });
+
+test('사용자가 중단한 미확인 결과는 중단 안내와 다시 번역하기 버튼을 보인다(#161)', () => {
+  const onRetry = vi.fn();
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        onRetry,
+        translation: {
+          phase: 'unknown',
+          elapsedMs: 0,
+          error: new ReaderError('cancelled', 'unknown'),
+        },
+      })}
+    />,
+  );
+  const float = screen.getByRole('region', { name: '번역 안내' });
+  expect(float).toHaveTextContent('번역이 중단됐어요.');
+  expect(float).not.toHaveTextContent('요청이 이미 처리됐을 수 있어');
+  fireEvent.click(within(float).getByRole('button', { name: '다시 번역하기' }));
+  expect(onRetry).toHaveBeenCalledTimes(1);
+});
+
+test('중단으로 실패가 남은 경우에도 중단 안내를 보인다(#161)', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'failed',
+          elapsedMs: 0,
+          error: new ReaderError('cancelled', 'not_sent'),
+        },
+      })}
+    />,
+  );
+  expect(screen.getByText('번역이 중단됐어요.')).toBeInTheDocument();
+});

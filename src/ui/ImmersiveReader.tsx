@@ -100,6 +100,7 @@ const translationFailureMessages: Partial<Record<ErrorCode, string>> = {
     '현재 모델은 용어집·말투 적용을 지원하지 않아요. 로컬 번역 설정을 확인해 주세요.',
   model_missing: '생성 모델을 찾지 못했어요. 연결 설정에서 모델을 다시 선택해 주세요.',
   storage: '기기 저장소에 접근하지 못했어요. 저장 공간이나 앱 상태를 확인해 주세요.',
+  cancelled: '번역이 중단됐어요.',
 };
 
 function ownVersion(version: CompletedTranslation | null, chapter: ChapterRef): boolean {
@@ -565,14 +566,29 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     ),
     props.route === 'translation' && props.translation.phase === 'unknown' && (
       <div key="unknown-result" className="nr-reader-notice nr-reader-notice--warning" role="alert">
-        <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
-        <Button
-          variant="outlined"
-          disabled={active || !props.connected || !props.selectedModelId}
-          onClick={props.onRetry}
-        >
-          확인하고 다시 번역하기
-        </Button>
+        {failureCode === 'cancelled' ? (
+          <>
+            <p>번역이 중단됐어요.</p>
+            <Button
+              variant="outlined"
+              disabled={active || !props.connected || !props.selectedModelId}
+              onClick={props.onRetry}
+            >
+              다시 번역하기
+            </Button>
+          </>
+        ) : (
+          <>
+            <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
+            <Button
+              variant="outlined"
+              disabled={active || !props.connected || !props.selectedModelId}
+              onClick={props.onRetry}
+            >
+              확인하고 다시 번역하기
+            </Button>
+          </>
+        )}
       </div>
     ),
     props.route === 'translation' && props.translation.phase === 'failed' && (
