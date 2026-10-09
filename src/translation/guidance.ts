@@ -3,14 +3,24 @@ import { digest, Journal, serial, type PrivateFiles } from '../storage/journal';
 import { check, object } from '../storage/validation';
 import { identifier } from '../storage/readingValidation';
 
+export type GuidanceEvidence = {
+  kind: 'ruby' | 'kanjidic' | 'wikipedia' | 'wikidata' | 'namuwiki' | 'model';
+  url?: string;
+  note: string;
+};
 export type GuidanceTerm = {
   source: string;
   target: string;
   aliases: string[];
   category: string;
   note: string;
-  /** 'auto'는 작품 스캔이 찾은 미확정 후보다. 확정 전에는 주입·적용 해시에서 모두 빠진다. */
-  origin?: 'auto';
+  /**
+   * 출처. undefined=사람이 입력·수정(기계가 덮어쓰지 않음), 'model'=번역 전 자동 생성(적용),
+   * 'scan'=정밀스캔이 근거와 함께 정함(적용), 'auto'=미리 번역 후보 스캔의 미확정 후보(미적용).
+   */
+  origin?: 'auto' | 'model' | 'scan';
+  /** 'scan' 항목의 근거. 다른 출처에는 두지 않는다. */
+  evidence?: GuidanceEvidence[];
 };
 export type GuidanceVoice = { name: string; aliases: string[]; instruction: string };
 export type GuidanceDraft = {
@@ -31,6 +41,31 @@ function aliases(value: unknown): void {
   check(Array.isArray(value) && value.length <= 8);
   value.forEach((alias) => string(alias, 80, true));
 }
+const evidenceKinds: readonly string[] = [
+  'ruby',
+  'kanjidic',
+  'wikipedia',
+  'wikidata',
+  'namuwiki',
+  'model',
+];
+function evidenceItem(value: unknown): void {
+  object(value, ['kind', 'url', 'note']);
+  check(typeof value.kind === 'string' && evidenceKinds.includes(value.kind));
+  if (value.url !== undefined) {
+    string(value.url, 300, true);
+    check(value.url.startsWith('https:') && parses(value.url));
+  }
+  string(value.note, 200);
+}
+function parses(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
   object(value, ['schemaVersion', 'workId', 'hash', 'terms', 'voices', 'plotSummary']);
   if (value.plotSummary !== undefined) string(value.plotSummary, 400);
@@ -40,8 +75,18 @@ export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
   check(Array.isArray(value.terms));
   check(Array.isArray(value.voices));
   for (const term of value.terms) {
-    object(term, ['source', 'target', 'aliases', 'category', 'note', 'origin']);
-    check(term.origin === undefined || term.origin === 'auto');
+    object(term, ['source', 'target', 'aliases', 'category', 'note', 'origin', 'evidence']);
+    check(
+      term.origin === undefined ||
+        term.origin === 'auto' ||
+        term.origin === 'model' ||
+        term.origin === 'scan',
+    );
+    if (term.evidence !== undefined) {
+      check(term.origin === 'scan');
+      check(Array.isArray(term.evidence) && term.evidence.length >= 1 && term.evidence.length <= 6);
+      term.evidence.forEach(evidenceItem);
+    }
     string(term.source, 80, true);
     string(term.target, 80, true);
     aliases(term.aliases);
@@ -105,6 +150,10 @@ function duplicateFree(draft: GuidanceDraft): void {
     const keys = names.map(nameKey);
     check(new Set(keys).size === keys.length);
   }
+}
+/** 기계가 만든 항목(model·scan·auto)인지. 사람 항목(origin 없음)은 기계가 덮어쓰지 않는다. */
+export function isMachineTerm(term: GuidanceTerm): boolean {
+  return term.origin !== undefined;
 }
 export function guidanceHash(value: WorkGuidance | null | undefined): string | undefined {
   return value && (value.terms.length || value.voices.length || value.plotSummary?.trim())

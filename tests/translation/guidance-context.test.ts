@@ -2,8 +2,12 @@ import { expect, test } from 'vitest';
 import {
   appliedGuidanceHash,
   guidanceContext,
+  isMachineTerm,
+  validateGuidance,
+  type GuidanceTerm,
   type WorkGuidance,
 } from '../../src/translation/guidance';
+import { digest } from '../../src/storage/journal';
 
 const guidance: WorkGuidance = {
   schemaVersion: 1,
@@ -102,4 +106,105 @@ test('the built-in preset applies without a work glossary and a work entry overr
   expect(merged).not.toContain('프리셋표기');
   expect(merged).toContain('冒険者ギルド translates to 모험가 길드');
   expect(guidanceContext(null, 'n1234ab', '冒険者ギルド。', [])).toBe('');
+});
+
+async function signed(terms: unknown[]): Promise<unknown> {
+  return {
+    schemaVersion: 1,
+    workId: 'n1234ab',
+    hash: await digest(['n1234ab', terms, []]),
+    terms,
+    voices: [],
+  };
+}
+const evidence = [
+  { kind: 'wikipedia', url: 'https://ja.wikipedia.org/wiki/アルベルト', note: '기사' },
+];
+test('model과 scan 항목은 출처와 근거를 담아 저장 형식을 통과한다', async () => {
+  await expect(
+    validateGuidance(
+      await signed([
+        { source: 'アル', target: '아르', aliases: [], category: '', note: '', origin: 'model' },
+        {
+          source: 'アルベルト',
+          target: '알베르트',
+          aliases: [],
+          category: '고유명사',
+          note: '',
+          origin: 'scan',
+          evidence,
+        },
+      ]),
+    ),
+  ).resolves.toMatchObject({ workId: 'n1234ab' });
+});
+test('evidence는 scan 항목에만 있고, 1~6개이며, url은 https로 파싱되는 값만 받는다', async () => {
+  const scan = (patch: Record<string, unknown>) =>
+    signed([
+      {
+        source: 'アル',
+        target: '아르',
+        aliases: [],
+        category: '',
+        note: '',
+        origin: 'scan',
+        evidence,
+        ...patch,
+      },
+    ]);
+  const rejects = (value: Promise<unknown>) =>
+    expect(value.then(validateGuidance)).rejects.toThrow();
+  await rejects(
+    signed([
+      {
+        source: 'アル',
+        target: '아르',
+        aliases: [],
+        category: '',
+        note: '',
+        origin: 'model',
+        evidence,
+      },
+    ]),
+  );
+  await rejects(scan({ evidence: [] }));
+  await rejects(scan({ evidence: Array.from({ length: 7 }, () => evidence[0]) }));
+  await rejects(
+    scan({ evidence: [{ kind: 'wikipedia', url: 'http://ja.wikipedia.org/x', note: '' }] }),
+  );
+  await rejects(scan({ evidence: [{ kind: 'wikipedia', url: 'https://[bad', note: '' }] }));
+  await rejects(scan({ evidence: [{ kind: 'blog', note: '' }] }));
+  await rejects(scan({ evidence: [{ kind: 'model', note: 'x'.repeat(201) }] }));
+  await rejects(scan({ evidence: [{ kind: 'model', note: '', extra: 1 }] }));
+  await expect(
+    validateGuidance(await scan({ evidence: [{ kind: 'model', note: '' }] })),
+  ).resolves.toBeTruthy();
+});
+test('isMachineTerm은 자동 생성·정밀스캔·미확정 후보를 기계 항목으로 본다', () => {
+  const term = (origin?: GuidanceTerm['origin']): GuidanceTerm => ({
+    source: 'アル',
+    target: '아르',
+    aliases: [],
+    category: '',
+    note: '',
+    ...(origin ? { origin } : {}),
+  });
+  expect(isMachineTerm(term())).toBe(false);
+  expect(isMachineTerm(term('auto'))).toBe(true);
+  expect(isMachineTerm(term('model'))).toBe(true);
+  expect(isMachineTerm(term('scan'))).toBe(true);
+});
+test('model과 scan 항목은 번역에 적용되고 auto 후보는 적용되지 않는다', async () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [
+      { source: 'ミナ', target: '미나', aliases: [], category: '', note: '', origin: 'model' },
+      { source: 'カイ', target: '카이', aliases: [], category: '', note: '', origin: 'scan' },
+      { source: 'リン', target: '린', aliases: [], category: '', note: '', origin: 'auto' },
+    ],
+  };
+  const context = guidanceContext(value, 'n1234ab', 'ミナとカイとリン。');
+  expect(context).toContain('ミナ translates to 미나');
+  expect(context).toContain('カイ translates to 카이');
+  expect(context).not.toContain('リン translates');
 });

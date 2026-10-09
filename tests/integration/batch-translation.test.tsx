@@ -838,3 +838,38 @@ test('confirming a newly found term updates saved-skip counts and old queues rem
   expect((await repository.read())?.scan).toBeUndefined();
   harness.app.dispose();
 });
+test.each(['model', 'scan'] as const)(
+  'a human confirmation replaces a %s term of the same source and drops its origin and evidence',
+  async (origin) => {
+    const harness = fixture();
+    await harness.setup();
+    harness.chapterExtra = 'アルベルトとアルベルト。';
+    await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+    await harness.app.scanBatch();
+    await harness.app.saveGuidance('n1234ab', {
+      terms: [
+        {
+          source: 'アルベルト',
+          target: '알버트',
+          aliases: [],
+          category: '고유명사',
+          note: '',
+          origin,
+          ...(origin === 'scan' ? { evidence: [{ kind: 'model', note: '자동 근거' }] } : {}),
+        },
+        { source: 'ミカエル', target: '미카엘', aliases: [], category: '', note: '' },
+      ],
+      voices: [],
+    });
+    await harness.app.confirmBatchCandidates([{ source: 'アルベルト', target: '알베르트' }]);
+    const saved = await harness.app.readGuidance('n1234ab');
+    expect(saved?.terms).toEqual([
+      { source: 'アルベルト', target: '알베르트', aliases: [], category: '고유명사', note: '' },
+      { source: 'ミカエル', target: '미카엘', aliases: [], category: '', note: '' },
+    ]);
+    expect(saved?.terms[0]?.origin).toBeUndefined();
+    expect(saved?.terms[0]?.evidence).toBeUndefined();
+    expect(saved?.terms[1]?.origin).toBeUndefined();
+    harness.app.dispose();
+  },
+);

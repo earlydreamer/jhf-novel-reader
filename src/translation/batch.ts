@@ -18,6 +18,7 @@ import { referencePreset } from './preset';
 import {
   appliedGuidanceHash,
   guidanceHash,
+  isMachineTerm,
   validateGuidance,
   type GuidanceRepository,
   type WorkGuidance,
@@ -455,7 +456,8 @@ export function createBatchTranslation(dependencies: {
           [term.source, ...term.aliases].some((name) => name.normalize('NFKC') === key),
         );
         // 스캔 중 별도로 확정한 수동 항목은 덮어쓰지 않는다.
-        if (existing && existing.origin !== 'auto') continue;
+        // 사람이 확정한 후보는 기계가 만든 항목(auto·model·scan)을 덮어쓴다.
+        if (existing && !isMachineTerm(existing)) continue;
         const confirmed = {
           source: choice.source,
           target: choice.target.trim(),
@@ -465,9 +467,11 @@ export function createBatchTranslation(dependencies: {
         };
         if (existing)
           terms[terms.indexOf(existing)] = {
-            ...existing,
+            source: existing.source,
             target: confirmed.target,
-            origin: undefined,
+            aliases: existing.aliases,
+            category: existing.category,
+            note: existing.note,
           };
         else terms.push(confirmed);
       }

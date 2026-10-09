@@ -1,5 +1,17 @@
 import { useEffect, useState, type JSX } from 'react';
-import type { GuidanceDraft, WorkGuidance } from '../translation/guidance';
+import type { GuidanceDraft, GuidanceTerm, WorkGuidance } from '../translation/guidance';
+
+/** 사람이 고친 항목은 출처와 근거를 지워 기계가 덮어쓰지 않는 사람 항목이 된다. 'auto'는 기존 동작을 유지한다. */
+function humanized(term: GuidanceTerm): GuidanceTerm {
+  if (term.origin !== 'model' && term.origin !== 'scan') return term;
+  return {
+    source: term.source,
+    target: term.target,
+    aliases: term.aliases,
+    category: term.category,
+    note: term.note,
+  };
+}
 
 export interface GuidancePanelProps {
   workId: string;
@@ -98,6 +110,29 @@ export function GuidancePanel({
         {draft.terms.map((term, index) => (
           <fieldset key={index}>
             <legend>용어 {index + 1}</legend>
+            {term.origin === 'model' && <span className="nr-guidance-origin">자동 생성</span>}
+            {term.origin === 'scan' && (
+              <>
+                <span className="nr-guidance-origin">정밀스캔</span>
+                {term.evidence?.length ? (
+                  <ul className="nr-guidance-evidence">
+                    {term.evidence.map((item, evidenceIndex) => (
+                      <li key={evidenceIndex}>
+                        {item.note}
+                        {item.url && (
+                          <>
+                            {' '}
+                            <a href={item.url} target="_blank" rel="noreferrer">
+                              출처
+                            </a>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            )}
             {(['source', 'target', 'category', 'note'] as const).map((key) => (
               <label key={key}>
                 {{ source: '원문', target: '한국어 표기', category: '분류', note: '설명' }[key]}
@@ -109,7 +144,7 @@ export function GuidancePanel({
                     change({
                       ...draft,
                       terms: draft.terms.map((entry, i) =>
-                        i === index ? { ...entry, [key]: event.target.value } : entry,
+                        i === index ? { ...humanized(entry), [key]: event.target.value } : entry,
                       ),
                     })
                   }
@@ -125,7 +160,9 @@ export function GuidancePanel({
                   change({
                     ...draft,
                     terms: draft.terms.map((entry, i) =>
-                      i === index ? { ...entry, aliases: aliases(event.target.value) } : entry,
+                      i === index
+                        ? { ...humanized(entry), aliases: aliases(event.target.value) }
+                        : entry,
                     ),
                   })
                 }

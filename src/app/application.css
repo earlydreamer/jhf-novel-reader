@@ -355,3 +355,18 @@
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
 }
+.nr-guidance-origin {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 0 8px;
+  border-radius: var(--shape-full);
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  font: var(--type-label-medium);
+}
+.nr-guidance-evidence {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+  color: var(--on-surface-variant);
+  font: var(--type-body-small);
+}
