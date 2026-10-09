@@ -56,6 +56,25 @@ describe('namuKoreanFor', () => {
   });
 });
 
+describe('namuKoreanFor word boundaries and suffix choice', () => {
+  test('block tags do not glue the preceding heading to the name', () => {
+    expect(namuKoreanFor('<div>문서</div><div>사이토 도산 (斎藤道三)</div>', ja)).toEqual({
+      ko: '사이토 도산',
+      count: 1,
+    });
+  });
+
+  test('a role word in front is not chosen when the bare name is the majority form', () => {
+    const html =
+      '<p>배우 사이토 도산 (斎藤道三)</p><p>사이토 도산 (斎藤道三 ; 1494)</p><p>사이토 도산 (斎藤道三 ; 1556)</p>';
+    expect(namuKoreanFor(html, ja)).toEqual({ ko: '사이토 도산', count: 3 });
+  });
+
+  test('a lone surname-like suffix is returned as is', () => {
+    expect(namuKoreanFor('<p>도산 (斎藤道三)</p>', ja)).toEqual({ ko: '도산', count: 1 });
+  });
+});
+
 describe('lookupWikipedia', () => {
   test('uses the exact Japanese title and returns the Korean language link as an exact hit', async () => {
     const { transport, get } = fakeTransport(() => ({

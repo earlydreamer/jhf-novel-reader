@@ -149,24 +149,40 @@ function escapeRegExp(value: string): string {
 
 /** 태그를 걷어 낸 텍스트에서 '한국어 (日本語)' 패턴으로 ja의 한국어 표기 후보를 센다. */
 export function namuKoreanFor(html: string, ja: string): { ko: string; count: number } | null {
+  // 태그는 줄바꿈으로 바꿔 인접한 블록의 글자가 서로 붙지 않게 한다.
   let plain = html
-    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
-    .replace(/<[^>]*>/g, '');
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '\n');
   for (const [entity, char] of ENTITIES) plain = plain.split(entity).join(char);
-  plain = plain.replace(/\s+/g, ' ').trim();
+  // 공백은 줄 안에서만 하나로 줄이고 줄바꿈은 유지한다.
+  plain = plain.replace(/[^\S\n]+/g, ' ');
 
+  // 한국어 부분은 줄을 넘지 않고 공백으로 이어진 최대 3어절이다.
   const pattern = new RegExp(
-    `([가-힣][가-힣·\\s]{0,20}?)\\s*\\(\\s*${escapeRegExp(ja)}(?:\\s*[;,)/])`,
+    `((?:[가-힣·]+ ){0,2}[가-힣·]+)\\s*\\(\\s*${escapeRegExp(ja)}(?:\\s*[;,)/])`,
     'g',
   );
+  // 매치마다 뒤에서부터 1~3어절 접미사를 모두 센다(1글자 접미사는 제외).
   const counts = new Map<string, number>();
   for (const match of plain.matchAll(pattern)) {
-    const ko = (match[1] ?? '').trim();
-    if (ko.length < 2 || ko.length > 20) continue;
-    counts.set(ko, (counts.get(ko) ?? 0) + 1);
+    const words = (match[1] ?? '').split(' ');
+    for (let size = 1; size <= Math.min(3, words.length); size++) {
+      const phrase = words.slice(words.length - size).join(' ');
+      if (phrase.length < 2) continue;
+      counts.set(phrase, (counts.get(phrase) ?? 0) + 1);
+    }
   }
-  // 동률이면 먼저 나온 후보를 쓴다(Map은 삽입 순서를 지킨다).
-  let best: { ko: string; count: number } | null = null;
-  for (const [ko, count] of counts) if (!best || count > best.count) best = { ko, count };
-  return best;
+  let top = 0;
+  for (const count of counts.values()) top = Math.max(top, count);
+  if (top === 0) return null;
+  // 최다 횟수의 60% 이상인 접미사 중 가장 긴 것(어절 수, 글자 수 순)을 고른다.
+  // 동률이면 먼저 나온 접미사를 쓴다(Map은 삽입 순서를 지킨다). 정수 비교로 0.6을 표현한다.
+  let best: { ko: string; count: number; words: number } | null = null;
+  for (const [ko, count] of counts) {
+    if (count * 5 < top * 3) continue;
+    const words = ko.split(' ').length;
+    if (!best || words > best.words || (words === best.words && ko.length > best.ko.length))
+      best = { ko, count, words };
+  }
+  return best && { ko: best.ko, count: best.count };
 }
