@@ -170,6 +170,12 @@ export function composePresetAddress(host: string, port: string): string {
   return `http://${trimmedHost}${trimmedPort ? `:${trimmedPort}` : ''}/v1`;
 }
 
+/** 목록에 이름이 없을 때 모델 ID(llama.cpp는 파일 경로)에서 읽을 수 있는 이름을 만든다(#176). */
+function readableModelName(id: string): string {
+  const last = id.split(/[/\\]/).filter(Boolean).at(-1) ?? id;
+  return last.replace(/\.(gguf|bin|safetensors)$/i, '');
+}
+
 export function SettingsScreen({
   state,
   onChange,
@@ -229,20 +235,27 @@ export function SettingsScreen({
     onChange({ provider: state.connection.provider, baseUrl: state.connection.baseUrl, ...value });
   }
 
-  async function runCheck(secret: string): Promise<void> {
+  async function runCheck(secret: string): Promise<ConnectionCheckResult | null> {
     let result: ConnectionCheckResult;
     try {
       result = await onCheck(secret);
     } catch {
       showSnackbar(catalogLabels.model_list);
-      return;
+      return null;
     }
     const message = checkResultMessage(result);
     if (message) showSnackbar(message);
+    return result;
   }
 
-  async function check(): Promise<void> {
-    await runCheck(clearSecret());
+  async function check(): Promise<ConnectionCheckResult | null> {
+    return runCheck(clearSecret());
+  }
+
+  /** 목록 없이 모델 행을 누르면 연결을 확인하고, 생성 가능한 모델이 왔을 때만 선택 창을 연다(#176). 실패는 check()가 알린다. */
+  async function checkForModel(): Promise<void> {
+    const result = await check();
+    if (result?.kind === 'done' && result.modelCount > 0) setModelOpen(true);
   }
 
   async function saveAuth(): Promise<void> {
@@ -273,7 +286,7 @@ export function SettingsScreen({
   const checking = state.catalogStatus === 'checking';
   const modelLabel =
     state.models.find((model) => model.id === state.selectedModelId)?.displayName ??
-    state.selectedModelId ??
+    (state.selectedModelId ? readableModelName(state.selectedModelId) : undefined) ??
     '선택 전';
   const modeDisabled =
     state.translationActive || !!state.batch?.active || !!state.pendingSaveChapter;
@@ -452,8 +465,11 @@ export function SettingsScreen({
           headline="모델"
           supporting={modelLabel}
           navigates
-          disabled={checking || state.models.length === 0}
-          onClick={() => setModelOpen(true)}
+          disabled={checking || (state.models.length === 0 && !state.selectedModelId)}
+          onClick={() => {
+            if (state.models.length > 0) setModelOpen(true);
+            else void checkForModel();
+          }}
         />
       </section>
 
