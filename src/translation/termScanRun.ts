@@ -1,4 +1,4 @@
-import { ReaderError } from '../contracts';
+import { ReaderError, type LookupTransport } from '../contracts';
 import type {
   CompletedTranslation,
   LibraryStore,
@@ -8,6 +8,7 @@ import type {
 import { kanaMismatch } from './kanaCheck';
 import type { GuidanceEvidence, GuidanceRepository, GuidanceTerm } from './guidance';
 import type { Kanjidic } from './kanjidic';
+import { lookupNamuwiki, lookupWikidata, lookupWikipedia, type LookupHit } from './lookup';
 import {
   judgeRequest,
   parseJudge,
@@ -18,7 +19,11 @@ import {
 } from './termJudge';
 import { collectScanCandidates, type ScanCandidate, type ScanChapter } from './termScan';
 
-export type TermScanProgress = { stage: 'collect' | 'judge' | 'save'; done: number; total: number };
+export type TermScanProgress = {
+  stage: 'collect' | 'lookup' | 'judge' | 'save';
+  done: number;
+  total: number;
+};
 export type TermScanChange = {
   source: string;
   role: 'new' | 'recheck' | 'suggest';
@@ -36,12 +41,14 @@ export type TermScanResult = {
   confirmed: number; // recheck인데 표기가 같아 근거만 붙인 수
   suggestions: TermScanChange[]; // 사람 항목과 다른 제안(저장 안 함)
   partial: boolean; // 일부 묶음이 실패함
+  lookupFailed?: ('wikipedia' | 'namuwiki')[]; // 조회 오류로 이번 실행에서 더 묻지 않은 출처(실패가 없으면 필드 없음)
 };
 
 const BATCH_SIZE = 8;
 const RUNS = 3;
 const TEMPERATURES = [0, 0.7, 0.7] as const;
 const NOTE_LIMIT = 200;
+const EVIDENCE_LIMIT = 6; // 저장 검증 상한
 const CONFIDENCE_RANK: Record<TermScanChange['confidence'], number> = {
   low: 0,
   medium: 1,
@@ -75,7 +82,11 @@ function newestVersion(
   );
 }
 
-function evidenceOf(candidate: ScanCandidate, answer: VotedAnswer): GuidanceEvidence[] {
+function evidenceOf(
+  candidate: ScanCandidate,
+  answer: VotedAnswer,
+  hits: readonly LookupHit[],
+): GuidanceEvidence[] {
   const evidence: GuidanceEvidence[] = [];
   if (candidate.ruby !== undefined) {
     evidence.push({ kind: 'ruby', note: clip(`루비: ${candidate.ruby}`) });
@@ -83,6 +94,11 @@ function evidenceOf(candidate: ScanCandidate, answer: VotedAnswer): GuidanceEvid
   if (candidate.kanji?.length) {
     const hints = candidate.kanji.map(({ char, ko }) => `${char}=${ko.join('/') || '?'}`);
     evidence.push({ kind: 'kanjidic', note: clip(hints.join(' ')) });
+  }
+  // 조회 근거는 model 앞에 둔다. 상한을 넘으면 조회 항목을 뒤에서부터 덜고 model은 남긴다.
+  const room = Math.max(0, EVIDENCE_LIMIT - evidence.length - 1);
+  for (const hit of hits.slice(0, room)) {
+    evidence.push({ kind: hit.kind, url: hit.url, note: clip(hit.note) });
   }
   const reason = answer.reason ? ` · ${answer.reason}` : '';
   evidence.push({ kind: 'model', note: clip(`판정 ${answer.votes}/${answer.total}${reason}`) });
@@ -106,14 +122,16 @@ export function createTermScan(deps: {
   guidance: GuidanceRepository;
   library: Pick<LibraryStore, 'listVersions'>;
   loadKanjidic(): Promise<Kanjidic>;
+  lookup?: LookupTransport;
 }): (input: {
   workId: string;
   chapterIds: readonly string[];
   selection: SelectedModel;
   signal: AbortSignal;
   onProgress?(progress: TermScanProgress): void;
+  sources?: { wikipedia?: boolean; namuwiki?: boolean };
 }) => Promise<TermScanResult> {
-  return async ({ workId, chapterIds, selection, signal, onProgress }) => {
+  return async ({ workId, chapterIds, selection, signal, onProgress, sources }) => {
     const session = deps.createProvider(selection);
     const complete = session.completeJson?.bind(session);
     if (!complete) throw new ReaderError('model_missing');
@@ -140,7 +158,50 @@ export function createTermScan(deps: {
     const candidates = collectScanCandidates(chapters, terms, dic);
     if (!candidates.length) return { applied: [], confirmed: 0, suggestions: [], partial: false };
 
-    // 3. 묶음별 3회 판정. 1회차는 온도 0, 나머지는 0.7이다.
+    // 3. 외부 조회. 통로가 있고 켠 출처가 하나라도 있을 때만 한다. 후보마다 위키백과(없으면 위키데이터)와
+    // 나무위키를 묻는다. 오류가 난 출처는 이번 실행에서 다시 묻지 않고, 취소는 그대로 던진다. 결과는 저장하지 않는다.
+    const lookups = new Map<string, LookupHit[]>();
+    const failed = new Set<'wikipedia' | 'namuwiki'>();
+    const transport = deps.lookup;
+    if (transport && (sources?.wikipedia || sources?.namuwiki)) {
+      const attempt = async (
+        source: 'wikipedia' | 'namuwiki',
+        look: () => Promise<LookupHit | null>,
+      ): Promise<LookupHit | null> => {
+        try {
+          return await look();
+        } catch (error) {
+          if (error instanceof ReaderError && error.code === 'cancelled') throw error;
+          cancelled(signal);
+          failed.add(source);
+          return null;
+        }
+      };
+      for (const [index, candidate] of candidates.entries()) {
+        const name = candidate.source;
+        const hits: LookupHit[] = [];
+        if (sources?.wikipedia && !failed.has('wikipedia')) {
+          const hit = await attempt(
+            'wikipedia',
+            async () =>
+              (await lookupWikipedia(transport, name, signal)) ??
+              (await lookupWikidata(transport, name, signal)),
+          );
+          if (hit) hits.push(hit);
+        }
+        if (sources?.namuwiki && !failed.has('namuwiki')) {
+          const hit = await attempt('namuwiki', () => lookupNamuwiki(transport, name, signal));
+          if (hit) hits.push(hit);
+        }
+        if (hits.length) lookups.set(name, hits);
+        onProgress?.({ stage: 'lookup', done: index + 1, total: candidates.length });
+      }
+    }
+    const lookupFailed = (['wikipedia', 'namuwiki'] as const).filter((source) =>
+      failed.has(source),
+    );
+
+    // 4. 묶음별 3회 판정. 1회차는 온도 0, 나머지는 0.7이다.
     const batches: ScanCandidate[][] = [];
     for (let index = 0; index < candidates.length; index += BATCH_SIZE) {
       batches.push(candidates.slice(index, index + BATCH_SIZE));
@@ -150,7 +211,7 @@ export function createTermScan(deps: {
     let partial = false;
     const voted = new Map<string, VotedAnswer>();
     for (const batch of batches) {
-      const request = judgeRequest(batch);
+      const request = judgeRequest(batch, lookups);
       const runs: Map<string, JudgeAnswer>[] = [];
       for (const temperature of TEMPERATURES) {
         let run = new Map<string, JudgeAnswer>();
@@ -179,7 +240,7 @@ export function createTermScan(deps: {
       for (const [source, answer] of voteJudgements(runs, batch)) voted.set(source, answer);
     }
 
-    // 4. 변경 만들기. 저장 직전 재확인이 필요한 계획(planned)과 바로 제안(suggestions)으로 나눈다.
+    // 5. 변경 만들기. 저장 직전 재확인이 필요한 계획(planned)과 바로 제안(suggestions)으로 나눈다.
     const planned: { change: TermScanChange; confirmed: boolean }[] = [];
     const suggestions: TermScanChange[] = [];
     for (const candidate of candidates) {
@@ -190,6 +251,12 @@ export function createTermScan(deps: {
         candidate.script === 'katakana'
           ? kanaMismatch(nameKey(candidate.source), answer.target)
           : undefined;
+      const hits = lookups.get(candidate.source) ?? [];
+      // 위키백과 정확 연결의 표기와 판정이 다르면 신뢰도를 낮춘다. 위키데이터·나무위키는 신뢰도를 바꾸지 않는다.
+      const wikiConflict = hits.some(
+        (hit) =>
+          hit.kind === 'wikipedia' && hit.exact && compact(hit.ko) !== compact(answer.target),
+      );
       const change: TermScanChange = {
         source: candidate.source,
         role: candidate.role,
@@ -197,10 +264,10 @@ export function createTermScan(deps: {
         after: answer.target,
         kind: answer.kind,
         category: answer.category,
-        confidence: kanaFlag ? 'low' : answer.confidence,
+        confidence: kanaFlag || wikiConflict ? 'low' : answer.confidence,
         reason: answer.reason,
         ...(kanaFlag !== undefined ? { kanaFlag } : {}),
-        evidence: evidenceOf(candidate, answer),
+        evidence: evidenceOf(candidate, answer, hits),
       };
       if (candidate.role === 'suggest') {
         if (before !== undefined && compact(before) !== compact(answer.target)) {
@@ -212,7 +279,7 @@ export function createTermScan(deps: {
       planned.push({ change, confirmed: candidate.role === 'recheck' && same });
     }
 
-    // 5. 저장 직전 재확인. 그사이 사람이 고친 내용은 보존하고 제안으로 옮긴다.
+    // 6. 저장 직전 재확인. 그사이 사람이 고친 내용은 보존하고 제안으로 옮긴다.
     const applied: TermScanChange[] = [];
     const moved: TermScanChange[] = [];
     let confirmed = 0;
@@ -291,6 +358,7 @@ export function createTermScan(deps: {
       confirmed,
       suggestions: [...suggestions, ...moved],
       partial,
+      ...(lookupFailed.length ? { lookupFailed } : {}),
     };
     sortChanges(result.applied);
     sortChanges(result.suggestions);

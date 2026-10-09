@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import type { LookupHit } from '../../src/translation/lookup';
 import type { ScanCandidate } from '../../src/translation/termScan';
 import {
   judgeRequest,
@@ -269,4 +270,63 @@ test('답이 없는 run은 total에만 세고, 답이 하나도 없는 후보는
   expect(votes.get('公爵')).toMatchObject({ votes: 2, total: 3, confidence: 'medium' });
   expect(votes.has('カミラ')).toBe(false);
   expect(votes.has('王都')).toBe(false);
+});
+
+const hit = (extra: Pick<LookupHit, 'kind' | 'ko'> & Partial<LookupHit>): LookupHit => ({
+  url: 'https://example.test/hit',
+  note: '',
+  exact: false,
+  ...extra,
+});
+const LOOKUP_SENTENCE =
+  'Lookup lines come from Korean Wikipedia, Wikidata or Namuwiki. Prefer a lookup rendering when the contexts refer to the same person, place or work, and ignore it when it clearly refers to something else. For names invented in this story, an author ruby reading still comes first.';
+
+test('조회 근거는 후보 블록에서 kanji 줄 뒤, contexts 앞에 kind와 exact 표시로 들어간다', () => {
+  const lookups = new Map([
+    ['公爵', [hit({ kind: 'wikidata', ko: '공작' })]],
+    [
+      '王都',
+      [
+        hit({ kind: 'wikipedia', ko: '왕도', exact: true }),
+        hit({ kind: 'namuwiki', ko: '왕도시' }),
+      ],
+    ],
+  ]);
+  const { user } = judgeRequest(batch, lookups);
+  expect(user).toContain(
+    [
+      '[c1] 公爵',
+      'existing: 공작 (machine)',
+      'kanji: 公=공(public) 爵=?(baron)',
+      'lookup: 공작 (wikidata)',
+      'contexts:',
+      '- 彼は公爵だ。',
+      '- 公爵が来た。',
+    ].join('\n'),
+  );
+  expect(user).toContain(
+    [
+      '[c3] 王都',
+      'lookup: 왕도 (wikipedia, exact link)',
+      'lookup: 왕도시 (namuwiki)',
+      'contexts:',
+      '- 王都へ行く。',
+    ].join('\n'),
+  );
+});
+
+test('조회 줄이 하나라도 있는 묶음의 시스템 지침은 고정 문장을 Guides 앞에 담는다', () => {
+  const lookups = new Map([['王都', [hit({ kind: 'wikidata', ko: '왕도' })]]]);
+  const { system } = judgeRequest(batch, lookups);
+  expect(system).toContain(`\n${LOOKUP_SENTENCE}\nGuides:\n`);
+});
+
+test('조회가 없는 묶음의 요청은 조회 인자가 없을 때와 같고 고정 문장을 넣지 않는다', () => {
+  const plain = judgeRequest(batch);
+  expect(judgeRequest(batch, new Map())).toEqual(plain);
+  expect(
+    judgeRequest(batch, new Map([['없는 이름', [hit({ kind: 'namuwiki', ko: '없음' })]]])),
+  ).toEqual(plain);
+  expect(plain.user).not.toContain('lookup:');
+  expect(plain.system).not.toContain('Lookup lines come from');
 });

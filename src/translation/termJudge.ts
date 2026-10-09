@@ -1,3 +1,4 @@
+import type { LookupHit } from './lookup';
 import { guidesFor } from './scanGuides';
 import type { ScanCandidate } from './termScan';
 
@@ -35,6 +36,8 @@ const SCHEMA: Record<string, unknown> = {
   required: ['items'],
   additionalProperties: false,
 };
+const LOOKUP_GUIDE =
+  'Lookup lines come from Korean Wikipedia, Wikidata or Namuwiki. Prefer a lookup rendering when the contexts refer to the same person, place or work, and ignore it when it clearly refers to something else. For names invented in this story, an author ruby reading still comes first.';
 const HANGUL = /\p{Script=Hangul}/u;
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
 const CONTROL = /\p{Cc}/u;
@@ -43,23 +46,34 @@ const TARGET_LIMIT = 80;
 
 const idOf = (index: number) => `c${index + 1}`;
 
-/** 묶음 후보로 판정 요청(system·user·스키마·출력 상한)을 만든다. 모델은 부르지 않는다. */
-export function judgeRequest(batch: readonly ScanCandidate[]): {
+/**
+ * 묶음 후보로 판정 요청(system·user·스키마·출력 상한)을 만든다. 모델은 부르지 않는다.
+ * lookups는 후보 source별 외부 조회 근거이며, 묶음에 조회 줄이 하나라도 있을 때만 지침 문장을 더한다.
+ */
+export function judgeRequest(
+  batch: readonly ScanCandidate[],
+  lookups?: ReadonlyMap<string, readonly LookupHit[]>,
+): {
   system: string;
   user: string;
   schema: Record<string, unknown>;
   maxTokens: number;
 } {
   const guides = guidesFor(batch).map((guide) => `- ${guide.text}`);
+  const hasLookup = batch.some((candidate) => (lookups?.get(candidate.source)?.length ?? 0) > 0);
   return {
-    system: [SYSTEM, 'Guides:', ...guides].join('\n'),
-    user: batch.map((candidate, index) => candidateBlock(idOf(index), candidate)).join('\n\n'),
+    system: [SYSTEM, ...(hasLookup ? [LOOKUP_GUIDE] : []), 'Guides:', ...guides].join('\n'),
+    user: batch
+      .map((candidate, index) =>
+        candidateBlock(idOf(index), candidate, lookups?.get(candidate.source) ?? []),
+      )
+      .join('\n\n'),
     schema: SCHEMA,
     maxTokens: batch.length * 120 + 200,
   };
 }
 
-function candidateBlock(id: string, candidate: ScanCandidate): string {
+function candidateBlock(id: string, candidate: ScanCandidate, hits: readonly LookupHit[]): string {
   const lines = [`[${id}] ${candidate.source}`];
   if (candidate.existing) {
     const origin = candidate.existing.origin === undefined ? 'human' : 'machine';
@@ -72,6 +86,9 @@ function candidateBlock(id: string, candidate: ScanCandidate): string {
       return en[0] ? `${char}=${reading}(${en[0]})` : `${char}=${reading}`;
     });
     lines.push(`kanji: ${hints.join(' ')}`);
+  }
+  for (const hit of hits) {
+    lines.push(`lookup: ${hit.ko} (${hit.kind}${hit.exact ? ', exact link' : ''})`);
   }
   lines.push('contexts:', ...candidate.contexts.map((context) => `- ${context}`));
   return lines.join('\n');
