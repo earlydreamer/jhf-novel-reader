@@ -24,6 +24,14 @@ def generateSourceProvenance = tasks.register('generateSourceProvenance') {
 }
 tasks.named('preBuild').configure { dependsOn(generateSourceProvenance) }
 
+// 앱 버전은 package.json의 version 하나로 정한다(#182). versionCode = major*10000 + minor*100 + patch.
+def appVersion = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json')).version as String
+def appVersionParts = appVersion.tokenize('.').collect { it as Integer }
+if (appVersionParts.size() != 3 || appVersionParts[1] > 99 || appVersionParts[2] > 99) {
+    throw new GradleException("package.json version must be major.minor.patch with minor/patch <= 99: ${appVersion}")
+}
+def appVersionCode = appVersionParts[0] * 10000 + appVersionParts[1] * 100 + appVersionParts[2]
+
 android {
     namespace = "app.narou.reader"
     sourceSets.main.assets.srcDir(provenanceAssets)
@@ -32,8 +40,8 @@ android {
         applicationId "app.narou.reader"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
