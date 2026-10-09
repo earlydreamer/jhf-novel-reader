@@ -24,6 +24,15 @@ export interface HomeScreenProps {
   legacyWarnings: readonly LegacyMigrationWarning[];
 }
 
+// recentTitles는 번역 제목이 없으면 원문을 그대로 담는다. 원문을 보일 때만 일본어 lang을 붙인다(#167).
+function titleLang(
+  recentTitles: Readonly<Record<string, string>>,
+  key: string,
+  source: string,
+): 'ja' | undefined {
+  return (recentTitles[key] ?? source) === source ? 'ja' : undefined;
+}
+
 function dateRead(value: string): string {
   const date = new Date(value);
   const now = new Date();
@@ -84,12 +93,20 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
           label="이어서 읽기"
         >
           <span className="nr-library__continue-label">이어서 읽기</span>
-          <strong>{state.recentTitles[recentWork.workId] ?? recentWork.title}</strong>
+          <strong lang={titleLang(state.recentTitles, recentWork.workId, recentWork.title)}>
+            {state.recentTitles[recentWork.workId] ?? recentWork.title}
+          </strong>
           <span>
             {recentChapter?.ordinal ?? mostRecent.chapterId.split('/').at(-1)}화 ·{' '}
-            {recentChapter
-              ? (state.recentTitles[recentChapter.chapterId] ?? recentChapter.title)
-              : mostRecent.chapterId}
+            {recentChapter ? (
+              <span
+                lang={titleLang(state.recentTitles, recentChapter.chapterId, recentChapter.title)}
+              >
+                {state.recentTitles[recentChapter.chapterId] ?? recentChapter.title}
+              </span>
+            ) : (
+              mostRecent.chapterId
+            )}
           </span>
         </Card>
       )}
@@ -120,6 +137,7 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
                 <li key={work.workId}>
                   <ListItem
                     headline={state.recentTitles[work.workId] ?? work.title}
+                    lang={titleLang(state.recentTitles, work.workId, work.title)}
                     supporting={supporting}
                     onClick={() => props.onOpenLibraryWork(work.workId)}
                     trailing={
