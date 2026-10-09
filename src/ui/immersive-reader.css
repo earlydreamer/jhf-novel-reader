@@ -327,12 +327,15 @@
 }
 
 .nr-reader-float > .nr-reader-notice {
+  justify-content: space-between;
   padding-inline-end: 56px;
   border-radius: var(--shape-lg);
   box-shadow: var(--elevation-3);
 }
 
+/* 본문(.nr-reader-notice, z-index 5) 위에 둬야 보이고 눌린다(#166). */
 .nr-reader-float > .nr-icon-button {
+  z-index: 6;
   position: absolute;
   inset-block-start: 4px;
   inset-inline-end: 4px;

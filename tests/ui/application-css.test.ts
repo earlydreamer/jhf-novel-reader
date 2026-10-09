@@ -305,3 +305,24 @@ describe('immersive-reader.css reader chapter buttons (#155)', () => {
     expect(ends?.body).not.toMatch(/(?<![\w-])inline-size:\s*56px;/);
   });
 });
+
+describe('immersive-reader.css reader float card (#166)', () => {
+  it('닫기 버튼은 본문 카드(z-index 5)보다 위에 있어야 보이고 눌린다', () => {
+    const notice = rules(readerCss).find((rule) => rule.selector === '.nr-reader-notice');
+    const close = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-float > .nr-icon-button',
+    );
+    const noticeZ = Number(notice?.body.match(/z-index:\s*(\d+);/)?.[1]);
+    const closeZ = Number(close?.body.match(/z-index:\s*(\d+);/)?.[1]);
+    expect(noticeZ).toBe(5);
+    expect(close?.body).toMatch(/z-index:\s*6;/);
+    expect(closeZ).toBeGreaterThan(noticeZ);
+  });
+
+  it('떠 있는 카드의 본문은 내용을 양끝으로 나눠 닫기 버튼 자리를 비운다', () => {
+    const body = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-float > .nr-reader-notice',
+    );
+    expect(body?.body).toMatch(/justify-content:\s*space-between;/);
+  });
+});
