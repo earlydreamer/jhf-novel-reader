@@ -30,6 +30,7 @@ export interface SettingsScreenProps {
   onMode?(mode: 'stream' | 'legacy'): void;
   onAutoTranslate?(enabled: boolean): void;
   onAutoRetryFailed?(enabled: boolean): void;
+  onAutoGlossary?(enabled: boolean): void;
   onTheme?(theme: ThemePreference): void;
 }
 
@@ -179,6 +180,7 @@ export function SettingsScreen({
   onMode,
   onAutoTranslate,
   onAutoRetryFailed,
+  onAutoGlossary,
   onTheme,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
@@ -485,6 +487,14 @@ export function SettingsScreen({
             description="회차를 열면 선택한 모델로 번역해요. 끄면 ‘이 화 번역하기’를 눌러 시작해요."
             checked={state.autoTranslate}
             onChange={onAutoTranslate}
+          />
+        )}
+        {onAutoGlossary && state.connection.provider === 'openai-compatible' && (
+          <Switch
+            label="번역 전 용어집 자동 생성"
+            description="새 이름이 나오면 번역하기 전에 모델로 용어집을 만들어 바로 적용해요. 처음 번역할 때 조금 더 걸리고, 작품 용어집에서 언제든 고칠 수 있어요."
+            checked={state.autoGlossary}
+            onChange={onAutoGlossary}
           />
         )}
         {onAutoRetryFailed && (

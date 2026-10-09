@@ -448,16 +448,19 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     { label: '서재로 가기', onSelect: props.onGoHome },
   ];
 
-  const phaseLabel = {
-    idle: '번역 전',
-    preparing: '원문 준비 중',
-    translating: '모델 응답 대기 중',
-    validating: '결과를 확인하고 있어요',
-    saving: '기기에 저장 중',
-    ready: '저장 완료',
-    failed: '번역 실패',
-    unknown: '요청 결과 확인 필요',
-  }[props.translation.phase];
+  const phaseLabel =
+    props.translation.phase === 'preparing' && props.translation.glossary === 'running'
+      ? '용어집을 만들고 있어요'
+      : {
+          idle: '번역 전',
+          preparing: '원문 준비 중',
+          translating: '모델 응답 대기 중',
+          validating: '결과를 확인하고 있어요',
+          saving: '기기에 저장 중',
+          ready: '저장 완료',
+          failed: '번역 실패',
+          unknown: '요청 결과 확인 필요',
+        }[props.translation.phase];
   const progress = props.translation.progress;
   const activeFlow = ['preparing', 'translating', 'validating', 'saving'].includes(
     props.translation.phase,
