@@ -17,6 +17,7 @@ export type ReadingSettings = {
   fontSize: number;
   autoTranslate?: boolean;
   autoRetryFailed?: boolean;
+  autoGlossary?: boolean;
   theme?: ThemePreference;
   readingBackground?: ReadingBackground;
   lineHeight?: LineHeight;
@@ -28,12 +29,14 @@ function readingSettings(value: unknown): ReadingSettings {
     'fontSize',
     'autoTranslate',
     'autoRetryFailed',
+    'autoGlossary',
     'theme',
     'readingBackground',
     'lineHeight',
   ]);
   check(value.autoTranslate === undefined || typeof value.autoTranslate === 'boolean');
   check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
+  check(value.autoGlossary === undefined || typeof value.autoGlossary === 'boolean');
   check(value.theme === undefined || THEME_PREFERENCES.includes(value.theme as ThemePreference));
   check(
     value.readingBackground === undefined ||

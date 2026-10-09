@@ -34,6 +34,13 @@ export interface FlowDependencies {
   attempts: AttemptRepository;
   clock: { now(): number };
   guidance?: GuidanceRepository;
+  /** 번역 직전 자동 용어집(#192). 없으면 건너뛴다. */
+  autoGlossary?: (input: {
+    workId: string;
+    source: SourceSnapshot;
+    selection: SelectedModel;
+    signal: AbortSignal;
+  }) => Promise<'skipped' | 'added'>;
 }
 export type PhaseDurations = { sourceMs: number; modelMs: number; validationStorageMs: number };
 export type ParagraphRepair = { base: CompletedTranslation; indexes: readonly number[] };
@@ -75,6 +82,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
     approved?: WorkGuidance | null,
     scannedSource?: SourceSnapshot,
     repair?: ParagraphRepair,
+    options: { autoGlossary?: boolean } = {},
   ): Promise<void> {
     if (!foreground || disposed || slot.occupied || state.pendingSave) return;
     const chapter = structuredClone(ref),
@@ -151,6 +159,35 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         if (frozenRepair) publish({ preview: frozenRepair.base.text });
         timings.sourceMs = deps.clock.now() - started;
         if (control.signal.aborted || !foreground || disposed) throw new ReaderError('cancelled');
+        // 번역 직전 자동 용어집(#192): 원문을 한 번만 받고 같은 취소 신호를 쓴다. 실패해도 번역은 막지 않는다.
+        if (
+          options.autoGlossary &&
+          deps.autoGlossary &&
+          !frozenRepair &&
+          frozenGuidance === undefined &&
+          selected.connection.provider === 'openai-compatible'
+        ) {
+          publish({ glossary: 'running' });
+          const child = new AbortController();
+          const abortChild = () => child.abort();
+          control.signal.addEventListener('abort', abortChild, { once: true });
+          const timeout = setTimeout(abortChild, 30_000);
+          try {
+            await deps.autoGlossary({
+              workId: chapter.workId,
+              source,
+              selection: selected,
+              signal: child.signal,
+            });
+            publish({ glossary: undefined });
+          } catch {
+            if (control.signal.aborted) throw new ReaderError('cancelled');
+            publish({ glossary: 'failed' });
+          } finally {
+            clearTimeout(timeout);
+            control.signal.removeEventListener('abort', abortChild);
+          }
+        }
         const guidance =
           frozenGuidance === undefined
             ? ((await deps.guidance?.read(chapter.workId)) ?? null)

@@ -33,7 +33,8 @@ test('model selection derives internal budgets and refresh replaces stale capaci
   controller.chooseModel('hy-mt2');
   controller.navigate({ kind: 'settings' });
   render(<Application controller={controller} />);
-  expect(screen.getAllByRole('switch')).toHaveLength(3);
+  expect(screen.getAllByRole('switch')).toHaveLength(4);
+  expect(screen.getByRole('switch', { name: '번역 전 용어집 자동 생성' })).toBeVisible();
   expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/컨텍스트|입력 예산|출력 상한/)).not.toBeInTheDocument();
   await waitFor(async () =>

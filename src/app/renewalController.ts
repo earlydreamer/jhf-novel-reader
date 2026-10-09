@@ -139,6 +139,7 @@ export interface RenewalSnapshot {
   readonly recentTitles: Readonly<Record<string, string>>;
   readonly autoTranslate: boolean;
   readonly autoRetryFailed: boolean;
+  readonly autoGlossary: boolean;
   readonly paragraphRepair: boolean;
   readonly translationMode: 'stream' | 'legacy';
   readonly streamingAvailable: boolean;
@@ -251,6 +252,7 @@ export interface RenewalController {
   saveTitle(key: string, target: string): Promise<void>;
   changeAutoTranslate(enabled: boolean): void;
   changeAutoRetryFailed(enabled: boolean): void;
+  changeAutoGlossary(enabled: boolean): void;
   retryParagraphs(indexes?: readonly number[]): Promise<void>;
   previewPosition(index: number, offset: number): void;
   changeTranslationMode(mode: 'stream' | 'legacy'): void;
@@ -316,6 +318,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     recentTitles: {},
     autoTranslate: true,
     autoRetryFailed: true,
+    autoGlossary: true,
     paragraphRepair: false,
     translationMode: dependencies.defaultTranslationMode ?? 'legacy',
     streamingAvailable: Boolean(dependencies.streamingAvailable),
@@ -396,6 +399,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ...(snapshot.lineHeight !== 1.8 ? { lineHeight: snapshot.lineHeight } : {}),
       ...(snapshot.autoTranslate ? {} : { autoTranslate: false }),
       ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
+      ...(snapshot.autoGlossary ? {} : { autoGlossary: false }),
       selection: snapshot.selectedModelId
         ? {
             connection: { ...snapshot.connection },
@@ -1113,6 +1117,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             lineHeight: saved.lineHeight ?? 1.8,
             autoTranslate: saved.autoTranslate ?? true,
             autoRetryFailed: saved.autoRetryFailed ?? saved.selection?.autoRetryFailed ?? true,
+            autoGlossary: saved.autoGlossary ?? true,
           });
         initialized = true;
         runAutomaticTranslation();
@@ -1938,6 +1943,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           undefined,
           repair?.base.source,
           repair,
+          // 일괄 번역은 자체 후보 스캔을 쓰므로 여기서 켜지 않는다. 문단 재번역도 용어집을 만들지 않는다.
+          { autoGlossary: snapshot.autoGlossary && !repair },
         );
         publish({ translationTimings: { ...dependencies.flow.getTimings(), readerDisplayMs: 0 } });
         const completed = dependencies.flow.getCompleted();
@@ -2044,8 +2051,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       token.chapterId === request.chapterId &&
       token.settingsRevision === request.settingsRevision &&
       ownsVisibleTranslation(request)
-    )
+    ) {
+      // 용어집 실패 알림은 같은 번역에서 상태가 처음 failed로 바뀔 때 한 번만 낸다(#192).
+      const glossaryFailedNow =
+        state.glossary === 'failed' && snapshot.translation.glossary !== 'failed';
       publish({ translation: state });
+      if (glossaryFailedNow) publish({ error: '용어집을 만들지 못해 그대로 번역해요.' });
+    }
   });
   async function adoptCompleted(value: CompletedTranslation, request: ActiveTranslation) {
     if (value.provenance.generation?.mode !== 'colomo-local-v1')
@@ -2434,6 +2446,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     },
     changeAutoRetryFailed(enabled) {
       publish({ autoRetryFailed: enabled });
+      persistSettings();
+    },
+    changeAutoGlossary(enabled) {
+      publish({ autoGlossary: enabled });
       persistSettings();
     },
     retryParagraphs,

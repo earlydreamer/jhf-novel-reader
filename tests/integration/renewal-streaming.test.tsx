@@ -28,6 +28,8 @@ function harness(fault = false, automatic = false) {
       selection: null,
       fontSize: 18,
       autoTranslate: automatic,
+      // 번역 요청 순서를 검증하는 하네스라 자동 용어집(추가 모델 요청)은 끈다.
+      autoGlossary: false,
     }),
   );
   let releaseStream!: () => void;

@@ -39,6 +39,7 @@ import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import { ReaderError } from '../contracts';
 import { createGuidanceRepository } from '../translation/guidance';
+import { createAutoGlossary } from '../translation/autoGlossary';
 import { createTitleRepository, createTitleTranslation } from '../translation/titles';
 export function createRenewalApplication(
   adapters: ApplicationAdapters & {
@@ -65,6 +66,7 @@ export function createRenewalApplication(
     store: library,
     guidance,
     createProvider,
+    ...(guidance ? { autoGlossary: createAutoGlossary(createProvider, guidance) } : {}),
     attempts: createAttemptRepository(adapters.files),
     clock: adapters.clock ?? { now: () => performance.now() },
   });

@@ -33,8 +33,14 @@ function deferred<T>() {
   return { resolve, promise };
 }
 function harness() {
+  // 번역 흐름과 요청 순서를 검증하는 하네스라 자동 용어집(추가 모델 요청)은 끈 상태로 시작한다.
   const bytes = new Map<string, string>(),
-    preferences = new Map<string, string>(),
+    preferences = new Map<string, string>([
+      [
+        'narou-reader.reading-settings.v2',
+        JSON.stringify({ schemaVersion: 2, selection: null, fontSize: 18, autoGlossary: false }),
+      ],
+    ]),
     secrets = new Map<string, string>();
   let chapterHtml = html;
   const requests: NativeHttpRequest[] = [];

@@ -78,6 +78,63 @@ function decode(data: unknown, keepPartial = false): WholeChapterResult {
     throw new ReaderError('invalid_output', 'received');
   return { text, finishReason };
 }
+/** 채팅 완성 요청 한 번과 공통 오류 매핑. 번역 경로와 JSON 경로가 함께 쓴다. */
+async function postChat(
+  transport: ModelTransport,
+  url: string,
+  body: Record<string, unknown>,
+  auth: string | undefined,
+  signal: AbortSignal,
+): Promise<unknown> {
+  if (signal.aborted) throw new ReaderError('cancelled', 'not_sent');
+  let response;
+  try {
+    response = await transport.post(
+      { url, body, ...(auth === undefined ? {} : { authorization: auth }) },
+      signal,
+    );
+  } catch (error) {
+    if (error instanceof ReaderError)
+      throw new ReaderError(error.code, error.outcome, error.status);
+    throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
+  }
+  if (signal.aborted) throw new ReaderError('cancelled', 'unknown');
+  if (response.status === 401 || response.status === 403)
+    throw new ReaderError('auth', 'received', response.status);
+  if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300) {
+    let value;
+    try {
+      value = envelope(response.data);
+    } catch {
+      /* no external message */
+    }
+    const error = object(value) && object(value.error) ? value.error : null;
+    const code = error?.code;
+    if (code === 'context_length_exceeded' || code === 'input_too_long')
+      throw new ReaderError('input_limit', 'received', response.status);
+    if (code === 'max_tokens_exceeded')
+      throw new ReaderError('output_limit', 'received', response.status);
+    throw new ReaderError('connection', 'received', response.status);
+  }
+  return response.data;
+}
+/** JSON 요청의 응답 본문에서 content를 꺼내 바깥 코드펜스를 걷고 파싱한다. */
+function jsonAnswer(data: unknown): unknown {
+  const value = envelope(data);
+  const choice = object(value) && Array.isArray(value.choices) ? value.choices[0] : undefined;
+  const message = object(choice) ? choice.message : undefined;
+  const content = object(message) ? message.content : undefined;
+  if (typeof content !== 'string') throw new ReaderError('invalid_output', 'received');
+  const text = content
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new ReaderError('invalid_output', 'received');
+  }
+}
 export function createProviderSession(
   selection: SelectedModel,
   transport: ModelTransport,
@@ -115,51 +172,19 @@ export function createProviderSession(
       const chapterReference = request.reference?.(normalizeChapterInput(request.source)) ?? '';
       if (chapterReference && !limits) throw new ReaderError('input_limit');
       const auth = await authorization(connection, secrets, signal);
-      async function send(
-        messages: { role: string; content: string }[],
-        maxTokens?: number,
-      ): Promise<unknown> {
-        if (signal.aborted) throw new ReaderError('cancelled', 'not_sent');
-        let response;
-        try {
-          response = await transport.post(
-            {
-              url: `${base}/chat/completions`,
-              body: {
-                model,
-                messages,
-                stream: false,
-                ...(maxTokens ? { max_tokens: maxTokens } : {}),
-              },
-              ...(auth === undefined ? {} : { authorization: auth }),
-            },
-            signal,
-          );
-        } catch (error) {
-          if (error instanceof ReaderError)
-            throw new ReaderError(error.code, error.outcome, error.status);
-          throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
-        }
-        if (signal.aborted) throw new ReaderError('cancelled', 'unknown');
-        if (response.status === 401 || response.status === 403)
-          throw new ReaderError('auth', 'received', response.status);
-        if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300) {
-          let value;
-          try {
-            value = envelope(response.data);
-          } catch {
-            /* no external message */
-          }
-          const error = object(value) && object(value.error) ? value.error : null;
-          const code = error?.code;
-          if (code === 'context_length_exceeded' || code === 'input_too_long')
-            throw new ReaderError('input_limit', 'received', response.status);
-          if (code === 'max_tokens_exceeded')
-            throw new ReaderError('output_limit', 'received', response.status);
-          throw new ReaderError('connection', 'received', response.status);
-        }
-        return response.data;
-      }
+      const send = (messages: { role: string; content: string }[], maxTokens?: number) =>
+        postChat(
+          transport,
+          `${base}/chat/completions`,
+          {
+            model,
+            messages,
+            stream: false,
+            ...(maxTokens ? { max_tokens: maxTokens } : {}),
+          },
+          auth,
+          signal,
+        );
       if (!limits) {
         const input = normalizeChapterInput(request.source);
         if (!input.trim()) throw new ReaderError('source_parse');
@@ -229,6 +254,42 @@ export function createProviderSession(
           estimator: hasCalibratedEstimator(model) ? 'gemma-e4b-v1' : 'utf8-v1',
         },
       };
+    },
+    async completeJson(request, signal) {
+      const auth = await authorization(connection, secrets, signal);
+      const url = `${base}/chat/completions`;
+      const common = {
+        model,
+        messages: [
+          { role: 'system', content: request.system },
+          { role: 'user', content: request.user },
+        ],
+        stream: false,
+        temperature: 0,
+        max_tokens: request.maxTokens,
+      };
+      let data: unknown;
+      try {
+        data = await postChat(
+          transport,
+          url,
+          {
+            ...common,
+            response_format: {
+              type: 'json_schema',
+              json_schema: { name: 'glossary', strict: true, schema: request.schema },
+            },
+          },
+          auth,
+          signal,
+        );
+      } catch (error) {
+        // response_format을 모르는 서버는 400을 낸다. 그때만 빼고 한 번 더 보낸다(입력 한도 오류는 그대로 둔다).
+        if (!(error instanceof ReaderError && error.code === 'connection' && error.status === 400))
+          throw error;
+        data = await postChat(transport, url, common, auth, signal);
+      }
+      return jsonAnswer(data);
     },
   };
 }

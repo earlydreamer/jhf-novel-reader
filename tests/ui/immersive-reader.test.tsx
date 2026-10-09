@@ -1031,3 +1031,17 @@ test('중단으로 실패가 남은 경우에도 중단 안내를 보인다(#161
   );
   expect(screen.getByText('번역이 중단됐어요.')).toBeInTheDocument();
 });
+
+test('번역 전 용어집을 만드는 동안에는 준비 상태 알림을 용어집 문구로 바꾼다 (#192)', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        translation: { phase: 'preparing', elapsedMs: 0, glossary: 'running' },
+        translationActive: true,
+      })}
+    />,
+  );
+  expect(screen.getAllByText('용어집을 만들고 있어요').length).toBeGreaterThan(0);
+  expect(screen.queryByText('원문 준비 중')).not.toBeInTheDocument();
+});

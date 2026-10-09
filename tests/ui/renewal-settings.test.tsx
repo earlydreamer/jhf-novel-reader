@@ -244,7 +244,8 @@ describe('Android 목록형 설정', () => {
   it('웹에서는 자동 설정 스위치를 유지하고 로컬 번역 방식만 숨겨요', async () => {
     const value = await setup({ streamingAvailable: false });
 
-    expect(screen.getAllByRole('switch')).toHaveLength(3);
+    expect(screen.getAllByRole('switch')).toHaveLength(4);
+    expect(screen.getByRole('switch', { name: '번역 전 용어집 자동 생성' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /^로컬 번역 방식/ })).not.toBeInTheDocument();
     value.controller.dispose();
   });
@@ -1016,5 +1017,51 @@ describe('설정 모델 행 (#176)', () => {
     );
 
     expect(screen.getByRole('button', { name: '모델 선택 전' })).toBeDisabled();
+  });
+});
+
+describe('번역 전 용어집 자동 생성 스위치 (#192)', () => {
+  function settingsState(provider: ConnectionConfig['provider']): RenewalSnapshot {
+    const state = createRenewalController().getSnapshot();
+    return { ...state, connection: { ...state.connection, provider } };
+  }
+
+  it('OpenAI 호환 서버에서 켜진 상태로 보이고 누르면 끄기를 알려요', () => {
+    const onAutoGlossary = vi.fn();
+    render(
+      <SettingsScreen
+        state={settingsState('openai-compatible')}
+        onChange={() => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
+        onSelect={() => {}}
+        onAutoRetryFailed={() => {}}
+        onAutoGlossary={onAutoGlossary}
+      />,
+    );
+
+    const toggle = screen.getByRole('switch', { name: '번역 전 용어집 자동 생성' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(onAutoGlossary).toHaveBeenCalledWith(false);
+  });
+
+  it('Gemini에서는 용어집 스위치를 보여 주지 않아요', () => {
+    render(
+      <SettingsScreen
+        state={settingsState('gemini')}
+        onChange={() => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
+        onSelect={() => {}}
+        onAutoRetryFailed={() => {}}
+        onAutoGlossary={() => {}}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('switch', { name: '번역 전 용어집 자동 생성' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('switch', { name: '실패한 문단 자동으로 다시 번역' }),
+    ).toBeInTheDocument();
   });
 });

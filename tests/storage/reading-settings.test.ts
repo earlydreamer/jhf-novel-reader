@@ -72,3 +72,24 @@ test('v2 settings saved before theme preferences still read unchanged', async ()
     fontSize: 22,
   });
 });
+
+test('v2 settings keep the automatic glossary preference and reject non-boolean values', async () => {
+  const memory = new Map<string, string>();
+  const repository = createReadingSettingsRepository({
+    get: async ({ key }) => ({ value: memory.get(key) ?? null }),
+    set: async ({ key, value }) => {
+      memory.set(key, value);
+    },
+  });
+  const settings = {
+    schemaVersion: 2 as const,
+    selection: null,
+    fontSize: 18,
+    autoGlossary: false,
+  };
+  await repository.saveReadingSettings(settings);
+  expect(await repository.readReadingSettings()).toEqual(settings);
+  await expect(
+    repository.saveReadingSettings({ ...settings, autoGlossary: 'off' as never }),
+  ).rejects.toThrow();
+});

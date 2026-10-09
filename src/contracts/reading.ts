@@ -122,6 +122,8 @@ export type TranslationState = {
   progress?: { completed: number; total: number };
   /** 번역 중에만 보여 주는 저장 전 미리보기. 저장 기준은 완성본이다. */
   preview?: string;
+  /** 번역 전 자동 용어집 상태(#192). */
+  glossary?: 'running' | 'failed';
 };
 export interface RenewalSource {
   getWorkPage(url: string, signal: AbortSignal): Promise<WorkPage>;
@@ -130,6 +132,11 @@ export interface RenewalSource {
 export interface ProviderSession {
   listModels(signal: AbortSignal): Promise<readonly ModelChoice[]>;
   translateChapter(request: WholeChapterRequest, signal: AbortSignal): Promise<WholeChapterResult>;
+  /** 짧은 JSON 응답 요청(용어집 생성 등). 비스트리밍, 온도 0. 지원하지 않는 제공자는 두지 않는다. */
+  completeJson?(
+    request: { system: string; user: string; schema: Record<string, unknown>; maxTokens: number },
+    signal: AbortSignal,
+  ): Promise<unknown>;
 }
 export interface LibraryStore {
   saveWorkPage(page: WorkPage): Promise<void>;

@@ -278,6 +278,7 @@ function RouteScreen({
           onMode={controller.changeTranslationMode}
           onAutoTranslate={controller.changeAutoTranslate}
           onAutoRetryFailed={controller.changeAutoRetryFailed}
+          onAutoGlossary={controller.changeAutoGlossary}
           onTheme={controller.changeTheme}
         />
       );
