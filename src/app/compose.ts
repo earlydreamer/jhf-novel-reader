@@ -1,7 +1,11 @@
 import { Capacitor } from '@capacitor/core';
 import { capacitorHttpClient } from '../platform/http/capacitor';
 import { createNativeStreamingClient } from '../platform/http/stream';
-import { createModelTransport, createSourceTransport } from '../platform/http';
+import {
+  createLookupTransport,
+  createModelTransport,
+  createSourceTransport,
+} from '../platform/http';
 import { capacitorLifecycle } from '../platform/lifecycle';
 import { createNativePreferences, createNativePrivateFiles } from '../storage/native';
 import { createNativeSecretStore } from '../storage/secrets';
@@ -151,6 +155,10 @@ export function createRenewalApplication(
     },
   });
 }
+
+/** 정밀스캔 외부 조회 통로. 아직 쓰는 곳은 없다(다음 단계에서 컨트롤러에 연결). */
+export const lookupTransport = createLookupTransport(capacitorHttpClient);
+
 export function createNativeRenewalApplication(): RenewalController {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
     return createRenewalController();
