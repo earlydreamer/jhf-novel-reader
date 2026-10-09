@@ -56,7 +56,8 @@ async function geminiApiKey(
 
 function decode(data: unknown): WholeChapterResult {
   const value = envelope(data);
-  if (!object(value) || value.error !== undefined) throw new ReaderError('invalid_output', 'received');
+  if (!object(value) || value.error !== undefined)
+    throw new ReaderError('invalid_output', 'received');
   if (value.promptFeedback !== undefined) {
     if (!object(value.promptFeedback)) throw new ReaderError('invalid_output', 'received');
     const blockReason = value.promptFeedback.blockReason;
@@ -103,7 +104,8 @@ export async function listGeminiModels(
   try {
     response = await transport.get({ url: `${base}/models`, geminiApiKey: key }, signal);
   } catch (error) {
-    if (error instanceof ReaderError) throw new ReaderError(error.code, error.outcome, error.status);
+    if (error instanceof ReaderError)
+      throw new ReaderError(error.code, error.outcome, error.status);
     throw new ReaderError(signal.aborted ? 'cancelled' : 'connection');
   }
   if (signal.aborted) throw new ReaderError('cancelled');
@@ -141,9 +143,7 @@ export async function listGeminiModels(
     models.push({
       id,
       displayName:
-        typeof model.displayName === 'string' && model.displayName.trim()
-          ? model.displayName
-          : id,
+        typeof model.displayName === 'string' && model.displayName.trim() ? model.displayName : id,
       supportsGeneration: true,
     });
   }
