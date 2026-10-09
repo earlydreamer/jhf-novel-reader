@@ -722,11 +722,22 @@ label.nr-list-item__main:has(> input:disabled)::before {
   position: fixed;
   z-index: 40;
   inset-inline: 0;
+  inset-block-start: auto;
   inset-block-end: calc(16px + var(--inset-bottom) + var(--nr-snackbar-offset, 0px));
   display: flex;
   justify-content: center;
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
   padding: 0 16px;
   pointer-events: none;
+}
+.nr-snackbar-region:not(:popover-open) {
+  display: flex;
 }
 .nr-snackbar {
   display: flex;
