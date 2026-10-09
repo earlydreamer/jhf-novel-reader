@@ -13,6 +13,13 @@ html {
   font: var(--type-body-large);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* 한국어는 어절 단위로 줄바꿈하고, 한 줄을 넘는 긴 덩어리(URL·띄어쓰기 없는 원문)는 넘치지 않게 끊는다(#167). */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+/* 일본어는 띄어쓰기가 없으므로 기본 줄바꿈(금칙 처리)으로 되돌린다. */
+:lang(ja) {
+  word-break: normal;
 }
 body {
   margin: 0;

@@ -265,6 +265,21 @@ describe('components.css navigating list item affordance', () => {
   });
 });
 
+const baseCss = readFileSync('src/ui/theme/base.css', 'utf8');
+
+describe('base.css Korean line breaking (#167)', () => {
+  it('html 규칙은 한국어를 어절 단위로 줄바꿈하고 긴 덩어리는 넘치지 않게 끊는다', () => {
+    const html = rules(baseCss).find((rule) => rule.selector === 'html');
+    expect(html?.body).toMatch(/word-break:\s*keep-all;/);
+    expect(html?.body).toMatch(/overflow-wrap:\s*anywhere;/);
+  });
+
+  it('일본어 요소는 어절 줄바꿈을 되돌려 기본 금칙 처리를 쓴다', () => {
+    const ja = rules(baseCss).find((rule) => rule.selector === ':lang(ja)');
+    expect(ja?.body).toMatch(/word-break:\s*normal;/);
+  });
+});
+
 const homeCss = readFileSync('src/ui/home.css', 'utf8');
 
 describe('home.css library scroll', () => {

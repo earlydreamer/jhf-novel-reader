@@ -12,6 +12,7 @@ import type {
   WorkRemovalResult,
 } from '../../src/contracts/reading';
 import type { BatchState } from '../../src/translation/batch';
+import type { TitleRepository } from '../../src/translation/titles';
 
 afterEach(() => {
   cleanup();
@@ -131,6 +132,35 @@ it('재시작 뒤 저장 번역이 없는 작품도 서재에 보이고 source �
   expect(library.readWork).toHaveBeenCalledWith(cached.workId);
   expect(controller.getSnapshot().savedChapterIds).toEqual([]);
   expect(controller.getSnapshot().sourceAvailable).toBe(false);
+  controller.dispose();
+});
+
+it('번역 제목이 없는 서재 행은 원문을 일본어로 표시하고 번역 제목 행은 lang을 붙이지 않는다(#167)', async () => {
+  const plain = work('n1234aa', '오프라인 작품');
+  const translated = work('n5678bb', '번역 대상 작품');
+  const { library } = libraryHarness([plain, translated]);
+  const titles: TitleRepository = {
+    read: async (workId) =>
+      workId === translated.workId
+        ? [
+            {
+              key: translated.workId,
+              source: translated.title,
+              target: '번역된 작품',
+              origin: 'user',
+              updatedAt: '2026-10-08T00:00:00Z',
+            },
+          ]
+        : [],
+    readAttempts: async () => [],
+    recordAttempt: async () => {},
+    save: async (_workId, entries) => entries,
+  };
+  const controller = createRenewalController({ library, titles });
+  render(<Application controller={controller} />);
+
+  expect(await screen.findByText('오프라인 작품')).toHaveAttribute('lang', 'ja');
+  expect(screen.getByText('번역된 작품')).not.toHaveAttribute('lang');
   controller.dispose();
 });
 
