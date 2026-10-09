@@ -1405,9 +1405,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         snapshot.route.versionId !== version.versionId
       )
         return;
-      const changed =
-        current.sourceHash !== version.source.sourceHash ||
-        (version.source.rawHtml !== null && current.rawHtml !== version.source.rawHtml);
+      // 번역 입력(URL·본문 문단·루비)을 나타내는 해시만 비교한다. 페이지 HTML 전체는 광고·스크립트 등 본문 밖 요소로 매번 달라질 수 있다(#157).
+      const changed = current.sourceHash !== version.source.sourceHash;
       publish({ sourceChange: changed ? 'changed' : 'unchanged' });
     } catch {
       if (operation === sourceOperation && !disposed) publish({ sourceChange: 'unavailable' });

@@ -498,6 +498,25 @@ it('source refresh requires a separate explicit translation before creating a ne
   expect(await h.store.listVersions('n1234ab/2')).toHaveLength(2);
   h.app.dispose();
 });
+it('page chrome changes outside the chapter body do not count as a source change', async () => {
+  const h = harness();
+  await prepare(h);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.settle();
+  await first;
+  const previous = h.app.getSnapshot().version!.versionId;
+  h.setChapterHtml(
+    `<div class="ad">広告 ${Date.now()}</div>` + html + '<script>var t="x"</script>',
+  );
+
+  await h.app.continueReading(previous);
+
+  await expect.poll(() => h.app.getSnapshot().sourceChange).toBe('unchanged');
+  expect(h.app.getSnapshot().route.kind).toBe('reader');
+  expect(await h.store.listVersions('n1234ab/2')).toHaveLength(1);
+  h.app.dispose();
+});
 it('background prevents dispatch and does not restart on foreground', async () => {
   const h = harness();
   await prepare(h);
