@@ -695,3 +695,26 @@ test('번역 진행 막대는 앱바 바로 뒤의 형제라 몰입 상태에서
     appbar!.compareDocumentPosition(progress!) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
 });
+
+test('번역 중 상태 알림은 앱바 바로 뒤의 형제라 바가 숨어도 같은 층에 놓인다', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'translating',
+          elapsedMs: 20,
+          token: { requestId: 'pill', chapterId: chapter.chapterId, settingsRevision: 1 },
+        },
+        translationActive: true,
+      })}
+    />,
+  );
+  const appbar = document.querySelector<HTMLElement>('.nr-immersive-appbar');
+  const pill = document.querySelector<HTMLElement>('.nr-status-pill');
+  expect(appbar).not.toBeNull();
+  expect(pill).not.toBeNull();
+  expect(appbar!.parentElement).toBe(pill!.parentElement);
+  expect(appbar!.compareDocumentPosition(pill!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});

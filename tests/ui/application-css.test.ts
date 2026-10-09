@@ -114,6 +114,23 @@ describe('immersive-reader.css progress bar', () => {
   });
 });
 
+describe('immersive-reader.css status pill and first paragraph', () => {
+  it('바가 숨은 몰입 상태에서는 상태 알림을 화면 아래로 내린다', () => {
+    const hidden = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-status-pill',
+    );
+    expect(hidden?.body).toMatch(/inset-block-end:\s*calc\(16px \+ var\(--inset-bottom\)\);/);
+  });
+
+  it('첫 문단 위 여백은 앱바 높이를 항상 확보한다', () => {
+    const article = rules(readerCss).find((rule) => rule.selector === '.nr-immersive-article');
+    expect(article?.body).toMatch(
+      /padding:\s*calc\(var\(--app-bar\) \+ 16px \+ var\(--inset-top\)\)/,
+    );
+  });
+});
+
 describe('immersive-reader.css chapter end card', () => {
   // .nr-reader-end 규칙은 여러 번 나오므로 같은 선택자를 가진 규칙 본문을 모두 모은다.
   const endBody = rules(readerCss)
