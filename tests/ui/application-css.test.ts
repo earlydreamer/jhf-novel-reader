@@ -114,6 +114,42 @@ describe('immersive-reader.css progress bar', () => {
   });
 });
 
+describe('immersive-reader.css status pill and first paragraph', () => {
+  it('바가 숨은 몰입 상태에서는 상태 알림을 화면 아래로 내린다', () => {
+    const hidden = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-status-pill',
+    );
+    expect(hidden?.body).toMatch(/inset-block-end:\s*calc\(16px \+ var\(--inset-bottom\)\);/);
+  });
+
+  it('행동 안내 카드는 본문 흐름에서 분리되어 고정 위치에 뜨고 닫기 버튼을 기준으로 둔다', () => {
+    const float = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-immersive-reader > .nr-reader-float',
+    );
+    expect(float?.body).toMatch(/position:\s*fixed;/);
+    expect(float?.body).toMatch(/transition:\s*inset-block-end /);
+    const hidden = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-reader-float',
+    );
+    expect(hidden?.body).toMatch(/inset-block-end:\s*calc\(16px \+ var\(--inset-bottom\)\);/);
+    const close = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-float > .nr-icon-button',
+    );
+    expect(close?.body).toMatch(/position:\s*absolute;/);
+  });
+
+  it('감소된 모션에서는 행동 안내 카드의 위치 전환을 끈다', () => {
+    const reduced = rules(readerCss).find(
+      (rule) =>
+        rule.selector === '.nr-immersive-reader > .nr-reader-float' &&
+        /transition:\s*none;/.test(rule.body),
+    );
+    expect(reduced).toBeDefined();
+  });
+});
+
 describe('immersive-reader.css chapter end card', () => {
   // .nr-reader-end 규칙은 여러 번 나오므로 같은 선택자를 가진 규칙 본문을 모두 모은다.
   const endBody = rules(readerCss)

@@ -624,7 +624,7 @@ test('원문 변경 안내는 번역 본문 안에서 회차 제목보다 앞에
   expect(notice.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-test('번역 실패 카드도 번역 본문 안에 표시된다', () => {
+test('번역 실패 카드는 본문 흐름 밖의 떠 있는 안내에 표시된다', () => {
   render(
     <ImmersiveReader
       {...props({
@@ -640,8 +640,95 @@ test('번역 실패 카드도 번역 본문 안에 표시된다', () => {
   );
 
   const article = screen.getByRole('article', { name: '번역 미리보기' });
-  expect(article).toContainElement(screen.getByRole('alert'));
+  const float = screen.getByRole('region', { name: '번역 안내' });
+  expect(float).toContainElement(screen.getByRole('alert'));
+  expect(article).not.toContainElement(screen.getByRole('alert'));
   expect(screen.getByRole('alert')).toHaveTextContent('선택한 회차에 접근하지 못했어요.');
+});
+
+test('행동이 필요한 안내는 떠 있는 카드에 두고 닫으면 같은 상태에서 다시 나오지 않는다', () => {
+  const props0 = props({
+    route: 'translation',
+    version: null,
+    translation: { phase: 'unknown', elapsedMs: 0 },
+  });
+  const view = render(<ImmersiveReader {...props0} />);
+
+  const float = screen.getByRole('region', { name: '번역 안내' });
+  const article = screen.getByRole('article', { name: '번역 미리보기' });
+  expect(float).toContainElement(screen.getByRole('button', { name: '확인하고 다시 번역하기' }));
+  expect(article).not.toContainElement(float);
+
+  fireEvent.click(screen.getByRole('button', { name: '안내 닫기' }));
+  expect(screen.queryByRole('region', { name: '번역 안내' })).not.toBeInTheDocument();
+
+  view.rerender(<ImmersiveReader {...props0} />);
+  expect(screen.queryByRole('region', { name: '번역 안내' })).not.toBeInTheDocument();
+});
+
+test('닫은 행동 안내는 상태가 바뀌면 다시 나온다', () => {
+  const unknown = props({
+    route: 'translation',
+    version: null,
+    translation: { phase: 'unknown', elapsedMs: 0 },
+  });
+  const view = render(<ImmersiveReader {...unknown} />);
+  fireEvent.click(screen.getByRole('button', { name: '안내 닫기' }));
+  expect(screen.queryByRole('region', { name: '번역 안내' })).not.toBeInTheDocument();
+
+  view.rerender(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'failed',
+          elapsedMs: 0,
+          error: new ReaderError('source_access', 'not_sent'),
+        },
+      })}
+    />,
+  );
+  expect(screen.getByRole('region', { name: '번역 안내' })).toHaveTextContent(
+    '선택한 회차에 접근하지 못했어요.',
+  );
+});
+
+test('번역 저장 완료 안내는 떠 있는 카드에 한 번만 있고 중복 알림 줄이 없다', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: { phase: 'ready', elapsedMs: 0 },
+      })}
+    />,
+  );
+
+  const float = screen.getByRole('region', { name: '번역 안내' });
+  expect(float).toHaveTextContent('번역을 저장했어요.');
+  expect(screen.getAllByRole('button', { name: '저장된 번역 열기' })).toHaveLength(1);
+  expect(float).toContainElement(screen.getByRole('button', { name: '저장된 번역 열기' }));
+  expect(document.querySelector('.nr-status-pill')).toBeNull();
+});
+
+test('정보성 안내는 행동 카드와 달리 본문 흐름 안에 남는다', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        catalogStatus: 'checking',
+        translation: { phase: 'idle', elapsedMs: 0 },
+      })}
+    />,
+  );
+
+  const article = screen.getByRole('article', { name: '번역 미리보기' });
+  expect(article).toContainElement(
+    screen.getByText('저장된 연결의 서버와 모델 목록을 확인하고 있어요.'),
+  );
+  expect(screen.queryByRole('region', { name: '번역 안내' })).not.toBeInTheDocument();
 });
 
 test('안내가 없으면 리더 안내 컨테이너를 렌더하지 않는다', () => {
@@ -694,4 +781,27 @@ test('번역 진행 막대는 앱바 바로 뒤의 형제라 몰입 상태에서
   expect(
     appbar!.compareDocumentPosition(progress!) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
+});
+
+test('번역 중 상태 알림은 앱바 바로 뒤의 형제라 바가 숨어도 같은 층에 놓인다', () => {
+  render(
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        version: null,
+        translation: {
+          phase: 'translating',
+          elapsedMs: 20,
+          token: { requestId: 'pill', chapterId: chapter.chapterId, settingsRevision: 1 },
+        },
+        translationActive: true,
+      })}
+    />,
+  );
+  const appbar = document.querySelector<HTMLElement>('.nr-immersive-appbar');
+  const pill = document.querySelector<HTMLElement>('.nr-status-pill');
+  expect(appbar).not.toBeNull();
+  expect(pill).not.toBeNull();
+  expect(appbar!.parentElement).toBe(pill!.parentElement);
+  expect(appbar!.compareDocumentPosition(pill!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
