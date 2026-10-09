@@ -26,6 +26,9 @@ const notices = JSON.parse(committedNotices) as Notices;
 const lock = JSON.parse(readFileSync(`${root}/package-lock.json`, 'utf8')) as {
   packages: Record<string, { dev?: boolean; version: string }>;
 };
+const kanjidicVersion = (
+  JSON.parse(readFileSync(`${root}/src/translation/kanjidic.json`, 'utf8')) as { version: string }
+).version;
 
 function section(id: string): NoticeSection {
   const found = notices.sections.find((candidate) => candidate.id === id);
@@ -64,6 +67,13 @@ describe('제3자 고지 생성물', () => {
         expect(notices.texts[item.textId]?.length, item.name).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('KANJIDIC2가 직접 가져온 코드와 자산 섹션에 kanjidic.json 버전과 CC BY-SA 4.0 원문으로 있다', () => {
+    const item = section('direct').items.find((candidate) => candidate.name === 'KANJIDIC2');
+    expect(item?.version).toBe(kanjidicVersion);
+    expect(item?.license).toBe('CC-BY-SA-4.0');
+    expect(notices.texts[item?.textId ?? '']).toContain('Attribution-ShareAlike 4.0 International');
   });
 
   it('Android 섹션에 -bom 아티팩트가 없다', () => {

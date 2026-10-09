@@ -59,6 +59,19 @@ const DIRECT = [
     ],
   },
   {
+    name: 'KANJIDIC2',
+    // 버전은 생성된 한자 사전 파일의 version을 그대로 쓴다(고정값을 두지 않는다).
+    versionFile: 'src/translation/kanjidic.json',
+    license: 'CC-BY-SA-4.0',
+    textFile: 'licenses/CC-BY-SA-4.0.txt',
+    md: [
+      '- 출처: https://www.edrdg.org/edrdg/licence.html (EDRDG), 원본 http://www.edrdg.org/kanjidic/kanjidic2.xml.gz',
+      '- 파일: `src/translation/kanjidic.json` (원본에서 한자, 한국어 한자음, 영어 뜻만 추림)',
+      '- 라이선스: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). 전체 원문은 아래 "라이선스 원문"에 있다.',
+      "- 고지: This package uses the KANJIDIC2 dictionary file. These files are the property of the Electronic Dictionary Research and Development Group, and are used in conformance with the Group's licence.",
+    ],
+  },
+  {
     name: 'Material Symbols (Outlined, weight 400)',
     version: '0.47.6',
     license: 'Apache-2.0',
@@ -235,9 +248,12 @@ function collectDirect(root, texts) {
     }
     const textId = textIdFor(entry.license, text);
     texts.set(textId, text);
+    const version = entry.versionFile
+      ? JSON.parse(readText(root, entry.versionFile)).version
+      : entry.version;
     return {
       name: entry.name,
-      version: entry.version,
+      version,
       license: entry.license,
       textId,
       md: entry.md,
