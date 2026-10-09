@@ -33,7 +33,11 @@ function RouteScreen({
   urlDialogOpen: boolean;
   onCloseUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
-  workDialogRequest: { dialog: 'guidance' | 'batch'; id: number; workId: string } | null;
+  workDialogRequest: {
+    dialog: 'guidance' | 'batch' | 'termScan';
+    id: number;
+    workId: string;
+  } | null;
   onWorkDialogRequestHandled(id: number): void;
 }): JSX.Element {
   const titles = state.titlesAvailable
@@ -113,6 +117,12 @@ function RouteScreen({
           onCancelBatch={controller.cancelBatch}
           onRetryBatchSave={() => void controller.retryBatchSave()}
           onSettings={() => controller.navigate({ kind: 'settings' })}
+          termScan={state.termScan}
+          onStartTermScan={(workId) => void controller.startTermScan(workId)}
+          onCancelTermScan={controller.cancelTermScan}
+          onRevertTermScan={(source) => void controller.revertTermScanChange(source)}
+          onApplyTermScanSuggestion={(source) => void controller.applyTermScanSuggestion(source)}
+          onCloseTermScan={controller.closeTermScan}
         />
       ) : (
         <p>작품 목차를 찾지 못했어요.</p>
@@ -305,7 +315,7 @@ function ShellAppBar({
   state: RenewalSnapshot;
   onOpenUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
-  onOpenWorkDialog(dialog: 'guidance' | 'batch'): void;
+  onOpenWorkDialog(dialog: 'guidance' | 'batch' | 'termScan'): void;
 }): JSX.Element | null {
   if (state.route.kind === 'home')
     return (
@@ -328,6 +338,8 @@ function ShellAppBar({
   if (state.route.kind === 'work' && state.work) {
     if (state.guidanceAvailable)
       items.push({ label: '용어집 편집하기', onSelect: () => onOpenWorkDialog('guidance') });
+    if (state.termScanAvailable && state.connection.provider === 'openai-compatible')
+      items.push({ label: '용어 정밀스캔', onSelect: () => onOpenWorkDialog('termScan') });
     items.push({ label: '미리 번역하기', onSelect: () => onOpenWorkDialog('batch') });
     if (state.titlesAvailable)
       items.push({
@@ -384,7 +396,7 @@ export function Application({
   );
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
   const [workDialogRequest, setWorkDialogRequest] = useState<{
-    dialog: 'guidance' | 'batch';
+    dialog: 'guidance' | 'batch' | 'termScan';
     id: number;
     workId: string;
   } | null>(null);
