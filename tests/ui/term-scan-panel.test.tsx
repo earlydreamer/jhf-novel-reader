@@ -62,6 +62,7 @@ function renderPanel(overrides: Partial<TermScanPanelProps> = {}): TermScanPanel
     onCancel: vi.fn(),
     onRevert: vi.fn(),
     onApplySuggestion: vi.fn(),
+    sources: { wikipedia: false, namuwiki: false },
     ...overrides,
   };
   render(<TermScanPanel {...props} />);
@@ -110,7 +111,7 @@ test('모르는 진행 단계는 문구 없이 진행 막대만 보인다', () =
     state: {
       workId: 'n1234ab',
       phase: 'running',
-      progress: { stage: 'lookup' as never, done: 1, total: 2 },
+      progress: { stage: 'mystery' as never, done: 1, total: 2 },
       handled: [],
     },
   });
@@ -265,3 +266,87 @@ const workPage: WorkPage = {
     },
   ],
 };
+
+test.each([
+  [
+    { wikipedia: true, namuwiki: false },
+    '켜 둔 외부 조회(위키백과·위키데이터)에는 용어 이름만 보내요.',
+  ],
+  [{ wikipedia: false, namuwiki: true }, '켜 둔 외부 조회(나무위키)에는 용어 이름만 보내요.'],
+  [
+    { wikipedia: true, namuwiki: true },
+    '켜 둔 외부 조회(위키백과·위키데이터, 나무위키)에는 용어 이름만 보내요.',
+  ],
+])('시작 전 켜 둔 조회 출처 %j를 알린다', (sources, text) => {
+  renderPanel({ sources });
+  expect(screen.getByText(text)).toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      '설정에서 위키백과·나무위키 조회를 켜면 실존 인물과 작품 이름을 더 정확히 찾을 수 있어요.',
+    ),
+  ).toBeNull();
+});
+
+test('외부 조회를 하나도 켜지 않았으면 설정 안내를 보인다', () => {
+  renderPanel();
+  expect(
+    screen.getByText(
+      '설정에서 위키백과·나무위키 조회를 켜면 실존 인물과 작품 이름을 더 정확히 찾을 수 있어요.',
+    ),
+  ).toBeInTheDocument();
+});
+
+test('외부 조회 단계는 완료 수를 보여 준다', () => {
+  renderPanel({
+    state: {
+      workId: 'n1234ab',
+      phase: 'running',
+      progress: { stage: 'lookup', done: 1, total: 2 },
+      handled: [],
+    },
+  });
+  expect(screen.getByText('외부 사전에서 찾아보고 있어요 · 1/2')).toBeInTheDocument();
+});
+
+test.each([
+  [['wikipedia'] as const, '위키백과·위키데이터 조회가 안 돼서 그 근거 없이 판정했어요.'],
+  [['namuwiki'] as const, '나무위키 조회가 안 돼서 그 근거 없이 판정했어요.'],
+  [
+    ['wikipedia', 'namuwiki'] as const,
+    '위키백과·위키데이터, 나무위키 조회가 안 돼서 그 근거 없이 판정했어요.',
+  ],
+])('조회가 실패한 출처 %j는 완료 화면에서 알린다', (lookupFailed, text) => {
+  renderPanel({ state: { ...done, result: { ...result, lookupFailed: [...lookupFailed] } } });
+  expect(screen.getByRole('status')).toHaveTextContent(text);
+});
+
+test('실패한 조회가 없으면 조회 실패 알림을 두지 않는다', () => {
+  renderPanel({ state: done });
+  expect(screen.queryByText(/조회가 안 돼서/)).toBeNull();
+});
+
+test('출처가 있는 근거는 링크로 열고 출처가 없는 근거는 글만 보인다', () => {
+  const linked: TermScanChange = {
+    ...suggestion,
+    evidence: [
+      {
+        kind: 'wikipedia',
+        url: 'https://ko.wikipedia.org/wiki/%EC%82%AC%EC%9D%B4%ED%86%A0_%EB%8F%84%EC%82%B0',
+        note: '위키백과: 사이토 도산',
+      },
+      { kind: 'model', note: '판정 3/3' },
+    ],
+  };
+  renderPanel({
+    state: { ...done, result: { ...result, applied: [], suggestions: [linked] } },
+  });
+  const link = screen.getByRole('link', { name: '위키백과: 사이토 도산' });
+  expect(link).toHaveAttribute(
+    'href',
+    'https://ko.wikipedia.org/wiki/%EC%82%AC%EC%9D%B4%ED%86%A0_%EB%8F%84%EC%82%B0',
+  );
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('rel', 'noreferrer');
+  expect(screen.queryByRole('link', { name: '판정 3/3' })).toBeNull();
+  expect(screen.getByText('판정 3/3')).toBeInTheDocument();
+});

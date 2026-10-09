@@ -128,7 +128,7 @@ export async function lookupNamuwiki(
     kind: 'namuwiki',
     ko: found.ko,
     url,
-    note: note(`나무위키 검색: ${found.ko} (${ja}) ${found.count}회`),
+    note: note(`나무위키(CC BY-NC-SA 2.0 KR) 검색: ${found.ko} (${ja}) ${found.count}회`),
     exact: false,
   };
 }

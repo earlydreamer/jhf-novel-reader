@@ -83,7 +83,7 @@ export function createRenewalApplication(
     library,
     guidance,
     termScan: guidance
-      ? createTermScan({ createProvider, guidance, library, loadKanjidic })
+      ? createTermScan({ createProvider, guidance, library, loadKanjidic, lookup: lookupTransport })
       : undefined,
     titles: createTitleRepository(adapters.files),
     translateTitles: createTitleTranslation(
@@ -161,7 +161,7 @@ export function createRenewalApplication(
   });
 }
 
-/** 정밀스캔 외부 조회 통로. 아직 쓰는 곳은 없다(다음 단계에서 컨트롤러에 연결). */
+/** 정밀스캔 외부 조회 통로. 출처별 설정이 켜졌을 때만 엔진이 쓴다. */
 export const lookupTransport = createLookupTransport(capacitorHttpClient);
 
 export function createNativeRenewalApplication(): RenewalController {

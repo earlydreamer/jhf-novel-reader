@@ -153,6 +153,8 @@ export interface RenewalSnapshot {
   readonly autoTranslate: boolean;
   readonly autoRetryFailed: boolean;
   readonly autoGlossary: boolean;
+  readonly lookupWikipedia: boolean;
+  readonly lookupNamuwiki: boolean;
   readonly paragraphRepair: boolean;
   readonly translationMode: 'stream' | 'legacy';
   readonly streamingAvailable: boolean;
@@ -288,6 +290,8 @@ export interface RenewalController {
   changeAutoTranslate(enabled: boolean): void;
   changeAutoRetryFailed(enabled: boolean): void;
   changeAutoGlossary(enabled: boolean): void;
+  changeLookupWikipedia(enabled: boolean): void;
+  changeLookupNamuwiki(enabled: boolean): void;
   retryParagraphs(indexes?: readonly number[]): Promise<void>;
   previewPosition(index: number, offset: number): void;
   changeTranslationMode(mode: 'stream' | 'legacy'): void;
@@ -360,6 +364,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     autoTranslate: true,
     autoRetryFailed: true,
     autoGlossary: true,
+    lookupWikipedia: false,
+    lookupNamuwiki: false,
     paragraphRepair: false,
     translationMode: dependencies.defaultTranslationMode ?? 'legacy',
     streamingAvailable: Boolean(dependencies.streamingAvailable),
@@ -443,6 +449,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ...(snapshot.autoTranslate ? {} : { autoTranslate: false }),
       ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
       ...(snapshot.autoGlossary ? {} : { autoGlossary: false }),
+      ...(snapshot.lookupWikipedia ? { lookupWikipedia: true } : {}),
+      ...(snapshot.lookupNamuwiki ? { lookupNamuwiki: true } : {}),
       selection: snapshot.selectedModelId
         ? {
             connection: { ...snapshot.connection },
@@ -1171,6 +1179,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             autoTranslate: saved.autoTranslate ?? true,
             autoRetryFailed: saved.autoRetryFailed ?? saved.selection?.autoRetryFailed ?? true,
             autoGlossary: saved.autoGlossary ?? true,
+            lookupWikipedia: saved.lookupWikipedia ?? false,
+            lookupNamuwiki: saved.lookupNamuwiki ?? false,
           });
         initialized = true;
         runAutomaticTranslation();
@@ -1991,6 +2001,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         workId,
         chapterIds,
         selection,
+        sources: { wikipedia: snapshot.lookupWikipedia, namuwiki: snapshot.lookupNamuwiki },
         signal: control.signal,
         onProgress(progress) {
           const running = snapshot.termScan;
@@ -2665,6 +2676,14 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     },
     changeAutoGlossary(enabled) {
       publish({ autoGlossary: enabled });
+      persistSettings();
+    },
+    changeLookupWikipedia(enabled) {
+      publish({ lookupWikipedia: enabled });
+      persistSettings();
+    },
+    changeLookupNamuwiki(enabled) {
+      publish({ lookupNamuwiki: enabled });
       persistSettings();
     },
     retryParagraphs,

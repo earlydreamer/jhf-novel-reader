@@ -177,7 +177,7 @@ describe('lookupNamuwiki', () => {
       kind: 'namuwiki',
       ko: '사이토 도산',
       url: `https://namu.wiki/Search?q=${encodeURIComponent(ja)}`,
-      note: `나무위키 검색: 사이토 도산 (${ja}) 2회`,
+      note: `나무위키(CC BY-NC-SA 2.0 KR) 검색: 사이토 도산 (${ja}) 2회`,
       exact: false,
     });
   });

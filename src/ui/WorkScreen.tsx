@@ -3,7 +3,7 @@ import type { ChapterRef, ChapterRemovalResult, WorkPage } from '../contracts/re
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
 import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
-import { TermScanPanel } from './TermScanPanel';
+import { TermScanPanel, type TermScanPanelProps } from './TermScanPanel';
 import { TitleHeading, type TitleControls } from './TitleHeading';
 import { displayedTitle } from '../translation/titles';
 import { BottomSheet, Dialog } from './components/Modal';
@@ -41,6 +41,7 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   onRevertTermScan?(source: string): void;
   onApplyTermScanSuggestion?(source: string): void;
   onCloseTermScan?(): void;
+  sources?: TermScanPanelProps['sources'];
   busy: boolean;
   savedChapterIds: readonly string[];
   onSelect(chapter: ChapterRef): void;
@@ -83,6 +84,7 @@ export function WorkScreen({
   onRevertTermScan,
   onApplyTermScanSuggestion,
   onCloseTermScan,
+  sources,
 }: WorkScreenProps): JSX.Element {
   const [sheetChapter, setSheetChapter] = useState<ChapterRef | null>(null);
   const [dialog, setDialog] = useState<'guidance' | 'batch' | null>(null);
@@ -532,6 +534,7 @@ export function WorkScreen({
           onCancel={() => onCancelTermScan?.()}
           onRevert={(source) => onRevertTermScan?.(source)}
           onApplySuggestion={(source) => onApplyTermScanSuggestion?.(source)}
+          sources={sources ?? { wikipedia: false, namuwiki: false }}
         />
       </Dialog>
       {recentChapterId && !recentIsLoaded && (
