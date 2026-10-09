@@ -22,6 +22,7 @@ import {
   SettingsScreen,
 } from '../../src/ui/SettingsScreen';
 import { SnackbarProvider } from '../../src/ui/components/Snackbar';
+import packageInfo from '../../package.json';
 
 vi.mock('@capacitor/app', () => ({
   App: {
@@ -122,7 +123,7 @@ describe('Android 목록형 설정', () => {
     for (const name of ['번역 서버', '번역 방식', '화면', '정보']) {
       expect(screen.getByRole('heading', { name })).toBeVisible();
     }
-    expect(screen.getByText('웹 미리보기 0.1.0')).toBeVisible();
+    expect(screen.getByText(`웹 미리보기 ${packageInfo.version}`)).toBeVisible();
     expect(screen.queryByRole('button', { name: '버전' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', {
@@ -207,7 +208,7 @@ describe('Android 목록형 설정', () => {
     expect(footer).not.toBeNull();
     expect(footer.querySelector('img')).toHaveAttribute('alt', '');
     expect(within(footer).getByText('JHF Novel Reader')).toBeVisible();
-    expect(within(footer).getByText('웹 미리보기 0.1.0')).toBeVisible();
+    expect(within(footer).getByText(`웹 미리보기 ${packageInfo.version}`)).toBeVisible();
     const info = screen.getByRole('region', { name: '정보' });
     expect(info.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     value.controller.dispose();
