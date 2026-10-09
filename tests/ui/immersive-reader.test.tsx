@@ -1056,7 +1056,7 @@ test('저장본 메뉴의 이 화 다시 번역하기는 확인 대화상자에�
 
   const dialog = screen.getByRole('dialog', { name: '이 화를 다시 번역할까요?' });
   expect(dialog).toHaveTextContent(
-    '지금 용어집과 설정으로 이 화를 처음부터 다시 번역해요. 기존 번역은 그대로 남고, 번역 정보에서 고를 수 있어요.',
+    '지금 용어집과 설정으로 이 화를 처음부터 다시 번역해요. 새 번역이 저장되면 그 번역으로 읽고, 기존 번역은 기기에 그대로 남아요.',
   );
   expect(onRetranslate).not.toHaveBeenCalled();
 

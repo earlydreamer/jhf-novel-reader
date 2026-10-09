@@ -1129,8 +1129,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         }
       >
         <p>
-          지금 용어집과 설정으로 이 화를 처음부터 다시 번역해요. 기존 번역은 그대로 남고, 번역
-          정보에서 고를 수 있어요.
+          지금 용어집과 설정으로 이 화를 처음부터 다시 번역해요. 새 번역이 저장되면 그 번역으로
+          읽고, 기존 번역은 기기에 그대로 남아요.
         </p>
       </Dialog>
     </section>
