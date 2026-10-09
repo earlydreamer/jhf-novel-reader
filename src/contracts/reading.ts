@@ -132,9 +132,16 @@ export interface RenewalSource {
 export interface ProviderSession {
   listModels(signal: AbortSignal): Promise<readonly ModelChoice[]>;
   translateChapter(request: WholeChapterRequest, signal: AbortSignal): Promise<WholeChapterResult>;
-  /** 짧은 JSON 응답 요청(용어집 생성 등). 비스트리밍, 온도 0. 지원하지 않는 제공자는 두지 않는다. */
+  /** 짧은 JSON 응답 요청(용어집 생성 등). 비스트리밍, 온도는 없으면 0. 지원하지 않는 제공자는 두지 않는다. */
   completeJson?(
-    request: { system: string; user: string; schema: Record<string, unknown>; maxTokens: number },
+    request: {
+      system: string;
+      user: string;
+      schema: Record<string, unknown>;
+      maxTokens: number;
+      /** 0~1. 다수결 판정에서 회차마다 다른 답을 받을 때만 쓴다. */
+      temperature?: number;
+    },
     signal: AbortSignal,
   ): Promise<unknown>;
 }
