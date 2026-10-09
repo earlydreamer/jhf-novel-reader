@@ -25,10 +25,20 @@ describe('Gemini fixed endpoint and model normalization', () => {
   it('normalizes explicit models prefix without choosing a model', () => {
     expect(normalizeGeminiModel(' models/gemini-synthetic ')).toBe('gemini-synthetic');
   });
-  it.each(['', ' ', '../other', 'x:y', 'x?key=secret', 'x#', 'x/y', 'models/', 'x%2fy', '.', '..', 'x\nkey'])(
-    'rejects unsafe model %s',
-    (model) => {
-      expect(() => normalizeGeminiModel(model)).toThrow(ReaderError);
-    },
-  );
+  it.each([
+    '',
+    ' ',
+    '../other',
+    'x:y',
+    'x?key=secret',
+    'x#',
+    'x/y',
+    'models/',
+    'x%2fy',
+    '.',
+    '..',
+    'x\nkey',
+  ])('rejects unsafe model %s', (model) => {
+    expect(() => normalizeGeminiModel(model)).toThrow(ReaderError);
+  });
 });

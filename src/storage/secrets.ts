@@ -1,48 +1,42 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor } from '@capacitor/core';
 import {
   KeychainAccess,
   SecureStorage,
   type SecureStoragePlugin,
-} from "@aparajita/capacitor-secure-storage";
-import type { SecretStore } from "../contracts";
-import { StorageError } from "./errors";
-import { check, text } from "./validation";
+} from '@aparajita/capacitor-secure-storage';
+import type { SecretStore } from '../contracts';
+import { StorageError } from './errors';
+import { check, text } from './validation';
 export type SecureBackend = Pick<
   SecureStoragePlugin,
-  | "setKeyPrefix"
-  | "setSynchronize"
-  | "setDefaultKeychainAccess"
-  | "getItem"
-  | "setItem"
-  | "removeItem"
+  | 'setKeyPrefix'
+  | 'setSynchronize'
+  | 'setDefaultKeychainAccess'
+  | 'getItem'
+  | 'setItem'
+  | 'removeItem'
 >;
 export function secretRef(ref: unknown): asserts ref is string {
-  check(
-    typeof ref === "string" && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(ref),
-  );
+  check(typeof ref === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(ref));
 }
 const queues = new WeakMap<SecureBackend, Promise<unknown>>();
 /** Fail closed: Capacitor's web implementation is plaintext and must never be called. */
 export function createNativeSecretStore(
   backend: SecureBackend = SecureStorage,
-  platform: () => string = () =>
-    Capacitor.isNativePlatform() ? Capacitor.getPlatform() : "web",
+  platform: () => string = () => (Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web'),
 ): SecretStore {
   function operation<T>(ref: string, action: () => Promise<T>): Promise<T> {
     const task = (queues.get(backend) ?? Promise.resolve()).then(async () => {
       secretRef(ref);
       const native = platform();
-      if (native !== "android" && native !== "ios")
-        throw new StorageError("unsupported_platform");
+      if (native !== 'android' && native !== 'ios') throw new StorageError('unsupported_platform');
       try {
-        await backend.setKeyPrefix("narou-reader.credentials.");
+        await backend.setKeyPrefix('narou-reader.credentials.');
         await backend.setSynchronize(false);
-        await backend.setDefaultKeychainAccess(
-          KeychainAccess.whenUnlockedThisDeviceOnly,
-        );
+        await backend.setDefaultKeychainAccess(KeychainAccess.whenUnlockedThisDeviceOnly);
         return await action();
       } catch {
-        throw new StorageError("secure");
+        throw new StorageError('secure');
       }
     });
     queues.set(
@@ -89,8 +83,7 @@ export function createProviderSecrets(native: SecretStore) {
     return next;
   }
   return {
-    get: (ref: string) =>
-      run(async () => (await session.get(ref)) ?? (await native.get(ref))),
+    get: (ref: string) => run(async () => (await session.get(ref)) ?? (await native.get(ref))),
     save: (ref: string, secret: string, persist = false) =>
       run(async () => {
         secretRef(ref);
