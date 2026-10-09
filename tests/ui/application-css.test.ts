@@ -341,3 +341,15 @@ describe('immersive-reader.css reader float card (#166)', () => {
     expect(body?.body).toMatch(/justify-content:\s*space-between;/);
   });
 });
+
+describe('immersive-reader.css reader toolbar disabled (#169)', () => {
+  it('비활성 회차 이동 버튼은 본문 위에서 투명해지지 않도록 불투명하게 칠한다', () => {
+    const disabled = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-toolbar > .nr-reader-symbol-button:disabled',
+    );
+    expect(disabled?.body).toMatch(/opacity:\s*1;/);
+    expect(disabled?.body).toMatch(/background:\s*color-mix\(/);
+    expect(disabled?.body).not.toMatch(/,\s*transparent\)/);
+    expect(disabled?.body).toMatch(/box-shadow:\s*none;/);
+  });
+});

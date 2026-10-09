@@ -453,6 +453,13 @@
   padding-inline: 20px;
   font: var(--type-label-large);
 }
+/* 본문 위에 떠 있으므로 비활성도 불투명하게 칠한다(M3 비활성: 컨테이너 on-surface 12%, 내용 38%)(#169). */
+.nr-reader-toolbar > .nr-reader-symbol-button:disabled {
+  opacity: 1;
+  background: color-mix(in srgb, var(--on-surface) 12%, var(--surface));
+  color: color-mix(in srgb, var(--on-surface) 38%, var(--surface));
+  box-shadow: none;
+}
 .nr-reader-toolbar__center {
   display: flex;
   gap: 4px;
