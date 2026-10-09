@@ -76,6 +76,7 @@ export interface ImmersiveReaderProps {
   onSettings(): void;
   onCheckConnection(): void;
   onRefreshSource(): void;
+  onRetranslate?(): void;
   onOpenSaved(): void;
   onRetryTitle?(): void;
   onSaveTitle?(title: string): Promise<void>;
@@ -136,6 +137,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [retranslateOpen, setRetranslateOpen] = useState(false);
   const [paragraphSheet, setParagraphSheet] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedParagraphs, setSelectedParagraphs] = useState<number[]>([]);
@@ -402,6 +404,9 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     ...(displayVersion
       ? [
           { label: '번역 확인 결과 보기', onSelect: () => setQualityOpen(true) },
+          ...(props.onRetranslate && !props.translationActive
+            ? [{ label: '이 화 다시 번역하기', onSelect: () => setRetranslateOpen(true) }]
+            : []),
           ...(mayRepair
             ? [
                 {
@@ -1101,6 +1106,32 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           />
         </label>
         {titleError && <p role="alert">{titleError}</p>}
+      </Dialog>
+      <Dialog
+        open={retranslateOpen}
+        title="이 화를 다시 번역할까요?"
+        onClose={() => setRetranslateOpen(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setRetranslateOpen(false)}>
+              닫기
+            </Button>
+            <Button
+              variant="filled"
+              onClick={() => {
+                setRetranslateOpen(false);
+                props.onRetranslate?.();
+              }}
+            >
+              다시 번역하기
+            </Button>
+          </>
+        }
+      >
+        <p>
+          지금 용어집과 설정으로 이 화를 처음부터 다시 번역해요. 새 번역이 저장되면 그 번역으로
+          읽고, 기존 번역은 기기에 그대로 남아요.
+        </p>
       </Dialog>
     </section>
   );

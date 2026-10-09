@@ -1067,3 +1067,25 @@ it('returning after a changed-settings request already settled restores its term
   expect(h.app.getSnapshot().version).toBeNull();
   h.app.dispose();
 });
+it('retranslate chapter from a saved reader adds a new version and keeps the previous one (#197)', async () => {
+  const h = harness();
+  await prepare(h);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.settle();
+  await first;
+  const previous = h.app.getSnapshot().version!.versionId;
+  await h.app.continueReading(previous);
+  expect(h.app.getSnapshot().route).toEqual({ kind: 'reader', versionId: previous });
+  const postCount = h.posts().length;
+
+  await h.app.retranslateChapter();
+
+  expect(h.posts()).toHaveLength(postCount + 1);
+  expect(h.app.getSnapshot().version!.versionId).not.toBe(previous);
+  expect(await h.store.listVersions('n1234ab/2')).toHaveLength(2);
+  expect(await h.store.listVersions('n1234ab/2')).toEqual(
+    expect.arrayContaining([expect.objectContaining({ versionId: previous })]),
+  );
+  h.app.dispose();
+});

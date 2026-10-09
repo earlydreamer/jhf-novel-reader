@@ -293,6 +293,7 @@ export interface RenewalController {
   saveGuidance(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
   translate(): Promise<void>;
   refreshSource(): Promise<void>;
+  retranslateChapter(): Promise<void>;
   showContents(): void;
   adjacentChapter(direction: -1 | 1): void;
   changeFontSize(fontSize: number): void;
@@ -1880,6 +1881,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     });
     navigate({ kind: 'translation', chapterId: chapter.chapterId });
   }
+  // 저장된 회차를 통째로 다시 번역한다(#197). 용어집을 고친 뒤 쓰는 경로. 기존 저장본은 남긴다.
+  async function retranslateChapter(): Promise<void> {
+    const chapter = snapshot.chapter;
+    if (snapshot.route.kind !== 'reader' || !chapter) return;
+    await refreshSource();
+    await translate();
+  }
   async function translate(repair?: ParagraphRepair): Promise<void> {
     const intendedChapter = snapshot.chapter?.chapterId;
     const intendedWorkId = intendedChapter ? chaptersById.get(intendedChapter)?.workId : undefined;
@@ -2574,6 +2582,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     },
     translate,
     refreshSource,
+    retranslateChapter,
     showContents,
     adjacentChapter,
     changeFontSize,

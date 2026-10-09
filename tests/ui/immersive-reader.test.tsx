@@ -1045,3 +1045,61 @@ test('번역 전 용어집을 만드는 동안에는 준비 상태 알림을 용
   expect(screen.getAllByText('용어집을 만들고 있어요').length).toBeGreaterThan(0);
   expect(screen.queryByText('원문 준비 중')).not.toBeInTheDocument();
 });
+
+test('저장본 메뉴의 이 화 다시 번역하기는 확인 대화상자에서 확인한 뒤에만 다시 번역을 요청한다 (#197)', () => {
+  const onRetranslate = vi.fn();
+  render(<ImmersiveReader {...props({ onRetranslate })} />);
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '이 화 다시 번역하기' }));
+
+  const dialog = screen.getByRole('dialog', { name: '이 화를 다시 번역할까요?' });
+  expect(dialog).toHaveTextContent(
+    '지금 용어집과 설정으로 이 화를 처음부터 다시 번역해요. 새 번역이 저장되면 그 번역으로 읽고, 기존 번역은 기기에 그대로 남아요.',
+  );
+  expect(onRetranslate).not.toHaveBeenCalled();
+
+  fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+  expect(onRetranslate).not.toHaveBeenCalled();
+  expect(
+    screen.queryByRole('dialog', { name: '이 화를 다시 번역할까요?' }),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '이 화 다시 번역하기' }));
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: '이 화를 다시 번역할까요?' })).getByRole('button', {
+      name: '다시 번역하기',
+    }),
+  );
+  expect(onRetranslate).toHaveBeenCalledTimes(1);
+  expect(
+    screen.queryByRole('dialog', { name: '이 화를 다시 번역할까요?' }),
+  ).not.toBeInTheDocument();
+});
+
+test('번역이 진행 중이면 이 화 다시 번역하기를 메뉴에 두지 않는다 (#197)', () => {
+  const onRetranslate = vi.fn();
+  const view = render(<ImmersiveReader {...props({ onRetranslate })} />);
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  expect(screen.getByRole('menuitem', { name: '이 화 다시 번역하기' })).toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+  view.rerender(
+    <ImmersiveReader
+      {...props({
+        onRetranslate,
+        route: 'translation',
+        translation: { phase: 'translating', elapsedMs: 0 },
+        translationActive: true,
+      })}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  expect(screen.queryByRole('menuitem', { name: '이 화 다시 번역하기' })).not.toBeInTheDocument();
+});
