@@ -805,7 +805,7 @@ test('최신 complete와 이전 unknown은 허용하고 양 슬롯을 정규화�
 });
 
 test.each(['unknown', 'fallback-unknown'] as const)(
-  'authoritative unfinished %s가 있으면 작품 제거를 막는다',
+  '결과 불명 %s 요청이 남아 있어도 작품을 지우고 그 작품의 attempt 기록을 모두 정리한다',
   async (caseName) => {
     const state = fixture(),
       attempts = createAttemptRepository(state.files),
@@ -820,12 +820,26 @@ test.each(['unknown', 'fallback-unknown'] as const)(
 
     const result = await library.removeWork!('n6666ff');
 
-    expect(result).toMatchObject({
-      removed: false,
-      cleanupComplete: false,
-      blockedBy: 'unfinished_attempt',
-    });
-    expect(state.removed).toEqual([]);
+    expect(result).toMatchObject({ removed: true, cleanupComplete: true });
+    expect(await attempts.readUnfinished()).toEqual([]);
+  },
+);
+
+test.each(['unknown', 'dispatching'] as const)(
+  '작품 제거는 %s 단계의 그 작품 attempt만 지우고 다른 작품 attempt는 남긴다',
+  async (phase) => {
+    const state = fixture(),
+      attempts = createAttemptRepository(state.files),
+      target = { requestId: `target-${phase}`, chapterId: 'n6666ff/1', settingsRevision: 1 },
+      other = { requestId: `other-${phase}`, chapterId: 'n7777gg/1', settingsRevision: 1 };
+    await attempts.write({ token: other, phase: 'unknown' });
+    await attempts.write({ token: target, phase });
+    const library = createLibraryStore(state.files, { preferences: state.preferences });
+
+    const result = await library.removeWork!('n6666ff');
+
+    expect(result).toMatchObject({ removed: true, cleanupComplete: true });
+    expect(await attempts.readUnfinished()).toEqual([other]);
   },
 );
 
@@ -892,21 +906,23 @@ test('최신 대상 완료 batch 제거 시 이전 작품 batch가 되살아나�
   expect(rawSlots).toEqual([null, null]);
 });
 
-test('최신 대상 진행 중 batch는 이전 슬롯 phase와 무관하게 제거를 막는다', async () => {
-  const state = fixture();
-  const library = createLibraryStore(state.files, { preferences: state.preferences });
-  const batches = createBatchRepository(state.files);
-  const target = work('n1212kk');
-  await library.saveWorkPage(target);
-  await batches.write(batchRecord(target, 'paused'));
-  await batches.write(batchRecord(target, 'running'));
+test.each(['paused', 'running'] as const)(
+  '런타임 owner가 없으면 최신 대상 %s batch 기록이 있어도 제거하고 기록을 정리한다',
+  async (phase) => {
+    const state = fixture();
+    const library = createLibraryStore(state.files, { preferences: state.preferences });
+    const batches = createBatchRepository(state.files);
+    const target = work('n1212kk');
+    await library.saveWorkPage(target);
+    await batches.write(batchRecord(target, 'paused'));
+    await batches.write(batchRecord(target, phase));
 
-  const result = await library.removeWork!(target.workId);
+    const result = await library.removeWork!(target.workId);
 
-  expect(result).toMatchObject({ removed: false, cleanupComplete: false, blockedBy: 'batch' });
-  expect(state.removed).toEqual([]);
-  expect(await batches.read()).toMatchObject({ phase: 'running', work: { workId: target.workId } });
-});
+    expect(result).toMatchObject({ removed: true, cleanupComplete: true });
+    expect(await batches.read()).toBeNull();
+  },
+);
 
 test('완료된 이전 대상 batch라도 실제 준비 owner가 그 작품이면 제거를 막는다', async () => {
   const state = fixture();

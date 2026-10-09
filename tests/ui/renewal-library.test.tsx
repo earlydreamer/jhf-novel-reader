@@ -407,7 +407,9 @@ it('서재 작품 메뉴는 확인 전에는 삭제하지 않고 확인 뒤 행�
 
   fireEvent.click(screen.getByRole('button', { name: '제거할 작품 메뉴' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
-  expect(screen.getByRole('dialog')).toHaveTextContent('번역 0화');
+  expect(screen.getByRole('dialog', { name: '서재에서 제거할까요?' })).toHaveTextContent(
+    '‘제거할 작품’의 저장한 번역 0화, 읽던 위치, 번역한 제목, 용어집이 이 기기에서 함께 삭제돼요.',
+  );
   fireEvent.click(screen.getByRole('button', { name: '닫기' }));
   expect(library.removeWork).not.toHaveBeenCalled();
 
@@ -422,7 +424,7 @@ it('서재 작품 메뉴는 확인 전에는 삭제하지 않고 확인 뒤 행�
   await waitFor(() =>
     expect(screen.queryByText('제거할 작품', { selector: '.nr-list-item__headline' })).toBeNull(),
   );
-  expect(await screen.findByText('서재에서 제거했어요.')).toBeVisible();
+  expect(await screen.findByText('작품을 서재에서 제거했어요.')).toBeVisible();
   controller.dispose();
 });
 
@@ -434,16 +436,18 @@ it.each([
       cleanupComplete: false,
       remainingInventory: ['library/index.removalInventory'],
     },
-    expected: '서재 목록에서는 제거했지만 저장 데이터 정리를 끝내지 못했어요.',
+    expected: '작품을 서재에서 제거했어요. 일부 파일은 다음에 정리할게요.',
+    removedFromList: true,
   },
   {
     title: '결과 불명',
     result: { removed: null, cleanupComplete: false, remainingInventory: ['library/index'] },
-    expected: '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
+    expected: '제거 여부를 확인하지 못했어요. 앱을 다시 열어 확인해 주세요.',
+    removedFromList: false,
   },
 ])(
-  '서재에서 제거의 $title 결과는 확인 대화상자에서 정확히 안내한다',
-  async ({ result, expected }) => {
+  '서재에서 제거의 $title 결과는 대화상자를 닫고 스낵바로 안내한다',
+  async ({ result, expected, removedFromList }) => {
     const target = work('n1313xy', '서재 결과 작품');
     const { library } = libraryHarness([target]);
     library.removeWork.mockResolvedValue(result);
@@ -455,19 +459,47 @@ it.each([
     fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
     fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
 
-    if (result.removed === true) {
-      expect(
-        await screen.findByRole('dialog', { name: '일부 데이터를 정리하지 못했어요' }),
-      ).toHaveTextContent(expected);
-      expect(controller.getSnapshot().libraryWorks).toEqual([]);
-    } else {
-      expect(await screen.findByRole('alert')).toHaveTextContent(expected);
-      expect(screen.getByRole('dialog')).toBeVisible();
-      expect(controller.getSnapshot().libraryWorks).toHaveLength(1);
-    }
+    expect(await screen.findByText(expected)).toBeVisible();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(controller.getSnapshot().libraryWorks).toHaveLength(removedFromList ? 0 : 1);
     controller.dispose();
   },
 );
+
+it('결과 불명 요청이 남은 작품도 제거하고 대화상자를 닫은 뒤 스낵바로 알린다', async () => {
+  const target = work('n1414jk', '결과 불명 기록 작품');
+  const { library } = libraryHarness([target]);
+  const token = {
+    requestId: 'request-unknown',
+    chapterId: target.chapters[0]!.chapterId,
+    settingsRevision: 0,
+  };
+  const flow = {
+    getSnapshot: () => ({ phase: 'idle', elapsedMs: 0 }),
+    getUnfinished: () => [token],
+    getCompleted: () => null,
+    clearWork: vi.fn(() => true),
+    clearChapter: vi.fn(() => true),
+    subscribe: vi.fn(() => () => {}),
+    setForeground: vi.fn(),
+    initialize: vi.fn(async () => {}),
+    dispose: vi.fn(),
+    active: false,
+  } as unknown as NonNullable<RenewalDependencies['flow']>;
+  const controller = createRenewalController({ library, flow });
+  render(<Application controller={controller} />);
+  await screen.findByText('결과 불명 기록 작품', { selector: '.nr-list-item__headline' });
+
+  fireEvent.click(screen.getByRole('button', { name: '결과 불명 기록 작품 메뉴' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
+  fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
+
+  expect(await screen.findByText('작품을 서재에서 제거했어요.')).toBeVisible();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(library.removeWork).toHaveBeenCalledOnce();
+  expect(flow.clearWork).toHaveBeenCalledWith(target.workId);
+  controller.dispose();
+});
 
 it('새 batch 준비 중에는 이전 완료 기록 대신 preparingWorkId를 실제 guard로 쓴다', async () => {
   const target = work('n1234aa', '완료 기록 작품');
@@ -627,9 +659,12 @@ it('preparingWorkId 대상 제거는 이전 작품 record가 달라도 차단한
   fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
   fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
 
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    '이 작품의 일괄 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 제거해 주세요.',
-  );
+  expect(
+    await screen.findByText(
+      '이 작품을 미리 번역하고 있어요. 미리 번역을 중단한 뒤 다시 제거해 주세요.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByRole('dialog')).toBeNull();
   expect(library.removeWork).not.toHaveBeenCalled();
   controller.dispose();
 });
@@ -902,10 +937,12 @@ it('제거 호출이 예기치 않게 reject되면 안내하고 busy를 풀어 �
   fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
   fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
 
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
-  );
-  expect(screen.getByRole('button', { name: '제거하기' })).toBeEnabled();
+  expect(
+    await screen.findByText('제거 여부를 확인하지 못했어요. 앱을 다시 열어 확인해 주세요.'),
+  ).toBeVisible();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: `${target.title} 메뉴` }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
   fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
 
   await waitFor(() => expect(removeWork).toHaveBeenCalledTimes(2));
@@ -938,7 +975,7 @@ it('읽기 위치 저장이 진행 중이면 제거가 저장 writer를 기다�
   controller.dispose();
 });
 
-it('목차 appbar 제거에서 부분 정리 결과를 목록 제거와 별도로 알린다', async () => {
+it('목차 appbar 제거에서 부분 정리 결과도 대화상자를 닫고 스낵바로 알린다', async () => {
   const target = work('n2828aa', '부분 정리 작품');
   const { library } = libraryHarness([target]);
   library.removeWork.mockResolvedValue({
@@ -955,8 +992,9 @@ it('목차 appbar 제거에서 부분 정리 결과를 목록 제거와 별도�
   fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
 
   expect(
-    await screen.findByRole('dialog', { name: '일부 데이터를 정리하지 못했어요' }),
-  ).toHaveTextContent('서재 목록에서는 제거했지만 저장 데이터 정리를 끝내지 못했어요.');
+    await screen.findByText('작품을 서재에서 제거했어요. 일부 파일은 다음에 정리할게요.'),
+  ).toBeVisible();
+  expect(screen.queryByRole('dialog')).toBeNull();
   expect(controller.getSnapshot().route.kind).toBe('home');
   expect(controller.getSnapshot().libraryWorks).toEqual([]);
   controller.dispose();
@@ -978,10 +1016,10 @@ it('제거 여부가 불명확하면 목차에서 머물며 확인 실패를 대
   fireEvent.click(screen.getByRole('menuitem', { name: '서재에서 제거하기' }));
   fireEvent.click(screen.getByRole('button', { name: '제거하기' }));
 
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
-  );
-  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(
+    await screen.findByText('제거 여부를 확인하지 못했어요. 앱을 다시 열어 확인해 주세요.'),
+  ).toBeVisible();
+  expect(screen.queryByRole('dialog')).toBeNull();
   expect(controller.getSnapshot().route).toEqual({ kind: 'work', workId: target.workId });
   controller.dispose();
 });
@@ -1030,6 +1068,7 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       }),
       getUnfinished: () => state.unfinished ?? [],
       getCompleted: () => null,
+      clearWork: vi.fn(() => true),
       clearChapter: vi.fn(() => true),
       subscribe: vi.fn(() => () => {}),
       setForeground: vi.fn(),
@@ -1113,10 +1152,9 @@ describe('회차 저장본 삭제 컨트롤러', () => {
     controller.dispose();
   });
 
-  it('저장 대기·번역 중·미확인 요청·일괄 번역은 막고 저장소를 부르지 않는다', async () => {
+  it('번역 중이거나 일괄 번역이 실행 중인 회차 저장본 삭제는 막고 저장소를 부르지 않는다', async () => {
     const target = work('n2121cc', '막히는 회차 작품');
     const chapter = target.chapters[0]!;
-    const saved = savedVersion(target);
     const { library } = libraryHarness([target]);
     const token = { requestId: 'request-1', chapterId: chapter.chapterId, settingsRevision: 0 };
     const cases: {
@@ -1124,9 +1162,7 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       flow?: RenewalDependencies['flow'];
       batch?: RenewalDependencies['batch'];
     }[] = [
-      { blockedBy: 'pending_save', flow: flowFake({ pendingSave: saved }) },
       { blockedBy: 'translation', flow: flowFake({ token, active: true }) },
-      { blockedBy: 'unfinished_attempt', flow: flowFake({ unfinished: [token] }) },
       {
         blockedBy: 'batch',
         batch: batchFake({
@@ -1140,8 +1176,8 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       {
         blockedBy: 'batch',
         batch: batchFake({
-          record: { work: { workId: target.workId }, phase: 'paused' },
-          active: false,
+          record: { work: { workId: target.workId }, phase: 'running' },
+          active: true,
           preparing: false,
           error: null,
         }),
@@ -1157,6 +1193,32 @@ describe('회차 저장본 삭제 컨트롤러', () => {
       controller.dispose();
     }
     expect(library.removeChapterVersions).not.toHaveBeenCalled();
+  });
+
+  it('저장 대기·결과 불명 요청·멈춘 일괄 번역 기록은 회차 저장본 삭제를 막지 않고 저장 대기를 비운다', async () => {
+    const target = work('n2525ee', '정리되는 회차 작품');
+    const chapter = target.chapters[0]!;
+    const saved = savedVersion(target);
+    const { library } = libraryHarness([target]);
+    const token = { requestId: 'request-3', chapterId: chapter.chapterId, settingsRevision: 0 };
+    const flow = flowFake({ pendingSave: saved, unfinished: [token] });
+    const batch = batchFake({
+      record: { work: { workId: target.workId }, phase: 'paused' },
+      active: false,
+      preparing: false,
+      error: null,
+    });
+    const controller = createRenewalController({ library, flow, batch });
+
+    await expect(controller.removeChapterVersions(chapter)).resolves.toMatchObject({
+      removed: true,
+      cleanupComplete: true,
+    });
+    expect(library.removeChapterVersions).toHaveBeenCalledExactlyOnceWith(chapter.chapterId, {
+      activeBatchWorkId: undefined,
+    });
+    expect(flow.clearChapter).toHaveBeenCalledWith(chapter.chapterId);
+    controller.dispose();
   });
 
   it('같은 작품의 다른 회차 번역 중에는 이 회차 저장본 삭제를 막지 않는다', async () => {
@@ -1304,25 +1366,50 @@ describe('목차 회차 시트의 저장본 삭제', () => {
     controller.dispose();
   });
 
-  it('막히면 대화상자 안에 이유를 보여 주고 닫지 않는다', async () => {
-    const { controller, removeSpy } = await openFirstSavedWork('n3333hh', '막힘 작품', {
+  it.each([
+    {
+      title: '번역 중',
       remove: {
-        removed: false,
+        removed: false as const,
         cleanupComplete: false,
         remainingInventory: [],
         versionIds: [],
-        blockedBy: 'translation',
+        blockedBy: 'translation' as const,
       },
+      message: '이 화를 번역하고 있어요. 번역을 중단한 뒤 다시 삭제해 주세요.',
+    },
+    {
+      title: '일괄 번역 중',
+      remove: {
+        removed: false as const,
+        cleanupComplete: false,
+        remainingInventory: [],
+        versionIds: [],
+        blockedBy: 'batch' as const,
+      },
+      message: '이 작품을 미리 번역하고 있어요. 미리 번역을 중단한 뒤 다시 삭제해 주세요.',
+    },
+    {
+      title: '결과 불명',
+      remove: {
+        removed: null,
+        cleanupComplete: false,
+        remainingInventory: ['library/index'],
+        versionIds: [],
+      },
+      message: '삭제 여부를 확인하지 못했어요. 앱을 다시 열어 확인해 주세요.',
+    },
+  ])('$title 상태의 회차 삭제는 대화상자를 닫고 스낵바로 안내한다', async ({ remove, message }) => {
+    const { controller, removeSpy } = await openFirstSavedWork('n3333hh', '막힘 작품', {
+      remove,
     });
 
     const confirm = await confirmRemoveDialog(1);
     fireEvent.click(within(confirm).getByRole('button', { name: '삭제하기' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      '이 화를 번역하고 있어요. 번역을 마치거나 중단한 뒤 다시 삭제해 주세요.',
-    );
+    expect(await screen.findByText(message)).toBeVisible();
     expect(removeSpy).toHaveBeenCalledOnce();
-    expect(screen.getByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeVisible();
+    expect(screen.queryByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeNull();
     controller.dispose();
   });
 

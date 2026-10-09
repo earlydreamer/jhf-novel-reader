@@ -168,17 +168,6 @@ async function removeWorkData(
       remainingInventory: ['attempts/index'],
     };
   const attempts = latestAttempts?.value ?? [];
-  if (
-    attempts.some(
-      (entry) => entry.token.chapterId.startsWith(`${workId}/`) && entry.phase !== 'complete',
-    )
-  )
-    return {
-      removed: Boolean(prior),
-      cleanupComplete: false,
-      remainingInventory: [],
-      blockedBy: 'unfinished_attempt',
-    };
 
   const batchSlots = await journal.readSlots('batches/current', validateBatch);
   const latestBatch = batchSlots.entries[0];
@@ -188,10 +177,8 @@ async function removeWorkData(
       cleanupComplete: false,
       remainingInventory: ['batches/current'],
     };
-  if (
-    activeBatchWorkId === workId ||
-    (latestBatch?.value?.work.workId === workId && latestBatch.value.phase !== 'complete')
-  )
+  // 저장된 batch 기록은 실행 중인 작업이 아니므로 막지 않는다. 런타임 owner만 막는다.
+  if (activeBatchWorkId === workId)
     return {
       removed: Boolean(prior),
       cleanupComplete: false,
@@ -409,9 +396,7 @@ async function removeWorkData(
     await writeBoth(
       journal,
       'attempts/index',
-      attempts.filter(
-        (entry) => !(entry.token.chapterId.startsWith(`${workId}/`) && entry.phase === 'complete'),
-      ),
+      attempts.filter((entry) => !entry.token.chapterId.startsWith(`${workId}/`)),
       validateAttempts,
     );
     const batchValue =
@@ -533,24 +518,12 @@ async function removeChapterVersionData(
     )
   )
     return kept();
-  const attemptSlots = await journal.readSlots('attempts/index', validateAttempts);
-  const latestAttempts = attemptSlots.entries[0];
-  if (attemptSlots.found && !latestAttempts)
-    return kept({ remainingInventory: ['attempts/index'] });
-  if (
-    (latestAttempts?.value ?? []).some(
-      (entry) => entry.token.chapterId === chapterId && entry.phase !== 'complete',
-    )
-  )
-    return kept({ blockedBy: 'unfinished_attempt' });
+  // 결과 불명 attempt는 막지 않는다. 저장본과 위치만 지우고 attempt 기록은 그대로 둔다.
   const batchSlots = await journal.readSlots('batches/current', validateBatch);
-  const latestBatch = batchSlots.entries[0];
-  if (batchSlots.found && !latestBatch) return kept({ remainingInventory: ['batches/current'] });
-  if (
-    activeBatchWorkId === workId ||
-    (latestBatch?.value?.work.workId === workId && latestBatch.value.phase !== 'complete')
-  )
-    return kept({ blockedBy: 'batch' });
+  if (batchSlots.found && !batchSlots.entries[0])
+    return kept({ remainingInventory: ['batches/current'] });
+  // 저장된 batch 기록은 막지 않고, 실행 중인 런타임 owner만 막는다.
+  if (activeBatchWorkId === workId) return kept({ blockedBy: 'batch' });
 
   const versionIds = targets.map((entry) => entry.versionId);
   const paths: string[] = [],

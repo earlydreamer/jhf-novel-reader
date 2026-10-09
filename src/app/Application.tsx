@@ -14,6 +14,7 @@ import { SnackbarProvider, useSnackbar } from '../ui/components/Snackbar';
 import { runTopBackHandler } from '../ui/shell/backStack';
 import { useResolvedTheme } from '../ui/theme/theme';
 import { capacitorShell, type ShellPlatform } from '../platform/shell';
+import type { WorkRemovalResult } from '../contracts/reading';
 import type { RenewalController, RenewalSnapshot } from './renewalController';
 import '../ui/theme/base.css';
 import './application.css';
@@ -394,50 +395,27 @@ export function Application({
     savedCount: number;
   } | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
-  const [removeFeedback, setRemoveFeedback] = useState<string | null>(null);
-  const [removeNotice, setRemoveNotice] = useState<string | null>(null);
+  const [removalNotice, setRemovalNotice] = useState<{ id: number; text: string } | null>(null);
+  const removalNoticeSequence = useRef(0);
   const requestRemove = (workId: string, title: string) => {
     const row = state.libraryWorks.find((entry) => entry.work.workId === workId);
     const savedChapterIds =
       row?.savedChapterIds ?? (state.work?.workId === workId ? state.savedChapterIds : []);
     setRemoveTarget({ workId, title, savedCount: new Set(savedChapterIds).size });
-    setRemoveFeedback(null);
-    setRemoveNotice(null);
   };
   const confirmRemove = async () => {
     if (!removeTarget || removeBusy) return;
     setRemoveBusy(true);
+    let message: string;
     try {
-      const result = await controller.removeWork(removeTarget.workId);
-      if (result.removed === false) {
-        setRemoveFeedback(
-          result.blockedBy === 'pending_save'
-            ? '저장하지 못한 번역이 있어요. 먼저 저장을 마친 뒤 다시 제거해 주세요.'
-            : result.blockedBy === 'batch'
-              ? '이 작품의 일괄 번역이 끝나지 않았어요. 번역을 마친 뒤 다시 제거해 주세요.'
-              : result.blockedBy === 'unfinished_attempt'
-                ? '요청 결과를 확인하지 못한 회차가 있어요. 지금은 작품을 제거할 수 없어요.'
-                : result.blockedBy === 'translation'
-                  ? '이 작품을 번역 중이에요. 번역을 마치거나 중단한 뒤 다시 제거해 주세요.'
-                  : '작품을 제거하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
-        );
-      } else if (result.removed === null) {
-        setRemoveFeedback(
-          '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
-        );
-      } else if (!result.cleanupComplete) {
-        setRemoveTarget(null);
-        setRemoveNotice('서재 목록에서는 제거했지만 저장 데이터 정리를 끝내지 못했어요.');
-      } else {
-        setRemoveTarget(null);
-      }
+      message = workRemovalMessage(await controller.removeWork(removeTarget.workId));
     } catch {
-      setRemoveFeedback(
-        '제거 여부를 확인하지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 확인해 주세요.',
-      );
-    } finally {
-      setRemoveBusy(false);
+      message = REMOVAL_UNKNOWN_MESSAGE;
     }
+    setRemoveBusy(false);
+    setRemoveTarget(null);
+    removalNoticeSequence.current += 1;
+    setRemovalNotice({ id: removalNoticeSequence.current, text: message });
   };
   useEffect(() => {
     void controller.initialize();
@@ -473,7 +451,11 @@ export function Application({
   }, [routeKey]);
   return (
     <SnackbarProvider offset={state.route.kind === 'home' ? 64 : 0}>
-      <SnackbarBridge state={state} holdErrors={urlDialogOpen && state.route.kind === 'home'} />
+      <SnackbarBridge
+        state={state}
+        holdErrors={urlDialogOpen && state.route.kind === 'home'}
+        notice={removalNotice}
+      />
       <div className="nr-application" lang="ko">
         <ShellAppBar
           controller={controller}
@@ -505,14 +487,9 @@ export function Application({
         </main>
         <Dialog
           open={!!removeTarget}
-          title={
-            removeTarget ? `${removeTarget.title}을 서재에서 제거할까요?` : '작품을 제거할까요?'
-          }
+          title="서재에서 제거할까요?"
           onClose={() => {
-            if (!removeBusy) {
-              setRemoveTarget(null);
-              setRemoveFeedback(null);
-            }
+            if (!removeBusy) setRemoveTarget(null);
           }}
           actions={
             <>
@@ -532,35 +509,38 @@ export function Application({
         >
           {removeTarget && (
             <p>
-              이 기기에 저장한 번역 {removeTarget.savedCount}화, 읽던 위치, 번역한 제목, 용어집이
-              함께 삭제돼요. 삭제한 내용은 되돌릴 수 없어요.
+              ‘{removeTarget.title}’의 저장한 번역 {removeTarget.savedCount}화, 읽던 위치, 번역한
+              제목, 용어집이 이 기기에서 함께 삭제돼요. 삭제한 내용은 되돌릴 수 없어요.
             </p>
           )}
-          {removeFeedback && <p role="alert">{removeFeedback}</p>}
-        </Dialog>
-        <Dialog
-          open={removeNotice !== null}
-          title="일부 데이터를 정리하지 못했어요"
-          onClose={() => setRemoveNotice(null)}
-          actions={
-            <Button variant="text" onClick={() => setRemoveNotice(null)}>
-              닫기
-            </Button>
-          }
-        >
-          <p>{removeNotice}</p>
         </Dialog>
       </div>
     </SnackbarProvider>
   );
 }
 
+const REMOVAL_UNKNOWN_MESSAGE = '제거 여부를 확인하지 못했어요. 앱을 다시 열어 확인해 주세요.';
+function workRemovalMessage(result: WorkRemovalResult): string {
+  if (result.removed === true)
+    return result.cleanupComplete
+      ? '작품을 서재에서 제거했어요.'
+      : '작품을 서재에서 제거했어요. 일부 파일은 다음에 정리할게요.';
+  if (result.removed === null) return REMOVAL_UNKNOWN_MESSAGE;
+  if (result.blockedBy === 'translation')
+    return '이 작품을 번역하고 있어요. 번역을 중단한 뒤 다시 제거해 주세요.';
+  if (result.blockedBy === 'batch')
+    return '이 작품을 미리 번역하고 있어요. 미리 번역을 중단한 뒤 다시 제거해 주세요.';
+  return '작품을 제거하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+}
+
 function SnackbarBridge({
   state,
   holdErrors,
+  notice,
 }: {
   state: RenewalSnapshot;
   holdErrors: boolean;
+  notice: { id: number; text: string } | null;
 }): null {
   const show = useSnackbar();
   const last = useRef({
@@ -568,6 +548,9 @@ function SnackbarBridge({
     titlesError: null as string | null,
     titlesBusy: false,
   });
+  useEffect(() => {
+    if (notice) show(notice.text);
+  }, [notice, show]);
   useEffect(() => {
     if (holdErrors) return;
     if (state.error && state.errorRevision !== last.current.errorRevision) show(state.error);

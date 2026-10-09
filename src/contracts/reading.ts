@@ -163,7 +163,7 @@ export interface WorkRemovalResult {
   removed: boolean | null;
   cleanupComplete: boolean;
   remainingInventory: readonly string[];
-  blockedBy?: 'translation' | 'pending_save' | 'batch' | 'unfinished_attempt';
+  blockedBy?: 'translation' | 'batch';
 }
 export interface ChapterRemovalResult extends WorkRemovalResult {
   /** 색인에서 뺀 저장본 ID. removed가 true가 아니면 빈 배열이다. */

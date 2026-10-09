@@ -235,7 +235,7 @@ test('저장본이 없는 회차는 아무것도 쓰지 않고 성공으로 끝�
   expect(state.writes.length).toBe(before);
 });
 
-test('그 회차의 미완료 요청이 있으면 막고 다른 회차의 미완료 요청은 막지 않는다', async () => {
+test('그 회차의 미완료 요청이 있어도 그 회차 저장본을 지우고 attempt 기록은 남긴다', async () => {
   const state = fixture();
   const library = createLibraryStore(state.files, { preferences: state.preferences });
   const a = work('n1111aa');
@@ -244,23 +244,18 @@ test('그 회차의 미완료 요청이 있으면 막고 다른 회차의 미완
   await library.saveWorkPage(a);
   await library.commitVersion(a1a);
   await library.commitVersion(a2a);
-  await createAttemptRepository(state.files).write({
-    token: { requestId: 'pending-1', chapterId: 'n1111aa/1', settingsRevision: 1 },
-    phase: 'dispatching',
-  });
+  const pending = { requestId: 'pending-1', chapterId: 'n1111aa/1', settingsRevision: 1 };
+  await createAttemptRepository(state.files).write({ token: pending, phase: 'dispatching' });
 
-  const blocked = await library.removeChapterVersions!('n1111aa/1');
+  const removed = await library.removeChapterVersions!('n1111aa/1');
 
-  expect(blocked).toMatchObject({ removed: false, blockedBy: 'unfinished_attempt' });
-  expect(state.removed).toEqual([]);
-  expect(await library.listVersions('n1111aa/1')).toHaveLength(1);
-
-  const other = await library.removeChapterVersions!('n1111aa/2');
-
-  expect(other).toMatchObject({ removed: true, cleanupComplete: true });
+  expect(removed).toMatchObject({ removed: true, cleanupComplete: true });
+  expect(await library.listVersions('n1111aa/1')).toHaveLength(0);
+  expect(await createAttemptRepository(state.files).readUnfinished()).toEqual([pending]);
+  expect(await library.listVersions('n1111aa/2')).toHaveLength(1);
 });
 
-test('그 작품의 진행 중 batch나 런타임 owner가 있으면 막는다', async () => {
+test('런타임 batch owner가 있으면 막고, 저장된 batch 기록만으로는 막지 않는다', async () => {
   const state = fixture();
   const library = createLibraryStore(state.files, { preferences: state.preferences });
   const a = work('n1111aa');
@@ -274,14 +269,15 @@ test('그 작품의 진행 중 batch나 런타임 owner가 있으면 막는다',
 
   expect(owned).toMatchObject({ removed: false, blockedBy: 'batch' });
   expect(state.removed).toEqual([]);
+  expect(await library.listVersions('n1111aa/1')).toHaveLength(1);
 
   await createBatchRepository(state.files).write(batchRecord(a, 'running'));
 
   const running = await library.removeChapterVersions!('n1111aa/1');
 
-  expect(running).toMatchObject({ removed: false, blockedBy: 'batch' });
-  expect(state.removed).toEqual([]);
-  expect(await library.listVersions('n1111aa/1')).toHaveLength(1);
+  expect(running).toMatchObject({ removed: true, cleanupComplete: true });
+  expect(await library.listVersions('n1111aa/1')).toHaveLength(0);
+  expect(await createBatchRepository(state.files).read()).toMatchObject({ phase: 'running' });
 });
 
 test('작품 제거가 남아 있는 작품은 회차 삭제를 하지 않는다', async () => {
