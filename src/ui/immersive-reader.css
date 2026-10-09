@@ -445,8 +445,10 @@
   box-shadow: var(--elevation-3);
 }
 .nr-reader-toolbar > .nr-reader-symbol-button {
-  inline-size: 56px;
+  min-inline-size: 56px;
   block-size: 56px;
+  padding-inline: 20px;
+  font: var(--type-label-large);
 }
 .nr-reader-toolbar__center {
   display: flex;

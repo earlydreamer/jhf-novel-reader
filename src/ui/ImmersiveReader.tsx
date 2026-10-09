@@ -28,7 +28,7 @@ import { IconButton } from './components/IconButton';
 import { LinearProgress } from './components/LinearProgress';
 import { Menu } from './components/Menu';
 import { StatusPill } from './components/StatusPill';
-import { useSnackbar } from './components/Snackbar';
+import { useSnackbar, useSnackbarOffset } from './components/Snackbar';
 import { TopAppBar } from './components/TopAppBar';
 import { useBackHandler } from './shell/backStack';
 import './immersive-reader.css';
@@ -130,6 +130,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const announcedSavedVersion = useRef<string | null>(null);
   const showSnackbar = useSnackbar();
   const [barsVisible, setBarsVisible] = useState(false);
+  // 하단 툴바가 보이면 스낵바를 그 위로 올린다(#154).
+  useSnackbarOffset(barsVisible ? 72 : 0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -858,7 +860,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           disabled={!previousAvailable || props.busy}
           onClick={() => props.onAdjacent(-1)}
         >
-          ‹
+          이전 화
         </button>
         <div className="nr-reader-toolbar__center">
           <button
@@ -885,7 +887,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           disabled={!nextAvailable || props.busy}
           onClick={() => props.onAdjacent(1)}
         >
-          ›
+          다음 화
         </button>
       </FloatingToolbar>
       <BottomSheet open={settingsOpen} title="보기 설정" onClose={() => setSettingsOpen(false)}>

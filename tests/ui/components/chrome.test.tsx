@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { TopAppBar } from '../../../src/ui/components/TopAppBar';
 import { IconButton } from '../../../src/ui/components/IconButton';
 import { ExtendedFab } from '../../../src/ui/components/ExtendedFab';
@@ -9,8 +10,18 @@ import { FloatingToolbar } from '../../../src/ui/components/FloatingToolbar';
 import { Switch } from '../../../src/ui/components/Switch';
 import { LinearProgress } from '../../../src/ui/components/LinearProgress';
 import { StatusPill } from '../../../src/ui/components/StatusPill';
-import { SnackbarProvider, useSnackbar } from '../../../src/ui/components/Snackbar';
+import {
+  SnackbarProvider,
+  useSnackbar,
+  useSnackbarOffset,
+} from '../../../src/ui/components/Snackbar';
 afterEach(cleanup);
+
+function providerWith(offset: number) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <SnackbarProvider offset={offset}>{children}</SnackbarProvider>;
+  };
+}
 
 describe('TopAppBar', () => {
   it('renders a heading title by default and plain text on request', () => {
@@ -153,5 +164,32 @@ describe('Snackbar', () => {
     expect(undo).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('제목을 저장했어요')).toBeNull();
     vi.useRealTimers();
+  });
+
+  it('lets a screen raise the offset above the provider offset and restores it on unmount', () => {
+    const region = () => document.querySelector<HTMLElement>('.nr-snackbar-region')!;
+    const offsetValue = () => region().style.getPropertyValue('--nr-snackbar-offset');
+    const live = { mounted: true };
+    const view = renderHook(() => useSnackbarOffset(72), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <SnackbarProvider>{live.mounted ? children : null}</SnackbarProvider>
+      ),
+    });
+    expect(offsetValue()).toBe('72px');
+    live.mounted = false;
+    view.rerender();
+    expect(offsetValue()).toBe('0px');
+    cleanup();
+
+    renderHook(() => useSnackbarOffset(20), { wrapper: providerWith(64) });
+    expect(offsetValue()).toBe('64px');
+    cleanup();
+
+    renderHook(() => useSnackbarOffset(72), { wrapper: providerWith(64) });
+    expect(offsetValue()).toBe('72px');
+  });
+
+  it('does nothing when no provider is mounted', () => {
+    expect(() => renderHook(() => useSnackbarOffset(72))).not.toThrow();
   });
 });

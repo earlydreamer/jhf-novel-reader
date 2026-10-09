@@ -838,3 +838,26 @@ test('번역 중 상태 알림은 앱바 바로 뒤의 형제라 바가 숨어�
   expect(appbar!.parentElement).toBe(pill!.parentElement);
   expect(appbar!.compareDocumentPosition(pill!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
+
+test('바가 보이면 스낵바를 하단 툴바 위 72px로 올리고 숨으면 0px로 되돌린다(#154)', () => {
+  render(
+    <SnackbarProvider>
+      <ImmersiveReader {...props()} />
+    </SnackbarProvider>,
+  );
+  const region = document.querySelector<HTMLElement>('.nr-snackbar-region')!;
+  expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('72px');
+
+  act(() => expect(runTopBackHandler()).toBe(true));
+  expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
+});
+
+test('회차 이동 버튼은 화살표 대신 이전 화·다음 화 글자를 보인다(#155)', () => {
+  render(<ImmersiveReader {...props()} />);
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('.nr-reader-toolbar button')];
+  expect(buttons[0]!.textContent).toBe('이전 화');
+  expect(buttons[buttons.length - 1]!.textContent).toBe('다음 화');
+});
