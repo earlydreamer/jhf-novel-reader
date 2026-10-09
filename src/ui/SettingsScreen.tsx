@@ -172,7 +172,7 @@ export function composePresetAddress(host: string, port: string): string {
 
 /** 목록에 이름이 없을 때 모델 ID(llama.cpp는 파일 경로)에서 읽을 수 있는 이름을 만든다(#176). */
 function readableModelName(id: string): string {
-  const last = id.split(/[\/]/).filter(Boolean).at(-1) ?? id;
+  const last = id.split(/[/\\]/).filter(Boolean).at(-1) ?? id;
   return last.replace(/\.(gguf|bin|safetensors)$/i, '');
 }
 

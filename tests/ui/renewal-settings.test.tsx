@@ -939,6 +939,15 @@ describe('설정 모델 행 (#176)', () => {
     expect(screen.getByRole('button', { name: `모델 ${readable}` })).toBeEnabled();
   });
 
+  it('Windows 경로 모델 ID도 마지막 조각을 이름으로 보여 줘요', () => {
+    const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => ({ kind: 'superseded' }));
+    render(
+      ui(snapshot({ selectedModelId: 'C:\\models\\qwen3-8b-Q4_K_M.gguf', models: [] }), onCheck),
+    );
+
+    expect(screen.getByRole('button', { name: '모델 qwen3-8b-Q4_K_M' })).toBeEnabled();
+  });
+
   it('목록 없이 행을 누르면 연결을 한 번 확인하고 생성 모델이 오면 모델 선택 창을 열어요', async () => {
     const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => ({
       kind: 'done',
