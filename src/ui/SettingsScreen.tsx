@@ -11,6 +11,7 @@ import type {
 } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
 import { GEMINI_BASE_URL } from '../providers/gemini';
+import { readableModelName } from '../providers/modelName';
 import type { ThemePreference } from '../storage/settings';
 import { Button } from './components/Button';
 import { Chip } from './components/Chip';
@@ -168,12 +169,6 @@ export function composePresetAddress(host: string, port: string): string {
   if (!trimmedHost) return '';
   const trimmedPort = port.trim();
   return `http://${trimmedHost}${trimmedPort ? `:${trimmedPort}` : ''}/v1`;
-}
-
-/** 목록에 이름이 없을 때 모델 ID(llama.cpp는 파일 경로)에서 읽을 수 있는 이름을 만든다(#176). */
-function readableModelName(id: string): string {
-  const last = id.split(/[/\\]/).filter(Boolean).at(-1) ?? id;
-  return last.replace(/\.(gguf|bin|safetensors)$/i, '');
 }
 
 export function SettingsScreen({

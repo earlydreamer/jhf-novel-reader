@@ -1,6 +1,7 @@
 import { ReaderError } from '../contracts';
 import type { ConnectionConfig, ModelChoice, ModelTransport, SecretStore } from '../contracts';
 import { normalizeOpenAICompatibleBaseUrl } from './endpoint';
+import { readableModelName } from './modelName';
 export function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -88,7 +89,7 @@ export async function listModels(
     }
     return {
       id: model.id,
-      displayName: model.id,
+      displayName: readableModelName(model.id),
       supportsGeneration: true,
       ...(contextTokens === undefined ? {} : { contextTokens }),
     };
