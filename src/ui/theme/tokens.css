@@ -113,13 +113,29 @@
   --scrim: rgb(0 0 0 / 0.5);
   --shadow-color: rgb(0 0 0 / 0.4);
 }
+/* 독서 배경은 리더 범위의 색 체계다(#173). 상단바·안내 카드가 본문과 이어지도록 바탕 토큰도 함께 바꾼다.
+   세피아는 라이트, 검정은 다크 체계와 짝이고 문서 테마·시스템 바는 Application이 맞춘다. */
 [data-reading-background='sepia'] {
   --reading-surface: #f4ebd7;
   --reading-on-surface: #2b2116;
   --reading-on-surface-variant: #514234;
+  --surface: #f4ebd7;
+  --surface-container-low: #eee3cb;
+  --surface-container: #e9ddc3;
+  --surface-container-high: #e3d6ba;
+  --surface-container-highest: #ddcfb1;
+  --on-surface: #2b2116;
+  --on-surface-variant: #514234;
 }
 [data-reading-background='black'] {
   --reading-surface: #000000;
   --reading-on-surface: #e4e4ee;
   --reading-on-surface-variant: #bcbccd;
+  --surface: #000000;
+  --surface-container-low: #0e0e12;
+  --surface-container: #141419;
+  --surface-container-high: #1c1c23;
+  --surface-container-highest: #25252e;
+  --on-surface: #e4e4ee;
+  --on-surface-variant: #bcbccd;
 }

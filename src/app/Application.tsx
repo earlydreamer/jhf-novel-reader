@@ -431,10 +431,19 @@ export function Application({
     [controller, platform],
   );
   const theme = useResolvedTheme(state.theme);
+  // 리더에서는 독서 배경이 색 체계를 정한다: 세피아는 라이트, 검정은 다크(#173). 리더를 나가면 앱 테마로 돌아간다.
+  const inReader = state.route.kind === 'reader' || state.route.kind === 'translation';
+  const readingTheme =
+    state.readingBackground === 'sepia'
+      ? 'light'
+      : state.readingBackground === 'black'
+        ? 'dark'
+        : null;
+  const effectiveTheme = inReader && readingTheme ? readingTheme : theme;
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    platform.setSystemBarsTheme(theme);
-  }, [theme, platform]);
+    document.documentElement.dataset.theme = effectiveTheme;
+    platform.setSystemBarsTheme(effectiveTheme);
+  }, [effectiveTheme, platform]);
   const main = useRef<HTMLElement>(null);
   const routeKey = JSON.stringify(state.route);
   const firstRoute = useRef(true);
