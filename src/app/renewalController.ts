@@ -1968,7 +1968,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   function showNonAdoptingOutcome(
-    request: Pick<ActiveTranslation, 'chapterId' | 'settingsRevision'>,
+    request: Pick<ActiveTranslation, 'chapterId' | 'settingsRevision'> & { cancelled?: boolean },
   ) {
     if (
       snapshot.route.kind !== 'translation' ||
@@ -1978,6 +1978,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return;
     const state = dependencies.flow.getSnapshot();
     if (['ready', 'failed', 'unknown'].includes(state.phase)) {
+      // 사용자가 중단했거나 앱이 백그라운드로 가서 멈춘 결과는 리더의 중단 안내로 충분하므로 스낵바를 띄우지 않는다(#164).
+      if (request.cancelled || state.error?.code === 'cancelled') {
+        publish({ translation: state });
+        return;
+      }
       publish({
         translation: state,
         error: '이전 요청 결과는 자동으로 열지 않아요. 저장본을 열거나 다시 시도해 주세요.',

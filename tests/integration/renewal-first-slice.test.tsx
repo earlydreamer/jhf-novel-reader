@@ -423,6 +423,35 @@ it('cancel_keeps_native_slot until actual native settlement', async () => {
   expect(h.app.getSnapshot().version).toBeNull();
   h.app.dispose();
 });
+it('user cancellation settles without the non-adopting snackbar', async () => {
+  const h = harness();
+  await prepare(h);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.app.cancelTranslation();
+  h.settle();
+  await first;
+  expect(h.app.getSnapshot().error).not.toBe(
+    '이전 요청 결과는 자동으로 열지 않아요. 저장본을 열거나 다시 시도해 주세요.',
+  );
+  expect(['unknown', 'failed']).toContain(h.app.getSnapshot().translation.phase);
+  expect(h.app.getSnapshot().translation.error?.code).toBe('cancelled');
+  h.app.dispose();
+});
+it('settings change keeps the non-adopting snackbar for a result from the old settings', async () => {
+  const h = harness();
+  await prepare(h);
+  const first = h.app.translate();
+  await dispatched(h);
+  h.app.changeConnection({ provider: 'openai-compatible', baseUrl: 'http://100.64.0.9:1234' });
+  h.settle();
+  await first;
+  expect(h.app.getSnapshot().route.kind).toBe('translation');
+  expect(h.app.getSnapshot().error).toBe(
+    '이전 요청 결과는 자동으로 열지 않아요. 저장본을 열거나 다시 시도해 주세요.',
+  );
+  h.app.dispose();
+});
 it('startup_never_reposts and interrupted attempts need explicit retry', async () => {
   const h = harness();
   await createAttemptRepository(h.adapters.files).write({
