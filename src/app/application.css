@@ -305,3 +305,28 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* 설정 끝 브랜드 영역(#143) */
+.nr-settings-footer {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin-block-start: 32px;
+  padding-block: 24px 8px;
+  text-align: center;
+}
+.nr-settings-footer__logo {
+  inline-size: 96px;
+  block-size: auto;
+  margin-block-end: 8px;
+}
+.nr-settings-footer__name {
+  margin: 0;
+  color: var(--on-surface);
+  font: var(--type-title-medium);
+}
+.nr-settings-footer__version {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
+}

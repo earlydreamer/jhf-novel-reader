@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
 import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
@@ -15,6 +17,17 @@ import {
   SettingsScreen,
 } from '../../src/ui/SettingsScreen';
 import { SnackbarProvider } from '../../src/ui/components/Snackbar';
+
+vi.mock('@capacitor/app', () => ({
+  App: {
+    getInfo: vi.fn(async () => ({
+      name: 'JHF Novel Reader',
+      id: 'com.example.reader',
+      build: '0',
+      version: '0.0.0',
+    })),
+  },
+}));
 
 const models: readonly ModelChoice[] = [
   { id: 'generation', displayName: 'Generation model', supportsGeneration: true },
@@ -161,11 +174,52 @@ describe('Android 목록형 설정', () => {
         name,
       ).not.toBeNull();
     }
-    for (const name of ['버전', '최근 번역 시간']) {
-      const row = rowOf(name);
-      expect(row, name).not.toHaveClass('nr-list-item--navigates');
-      expect(row.querySelector('[data-icon="chevron_right"]'), name).toBeNull();
-    }
+    const timingRow = rowOf('최근 번역 시간');
+    expect(timingRow).not.toHaveClass('nr-list-item--navigates');
+    expect(timingRow.querySelector('[data-icon="chevron_right"]')).toBeNull();
+    value.controller.dispose();
+  });
+
+  it('정보 섹션에는 오픈소스 라이선스만 남기고 최근 번역 시간은 번역 방식에 둬요(#143)', async () => {
+    const value = await setup();
+
+    const info = screen.getByRole('region', { name: '정보' });
+    expect(within(info).queryByText('버전')).not.toBeInTheDocument();
+    expect(within(info).queryByText('최근 번역 시간')).not.toBeInTheDocument();
+    expect(
+      within(info).getByRole('button', { name: '오픈소스 라이선스 포함된 오픈소스와 라이선스' }),
+    ).toBeVisible();
+    const translation = screen.getByRole('region', { name: '번역 방식' });
+    expect(within(translation).getByText('최근 번역 시간')).toBeVisible();
+    expect(within(translation).getByText('아직 기록이 없어요')).toBeVisible();
+    value.controller.dispose();
+  });
+
+  it('설정 끝 브랜드 footer에 로고와 앱 이름, 웹 버전을 정보 섹션 뒤에 보여 줘요(#143)', async () => {
+    const value = await setup();
+
+    const footer = document.querySelector('.nr-settings-footer') as HTMLElement;
+    expect(footer).not.toBeNull();
+    expect(footer.querySelector('img')).toHaveAttribute('alt', '');
+    expect(within(footer).getByText('JHF Novel Reader')).toBeVisible();
+    expect(within(footer).getByText('웹 미리보기 0.1.0')).toBeVisible();
+    const info = screen.getByRole('region', { name: '정보' });
+    expect(info.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    value.controller.dispose();
+  });
+
+  it('네이티브 앱에서는 footer에 앱 버전과 빌드 번호를 보여 줘요(#143)', async () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    vi.mocked(App.getInfo).mockResolvedValue({
+      name: 'JHF Novel Reader',
+      id: 'com.example.reader',
+      build: '7',
+      version: '1.2.3',
+    });
+    const value = await setup();
+
+    const footer = document.querySelector('.nr-settings-footer') as HTMLElement;
+    expect(await within(footer).findByText('버전 1.2.3 (build 7)')).toBeVisible();
     value.controller.dispose();
   });
 

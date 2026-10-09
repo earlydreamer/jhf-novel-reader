@@ -19,6 +19,7 @@ import { ListItem } from './components/ListItem';
 import { Switch } from './components/Switch';
 import { useSnackbar } from './components/Snackbar';
 import { LicensesList } from './LicensesList';
+import brandLogo from './assets/brand-logo.png';
 
 export interface SettingsScreenProps {
   state: RenewalSnapshot;
@@ -198,9 +199,7 @@ export function SettingsScreen({
   const [themeOpen, setThemeOpen] = useState(false);
   const [licensesOpen, setLicensesOpen] = useState(false);
   const [version, setVersion] = useState(() =>
-    Capacitor.isNativePlatform()
-      ? 'Android 앱 버전을 확인하고 있어요.'
-      : `웹 미리보기 ${packageInfo.version}`,
+    Capacitor.isNativePlatform() ? '버전을 확인하고 있어요.' : `웹 미리보기 ${packageInfo.version}`,
   );
 
   useEffect(() => {
@@ -208,7 +207,7 @@ export function SettingsScreen({
     let mounted = true;
     void App.getInfo().then(
       (info) => {
-        if (mounted) setVersion(`Android 앱 ${info.version} (build ${info.build})`);
+        if (mounted) setVersion(`버전 ${info.version} (build ${info.build})`);
       },
       () => {
         if (mounted) setVersion('앱 정보를 불러오지 못했어요');
@@ -485,6 +484,14 @@ export function SettingsScreen({
             onChange={onAutoRetryFailed}
           />
         )}
+        <div className="nr-list-item nr-list-item--two-line">
+          <div className="nr-list-item__main">
+            <span className="nr-list-item__text">
+              <span className="nr-list-item__headline">최근 번역 시간</span>
+              <span className="nr-list-item__supporting">{timingLabel(state)}</span>
+            </span>
+          </div>
+        </div>
       </section>
 
       {onTheme && (
@@ -501,29 +508,19 @@ export function SettingsScreen({
 
       <section aria-labelledby="settings-info">
         <h2 id="settings-info">정보</h2>
-        <div className="nr-list-item nr-list-item--two-line">
-          <div className="nr-list-item__main">
-            <span className="nr-list-item__text">
-              <span className="nr-list-item__headline">버전</span>
-              <span className="nr-list-item__supporting">{version}</span>
-            </span>
-          </div>
-        </div>
         <ListItem
           headline="오픈소스 라이선스"
           supporting="포함된 오픈소스와 라이선스"
           navigates
           onClick={() => setLicensesOpen(true)}
         />
-        <div className="nr-list-item nr-list-item--two-line">
-          <div className="nr-list-item__main">
-            <span className="nr-list-item__text">
-              <span className="nr-list-item__headline">최근 번역 시간</span>
-              <span className="nr-list-item__supporting">{timingLabel(state)}</span>
-            </span>
-          </div>
-        </div>
       </section>
+
+      <footer className="nr-settings-footer">
+        <img className="nr-settings-footer__logo" src={brandLogo} alt="" width={96} height={96} />
+        <p className="nr-settings-footer__name">JHF Novel Reader</p>
+        <p className="nr-settings-footer__version">{version}</p>
+      </footer>
 
       <Dialog
         open={providerOpen}
