@@ -250,6 +250,16 @@ export function createTermScan(deps: {
           }
           continue;
         }
+        // 기존 정밀스캔 항목은 더 강한 근거(신뢰도 높음)일 때만 바꾼다(설계 §3). 그 밖에는 제안으로 남겨 재스캔마다 표기가 뒤집히지 않게 한다.
+        if (
+          current.origin === 'scan' &&
+          !isConfirmed &&
+          change.confidence !== 'high' &&
+          compact(current.target) !== compact(change.after)
+        ) {
+          moved.push({ ...change, role: 'suggest', before: current.target });
+          continue;
+        }
         next[index] = {
           source: current.source,
           target: isConfirmed ? current.target : change.after,
@@ -302,14 +312,26 @@ export function revertScanChange(
   return terms.map((item, position) => (position === index ? original : item));
 }
 
-/** 사람 항목에 제안 적용. 표기만 after로 바꾸고 사람 항목의 나머지는 그대로 둔다. */
+/**
+ * 제안 적용. 사람 항목은 표기만 after로 바꾸고 그대로 둔다. 정밀스캔 항목은 표기를 after로 바꾸고
+ * 사람이 고른 결정으로 보아 사람 항목으로 만든다(origin·evidence 제거). 그 밖의 기계 항목은 그대로 둔다.
+ */
 export function applySuggestion(
   terms: readonly GuidanceTerm[],
   change: TermScanChange,
 ): GuidanceTerm[] {
-  return terms.map((item) =>
-    item.origin === undefined && nameKey(item.source) === nameKey(change.source)
-      ? { ...item, target: change.after }
-      : item,
-  );
+  return terms.map((item) => {
+    if (nameKey(item.source) !== nameKey(change.source)) return item;
+    if (item.origin === undefined) return { ...item, target: change.after };
+    if (item.origin === 'scan') {
+      return {
+        source: item.source,
+        target: change.after,
+        aliases: [...item.aliases],
+        category: item.category,
+        note: item.note,
+      };
+    }
+    return item;
+  });
 }

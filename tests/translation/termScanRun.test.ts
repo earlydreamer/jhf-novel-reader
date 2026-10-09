@@ -467,3 +467,63 @@ test('제안 적용: 사람 항목은 표기만 바꾸고 나머지와 다른 �
   ]);
   expect(applySuggestion([other, human], suggestion)[1]!.origin).toBeUndefined();
 });
+
+test('제안 적용: 정밀스캔 항목에 적용하면 표기만 바뀌고 사람 항목이 된다', () => {
+  const scanned = term('ルーク', '루크-이전', {
+    origin: 'scan',
+    aliases: ['ルーク君'],
+    note: '메모',
+    evidence: [{ kind: 'model', note: '근거' }],
+  });
+  const suggestion = change({
+    source: 'ルーク',
+    role: 'suggest',
+    before: '루크-이전',
+    after: '루크',
+  });
+  const [result] = applySuggestion([scanned], suggestion);
+  expect(result).toEqual({
+    source: 'ルーク',
+    target: '루크',
+    aliases: ['ルーク君'],
+    category: '',
+    note: '메모',
+  });
+  expect(result).not.toHaveProperty('origin');
+  expect(result).not.toHaveProperty('evidence');
+});
+
+test('기존 정밀스캔 항목은 신뢰도 높음일 때만 바꾸고, 그 밖에는 제안으로 남긴다', async () => {
+  const scanned = term('ルーク', '루크-이전', {
+    origin: 'scan',
+    evidence: [{ kind: 'model', note: '근거' }],
+  });
+  const text = 'ルークが笑う。ルークは去った。';
+  const medium = harness({
+    terms: [scanned],
+    versions: { c1: oneVersion(text) },
+    answers: { ルーク: { target: '루크' } },
+  });
+  medium.hooks.fail = (call) => call === 2;
+  const mediumResult = await run(medium);
+  expect(mediumResult.applied).toEqual([]);
+  expect(mediumResult.suggestions).toMatchObject([
+    { source: 'ルーク', role: 'suggest', before: '루크-이전', after: '루크', confidence: 'medium' },
+  ]);
+  expect(medium.saves).toEqual([]);
+
+  const high = harness({
+    terms: [scanned],
+    versions: { c1: oneVersion(text) },
+    answers: { ルーク: { target: '루크' } },
+  });
+  const highResult = await run(high);
+  expect(highResult.applied.map((item) => [item.source, item.confidence])).toEqual([
+    ['ルーク', 'high'],
+  ]);
+  expect(high.saves[0]!.terms[0]).toMatchObject({
+    source: 'ルーク',
+    target: '루크',
+    origin: 'scan',
+  });
+});
