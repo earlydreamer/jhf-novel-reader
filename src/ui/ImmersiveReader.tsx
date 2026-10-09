@@ -850,7 +850,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             </div>
           )}
       </article>
-      <FloatingToolbar label="읽기 도구" hidden={!barsVisible}>
+      <FloatingToolbar label="읽기 도구" hidden={!barsVisible} className="nr-reader-toolbar">
         <button
           type="button"
           className="nr-reader-symbol-button"
@@ -860,22 +860,24 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         >
           ‹
         </button>
-        <button
-          type="button"
-          className="nr-reader-symbol-button"
-          aria-label="목차"
-          onClick={props.onBack}
-        >
-          목차
-        </button>
-        <button
-          type="button"
-          className="nr-reader-symbol-button"
-          aria-label="보기 설정"
-          onClick={() => setSettingsOpen(true)}
-        >
-          Aa
-        </button>
+        <div className="nr-reader-toolbar__center">
+          <button
+            type="button"
+            className="nr-reader-symbol-button"
+            aria-label="목차"
+            onClick={props.onBack}
+          >
+            목차
+          </button>
+          <button
+            type="button"
+            className="nr-reader-symbol-button"
+            aria-label="보기 설정"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Aa
+          </button>
+        </div>
         <button
           type="button"
           className="nr-reader-symbol-button"

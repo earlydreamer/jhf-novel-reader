@@ -62,6 +62,18 @@ describe('FloatingToolbar', () => {
     expect(screen.queryByRole('toolbar')).toBeNull();
     expect(document.querySelector('.nr-toolbar')).toHaveAttribute('inert');
   });
+
+  it('className을 루트 툴바 요소에 붙인다', () => {
+    render(
+      <FloatingToolbar label="읽기 도구" className="nr-reader-toolbar">
+        <IconButton icon="arrow_back" label="이전 화" />
+      </FloatingToolbar>,
+    );
+    expect(screen.getByRole('toolbar', { name: '읽기 도구' })).toHaveClass(
+      'nr-toolbar',
+      'nr-reader-toolbar',
+    );
+  });
 });
 
 describe('Switch', () => {

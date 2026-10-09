@@ -5,10 +5,12 @@ export function FloatingToolbar({
   label,
   children,
   hidden = false,
+  className,
 }: {
   label: string;
   children: ReactNode;
   hidden?: boolean;
+  className?: string;
 }): JSX.Element {
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
@@ -24,7 +26,7 @@ export function FloatingToolbar({
       aria-label={label}
       aria-hidden={hidden || undefined}
       inert={hidden || undefined}
-      className={`nr-toolbar${hidden ? ' nr-toolbar--hidden' : ''}`}
+      className={`nr-toolbar${hidden ? ' nr-toolbar--hidden' : ''}${className ? ` ${className}` : ''}`}
       onKeyDown={onKeyDown}
     >
       {children}

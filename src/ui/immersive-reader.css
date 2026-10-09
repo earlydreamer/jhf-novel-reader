@@ -423,6 +423,38 @@
   color: inherit;
 }
 
+/* 회차 이동은 엄지가 닿는 양 끝으로(#152): 이전·다음은 좌우 끝의 둥근 버튼, 목차·보기 설정은 가운데 알약.
+   컨테이너는 배경 없이 넓히고 빈 가운데는 터치를 통과시켜 본문 탭(바 토글)을 막지 않는다. */
+.nr-toolbar.nr-reader-toolbar {
+  inset-inline: max(16px, var(--inset-left)) max(16px, var(--inset-right));
+  inline-size: auto;
+  max-inline-size: 720px;
+  margin-inline: auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.nr-reader-toolbar > .nr-reader-symbol-button,
+.nr-reader-toolbar__center {
+  pointer-events: auto;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  box-shadow: var(--elevation-3);
+}
+.nr-reader-toolbar > .nr-reader-symbol-button {
+  inline-size: 56px;
+  block-size: 56px;
+}
+.nr-reader-toolbar__center {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--shape-full);
+}
+
 @media (max-width: 600px) {
   .nr-immersive-article {
     padding-inline: max(20px, var(--inset-left)) max(20px, var(--inset-right));
