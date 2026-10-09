@@ -68,7 +68,7 @@ export interface NativeHttpRequest {
   readonly method: 'GET' | 'POST';
   readonly headers: Record<string, string>;
   readonly data?: Record<string, unknown>;
-  readonly responseType: 'text';
+  readonly responseType: 'json' | 'text';
   readonly disableRedirects: true;
   readonly connectTimeout: number;
   readonly readTimeout: number;
@@ -86,6 +86,10 @@ export interface NativeStreamingClient {
 }
 export interface SourceTransport {
   get(url: string, signal: AbortSignal): Promise<HttpResponse>;
+}
+export interface LookupTransport {
+  /** 허용된 조회 주소에만 GET. json이면 파싱된 값, text면 문자열을 data로 돌려준다. */
+  get(url: string, responseType: 'json' | 'text', signal: AbortSignal): Promise<HttpResponse>;
 }
 export interface ModelRequest {
   readonly url: string;

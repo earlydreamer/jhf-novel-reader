@@ -4,9 +4,11 @@ import type {
   NativeHttpRequest,
   HttpResponse,
   SourceTransport,
+  LookupTransport,
   ModelTransport,
   NativeStreamingClient,
 } from '../../contracts';
+import packageInfo from '../../../package.json';
 function validateUrl(value: string, source: boolean): URL {
   try {
     const url = new URL(value);
@@ -63,16 +65,13 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
     });
   });
 }
-export function createSourceTransport(
-  client: NativeHttpClient,
-  pacing: SourcePacing = { minIntervalMs: 0 },
-): SourceTransport {
+/** 요청을 한 줄로 세워 보낸 시각 기준으로 간격을 둔다. 대기 중 취소되면 보내지 않는다. */
+function createTurn(pacing: SourcePacing): (signal: AbortSignal) => Promise<void> {
   const now = pacing.now ?? Date.now;
   const wait = pacing.wait ?? sleep;
   let lastSent = Number.NEGATIVE_INFINITY;
   let queue: Promise<void> = Promise.resolve();
-  // 요청을 한 줄로 세워 보낸 시각 기준으로 간격을 둔다. 대기 중 취소되면 보내지 않는다.
-  function turn(signal: AbortSignal): Promise<void> {
+  return function turn(signal: AbortSignal): Promise<void> {
     const next = queue.then(async () => {
       const delay = lastSent + pacing.minIntervalMs - now();
       if (delay > 0) {
@@ -87,7 +86,14 @@ export function createSourceTransport(
     });
     queue = next.catch(() => undefined);
     return next;
-  }
+  };
+}
+
+export function createSourceTransport(
+  client: NativeHttpClient,
+  pacing: SourcePacing = { minIntervalMs: 0 },
+): SourceTransport {
+  const turn = createTurn(pacing);
   return {
     async get(value, signal) {
       const url = validateUrl(value, true);
@@ -109,6 +115,71 @@ export function createSourceTransport(
     },
   };
 }
+export type LookupGroup = 'wikimedia' | 'namu';
+export type LookupPacing = {
+  /** 출처 묶음별 최소 간격(ms). 빠뜨리면 기본값(위키미디어 1000, 나무위키 2500)을 쓴다. */
+  minIntervalMs?: Partial<Record<LookupGroup, number>>;
+  now?: () => number;
+  wait?: (ms: number, signal: AbortSignal) => Promise<void>;
+};
+
+const LOOKUP_USER_AGENT = `JHFNovelReader/${packageInfo.version} (https://github.com/earlydreamer/narou-reader)`;
+// 정확한 주소만 허용한다. 쿼리·경로 규칙은 조회 함수가 쓰는 주소와 한 쌍으로 유지한다.
+const WIKIMEDIA_API =
+  /^https:\/\/(?:ja\.wikipedia\.org|ko\.wikipedia\.org|www\.wikidata\.org)\/w\/api\.php\?[^#\s]+$/;
+const NAMU_SEARCH = /^https:\/\/namu\.wiki\/Search\?q=[^&#\s]+$/;
+const NAMU_DOCUMENT = /^https:\/\/namu\.wiki\/w\/[^?#\s]+$/;
+const DOT_SEGMENT_OR_BACKSLASH = /\.\.|%2e|\\/i;
+
+function lookupGroup(value: string): LookupGroup {
+  if (WIKIMEDIA_API.test(value)) return 'wikimedia';
+  if (NAMU_SEARCH.test(value)) return 'namu';
+  if (NAMU_DOCUMENT.test(value) && !DOT_SEGMENT_OR_BACKSLASH.test(value)) return 'namu';
+  throw new ReaderError('connection');
+}
+
+/** 외부 조회 통로. 허용 주소 밖은 요청 없이 거부하고, 리다이렉트를 끈 GET만 보낸다. */
+export function createLookupTransport(
+  client: NativeHttpClient,
+  pacing: LookupPacing = {},
+): LookupTransport {
+  const turns: Record<LookupGroup, (signal: AbortSignal) => Promise<void>> = {
+    wikimedia: createTurn({
+      minIntervalMs: pacing.minIntervalMs?.wikimedia ?? 1000,
+      now: pacing.now ?? Date.now,
+      wait: pacing.wait ?? sleep,
+    }),
+    namu: createTurn({
+      minIntervalMs: pacing.minIntervalMs?.namu ?? 2500,
+      now: pacing.now ?? Date.now,
+      wait: pacing.wait ?? sleep,
+    }),
+  };
+  return {
+    async get(value, responseType, signal) {
+      const group = lookupGroup(value);
+      await turns[group](signal);
+      return dispatch(
+        client,
+        {
+          url: value,
+          method: 'GET',
+          headers: {
+            'User-Agent': LOOKUP_USER_AGENT,
+            Accept: responseType === 'json' ? 'application/json' : 'text/html',
+          },
+          responseType,
+          disableRedirects: true,
+          connectTimeout: 10000,
+          readTimeout: 20000,
+        },
+        signal,
+        false,
+      );
+    },
+  };
+}
+
 export function createModelTransport(
   client: NativeHttpClient,
   streaming?: NativeStreamingClient,
