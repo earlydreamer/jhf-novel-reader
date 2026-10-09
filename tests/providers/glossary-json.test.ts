@@ -32,7 +32,11 @@ function provider(responses: { status: number; data: unknown }[]) {
   );
   if (!session.completeJson) throw Error('completeJson is missing');
   const complete = session.completeJson.bind(session);
-  return { bodies, complete: () => complete(request, new AbortController().signal) };
+  return {
+    bodies,
+    complete: (extra: { temperature?: number } = {}) =>
+      complete({ ...request, ...extra }, new AbortController().signal),
+  };
 }
 
 const ok = (content: unknown) => ({
@@ -58,6 +62,12 @@ test('JSON request is non-streaming, deterministic and asks for the strict schem
       json_schema: { name: 'glossary', strict: true, schema: request.schema },
     },
   });
+});
+
+test('a caller-set temperature is sent instead of the default 0', async () => {
+  const { bodies, complete } = provider([ok('{"terms":[]}')]);
+  await expect(complete({ temperature: 0.7 })).resolves.toEqual({ terms: [] });
+  expect(bodies[0]).toMatchObject({ temperature: 0.7 });
 });
 
 test('a 400 response is retried once without response_format', async () => {

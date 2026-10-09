@@ -265,7 +265,7 @@ export function createProviderSession(
           { role: 'user', content: request.user },
         ],
         stream: false,
-        temperature: 0,
+        temperature: request.temperature ?? 0,
         max_tokens: request.maxTokens,
       };
       let data: unknown;
