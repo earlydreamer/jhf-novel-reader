@@ -455,9 +455,22 @@ test('settings preserve legacy font values while changing the selected reading p
   fireEvent.click(screen.getByRole('button', { name: '글자 크기 키우기' }));
   expect(onFontSize).toHaveBeenCalledWith(48);
   fireEvent.click(screen.getByRole('button', { name: '세피아' }));
-  fireEvent.click(screen.getByRole('button', { name: '2' }));
+  fireEvent.click(screen.getByRole('button', { name: '2.0' }));
   expect(onReadingBackground).toHaveBeenCalledWith('sepia');
   expect(onLineHeight).toHaveBeenCalledWith(2);
+});
+
+test('line height chips show one decimal place in the settings sheet', () => {
+  render(<ImmersiveReader {...props()} />);
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '보기 설정' }));
+  const lineHeight = screen.getByRole('group', { name: '줄 간격' });
+  expect(
+    within(lineHeight)
+      .getAllByRole('button')
+      .map((button) => button.textContent),
+  ).toEqual(['1.6', '1.8', '2.0']);
 });
 
 test('all active translation phases keep an explicit stop action available', () => {

@@ -124,6 +124,33 @@ describe('immersive-reader.css reader toolbar split (#152)', () => {
   });
 });
 
+describe('immersive-reader.css font control and sheet title (#171)', () => {
+  it('글자 크기 조절 줄은 라벨을 시작 쪽에 두고 [– 값 +]를 끝 쪽에 묶는다', () => {
+    const control = rules(readerCss).find((rule) => rule.selector === '.nr-reader-font-control');
+    expect(control?.body).toMatch(/justify-content:\s*flex-start;/);
+    const label = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-font-control > span',
+    );
+    expect(label?.body).toMatch(/margin-inline-end:\s*auto;/);
+    expect(label?.body).toMatch(/font:\s*var\(--type-title-medium\);/);
+  });
+
+  it('글자 크기 −·+ 버튼은 테두리 있는 원형 버튼으로 보인다', () => {
+    const stepper = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-font-control > .nr-reader-symbol-button',
+    );
+    expect(stepper?.body).toMatch(/border:\s*1px solid var\(--outline\);/);
+    expect(stepper?.body).toMatch(/color:\s*var\(--primary\);/);
+  });
+
+  it('보기 설정 시트의 legend는 시트 제목과 같은 시작선에 맞춘다', () => {
+    const legend = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-sheet-body legend',
+    );
+    expect(legend?.body).toMatch(/padding-inline:\s*0;/);
+  });
+});
+
 describe('immersive-reader.css progress bar', () => {
   it('앱바가 숨으면 번역 진행 막대를 화면 맨 위로 올린다', () => {
     const hidden = rules(readerCss).find(

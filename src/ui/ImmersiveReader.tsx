@@ -961,7 +961,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
                 aria-pressed={props.lineHeight === value}
                 onClick={() => props.onLineHeight(value)}
               >
-                {value}
+                {value.toFixed(1)}
               </Button>
             ))}
           </fieldset>
