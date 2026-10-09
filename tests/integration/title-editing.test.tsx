@@ -141,13 +141,13 @@ test('a chapter edit persists without model access and the untranslated source i
   const app = await h.ready();
   render(<Application controller={app} />);
   fireEvent.click(screen.getByRole('button', { name: '2화 메뉴' }));
-  fireEvent.click(screen.getByRole('button', { name: '2화 제목 수정' }));
-  const panel = screen.getByRole('form', { name: '2화 제목 편집' });
+  fireEvent.click(screen.getByRole('button', { name: '제목 직접 수정하기' }));
+  const panel = screen.getByRole('dialog', { name: '회차 제목 직접 수정하기' });
   expect(within(panel).getByText('원제: 夏の朝 2')).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('2화 제목 번역문'), {
     target: { value: '직접 쓴 소제목' },
   });
-  fireEvent.click(screen.getByRole('button', { name: '제목 저장' }));
+  fireEvent.click(within(panel).getByRole('button', { name: '저장하기' }));
   await screen.findByRole('button', { name: '2화 직접 쓴 소제목' });
   expect(h.translateTitles).not.toHaveBeenCalled();
   app.dispose();

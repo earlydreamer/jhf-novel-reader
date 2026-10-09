@@ -75,6 +75,10 @@ export function WorkScreen({
   const [dialog, setDialog] = useState<'guidance' | 'batch' | null>(null);
   const [removeChapter, setRemoveChapter] = useState<ChapterRef | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
+  const [titleEditChapter, setTitleEditChapter] = useState<ChapterRef | null>(null);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [titleSaving, setTitleSaving] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const showSnackbar = useSnackbar();
   const guidanceBody = useRef<HTMLDivElement>(null);
   const recentRow = useRef<HTMLDivElement>(null);
@@ -142,6 +146,24 @@ export function WorkScreen({
     );
   const openSheet = (chapter: ChapterRef) => setSheetChapter(chapter);
   const sheetTitle = sheetChapter ? chapterSavedTitle(sheetChapter) : undefined;
+  const openTitleEditor = (chapter: ChapterRef) => {
+    setTitleDraft(displayedTitle(selectedTitles, chapter.chapterId, chapter.title));
+    setTitleError(null);
+    setTitleEditChapter(chapter);
+  };
+  const saveChapterTitle = async () => {
+    if (!titleEditChapter || !titles || titleSaving || !titleDraft.trim()) return;
+    setTitleSaving(true);
+    setTitleError(null);
+    try {
+      await titles.onSave(titleEditChapter.chapterId, titleDraft.trim());
+      setTitleEditChapter(null);
+    } catch {
+      setTitleError('제목을 저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.');
+    } finally {
+      setTitleSaving(false);
+    }
+  };
   const currentRecentStatus = recentStatus ?? 'none';
   const confirmRemoveChapter = async () => {
     if (!removeChapter || removeBusy || !onRemoveChapter) return;
@@ -283,23 +305,46 @@ export function WorkScreen({
       >
         {sheetChapter && (
           <div className="nr-work-chapter-menu">
-            <p>{sheetTitle ? '제목 다시 번역하기' : '제목 번역하기'}</p>
             {titles && (
-              <TitleHeading
-                titleKey={sheetChapter.chapterId}
-                source={sheetChapter.title}
-                label={`${sheetChapter.ordinal}화 제목`}
-                controls={titles}
-                inline
-              />
+              <button
+                type="button"
+                className="nr-sheet-action"
+                disabled={titles.busy}
+                onClick={() => {
+                  void titles.onTranslate(sheetChapter.chapterId);
+                  setSheetChapter(null);
+                }}
+              >
+                {sheetTitle ? '제목 다시 번역하기' : '제목 번역하기'}
+              </button>
             )}
-            <a href={sheetChapter.canonicalUrl} target="_blank" rel="noreferrer">
+            {titles && (
+              <button
+                type="button"
+                className="nr-sheet-action"
+                onClick={() => {
+                  setSheetChapter(null);
+                  openTitleEditor(sheetChapter);
+                }}
+              >
+                제목 직접 수정하기
+                {sheetTitle?.origin === 'user' && (
+                  <span className="nr-sheet-action__supporting">직접 수정됨</span>
+                )}
+              </button>
+            )}
+            <a
+              className="nr-sheet-action"
+              href={sheetChapter.canonicalUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
               원문 사이트에서 보기
             </a>
             {onRemoveChapter && savedChapterIds.includes(sheetChapter.chapterId) && (
-              <Button
-                variant="text"
-                tone="danger"
+              <button
+                type="button"
+                className="nr-sheet-action nr-sheet-action--danger"
                 disabled={busy}
                 onClick={() => {
                   setRemoveChapter(sheetChapter);
@@ -307,7 +352,7 @@ export function WorkScreen({
                 }}
               >
                 이 화 저장본 삭제하기
-              </Button>
+              </button>
             )}
           </div>
         )}
@@ -339,6 +384,42 @@ export function WorkScreen({
         <p>
           이 화의 번역 저장본과 읽던 위치가 이 기기에서 삭제돼요. 삭제한 내용은 되돌릴 수 없어요.
         </p>
+      </Dialog>
+      <Dialog
+        open={!!titleEditChapter}
+        title="회차 제목 직접 수정하기"
+        onClose={() => {
+          if (!titleSaving) setTitleEditChapter(null);
+        }}
+        actions={
+          <>
+            <Button variant="text" disabled={titleSaving} onClick={() => setTitleEditChapter(null)}>
+              닫기
+            </Button>
+            <Button
+              variant="filled"
+              disabled={titleSaving || !titleDraft.trim()}
+              onClick={() => void saveChapterTitle()}
+            >
+              저장하기
+            </Button>
+          </>
+        }
+      >
+        {titleEditChapter && (
+          <>
+            <p lang="ja">원제: {titleEditChapter.title}</p>
+            <label>
+              {titleEditChapter.ordinal}화 제목 번역문
+              <input
+                value={titleDraft}
+                maxLength={4096}
+                onChange={(event) => setTitleDraft(event.target.value)}
+              />
+            </label>
+            {titleError && <p role="alert">{titleError}</p>}
+          </>
+        )}
       </Dialog>
       <Dialog
         open={visibleDialog === 'guidance'}

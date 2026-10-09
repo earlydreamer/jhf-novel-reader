@@ -95,10 +95,17 @@ describe('application.css screen defaults', () => {
     expect(block).toMatch(/gap:\s*8px;/);
   });
 
-  it('회차 메뉴 시트는 리더 시트와 같은 좌우 여백을 두고 항목을 왼쪽에 맞춘다', () => {
-    const menu = rules(css).find((rule) => rule.selector === '.nr-work-chapter-menu');
-    expect(menu?.body).toMatch(/padding:\s*8px 24px 16px;/);
-    expect(menu?.body).toMatch(/justify-items:\s*start;/);
+  it('회차 메뉴 시트 행은 리더 시트와 같은 좌우 여백을 두고 글자를 왼쪽에 맞춘다', () => {
+    const row = rules(css).find((rule) => rule.selector === '.nr-sheet-action');
+    expect(row?.body).toMatch(/padding:\s*8px 24px;/);
+    expect(row?.body).toMatch(/text-align:\s*start;/);
+  });
+
+  it('회차 메뉴 시트 행은 같은 모양의 최소 높이를 가지고 삭제 행만 오류 색을 쓴다', () => {
+    const row = rules(css).find((rule) => rule.selector === '.nr-sheet-action');
+    expect(row?.body).toMatch(/min-block-size:\s*56px;/);
+    const danger = rules(css).find((rule) => rule.selector === '.nr-sheet-action--danger');
+    expect(danger?.body).toMatch(/color:\s*var\(--error\);/);
   });
 });
 
