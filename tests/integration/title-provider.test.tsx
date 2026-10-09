@@ -120,7 +120,8 @@ test('real compose translates titles, reads the same chapter heading, edits it a
   app.chooseModel('test-model');
   await app.openWork(url);
   render(<Application controller={app} />);
-  await screen.findByRole('heading', { name: '여름 이야기' });
+  // 제목은 openWork 뒤 백그라운드 제목 번역이 끝나야 나타난다. 기본 1초 대기는 동시 실행 부하에서 모자란다(#186).
+  await screen.findByRole('heading', { name: '여름 이야기' }, { timeout: 10_000 });
   await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
   expect(h.requests).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: '1화 여름 아침' }));
