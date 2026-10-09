@@ -370,3 +370,43 @@
   color: var(--on-surface-variant);
   font: var(--type-body-small);
 }
+/* 용어 정밀스캔 결과 목록(#200). 항목 사이에만 구분선을 둔다. */
+.nr-scan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nr-scan-list > li {
+  padding: 12px 0;
+}
+.nr-scan-list > li + li {
+  border-block-start: 1px solid var(--outline-variant);
+}
+.nr-scan-evidence {
+  margin: 4px 0;
+  padding-inline-start: 20px;
+  color: var(--on-surface-variant);
+  font: var(--type-body-small);
+}
+.nr-scan-confidence {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: var(--shape-full);
+  font: var(--type-label-medium);
+}
+.nr-scan-confidence--low {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+.nr-scan-confidence--medium {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+.nr-scan-confidence--high {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+.nr-scan-confidence--flag {
+  border: 1px solid var(--outline);
+  color: var(--on-surface-variant);
+}

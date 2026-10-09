@@ -39,7 +39,19 @@ import type {
   ChapterRange,
   CandidateChoice,
 } from '../translation/batch';
-import type { GuidanceDraft, GuidanceRepository, WorkGuidance } from '../translation/guidance';
+import type {
+  GuidanceDraft,
+  GuidanceRepository,
+  GuidanceTerm,
+  WorkGuidance,
+} from '../translation/guidance';
+import {
+  applySuggestion,
+  revertScanChange,
+  type createTermScan,
+  type TermScanProgress,
+  type TermScanResult,
+} from '../translation/termScanRun';
 import {
   displayedTitle,
   workTitleInputs,
@@ -106,6 +118,7 @@ export interface RenewalDependencies {
   readonly flow?: WholeChapterFlow;
   readonly batch?: BatchTranslation;
   readonly guidance?: GuidanceRepository;
+  readonly termScan?: ReturnType<typeof createTermScan>;
   readonly lifecycle?: AppLifecycle;
   readonly browse?: (startUrl?: string) => Promise<{ selectedUrl: string } | null>;
   readonly normalizeInput?: (url: string) => string;
@@ -187,6 +200,16 @@ export interface RenewalSnapshot {
   readonly batch: BatchState | null;
   readonly batchAvailable: boolean;
   readonly guidanceAvailable: boolean;
+  readonly termScanAvailable: boolean;
+  readonly termScan: {
+    workId: string;
+    phase: 'running' | 'done' | 'failed' | 'cancelled';
+    progress?: TermScanProgress;
+    result?: TermScanResult;
+    /** 결과 화면에서 이미 되돌리거나 적용한 항목(source) */
+    handled: readonly string[];
+    error?: string;
+  } | null;
 }
 const DEFAULT_CONNECTION: ConnectionConfig = {
   provider: 'openai-compatible',
@@ -247,6 +270,18 @@ function problemOf(error: unknown): CatalogProblem {
       return { reason: 'unknown' };
   }
 }
+const TERM_SCAN_CONNECTION_MESSAGE =
+  '연결 설정에서 서버와 모델을 확인하면 용어 정밀스캔을 할 수 있어요.';
+const TERM_SCAN_GEMINI_MESSAGE = '용어 정밀스캔은 로컬 모델 연결에서만 쓸 수 있어요.';
+const TERM_SCAN_BUSY_MESSAGE = '번역이 끝난 뒤 용어 정밀스캔을 시작할 수 있어요.';
+const TERM_SCAN_SAVED_MESSAGE = '저장된 회차가 있어야 용어 정밀스캔을 할 수 있어요.';
+const TERM_SCAN_FAILED_MESSAGE =
+  '용어 정밀스캔을 마치지 못했어요. 연결을 확인하고 다시 시도해 주세요.';
+const TERM_SCAN_TRANSLATE_BLOCKED = '용어 정밀스캔이 끝난 뒤 번역할 수 있어요.';
+const TERM_SCAN_EDIT_BUSY_MESSAGE = '번역이 끝난 뒤 용어집을 고칠 수 있어요.';
+const TERM_SCAN_SAVE_FAILED_MESSAGE = '용어집을 저장하지 못했어요. 다시 시도해 주세요.';
+const termKey = (source: string) => source.normalize('NFKC');
+
 export interface RenewalController {
   translateTitles(key?: string): Promise<void>;
   saveTitle(key: string, target: string): Promise<void>;
@@ -291,6 +326,11 @@ export interface RenewalController {
   openBatch(): void;
   readGuidance(workId: string): Promise<WorkGuidance | null>;
   saveGuidance(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
+  startTermScan(workId: string): Promise<void>;
+  cancelTermScan(): void;
+  revertTermScanChange(source: string): Promise<void>;
+  applyTermScanSuggestion(source: string): Promise<void>;
+  closeTermScan(): void;
   translate(): Promise<void>;
   refreshSource(): Promise<void>;
   retranslateChapter(): Promise<void>;
@@ -357,6 +397,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     batch: null,
     batchAvailable: Boolean(dependencies.batch),
     guidanceAvailable: Boolean(dependencies.guidance),
+    termScanAvailable: Boolean(dependencies.termScan),
+    termScan: null,
   };
   const listeners = new Set<() => void>();
   const history: Route[] = [];
@@ -426,6 +468,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let livePosition: { chapterId: string; index: number; offset: number } | null = null;
   let catalogAbort: AbortController | null = null;
   let sourceAbort: AbortController | null = null;
+  // 정밀스캔 진행 중이면 그 abort 컨트롤러가 있다. 시작 전 용어집 원본은 되돌리기에 쓴다(source NFKC → 항목).
+  let termScanAbort: AbortController | null = null;
+  // 스캔을 소유한 작품. 스냅샷은 running을 publish해야 갱신되므로 삭제 판정은 이 변수로 한다.
+  let termScanOwner: string | null = null;
+  let termScanOriginals = new Map<string, GuidanceTerm>();
   let automaticRequest: { chapterId: string; operation: number } | null = null;
   let retryableRepair: ParagraphRepair | null = null;
   const titlesByWork = new Map<string, readonly SavedTitle[]>();
@@ -546,6 +593,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       activeTranslation ||
       dependencies.flow?.active ||
       dependencies.batch?.active ||
+      termScanRunning() ||
       snapshot.pendingSaveChapter ||
       (automatic && (!snapshot.autoTranslate || !titlesByWork.has(snapshot.work.workId)))
     )
@@ -720,6 +768,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       activeTranslation ||
       dependencies.flow?.active ||
       dependencies.batch?.active ||
+      termScanRunning() ||
       snapshot.pendingSaveChapter ||
       snapshot.catalogStatus !== 'connected' ||
       !snapshot.selectedModelId
@@ -837,7 +886,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const flowState = dependencies.flow?.getSnapshot();
     if (
       (activeTranslation?.chapterId.startsWith(`${workId}/`) ?? false) ||
-      (flowState?.token?.chapterId.startsWith(`${workId}/`) && dependencies.flow?.active)
+      (flowState?.token?.chapterId.startsWith(`${workId}/`) && dependencies.flow?.active) ||
+      // 정밀스캔이 저장하면 삭제 뒤 고아 파일이 남으므로 번역과 같이 막는다.
+      (termScanRunning() && termScanOwner === workId)
     )
       return {
         removed: false,
@@ -1083,6 +1134,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             foreground = active;
             if (!active && activeTranslation) activeTranslation.cancelled = true;
             if (!active) titleAbort?.abort();
+            if (!active) termScanAbort?.abort();
             dependencies.flow?.setForeground(active);
             dependencies.batch?.setForeground(active);
             if (active) runAutomaticTranslation();
@@ -1888,7 +1940,157 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     await refreshSource();
     await translate();
   }
+  function termScanRunning(): boolean {
+    return termScanAbort !== null;
+  }
+  /** 용어 정밀스캔 시작. 조건이 안 맞으면 안내만 띄우고, 번역과 같은 요청이라 한 번에 하나만 돈다. */
+  async function startTermScan(workId: string): Promise<void> {
+    const scan = dependencies.termScan;
+    if (!scan || disposed || !initialized || !foreground || removingWorkIds.has(workId)) return;
+    if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
+      publish({ error: TERM_SCAN_CONNECTION_MESSAGE });
+      return;
+    }
+    if (snapshot.connection.provider !== 'openai-compatible') {
+      publish({ error: TERM_SCAN_GEMINI_MESSAGE });
+      return;
+    }
+    if (
+      termScanRunning() ||
+      activeTranslation ||
+      dependencies.flow?.active ||
+      dependencies.batch?.active
+    ) {
+      publish({ error: TERM_SCAN_BUSY_MESSAGE });
+      return;
+    }
+    const chapterIds = savedChaptersByWork.get(workId) ?? [];
+    if (!chapterIds.length) {
+      publish({ error: TERM_SCAN_SAVED_MESSAGE });
+      return;
+    }
+    const selection: SelectedModel = {
+      connection: snapshot.connection,
+      modelId: snapshot.selectedModelId,
+      translationMode: snapshot.translationMode,
+      ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
+      ...(snapshot.connection.provider === 'openai-compatible' && snapshot.localLimits
+        ? { limits: { ...snapshot.localLimits } }
+        : {}),
+    };
+    // 첫 await 전에 세워 둬야 두 번째 시작 요청이 진행 중으로 보고 막힌다.
+    const control = new AbortController();
+    termScanAbort = control;
+    termScanOwner = workId;
+    try {
+      await stopTitles();
+      const current = (await dependencies.guidance?.read(workId))?.terms ?? [];
+      termScanOriginals = new Map(current.map((item) => [termKey(item.source), item]));
+      publish({ error: null, termScan: { workId, phase: 'running', handled: [] } });
+      const result = await scan({
+        workId,
+        chapterIds,
+        selection,
+        signal: control.signal,
+        onProgress(progress) {
+          const running = snapshot.termScan;
+          if (control.signal.aborted || termScanAbort !== control) return;
+          if (!running || running.workId !== workId) return;
+          publish({ termScan: { ...running, progress } });
+        },
+      });
+      publish({ termScan: { workId, phase: 'done', result, handled: [] } });
+    } catch (error) {
+      const cancelled =
+        control.signal.aborted || (error instanceof ReaderError && error.code === 'cancelled');
+      publish({
+        termScan: cancelled
+          ? { workId, phase: 'cancelled', handled: [] }
+          : { workId, phase: 'failed', handled: [], error: TERM_SCAN_FAILED_MESSAGE },
+      });
+    } finally {
+      if (termScanAbort === control) {
+        termScanAbort = null;
+        termScanOwner = null;
+      }
+      // 스캔 중 미뤄 둔 자동 번역과 제목 번역을 이어 간다. 스캔이 바꾼 용어집을 쓰게 된다.
+      runAutomaticTranslation();
+      requestTitleTranslation();
+    }
+  }
+  function cancelTermScan(): void {
+    termScanAbort?.abort();
+  }
+  function closeTermScan(): void {
+    if (termScanRunning()) return;
+    termScanOriginals = new Map();
+    publish({ termScan: null });
+  }
+  /** 용어집을 최신 저장본 기준으로 고쳐 저장한다. 바뀐 것이 없으면 저장하지 않는다. */
+  async function editTermScanTerms(
+    workId: string,
+    edit: (terms: readonly GuidanceTerm[]) => GuidanceTerm[],
+  ): Promise<boolean> {
+    const guidance = dependencies.guidance;
+    if (!guidance || disposed || removingWorkIds.has(workId)) return false;
+    if (activeTranslation || dependencies.flow?.active || dependencies.batch?.active) {
+      publish({ error: TERM_SCAN_EDIT_BUSY_MESSAGE });
+      return false;
+    }
+    try {
+      await trackWorkWrite(workId, async () => {
+        const latest = await guidance.read(workId);
+        const terms = latest?.terms ?? [];
+        const next = edit(terms);
+        const changed =
+          next.length !== terms.length || next.some((item, index) => item !== terms[index]);
+        if (!changed) return;
+        await guidance.save(workId, {
+          terms: next,
+          voices: latest?.voices ?? [],
+          ...(latest?.plotSummary !== undefined ? { plotSummary: latest.plotSummary } : {}),
+        });
+      });
+      return true;
+    } catch {
+      publish({ error: TERM_SCAN_SAVE_FAILED_MESSAGE });
+      return false;
+    }
+  }
+  function markTermScanHandled(
+    scan: NonNullable<RenewalSnapshot['termScan']>,
+    source: string,
+  ): void {
+    const current = snapshot.termScan;
+    // 결과가 그새 닫히거나 다른 스캔으로 바뀌었으면 기록하지 않는다.
+    if (!current || current.phase !== 'done' || current.result !== scan.result) return;
+    if (current.handled.includes(source)) return;
+    publish({ termScan: { ...current, handled: [...current.handled, source] } });
+  }
+  async function revertTermScanChange(source: string): Promise<void> {
+    const scan = snapshot.termScan;
+    if (scan?.phase !== 'done' || !scan.result) return;
+    const change = scan.result.applied.find((item) => termKey(item.source) === termKey(source));
+    if (!change || scan.handled.includes(change.source)) return;
+    const original = termScanOriginals.get(termKey(change.source));
+    const saved = await editTermScanTerms(scan.workId, (terms) =>
+      revertScanChange(terms, change, original),
+    );
+    if (saved) markTermScanHandled(scan, change.source);
+  }
+  async function applyTermScanSuggestion(source: string): Promise<void> {
+    const scan = snapshot.termScan;
+    if (scan?.phase !== 'done' || !scan.result) return;
+    const change = scan.result.suggestions.find((item) => termKey(item.source) === termKey(source));
+    if (!change || scan.handled.includes(change.source)) return;
+    const saved = await editTermScanTerms(scan.workId, (terms) => applySuggestion(terms, change));
+    if (saved) markTermScanHandled(scan, change.source);
+  }
   async function translate(repair?: ParagraphRepair): Promise<void> {
+    if (termScanRunning()) {
+      publish({ error: TERM_SCAN_TRANSLATE_BLOCKED });
+      return;
+    }
     const intendedChapter = snapshot.chapter?.chapterId;
     const intendedWorkId = intendedChapter ? chaptersById.get(intendedChapter)?.workId : undefined;
     const intendedOperation = selectionOperation;
@@ -2353,6 +2555,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     );
   }
   async function runBatch(retryUncertain: boolean = false): Promise<void> {
+    if (termScanRunning()) {
+      publish({ error: TERM_SCAN_TRANSLATE_BLOCKED });
+      return;
+    }
     await stopTitles();
     if (
       !dependencies.batch ||
@@ -2428,6 +2634,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   });
   function dispose(): void {
     titleAbort?.abort();
+    termScanAbort?.abort();
     disposed = true;
     sourceOperation++;
     selectionOperation++;
@@ -2564,6 +2771,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     cancelBatch: () => dependencies.batch?.cancel(),
     retryBatchSave,
     openBatch,
+    startTermScan,
+    cancelTermScan,
+    revertTermScanChange,
+    applyTermScanSuggestion,
+    closeTermScan,
     readGuidance: async (workId) => (await dependencies.guidance?.read(workId)) ?? null,
     async saveGuidance(workId, draft) {
       if (

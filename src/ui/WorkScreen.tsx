@@ -3,13 +3,14 @@ import type { ChapterRef, ChapterRemovalResult, WorkPage } from '../contracts/re
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
 import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
+import { TermScanPanel } from './TermScanPanel';
 import { TitleHeading, type TitleControls } from './TitleHeading';
 import { displayedTitle } from '../translation/titles';
 import { BottomSheet, Dialog } from './components/Modal';
 import { Button } from './components/Button';
 import { ListItem } from './components/ListItem';
 import { useSnackbar } from './components/Snackbar';
-import type { WorkRecentSnapshot } from '../app/renewalController';
+import type { RenewalSnapshot, WorkRecentSnapshot } from '../app/renewalController';
 
 const CHAPTER_REMOVAL_UNKNOWN_MESSAGE =
   '삭제 여부를 확인하지 못했어요. 앱을 다시 열어 확인해 주세요.';
@@ -32,8 +33,14 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   recentChapterId?: string;
   recentStatus?: WorkRecentSnapshot['status'] | 'idle';
   batchGlobalBlocked?: boolean;
-  dialogRequest?: { dialog: 'guidance' | 'batch'; id: number; workId: string } | null;
+  dialogRequest?: { dialog: 'guidance' | 'batch' | 'termScan'; id: number; workId: string } | null;
   onDialogRequestHandled?(id: number): void;
+  termScan?: RenewalSnapshot['termScan'];
+  onStartTermScan?(workId: string): void;
+  onCancelTermScan?(): void;
+  onRevertTermScan?(source: string): void;
+  onApplyTermScanSuggestion?(source: string): void;
+  onCloseTermScan?(): void;
   busy: boolean;
   savedChapterIds: readonly string[];
   onSelect(chapter: ChapterRef): void;
@@ -70,6 +77,12 @@ export function WorkScreen({
   guidance,
   titles,
   onRemoveChapter,
+  termScan,
+  onStartTermScan,
+  onCancelTermScan,
+  onRevertTermScan,
+  onApplyTermScanSuggestion,
+  onCloseTermScan,
 }: WorkScreenProps): JSX.Element {
   const [sheetChapter, setSheetChapter] = useState<ChapterRef | null>(null);
   const [dialog, setDialog] = useState<'guidance' | 'batch' | null>(null);
@@ -100,6 +113,35 @@ export function WorkScreen({
     setDialog(null);
     if (requestedDialog && dialogRequest) onDialogRequestHandled?.(dialogRequest.id);
   };
+  const closeTermScanDialog = () => {
+    closeDialog();
+    // 스캔이 도는 동안 닫으면 스캔은 이어진다. 끝난 결과만 닫는다.
+    if (termScan?.phase === 'running')
+      showSnackbar('정밀스캔은 계속 진행돼요. 메뉴의 ‘용어 정밀스캔’에서 다시 볼 수 있어요.');
+    else onCloseTermScan?.();
+  };
+  // 정밀스캔 결과가 새로 나오거나(완료·재스캔 완료) 되돌리기·제안 적용으로 바뀔 때마다 1씩 올린다.
+  const termScanResult = termScan?.result;
+  const termScanHandled = termScan?.handled.length;
+  const [termScanTrack, setTermScanTrack] = useState({
+    result: termScanResult,
+    handled: termScanHandled,
+    revision: 0,
+  });
+  let termScanRevision = termScanTrack.revision;
+  if (termScanTrack.result !== termScanResult || termScanTrack.handled !== termScanHandled) {
+    termScanRevision += 1;
+    setTermScanTrack({
+      result: termScanResult,
+      handled: termScanHandled,
+      revision: termScanRevision,
+    });
+  }
+  // 정밀스캔이 용어집을 바꾸면 열어 둔 용어집 화면도 다시 읽는다.
+  const termScanRefreshKey =
+    termScan?.workId === work.workId && termScan.phase === 'done'
+      ? `term-scan:${termScanRevision}`
+      : undefined;
   const savedCount = new Set(savedChapterIds).size;
   const uniqueChapterCount = new Set(work.chapters.map((chapter) => chapter.chapterId)).size;
   const maximumOrdinal = Math.max(0, ...work.chapters.map((chapter) => chapter.ordinal));
@@ -440,7 +482,14 @@ export function WorkScreen({
               workId={work.workId}
               {...guidance}
               refreshKey={
-                batchRecord?.scan?.status === 'confirmed' ? batchRecord.guidance?.hash : undefined
+                [
+                  batchRecord?.scan?.status === 'confirmed'
+                    ? batchRecord.guidance?.hash
+                    : undefined,
+                  termScanRefreshKey,
+                ]
+                  .filter(Boolean)
+                  .join('|') || undefined
               }
             />
           </div>
@@ -466,6 +515,23 @@ export function WorkScreen({
           onCancelBatch={recentOwnsWork ? onCancelBatch : undefined}
           onRetryBatchSave={recentOwnsWork ? onRetryBatchSave : undefined}
           onSettings={onSettings}
+        />
+      </Dialog>
+      <Dialog
+        open={visibleDialog === 'termScan'}
+        title="용어 정밀스캔"
+        onClose={closeTermScanDialog}
+        fullScreen
+        keepMounted
+      >
+        <TermScanPanel
+          workId={work.workId}
+          savedCount={savedCount}
+          state={termScan ?? null}
+          onStart={() => onStartTermScan?.(work.workId)}
+          onCancel={() => onCancelTermScan?.()}
+          onRevert={(source) => onRevertTermScan?.(source)}
+          onApplySuggestion={(source) => onApplyTermScanSuggestion?.(source)}
         />
       </Dialog>
       {recentChapterId && !recentIsLoaded && (
