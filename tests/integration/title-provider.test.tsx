@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { FilesystemPlugin } from '@capacitor/filesystem';
 import { createRenewalApplication } from '../../src/app/compose';
@@ -11,10 +11,6 @@ import { createGuidanceRepository } from '../../src/translation/guidance';
 import { createTitleTranslation, createTitleRepository } from '../../src/translation/titles';
 import { DEFAULT_LOCAL_LIMITS } from '../../src/translation/segments';
 import { createNativePrivateFiles } from '../../src/storage/native';
-
-// 이 파일의 화면 대기는 모두 백그라운드 컨트롤러 작업(제목 번역·회차 열기·저장)의 결과를 기다린다. 기본 1초는
-// 다른 vitest와 동시에 돌 때 모자라므로 이 파일에서만 늘린다(#186). vitest는 파일마다 모듈을 격리한다.
-configure({ asyncUtilTimeout: 10_000 });
 
 const url = 'https://ncode.syosetu.com/n1234ab/';
 const toc =

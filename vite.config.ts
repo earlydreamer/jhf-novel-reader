@@ -42,6 +42,7 @@ export default defineConfig({
     // 통합 테스트는 jsdom 전체 렌더·Node 자식 프로세스 때문에 단독으로도 1~3초 걸리고, 다른 vitest와 동시에 돌면
     // 3~4배 느려진다(#186 측정: 최악 약 12초). 시간 제한은 멈춘 테스트를 끊는 안전장치라 판정 의미는 바뀌지 않는다.
     testTimeout: 20_000,
+    setupFiles: ['tests/setup/testing-library.ts'],
     // .superpowers/는 git-ignored 검증·인계 작업 폴더다. 그 안의 테스트 사본을 수집하지 않는다(#101).
     exclude: [...configDefaults.exclude, '.superpowers/**'],
   },
