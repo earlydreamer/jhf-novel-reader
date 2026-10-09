@@ -130,6 +130,11 @@ export interface RenewalSource {
 export interface ProviderSession {
   listModels(signal: AbortSignal): Promise<readonly ModelChoice[]>;
   translateChapter(request: WholeChapterRequest, signal: AbortSignal): Promise<WholeChapterResult>;
+  /** 짧은 JSON 응답 요청(용어집 생성 등). 비스트리밍, 온도 0. 지원하지 않는 제공자는 두지 않는다. */
+  completeJson?(
+    request: { system: string; user: string; schema: Record<string, unknown>; maxTokens: number },
+    signal: AbortSignal,
+  ): Promise<unknown>;
 }
 export interface LibraryStore {
   saveWorkPage(page: WorkPage): Promise<void>;
