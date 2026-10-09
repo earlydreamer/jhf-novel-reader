@@ -5,7 +5,12 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
-import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
+import {
+  createRenewalController,
+  type ConnectionCheckResult,
+  type RenewalDependencies,
+  type RenewalSnapshot,
+} from '../../src/app/renewalController';
 import { ReaderError } from '../../src/contracts';
 import type { ConnectionConfig, ModelChoice } from '../../src/contracts/reading';
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
@@ -904,5 +909,102 @@ describe('연결 확인 결과 알림', () => {
     expect(connectionStatusText()).not.toContain(host);
     expect(document.body.textContent).not.toContain(canary);
     value.controller.dispose();
+  });
+});
+
+describe('설정 모델 행 (#176)', () => {
+  const baseUrl = 'http://192.0.2.1/v1';
+  const gguf = '/home/u/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf';
+  const readable = 'gemma-4-E4B-it-UD-Q4_K_XL';
+  const snapshot = (overrides: Partial<RenewalSnapshot> = {}): RenewalSnapshot => {
+    const base = createRenewalController().getSnapshot();
+    return {
+      ...base,
+      connectionAvailable: true,
+      connection: { ...base.connection, baseUrl },
+      ...overrides,
+    };
+  };
+  const ui = (state: RenewalSnapshot, onCheck: () => Promise<ConnectionCheckResult>) => (
+    <SnackbarProvider>
+      <SettingsScreen state={state} onChange={() => {}} onCheck={onCheck} onSelect={() => {}} />
+    </SnackbarProvider>
+  );
+  const snackbarText = () => document.querySelector('.nr-snackbar__text')?.textContent;
+
+  it('목록이 비어도 저장된 모델의 읽을 수 있는 이름을 보여 주고 행을 활성으로 둬요', () => {
+    const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => ({ kind: 'superseded' }));
+    render(ui(snapshot({ selectedModelId: gguf, models: [] }), onCheck));
+
+    expect(screen.getByRole('button', { name: `모델 ${readable}` })).toBeEnabled();
+  });
+
+  it('목록 없이 행을 누르면 연결을 한 번 확인하고 생성 모델이 오면 모델 선택 창을 열어요', async () => {
+    const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => ({
+      kind: 'done',
+      status: 'connected',
+      modelCount: 1,
+      problem: null,
+    }));
+    const view = render(ui(snapshot({ selectedModelId: gguf, models: [] }), onCheck));
+
+    fireEvent.click(screen.getByRole('button', { name: `모델 ${readable}` }));
+
+    expect(onCheck).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: '모델 선택' })).not.toBeInTheDocument();
+    view.rerender(
+      ui(
+        snapshot({
+          selectedModelId: gguf,
+          catalogStatus: 'connected',
+          models: [{ id: gguf, displayName: readable, supportsGeneration: true }],
+        }),
+        onCheck,
+      ),
+    );
+    expect(await screen.findByRole('dialog', { name: '모델 선택' })).toBeVisible();
+  });
+
+  it('연결 확인이 실패해 목록이 계속 비면 모델 선택 창을 열지 않고 실패를 알려요', async () => {
+    const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => {
+      throw new Error('synthetic check failure');
+    });
+    const view = render(ui(snapshot({ selectedModelId: gguf, models: [] }), onCheck));
+
+    fireEvent.click(screen.getByRole('button', { name: `모델 ${readable}` }));
+
+    await waitFor(() =>
+      expect(snackbarText()).toBe('모델 목록을 불러오지 못했어요. 잠시 뒤 다시 확인해 주세요.'),
+    );
+    view.rerender(
+      ui(snapshot({ selectedModelId: gguf, catalogStatus: 'connection', models: [] }), onCheck),
+    );
+    expect(screen.queryByRole('dialog', { name: '모델 선택' })).not.toBeInTheDocument();
+  });
+
+  it('목록에 표시 이름이 있으면 파일 경로 대신 그 이름을 써요', () => {
+    render(
+      ui(
+        snapshot({
+          selectedModelId: gguf,
+          catalogStatus: 'connected',
+          models: [{ id: gguf, displayName: '보기 좋은 이름', supportsGeneration: true }],
+        }),
+        vi.fn(async (): Promise<ConnectionCheckResult> => ({ kind: 'superseded' })),
+      ),
+    );
+
+    expect(screen.getByRole('button', { name: '모델 보기 좋은 이름' })).toBeEnabled();
+  });
+
+  it('선택한 모델도 목록도 없으면 모델 행을 비활성으로 둬요', () => {
+    render(
+      ui(
+        snapshot({ selectedModelId: null, models: [] }),
+        vi.fn(async (): Promise<ConnectionCheckResult> => ({ kind: 'superseded' })),
+      ),
+    );
+
+    expect(screen.getByRole('button', { name: '모델 선택 전' })).toBeDisabled();
   });
 });
