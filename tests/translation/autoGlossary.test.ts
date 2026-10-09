@@ -1,12 +1,20 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import {
   autoGlossaryCandidates,
+  createAutoGlossary,
   glossaryRequest,
   mergeGlossaryProposals,
   parseGlossaryProposals,
   shouldGenerateGlossary,
 } from '../../src/translation/autoGlossary';
-import type { GuidanceTerm } from '../../src/translation/guidance';
+import type {
+  GuidanceDraft,
+  GuidanceRepository,
+  GuidanceTerm,
+  WorkGuidance,
+} from '../../src/translation/guidance';
+import type { ProviderSession, SelectedModel } from '../../src/contracts/reading';
+import { source } from '../providers/wholeChapterFixture';
 
 const term = (overrides: Partial<GuidanceTerm> & { source: string }): GuidanceTerm => ({
   target: '번역',
@@ -165,4 +173,239 @@ test('merge leaves names already present in any origin untouched and appends new
     { source: 'リン', target: '린', aliases: [], category: '인명', note: '', origin: 'model' },
   ]);
   expect(existing).toEqual(before);
+});
+
+test('candidates skip names of auto terms too, so an unapplied name is not proposed again', () => {
+  const candidates = autoGlossaryCandidates(
+    [
+      paragraph('アルベルトが来た。'),
+      paragraph('アルベルトは去った。'),
+      paragraph('ヴォルフが来た。'),
+      paragraph('ヴォルフは去った。'),
+    ],
+    [
+      term({ source: 'アルベルト', origin: 'auto' }),
+      term({ source: 'ベルナルド', aliases: ['ヴォルフ'], origin: 'auto' }),
+    ],
+  );
+  expect(candidates).toEqual([]);
+});
+
+test('merge turns an auto term matched by name into a model term in place and keeps its other fields', () => {
+  const existing = [
+    term({ source: '北嶋', target: '기타지마' }),
+    term({
+      source: 'アルベルト',
+      target: '아르베르토',
+      aliases: ['アル'],
+      category: '인명',
+      note: '메모',
+      origin: 'auto',
+    }),
+    term({
+      source: 'ミナ',
+      target: '미나',
+      origin: 'scan',
+      evidence: [{ kind: 'ruby', note: '루비' }],
+    }),
+  ];
+  const before = structuredClone(existing);
+  const result = mergeGlossaryProposals(existing, [
+    { source: 'アル', target: '알베르트', category: '별명' },
+    { source: '北嶋', target: '다른', category: '인명' },
+    { source: 'ミナ', target: '다른', category: '인명' },
+  ]);
+  expect(result).toEqual([
+    before[0],
+    {
+      source: 'アルベルト',
+      target: '알베르트',
+      aliases: ['アル'],
+      category: '별명',
+      note: '메모',
+      origin: 'model',
+    },
+    before[2],
+  ]);
+  expect(existing).toEqual(before);
+});
+
+const selection: SelectedModel = {
+  connection: { provider: 'openai-compatible', baseUrl: 'http://localhost:1234', revision: 0 },
+  modelId: 'local',
+};
+const chapterOf = (...texts: string[]) => ({
+  ...source,
+  paragraphs: texts.map((text, index) => ({ id: `p${index}`, text, ruby: [] })),
+});
+const noJson: ProviderSession = {
+  listModels: async () => [],
+  translateChapter: async () => {
+    throw new Error('unused');
+  },
+};
+function modelSession(value: unknown) {
+  const completeJson = vi.fn<(request: { user: string }, signal: AbortSignal) => Promise<unknown>>(
+    async () => value,
+  );
+  const session: ProviderSession = {
+    listModels: async () => [],
+    translateChapter: async () => {
+      throw new Error('unused');
+    },
+    completeJson,
+  };
+  return { session, completeJson };
+}
+function memoryGuidance(initial?: GuidanceDraft) {
+  let current: GuidanceDraft | null = initial ?? null;
+  const save = vi.fn(async (workId: string, draft: GuidanceDraft) => {
+    current = structuredClone(draft);
+    return { schemaVersion: 1, workId, hash: 'hash', ...structuredClone(draft) } as WorkGuidance;
+  });
+  const repository: GuidanceRepository = {
+    read: async (workId: string) =>
+      current
+        ? ({ schemaVersion: 1, workId, hash: 'hash', ...structuredClone(current) } as WorkGuidance)
+        : null,
+    save,
+  };
+  return { repository, save };
+}
+const signal = () => new AbortController().signal;
+
+test('createAutoGlossary skips a provider without completeJson and saves nothing', async () => {
+  const { repository, save } = memoryGuidance();
+  const run = createAutoGlossary(() => noJson, repository);
+  await expect(
+    run({
+      workId: 'n1234ab',
+      source: chapterOf('北嶋は笑った。', '北嶋は去った。'),
+      selection,
+      signal: signal(),
+    }),
+  ).resolves.toBe('skipped');
+  expect(save).not.toHaveBeenCalled();
+});
+
+test('createAutoGlossary does not call the model when no candidates exist and applied terms are present', async () => {
+  const { repository, save } = memoryGuidance({
+    terms: [term({ source: '北嶋', origin: 'scan' })],
+    voices: [],
+  });
+  const { session, completeJson } = modelSession({ terms: [] });
+  const run = createAutoGlossary(() => session, repository);
+  await expect(
+    run({ workId: 'n1234ab', source: chapterOf('北嶋は笑った。'), selection, signal: signal() }),
+  ).resolves.toBe('skipped');
+  expect(completeJson).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+});
+
+test('createAutoGlossary saves only new model terms and keeps human terms, plot summary and voices', async () => {
+  const human = term({ source: '北嶋', target: '기타지마', aliases: ['キタジマ'] });
+  const voice = { name: '北嶋', aliases: [], instruction: '반말' };
+  const { repository, save } = memoryGuidance({
+    terms: [human],
+    voices: [voice],
+    plotSummary: '요약',
+  });
+  const { session } = modelSession({
+    terms: [
+      { source: '北嶋', target: '다른', category: '인명' },
+      { source: 'リリアン', target: '릴리언', category: '인명' },
+    ],
+  });
+  const run = createAutoGlossary(() => session, repository);
+  await expect(
+    run({
+      workId: 'n1234ab',
+      source: chapterOf('北嶋は笑った。', 'リリアンが来た。', 'リリアンは去った。'),
+      selection,
+      signal: signal(),
+    }),
+  ).resolves.toBe('added');
+  expect(save).toHaveBeenCalledWith('n1234ab', {
+    terms: [
+      human,
+      {
+        source: 'リリアン',
+        target: '릴리언',
+        aliases: [],
+        category: '인명',
+        note: '',
+        origin: 'model',
+      },
+    ],
+    voices: [voice],
+    plotSummary: '요약',
+  });
+});
+
+test('createAutoGlossary saves nothing when every proposal is already present', async () => {
+  const { repository, save } = memoryGuidance({
+    terms: [term({ source: '北嶋', target: '기타지마' })],
+    voices: [],
+  });
+  const { session } = modelSession({
+    terms: [{ source: '北嶋', target: '다른', category: '인명' }],
+  });
+  const run = createAutoGlossary(() => session, repository);
+  await expect(
+    run({
+      workId: 'n1234ab',
+      source: chapterOf('北嶋は笑った。ミナミが来た。ミナミは去った。'),
+      selection,
+      signal: signal(),
+    }),
+  ).resolves.toBe('skipped');
+  expect(save).not.toHaveBeenCalled();
+});
+
+test('createAutoGlossary saves an auto term that a proposal matches as a model term, keeping the count', async () => {
+  const { repository, save } = memoryGuidance({
+    terms: [
+      term({ source: 'アルベルト', target: '아르베르토', origin: 'auto' }),
+      term({ source: '北嶋', origin: 'scan' }),
+    ],
+    voices: [],
+  });
+  const { session } = modelSession({
+    terms: [{ source: 'アルベルト', target: '알베르트', category: '인명' }],
+  });
+  const run = createAutoGlossary(() => session, repository);
+  await expect(
+    run({
+      workId: 'n1234ab',
+      source: chapterOf('アルベルトが来た。ミナミが来た。ミナミは去った。'),
+      selection,
+      signal: signal(),
+    }),
+  ).resolves.toBe('added');
+  expect(save.mock.calls[0]?.[1].terms).toEqual([
+    {
+      source: 'アルベルト',
+      target: '알베르트',
+      aliases: [],
+      category: '인명',
+      note: '',
+      origin: 'model',
+    },
+    term({ source: '北嶋', origin: 'scan' }),
+  ]);
+});
+
+test('createAutoGlossary sends only the first 12,000 characters of the chapter', async () => {
+  const { repository } = memoryGuidance();
+  const { session, completeJson } = modelSession({ terms: [] });
+  const run = createAutoGlossary(() => session, repository);
+  await run({
+    workId: 'n1234ab',
+    source: chapterOf('あ'.repeat(12000), '末尾'),
+    selection,
+    signal: signal(),
+  });
+  const request = completeJson.mock.calls[0]?.[0];
+  expect(request?.user.endsWith('あ'.repeat(12000))).toBe(true);
+  expect(request?.user).not.toContain('末尾');
 });

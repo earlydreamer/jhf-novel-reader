@@ -1,4 +1,5 @@
-import type { GuidanceTerm } from './guidance';
+import type { ProviderSession, SelectedModel, SourceSnapshot } from '../contracts/reading';
+import type { GuidanceRepository, GuidanceTerm } from './guidance';
 import { createNameCandidateScan } from './scan';
 
 export type GlossaryProposal = { source: string; target: string; category: string };
@@ -13,7 +14,11 @@ const nameKey = (name: string) => name.normalize('NFKC');
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** 이 회차 원문에서 용어집에 아직 없는 규칙 후보(루비, 회차 안에서 2번 이상 나온 가타카나 이름). */
+/**
+ * 이 회차 원문에서 용어집에 아직 없는 규칙 후보(루비, 회차 안에서 2번 이상 나온 가타카나 이름).
+ * 용어집의 모든 항목(출처 무관)의 source·aliases에 있는 이름은 뺀다. 미확정('auto') 이름도 제외해야
+ * 회차마다 같은 후보로 생성 요청이 반복되지 않는다.
+ */
 export function autoGlossaryCandidates(
   paragraphs: readonly {
     text: string;
@@ -26,7 +31,11 @@ export function autoGlossaryCandidates(
     chapterId: 'chapter',
     paragraphs: paragraphs.map((paragraph, index) => ({ id: `p${index}`, ...paragraph })),
   });
-  return scan.result().map((candidate) => candidate.source);
+  const knownNames = new Set(known.flatMap((term) => [term.source, ...term.aliases]).map(nameKey));
+  return scan
+    .result()
+    .map((candidate) => candidate.source)
+    .filter((source) => !knownNames.has(nameKey(source)));
 }
 
 /** 생성할지 판단: 규칙 후보가 있거나, 작품 용어집에 적용 항목이 하나도 없을 때(첫 회차, 한자 이름 추출용). */
@@ -118,16 +127,38 @@ export function parseGlossaryProposals(value: unknown, chapterText: string): Glo
 }
 
 /**
- * 병합: 이미 있는 이름(source·aliases, NFKC)은 출처와 관계없이 건드리지 않는다. 새 항목만 origin 'model'로 뒤에 추가한다.
+ * 병합: 사람·'scan'·'model' 항목과 같은 이름(source·aliases, NFKC)은 건드리지 않는다.
+ * 'auto' 항목과 같은 이름이면 그 항목을 제자리에서 'model'로 바꾼다(표기·분류는 제안 값, 이름·별칭·메모는 기존 값).
+ * 나머지 새 항목만 origin 'model'로 뒤에 추가한다.
  */
 export function mergeGlossaryProposals(
   terms: readonly GuidanceTerm[],
   proposals: readonly GlossaryProposal[],
 ): GuidanceTerm[] {
   const names = new Set(terms.flatMap((term) => [term.source, ...term.aliases]).map(nameKey));
+  const autoAt = new Map<string, number>();
+  terms.forEach((term, index) => {
+    if (term.origin !== 'auto') return;
+    for (const name of [term.source, ...term.aliases]) autoAt.set(nameKey(name), index);
+  });
+  const merged = [...terms];
   const added: GuidanceTerm[] = [];
   for (const proposal of proposals) {
     const key = nameKey(proposal.source);
+    const index = autoAt.get(key);
+    if (index !== undefined) {
+      const auto = terms[index]!;
+      merged[index] = {
+        source: auto.source,
+        target: proposal.target,
+        aliases: [...auto.aliases],
+        category: proposal.category,
+        note: auto.note,
+        origin: 'model',
+      };
+      for (const name of [auto.source, ...auto.aliases]) autoAt.delete(nameKey(name));
+      continue;
+    }
     if (names.has(key)) continue;
     names.add(key);
     added.push({
@@ -139,5 +170,50 @@ export function mergeGlossaryProposals(
       origin: 'model',
     });
   }
-  return [...terms, ...added];
+  return [...merged, ...added];
+}
+
+export type AutoGlossaryResult = 'skipped' | 'added';
+
+/** 번역 직전 자동 용어집. 후보가 없으면 건너뛰고, 새 항목만 'model'로 저장한다. 실패는 throw. */
+export function createAutoGlossary(
+  createProvider: (selection: SelectedModel) => ProviderSession,
+  guidance: GuidanceRepository,
+): (input: {
+  workId: string;
+  source: SourceSnapshot;
+  selection: SelectedModel;
+  signal: AbortSignal;
+}) => Promise<AutoGlossaryResult> {
+  return async ({ workId, source, selection, signal }) => {
+    const session = createProvider(selection);
+    if (!session.completeJson) return 'skipped';
+    const current = await guidance.read(workId);
+    const known = current?.terms ?? [];
+    const candidates = autoGlossaryCandidates(source.paragraphs, known);
+    if (!shouldGenerateGlossary(candidates, known)) return 'skipped';
+    // 작은 모델의 맥락 한도 대비. 이름은 보통 회차 앞부분에 나온다.
+    const text = source.paragraphs
+      .filter((paragraph) => paragraph.text.trim())
+      .map((paragraph) => paragraph.text)
+      .join('\n')
+      .slice(0, 12000);
+    const value = await session.completeJson(glossaryRequest(text, candidates), signal);
+    const proposals = parseGlossaryProposals(value, text);
+    if (!proposals.length) return 'skipped';
+    // 생성 요청 동안 사람이 고친 내용을 보존하려고 저장 직전에 다시 읽는다.
+    const latest = await guidance.read(workId);
+    const latestTerms = latest?.terms ?? [];
+    const terms = mergeGlossaryProposals(latestTerms, proposals);
+    const changed =
+      terms.length !== latestTerms.length ||
+      terms.some((term, index) => term !== latestTerms[index]);
+    if (!changed) return 'skipped';
+    await guidance.save(workId, {
+      terms,
+      voices: latest?.voices ?? [],
+      ...(latest?.plotSummary !== undefined ? { plotSummary: latest.plotSummary } : {}),
+    });
+    return 'added';
+  };
 }
