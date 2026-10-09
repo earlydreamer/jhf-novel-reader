@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { ReaderError } from '../../src/contracts';
@@ -196,6 +196,39 @@ test('immersive bars are inert while hidden, keyboard reveal opens them, and Bac
   expect(screen.getByRole('toolbar', { name: '읽기 도구' })).not.toHaveAttribute('inert');
   act(() => expect(runTopBackHandler()).toBe(true));
   expect(document.querySelector('.nr-toolbar')).toHaveAttribute('inert');
+});
+
+test('reader toolbar puts 이전 화 and 다음 화 at the ends and groups 목차 and 보기 설정 in the centre', () => {
+  render(<ImmersiveReader {...props()} />);
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+
+  const toolbar = screen.getByRole('toolbar', { name: '읽기 도구' });
+  expect(toolbar).toHaveClass('nr-reader-toolbar');
+  expect(toolbar.children).toHaveLength(3);
+  expect(toolbar.children[0]).toHaveAccessibleName('이전 화');
+  expect(toolbar.children[2]).toHaveAccessibleName('다음 화');
+  const centre = toolbar.children[1] as HTMLElement;
+  expect(centre).toHaveClass('nr-reader-toolbar__center');
+  expect(within(centre).getByRole('button', { name: '목차' })).toBeInTheDocument();
+  expect(within(centre).getByRole('button', { name: '보기 설정' })).toBeInTheDocument();
+});
+
+test('reader toolbar arrow keys move through 이전 화, 목차, 보기 설정, 다음 화 across the centre group', () => {
+  const previous: ChapterRef = { ...chapter, chapterId: 'prev', title: '앞', ordinal: 1 };
+  const next: ChapterRef = { ...chapter, chapterId: 'next', title: '뒤', ordinal: 3 };
+  render(
+    <ImmersiveReader {...props({ work: { ...work, chapters: [previous, chapter, next] } })} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+
+  const toolbar = screen.getByRole('toolbar', { name: '읽기 도구' });
+  screen.getByRole('button', { name: '이전 화' }).focus();
+  fireEvent.keyDown(toolbar, { key: 'ArrowRight' });
+  expect(screen.getByRole('button', { name: '목차' })).toHaveFocus();
+  fireEvent.keyDown(toolbar, { key: 'ArrowRight' });
+  expect(screen.getByRole('button', { name: '보기 설정' })).toHaveFocus();
+  fireEvent.keyDown(toolbar, { key: 'ArrowRight' });
+  expect(screen.getByRole('button', { name: '다음 화' })).toHaveFocus();
 });
 
 test('a valid saved translation with mismatched source paragraph count remains readable with whole-original toggle', () => {

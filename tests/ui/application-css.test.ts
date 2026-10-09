@@ -104,6 +104,26 @@ describe('application.css screen defaults', () => {
 
 const readerCss = readFileSync('src/ui/immersive-reader.css', 'utf8');
 
+describe('immersive-reader.css reader toolbar split (#152)', () => {
+  it('회차 이동 툴바는 배경 없이 양 끝으로 벌리고 빈 가운데는 터치를 통과시킨다', () => {
+    const bar = rules(readerCss).find((rule) => rule.selector === '.nr-toolbar.nr-reader-toolbar');
+    expect(bar?.body).toMatch(/justify-content:\s*space-between;/);
+    expect(bar?.body).toMatch(/pointer-events:\s*none;/);
+    expect(bar?.body).toMatch(/background:\s*transparent;/);
+  });
+
+  it('양 끝 버튼과 가운데 묶음만 터치를 받는다', () => {
+    const ends = rules(readerCss).find((rule) =>
+      selectorParts(rule.selector).includes('.nr-reader-toolbar > .nr-reader-symbol-button'),
+    );
+    const centre = rules(readerCss).find((rule) =>
+      selectorParts(rule.selector).includes('.nr-reader-toolbar__center'),
+    );
+    expect(ends?.body).toMatch(/pointer-events:\s*auto;/);
+    expect(centre?.body).toMatch(/pointer-events:\s*auto;/);
+  });
+});
+
 describe('immersive-reader.css progress bar', () => {
   it('앱바가 숨으면 번역 진행 막대를 화면 맨 위로 올린다', () => {
     const hidden = rules(readerCss).find(
