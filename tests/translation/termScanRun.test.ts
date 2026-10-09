@@ -1,0 +1,469 @@
+import { expect, test } from 'vitest';
+import { ReaderError } from '../../src/contracts';
+import type {
+  CompletedTranslation,
+  ProviderSession,
+  SelectedModel,
+} from '../../src/contracts/reading';
+import type { Kanjidic } from '../../src/translation/kanjidic';
+import type {
+  GuidanceDraft,
+  GuidanceRepository,
+  GuidanceTerm,
+  WorkGuidance,
+} from '../../src/translation/guidance';
+import type { JudgeKind } from '../../src/translation/termJudge';
+import {
+  applySuggestion,
+  createTermScan,
+  revertScanChange,
+  type TermScanChange,
+  type TermScanProgress,
+} from '../../src/translation/termScanRun';
+
+type Answer = { kind?: JudgeKind; category?: string; target: string; reason?: string };
+type ProviderHooks = { onCall?: (call: number) => void; fail?: (call: number) => boolean };
+type Request = { system: string; user: string; temperature?: number };
+
+const NOW = '2026-10-03T00:00:00Z';
+const selection = { modelId: 'fake-model' } as SelectedModel;
+
+const term = (source: string, target: string, extra: Partial<GuidanceTerm> = {}): GuidanceTerm => ({
+  source,
+  target,
+  aliases: [],
+  category: '',
+  note: '',
+  ...extra,
+});
+const change = (
+  extra: Partial<TermScanChange> & Pick<TermScanChange, 'source' | 'role' | 'after'>,
+): TermScanChange => ({
+  kind: 'work',
+  category: '인명',
+  confidence: 'high',
+  reason: '',
+  evidence: [],
+  ...extra,
+});
+const workGuidance = (terms: GuidanceTerm[]): WorkGuidance => ({
+  schemaVersion: 1,
+  workId: 'w1',
+  hash: 'h0',
+  terms,
+  voices: [],
+});
+const version = (
+  createdAt: string,
+  paragraphs: { text: string; ruby?: { start: number; end: number; reading: string }[] }[],
+) =>
+  ({
+    versionId: createdAt,
+    createdAt,
+    source: {
+      paragraphs: paragraphs.map((paragraph, index) => ({
+        id: `p${index}`,
+        text: paragraph.text,
+        ruby: paragraph.ruby ?? [],
+      })),
+    },
+  }) as unknown as CompletedTranslation;
+const oneVersion = (text: string, ruby?: { start: number; end: number; reading: string }[]) => [
+  version(NOW, [{ text, ruby }]),
+];
+const kanjidic = (): Kanjidic => {
+  const entries: Record<string, { ko: string[]; en: string[] }> = {
+    王: { ko: ['왕'], en: ['king'] },
+    都: { ko: ['도'], en: ['city'] },
+  };
+  return { version: 'test', lookup: (char) => entries[char] ?? null };
+};
+
+function fakeProvider(answers: Record<string, Answer>, hooks: ProviderHooks) {
+  const requests: Request[] = [];
+  const session = {
+    listModels: async () => [],
+    translateChapter: async () => {
+      throw new Error('unused');
+    },
+    completeJson: async (request: Request) => {
+      requests.push(request);
+      const call = requests.length;
+      hooks.onCall?.(call);
+      if (hooks.fail?.(call)) throw new Error('boom');
+      const items = [...request.user.matchAll(/^\[(c\d+)\] (.+)$/gm)].flatMap(([, id, source]) => {
+        const answer = answers[source ?? ''];
+        return answer
+          ? [
+              {
+                id,
+                kind: answer.kind ?? 'work',
+                category: answer.category ?? '인명',
+                target: answer.target,
+                reason: answer.reason ?? `근거 ${answer.target}`,
+              },
+            ]
+          : [];
+      });
+      return { items };
+    },
+  };
+  return { session: session as unknown as ProviderSession, requests };
+}
+
+function fakeGuidance(terms: GuidanceTerm[]) {
+  const state: { value: WorkGuidance | null } = { value: workGuidance(terms) };
+  const saves: GuidanceDraft[] = [];
+  const repository: GuidanceRepository = {
+    read: async () => state.value,
+    save: async (workId, draft) => {
+      saves.push(draft);
+      state.value = { ...draft, schemaVersion: 1, workId, hash: 'h1', voices: draft.voices };
+      return state.value;
+    },
+  };
+  return { state, saves, repository };
+}
+
+function fakeLibrary(versions: Record<string, CompletedTranslation[]>) {
+  return { listVersions: async (chapterId: string) => versions[chapterId] ?? [] };
+}
+
+function harness(input: {
+  versions: Record<string, CompletedTranslation[]>;
+  terms?: GuidanceTerm[];
+  answers?: Record<string, Answer>;
+  loadKanjidic?: () => Promise<Kanjidic>;
+}) {
+  const hooks: ProviderHooks = {};
+  const provider = fakeProvider(input.answers ?? {}, hooks);
+  const guidance = fakeGuidance(input.terms ?? []);
+  const scan = createTermScan({
+    createProvider: () => provider.session,
+    guidance: guidance.repository,
+    library: fakeLibrary(input.versions),
+    loadKanjidic: input.loadKanjidic ?? (async () => kanjidic()),
+  });
+  return { hooks, scan, requests: provider.requests, ...guidance };
+}
+type Harness = ReturnType<typeof harness>;
+
+const run = (
+  h: Harness,
+  chapterIds = ['c1'],
+  onProgress?: (progress: TermScanProgress) => void,
+  signal = new AbortController().signal,
+) => h.scan({ workId: 'w1', chapterIds, selection, signal, onProgress });
+
+test('최신 저장본의 원문만 쓰고 저장본이 없는 회차는 건너뛴다', async () => {
+  const h = harness({
+    versions: {
+      c1: [
+        version('2026-10-01T00:00:00Z', [{ text: 'アルベルトが笑う。アルベルトは去った。' }]),
+        version(NOW, [{ text: 'カミラが笑う。カミラは去った。' }]),
+      ],
+      c2: [],
+    },
+    answers: { カミラ: { target: '카미라' } },
+  });
+  const result = await run(h, ['c1', 'c2']);
+  const users = h.requests.map((request) => request.user).join('\n');
+  expect(users).toContain('カミラ');
+  expect(users).not.toContain('アルベルト');
+  expect(result.applied.map((item) => item.source)).toEqual(['カミラ']);
+});
+
+test('후보를 8개씩 묶고 묶음마다 3회 요청하며 온도는 0, 0.7, 0.7이다', async () => {
+  const names = [
+    'アルフ',
+    'ベルナ',
+    'カルロ',
+    'ダリア',
+    'エルザ',
+    'フレイ',
+    'ゴルド',
+    'ハンナ',
+    'イリス',
+  ];
+  const h = harness({
+    versions: { c1: oneVersion(names.map((name) => `${name}が${name}に会う。`).join('')) },
+  });
+  const progress: TermScanProgress[] = [];
+  await run(h, ['c1'], (item) => progress.push(item));
+  expect(h.requests.map((request) => request.temperature)).toEqual([0, 0.7, 0.7, 0, 0.7, 0.7]);
+  expect(h.requests.map((request) => (request.user.match(/^\[c\d+\]/gm) ?? []).length)).toEqual([
+    8, 8, 8, 1, 1, 1,
+  ]);
+  expect(progress.filter((item) => item.stage === 'judge').map((item) => item.total)).toEqual([
+    6, 6, 6, 6, 6, 6,
+  ]);
+});
+
+test('새 항목은 origin scan과 ruby·kanjidic·model 근거를 가지며 common은 추가하지 않는다', async () => {
+  const h = harness({
+    versions: {
+      c1: [
+        version(NOW, [
+          { text: '王都へ行く。', ruby: [{ start: 0, end: 2, reading: 'おうと' }] },
+          { text: 'ハンナが笑う。ハンナは去った。' },
+        ]),
+      ],
+    },
+    answers: {
+      王都: { kind: 'real', category: '지명', target: '왕도', reason: '왕도 표기' },
+      ハンナ: { kind: 'common', category: '기타', target: '한나', reason: '일반 명사' },
+    },
+  });
+  const result = await run(h);
+  const evidence = [
+    { kind: 'ruby', note: '루비: おうと' },
+    { kind: 'kanjidic', note: '王=왕 都=도' },
+    { kind: 'model', note: '판정 3/3 · 왕도 표기' },
+  ];
+  expect(result.applied).toEqual([
+    {
+      source: '王都',
+      role: 'new',
+      after: '왕도',
+      kind: 'real',
+      category: '지명',
+      confidence: 'high',
+      reason: '왕도 표기',
+      evidence,
+    },
+  ]);
+  expect(h.saves).toHaveLength(1);
+  expect(h.saves[0]!.terms).toEqual([
+    {
+      source: '王都',
+      target: '왕도',
+      aliases: [],
+      category: '지명',
+      note: '',
+      origin: 'scan',
+      evidence,
+    },
+  ]);
+});
+
+test('사전을 불러오지 못해도 kanjidic 근거 없이 계속한다', async () => {
+  const h = harness({
+    versions: {
+      c1: oneVersion('王都へ行く。', [{ start: 0, end: 2, reading: 'おうと' }]),
+    },
+    answers: { 王都: { kind: 'real', category: '지명', target: '왕도' } },
+    loadKanjidic: async () => {
+      throw new Error('missing');
+    },
+  });
+  const result = await run(h);
+  expect(result.applied[0]?.evidence.map((item) => item.kind)).toEqual(['ruby', 'model']);
+});
+
+test('recheck는 표기가 바뀌면 교체하고, 같으면 근거만 붙이며, 사람 항목은 제안으로만 남긴다', async () => {
+  const h = harness({
+    terms: [
+      term('カミラ', '카밀라', { aliases: ['カミラ姫'], note: '메모', origin: 'model' }),
+      term('ダリア', '다리아', { origin: 'auto' }),
+      term('エルザ', '엘자'),
+    ],
+    versions: {
+      c1: oneVersion(
+        'カミラが笑う。カミラは去った。ダリアが来た。ダリアは帰った。エルザが立つ。エルザは座る。',
+      ),
+    },
+    answers: {
+      カミラ: { target: '카미라', reason: '근거 카미라' },
+      ダリア: { target: '다리아', reason: '근거 다리아' },
+      エルザ: { target: '엘사', reason: '근거 엘사' },
+    },
+  });
+  const result = await run(h);
+  expect(result.applied.map((item) => [item.source, item.role, item.before, item.after])).toEqual([
+    ['カミラ', 'recheck', '카밀라', '카미라'],
+  ]);
+  expect(result.confirmed).toBe(1);
+  expect(
+    result.suggestions.map((item) => [item.source, item.role, item.before, item.after]),
+  ).toEqual([['エルザ', 'suggest', '엘자', '엘사']]);
+  expect(result.partial).toBe(false);
+  const saved = h.saves[0]!.terms;
+  expect(saved.find((item) => item.source === 'カミラ')).toEqual({
+    source: 'カミラ',
+    target: '카미라',
+    aliases: ['カミラ姫'],
+    category: '인명',
+    note: '메모',
+    origin: 'scan',
+    evidence: [{ kind: 'model', note: '판정 3/3 · 근거 카미라' }],
+  });
+  expect(saved.find((item) => item.source === 'ダリア')).toMatchObject({
+    target: '다리아',
+    origin: 'scan',
+    evidence: [{ kind: 'model', note: '판정 3/3 · 근거 다리아' }],
+  });
+  expect(saved.find((item) => item.source === 'エルザ')).toEqual(term('エルザ', '엘자'));
+});
+
+test('저장 직전에 사람이 고친 기계 항목은 덮어쓰지 않고 제안으로 옮긴다', async () => {
+  const h = harness({
+    terms: [term('カミラ', '카밀라', { origin: 'model' })],
+    versions: { c1: oneVersion('カミラが笑う。カミラは去った。') },
+    answers: { カミラ: { target: '카미라' } },
+  });
+  h.hooks.onCall = (call) => {
+    if (call === 1) h.state.value = workGuidance([term('カミラ', '카밀라-사람')]);
+  };
+  const result = await run(h);
+  expect(result.applied).toEqual([]);
+  expect(
+    result.suggestions.map((item) => [item.source, item.role, item.before, item.after]),
+  ).toEqual([['カミラ', 'suggest', '카밀라-사람', '카미라']]);
+  expect(h.saves).toEqual([]);
+});
+
+test('저장 직전에 같은 이름의 사람 항목이 생기면 새 항목을 추가하지 않는다', async () => {
+  const h = harness({
+    versions: { c1: oneVersion('ゴルドが笑う。ゴルドは去った。') },
+    answers: { ゴルド: { target: '고르드' } },
+  });
+  h.hooks.onCall = (call) => {
+    if (call === 1) h.state.value = workGuidance([term('ゴルド', '골드')]);
+  };
+  const result = await run(h);
+  expect(result.applied).toEqual([]);
+  expect(result.suggestions).toEqual([]);
+  expect(h.saves).toEqual([]);
+});
+
+test('요청 하나가 실패하면 partial이 되고 나머지 판정으로 계속한다', async () => {
+  const h = harness({
+    versions: { c1: oneVersion('ルークが笑う。ルークは去った。') },
+    answers: { ルーク: { target: '루크' } },
+  });
+  h.hooks.fail = (call) => call === 2;
+  const result = await run(h);
+  expect(h.requests).toHaveLength(3);
+  expect(result.partial).toBe(true);
+  expect(result.applied).toMatchObject([
+    {
+      source: 'ルーク',
+      role: 'new',
+      after: '루크',
+      confidence: 'medium',
+      evidence: [{ kind: 'model', note: '판정 2/3 · 근거 루크' }],
+    },
+  ]);
+});
+
+test('취소되면 cancelled로 끝나고 저장하지 않는다', async () => {
+  const controller = new AbortController();
+  const h = harness({
+    versions: { c1: oneVersion('カミラが笑う。カミラは去った。') },
+    answers: { カミラ: { target: '카미라' } },
+  });
+  h.hooks.onCall = (call) => {
+    if (call === 2) controller.abort();
+  };
+  const error = await run(h, ['c1'], undefined, controller.signal).catch((item: unknown) => item);
+  expect(error).toBeInstanceOf(ReaderError);
+  expect((error as ReaderError).code).toBe('cancelled');
+  expect(h.saves).toEqual([]);
+});
+
+test('가나 불일치 변경은 confidence를 low로 내리고 low가 먼저 정렬된다', async () => {
+  const h = harness({
+    versions: {
+      c1: oneVersion('ルークが笑う。ルークは去った。ルークが来た。カミラが笑う。カミラは去った。'),
+    },
+    answers: { ルーク: { target: '루크' }, カミラ: { target: '소피아' } },
+  });
+  const result = await run(h);
+  expect(result.applied.map((item) => [item.source, item.confidence, item.kanaFlag])).toEqual([
+    ['カミラ', 'low', true],
+    ['ルーク', 'high', false],
+  ]);
+});
+
+test('진행 단계는 수집, 판정, 저장 순서로 보고된다', async () => {
+  const progress: TermScanProgress[] = [];
+  const h = harness({
+    versions: {
+      c1: oneVersion('カミラが笑う。'),
+      c2: oneVersion('カミラは去った。'),
+    },
+    answers: { カミラ: { target: '카미라' } },
+  });
+  await run(h, ['c1', 'c2'], (item) => progress.push(item));
+  expect(progress).toEqual([
+    { stage: 'collect', done: 1, total: 2 },
+    { stage: 'collect', done: 2, total: 2 },
+    { stage: 'judge', done: 1, total: 3 },
+    { stage: 'judge', done: 2, total: 3 },
+    { stage: 'judge', done: 3, total: 3 },
+    { stage: 'save', done: 1, total: 1 },
+  ]);
+});
+
+test('후보가 없으면 판정 요청과 저장 없이 빈 결과를 낸다', async () => {
+  const h = harness({ versions: { c1: oneVersion('ただの文章です。') } });
+  const result = await run(h);
+  expect(result).toEqual({ applied: [], confirmed: 0, suggestions: [], partial: false });
+  expect(h.requests).toEqual([]);
+  expect(h.saves).toEqual([]);
+});
+
+test('completeJson이 없는 제공자는 model_missing으로 거부한다', async () => {
+  const scan = createTermScan({
+    createProvider: () =>
+      ({
+        listModels: async () => [],
+        translateChapter: async () => {
+          throw new Error('unused');
+        },
+      }) as unknown as ProviderSession,
+    guidance: fakeGuidance([]).repository,
+    library: fakeLibrary({ c1: oneVersion('カミラが笑う。カミラは去った。') }),
+    loadKanjidic: async () => kanjidic(),
+  });
+  const error = await scan({
+    workId: 'w1',
+    chapterIds: ['c1'],
+    selection,
+    signal: new AbortController().signal,
+  }).catch((item: unknown) => item);
+  expect((error as ReaderError).code).toBe('model_missing');
+});
+
+test('되돌리기: 새로 추가한 기계 항목은 제거하고 사람이 고친 항목은 건드리지 않는다', () => {
+  const human = term('ミナ', '미나');
+  const added = term('カミラ', '카미라', {
+    origin: 'scan',
+    evidence: [{ kind: 'model', note: 'n' }],
+  });
+  const addedChange = change({ source: 'カミラ', role: 'new', after: '카미라' });
+  expect(revertScanChange([human, added], addedChange, undefined)).toEqual([human]);
+  const edited = term('カミラ', '카미라-사람');
+  expect(revertScanChange([edited], addedChange, undefined)).toEqual([edited]);
+});
+
+test('되돌리기: 표기를 바꾼 기계 항목은 원래 항목으로 돌아간다', () => {
+  const original = term('カミラ', '카밀라', { origin: 'model', aliases: ['カミラ姫'] });
+  const current = term('カミラ', '카미라', {
+    origin: 'scan',
+    evidence: [{ kind: 'model', note: 'n' }],
+  });
+  const recheck = change({ source: 'カミラ', role: 'recheck', before: '카밀라', after: '카미라' });
+  expect(revertScanChange([current], recheck, original)).toEqual([original]);
+});
+
+test('제안 적용: 사람 항목은 표기만 바꾸고 나머지와 다른 항목은 그대로 둔다', () => {
+  const other = term('ミナ', '미나', { origin: 'model' });
+  const human = term('エルザ', '엘자', { note: '메모', aliases: ['エルザ様'] });
+  const suggestion = change({ source: 'エルザ', role: 'suggest', before: '엘자', after: '엘사' });
+  expect(applySuggestion([other, human], suggestion)).toEqual([
+    other,
+    { ...human, target: '엘사' },
+  ]);
+  expect(applySuggestion([other, human], suggestion)[1]!.origin).toBeUndefined();
+});
