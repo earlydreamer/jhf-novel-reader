@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { useCallback, useState } from 'react';
 import { WorkScreen } from '../../src/ui/WorkScreen';
+import { BatchPanel } from '../../src/ui/BatchPanel';
 import type { BatchState, BatchRecord } from '../../src/translation/batch';
 import type { WorkPage } from '../../src/contracts/reading';
 afterEach(cleanup);
@@ -663,4 +664,53 @@ it('keeps explicit global blockers on batch start actions', async () => {
   expect((start as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(start);
   expect(onRunBatch).not.toHaveBeenCalled();
+});
+it('미리 번역 확정 범위는 경로형 모델 ID를 읽을 수 있는 이름으로 보여 준다 (#197)', () => {
+  const work: WorkPage = {
+    workId: 'n1234ab',
+    canonicalUrl: 'https://ncode.syosetu.com/n1234ab/',
+    title: '合成作品',
+    pageUrl: 'https://ncode.syosetu.com/n1234ab/',
+    nextPageUrl: null,
+    complete: true,
+    chapters: [
+      {
+        workId: 'n1234ab',
+        chapterId: 'n1234ab/1',
+        canonicalUrl: 'https://ncode.syosetu.com/n1234ab/1/',
+        ordinal: 1,
+        title: '一話',
+      },
+    ],
+  };
+  const batch = {
+    active: false,
+    preparing: false,
+    error: null,
+    record: {
+      schemaVersion: 1,
+      id: 'record-model-name',
+      createdAt: '2026-10-08T00:00:00Z',
+      work,
+      selection: {
+        connection: {
+          provider: 'openai-compatible',
+          baseUrl: 'http://localhost:1234',
+          revision: 1,
+        },
+        modelId: 'D:\\models\\hymt2-7b.gguf',
+      },
+      chapters: work.chapters,
+      retranslate: false,
+      alreadySaved: 0,
+      cursor: 0,
+      completed: 0,
+      skipped: 0,
+      phase: 'prepared',
+    },
+  } as BatchState;
+  render(<BatchPanel workId="n1234ab" batch={batch} batchAvailable />);
+  expect(screen.getByText('모델: hymt2-7b')).toBeTruthy();
+  expect(screen.queryByText(/hymt2-7b\.gguf/)).toBeNull();
+  cleanup();
 });

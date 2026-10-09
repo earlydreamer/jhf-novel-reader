@@ -1,6 +1,7 @@
 import { useRef, type JSX } from 'react';
 import type { BatchState, ChapterRange, CandidateChoice } from '../translation/batch';
 import { CandidateReview } from './CandidateReview';
+import { readableModelName } from '../providers/modelName';
 export interface BatchPanelProps {
   workId: string;
   batch?: BatchState | null;
@@ -80,7 +81,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             확정 범위: {record.chapters[0]!.ordinal}–
             {record.chapters[record.chapters.length - 1]!.ordinal}화 · 총 {record.chapters.length}화
           </p>
-          <p>모델: {record.selection.modelId}</p>
+          <p>모델: {readableModelName(record.selection.modelId)}</p>
           <p>
             {record.retranslate
               ? '기존 완성본은 그대로 두고 새 번역을 추가해요.'

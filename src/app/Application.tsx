@@ -172,6 +172,7 @@ function RouteScreen({
           onSettings={() => controller.navigate({ kind: 'settings' })}
           onCheckConnection={() => void controller.checkConnection()}
           onRefreshSource={() => void controller.refreshSource()}
+          onRetranslate={() => void controller.retranslateChapter()}
           onOpenSaved={() => void controller.openSavedTranslation()}
           onRetryTitle={
             state.titlesAvailable
@@ -251,6 +252,7 @@ function RouteScreen({
           onSettings={() => controller.navigate({ kind: 'settings' })}
           onCheckConnection={() => void controller.checkConnection()}
           onRefreshSource={() => void controller.refreshSource()}
+          onRetranslate={() => void controller.retranslateChapter()}
           onOpenSaved={() => void controller.openSavedTranslation()}
           onRetryTitle={
             state.titlesAvailable
