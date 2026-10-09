@@ -197,4 +197,9 @@ describe('design token contrast', () => {
       /\.nr-reader-paragraph--failed\s*\{[^}]*border-inline-start:\s*3px solid var\(--error\)/s,
     );
   });
+
+  it('paints the reading background as the surface the reader bars and notice cards share (#173)', () => {
+    expect(block("[data-reading-background='sepia']").surface).toBe('#F4EBD7');
+    expect(block("[data-reading-background='black']").surface).toBe('#000000');
+  });
 });

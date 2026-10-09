@@ -7,7 +7,9 @@ import * as controllers from '../../src/app/renewalController';
 import type { RenewalDependencies } from '../../src/app/renewalController';
 import { ReaderError } from '../../src/contracts';
 import type { CompletedTranslation, ModelChoice, WorkPage } from '../../src/contracts/reading';
+import { capacitorShell } from '../../src/platform/shell';
 import { StorageError } from '../../src/storage/errors';
+import type { ReadingBackground } from '../../src/storage/settings';
 
 function chooseShellMenu(item: string) {
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
@@ -1497,5 +1499,43 @@ describe('review P2: library-only continuation restores saved metadata', () => {
     expect(controller.getSnapshot().savedChapterIds).toEqual([saved.source.chapterId]);
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     expect(value.dependencies.source?.getWorkPage).not.toHaveBeenCalled();
+  });
+});
+
+describe('reading background follows the reader color scheme (#173)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function openSavedChapter(theme: 'light' | 'dark', background: ReadingBackground) {
+    const value = await setup(true);
+    const bars = vi.spyOn(capacitorShell, 'setSystemBarsTheme');
+    value.controller.changeTheme(theme);
+    value.controller.changeReadingBackground(background);
+    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    await screen.findByText('저장된 한국어 본문');
+    return { ...value, bars };
+  }
+
+  it('검정 독서 배경은 앱 테마가 밝아도 리더에서 다크 체계를 쓰고 목차로 나가면 앱 테마로 돌아와요', async () => {
+    const value = await openSavedChapter('light', 'black');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(value.bars).toHaveBeenLastCalledWith('dark');
+
+    revealReaderBars();
+    fireEvent.click(screen.getByRole('button', { name: '목차' }));
+    await screen.findByRole('heading', { name: '합성 작품' });
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(value.bars).toHaveBeenLastCalledWith('light');
+  });
+
+  it('세피아 독서 배경은 앱 테마가 어두워도 리더에서 라이트 체계를 써요', async () => {
+    const value = await openSavedChapter('dark', 'sepia');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(value.bars).toHaveBeenLastCalledWith('light');
+  });
+
+  it('theme 독서 배경은 리더에서도 앱 테마를 그대로 써요', async () => {
+    const value = await openSavedChapter('dark', 'theme');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(value.bars).toHaveBeenLastCalledWith('dark');
   });
 });
