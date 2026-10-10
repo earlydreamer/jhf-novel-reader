@@ -64,12 +64,15 @@ export function createOpenAIStream(onText: (text: string) => void) {
   return {
     push(chunk: string) {
       buffer += chunk;
-      if (buffer.length > 1_000_000) throw new ReaderError('invalid_output', 'received');
       let boundary: RegExpExecArray | null;
       while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
+        // Limit each wire frame (including its separator), not the network chunk.
+        const frameLength = boundary.index + boundary[0].length;
+        if (frameLength > 1_000_000) throw new ReaderError('invalid_output', 'received');
         frame(buffer.slice(0, boundary.index));
-        buffer = buffer.slice(boundary.index + boundary[0].length);
+        buffer = buffer.slice(frameLength);
       }
+      if (buffer.length > 1_000_000) throw new ReaderError('invalid_output', 'received');
     },
     complete() {
       if (buffer.trim()) frame(buffer);
