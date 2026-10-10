@@ -1258,11 +1258,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           publish({
             connection: hiddenProvider
               ? DEFAULT_CONNECTION
-              : saved.selection?.connection ?? DEFAULT_CONNECTION,
-            selectedModelId: hiddenProvider ? null : saved.selection?.modelId ?? null,
+              : (saved.selection?.connection ?? DEFAULT_CONNECTION),
+            selectedModelId: hiddenProvider ? null : (saved.selection?.modelId ?? null),
             translationMode: hiddenProvider
-              ? dependencies.defaultTranslationMode ?? 'legacy'
-              : saved.selection?.translationMode ?? dependencies.defaultTranslationMode ?? 'legacy',
+              ? (dependencies.defaultTranslationMode ?? 'legacy')
+              : (saved.selection?.translationMode ??
+                dependencies.defaultTranslationMode ??
+                'legacy'),
             localLimits: undefined,
             fontSize: saved.fontSize,
             theme: saved.theme ?? 'system',

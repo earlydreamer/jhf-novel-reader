@@ -600,7 +600,6 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     expect(value.controller.getSnapshot().connection.baseUrl).toBe('https://other.example/v1');
     value.controller.dispose();
   });
-
 });
 
 describe('OpenAI 호환 주소 조합과 해석', () => {
@@ -1006,7 +1005,6 @@ describe('번역 전 용어집 자동 생성 스위치 (#192)', () => {
     fireEvent.click(toggle);
     expect(onAutoGlossary).toHaveBeenCalledWith(false);
   });
-
 });
 
 describe('정밀스캔 외부 조회 설정 (#203)', () => {
