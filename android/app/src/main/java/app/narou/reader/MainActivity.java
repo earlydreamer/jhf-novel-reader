@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     @Override public void onCreate(Bundle savedInstanceState) {
         registerPlugin(SourceBrowserPlugin.class);
         registerPlugin(ModelStreamPlugin.class);
+        registerPlugin(OnDeviceEmbeddingPlugin.class);
         registerPlugin(ReaderThemePlugin.class);
         registerPlugin(ScreenAwakePlugin.class);
         super.onCreate(savedInstanceState);

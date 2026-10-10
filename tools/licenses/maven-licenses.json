@@ -21,6 +21,18 @@
       "license": "Apache-2.0"
     },
     {
+      "match": "com.google.ai.edge.litertlm:",
+      "license": "Apache-2.0"
+    },
+    {
+      "match": "com.google.code.gson:",
+      "license": "Apache-2.0"
+    },
+    {
+      "match": "com.google.errorprone:error_prone_annotations",
+      "license": "Apache-2.0"
+    },
+    {
       "match": "com.google.guava:",
       "license": "Apache-2.0",
       "note": "listenablefuture POM에는 라이선스가 없고 Guava(Apache-2.0)에 속함"
