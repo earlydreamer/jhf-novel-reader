@@ -1,5 +1,5 @@
 import { App } from '@capacitor/app';
-import { SystemBars } from '@capacitor/core';
+import { Capacitor, SystemBars } from '@capacitor/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { capacitorShell } from '../../src/platform/shell';
 
@@ -8,18 +8,22 @@ import { capacitorShell } from '../../src/platform/shell';
 const app = vi.hoisted(() => ({
   registered: [] as string[],
   order: [] as string[],
+  native: true,
   theme: {
     applyResolvedTheme: vi.fn(async ({ theme }: { theme: string }) => {
       app.order.push(`theme:${theme}`);
     }),
+  },
+  screen: {
+    setKeepAwake: vi.fn(async (_options: { enabled: boolean }) => {}),
   },
   addListener: (_event: string, _listener: () => void): Promise<{ remove(): Promise<void> }> =>
     Promise.resolve({ remove: async () => {} }),
 }));
 
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => true },
-  registerPlugin: vi.fn(() => app.theme),
+  Capacitor: { isNativePlatform: () => app.native },
+  registerPlugin: vi.fn((name: string) => (name === 'ScreenAwake' ? app.screen : app.theme)),
   SystemBars: {
     setStyle: vi.fn(async ({ style }: { style: string }) => {
       app.order.push(`bars:${style}`);
@@ -55,6 +59,7 @@ async function expectNoUnhandledRejection(run: () => void): Promise<void> {
 beforeEach(() => {
   app.registered.length = 0;
   app.order.length = 0;
+  app.native = true;
   app.addListener = () => Promise.resolve({ remove: async () => {} });
 });
 
@@ -182,5 +187,38 @@ describe('capacitorShell native branches', () => {
     expect(app.theme.applyResolvedTheme).toHaveBeenCalledTimes(2);
     expect(SystemBars.setStyle).toHaveBeenCalledTimes(2);
     expect(SystemBars.setStyle).toHaveBeenLastCalledWith({ style: 'LIGHT' });
+  });
+});
+
+describe('capacitorShell keep awake', () => {
+  beforeEach(() => {
+    // 모듈에 남은 마지막 값을 꺼진 상태로 맞춘 뒤 호출 기록을 비운다.
+    capacitorShell.setKeepAwake(false);
+    vi.mocked(app.screen.setKeepAwake).mockClear();
+  });
+
+  it('calls the ScreenAwake plugin only when the value changes', () => {
+    capacitorShell.setKeepAwake(true);
+    capacitorShell.setKeepAwake(true);
+    expect(app.screen.setKeepAwake).toHaveBeenCalledTimes(1);
+    expect(app.screen.setKeepAwake).toHaveBeenLastCalledWith({ enabled: true });
+    capacitorShell.setKeepAwake(false);
+    expect(app.screen.setKeepAwake).toHaveBeenCalledTimes(2);
+    expect(app.screen.setKeepAwake).toHaveBeenLastCalledWith({ enabled: false });
+  });
+
+  it('does not call the plugin outside the native platform', () => {
+    app.native = false;
+    capacitorShell.setKeepAwake(true);
+    expect(app.screen.setKeepAwake).not.toHaveBeenCalled();
+    expect(Capacitor.isNativePlatform()).toBe(false);
+  });
+
+  it('swallows plugin failures without throwing or an unhandled rejection', async () => {
+    app.screen.setKeepAwake.mockRejectedValueOnce(new Error('plugin failed'));
+    await expectNoUnhandledRejection(() => {
+      expect(() => capacitorShell.setKeepAwake(true)).not.toThrow();
+    });
+    expect(app.screen.setKeepAwake).toHaveBeenCalledTimes(1);
   });
 });
