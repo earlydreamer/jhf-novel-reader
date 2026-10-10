@@ -1133,6 +1133,8 @@ test('범위 판정은 일반어와 답 없음을 세고, 제안만 new로 내�
   expect(result.suggestions[0]).not.toHaveProperty('before');
   expect(result.common).toEqual(['ハンナ']);
   expect(result.counts).toEqual({ candidates: 3, common: 1, unchanged: 0, unanswered: 1 });
+  expect(result.skipped).toBe(1);
+  expect(result.skipped).toBe(1);
   expect(result.partial).toBe(false);
   expect(result).not.toHaveProperty('lookupFailed');
   expect(h.saves).toEqual([]);
@@ -1183,6 +1185,7 @@ test('후보가 없으면 판정 요청 없이 0 집계의 빈 결과를 낸다'
     common: [],
     partial: false,
     counts: { candidates: 0, common: 0, unchanged: 0, unanswered: 0 },
+    skipped: 1,
   });
   expect(h.requests).toEqual([]);
 });
@@ -1198,4 +1201,23 @@ test('이미 취소된 신호로 부르면 cancelled로 끝나고 판정하지 �
   ).rejects.toMatchObject({ code: 'cancelled' });
   expect(h.requests).toEqual([]);
   expect(h.saves).toEqual([]);
+});
+
+test('이름 목록이 200개를 넘으면 앞 200개만 판정하고 나머지는 skipped로 센다', async () => {
+  const syllables = 'アイウエオカキクケコサシスセソタチツテト';
+  const names = Array.from(
+    { length: 205 },
+    (_, index) => syllables[Math.floor(index / 20)]! + syllables[index % 20]!,
+  );
+  const h = rangeHarness({});
+  const result = await rangeRun(h, [scanChapter('c1', names.join('。'))], names);
+  expect(result.counts.candidates).toBe(200);
+  expect(result.skipped).toBe(5);
+});
+
+test('원문에서 찾지 못한 이름은 skipped로 센다', async () => {
+  const h = rangeHarness({ answers: { カミラ: { target: '카미라' } } });
+  const result = await rangeRun(h, [scanChapter('c1', 'カミラが笑う。')], ['カミラ', 'ミナ']);
+  expect(result.counts.candidates).toBe(1);
+  expect(result.skipped).toBe(1);
 });

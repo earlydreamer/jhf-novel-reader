@@ -93,6 +93,11 @@ function FillSection({
       <p>
         표기 {result.suggestions.length}개를 채웠어요 · 일반어로 판정 {result.common.length}개
       </p>
+      {result.skipped > 0 && (
+        <p role="status">
+          {`이번에 판정하지 못한 후보가 ${result.skipped}개 있어요. 한 번에 등장 횟수가 많은 200개까지 판정해요. 나머지는 직접 확인해 주세요.`}
+        </p>
+      )}
       {result.counts.unanswered > 0 && (
         <p role="status">모델이 답하지 않은 이름이 {result.counts.unanswered}개 있어요.</p>
       )}
