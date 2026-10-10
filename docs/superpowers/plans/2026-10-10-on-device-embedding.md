@@ -35,7 +35,12 @@
 - [ ] Fold7에서 최소 실험 앱(또는 이 앱의 실험 브랜치)으로: 모델 로드 시간, 128토큰 텍스트 1개·16개·64개 임베딩 시간(CPU·GPU), 메모리 사용.
 - [ ] 판정 실험(오프라인, PC): n0421du 1화의 후보 매칭 예(リスト in クリストファー, 魔王 in 魔王城)와 확정 매칭 문맥으로 유사도 분포를 보고 임계값 초안을 정한다(PC는 `litert-lm` Python 또는 ONNX 버전 사용).
 
-**Task 0 결과:** (실험 후 채운다 — 버전, URL, SHA-256, 크기, 지연, 임계값 초안. 이 절이 채워지기 전에는 Task 1 이후를 시작하지 않는다.)
+**Task 0 결과(2026-10-10, 일부):**
+- 라이브러리: `com.google.ai.edge.litertlm:litertlm-android:0.18.0`(2026-10-06 배포, EmbeddingGemma 2와 같은 날). AAR에 `EmbeddingEngine`, `EmbeddingEngineConfig`, `EmbeddingOptions`, `EmbeddingResponse`, `computeEmbeddingAsync`·`computeEmbeddingBatchAsync`가 있다. minSdk 24(우리와 같음). 전이 의존성: gson 2.14.0, kotlin-reflect 2.4.0, kotlinx-coroutines-android 1.11.0.
+- 네이티브 크기: `liblitertlm_jni.so` arm64-v8a 22.2MB(gzip 9.7MB), x86_64 26.4MB. 현재 APK 9.0MB.
+  - 판정: `abiFilters 'arm64-v8a'`만 넣는다(실사용 기기는 arm64, 에뮬레이터 x86_64 미지원 감수). 예상 APK 약 +22~25MB(라이브러리 비압축 저장 + Kotlin 런타임).
+- 모델: `https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm/resolve/9be6e8b90982095dc05c2bd162e4b954ee4dbac7/embeddinggemma-2-text-270m.litertlm`, 164,626,432바이트, SHA-256 `2d079ee2f6f066b1f368e8d7c819f55214eaef1d0513b312321901f30ab286fb`, Apache-2.0, gated 아님. (Tensor G5/G6 전용 파일은 쓰지 않는다.)
+- 남은 확인: Fold7 로드 시간·배치 지연·메모리, 백엔드(CPU/GPU) 선택, 임계값 초안 → Task 1 구현물로 실측해 채운다.
 
 ### Task 1: 네이티브 플러그인 — 다운로드·검증·로드·임베딩
 
