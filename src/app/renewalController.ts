@@ -186,6 +186,8 @@ export interface RenewalSnapshot {
   readonly translationMode: 'stream' | 'legacy';
   readonly streamingAvailable: boolean;
   readonly legacyWarnings: readonly LegacyMigrationWarning[];
+  /** 설정에서 빠진 제공자(Google Gemini)를 로컬 기본 연결로 되돌렸을 때 한 번 보여 주는 안내. */
+  readonly settingsNotice: { id: number; text: string } | null;
   readonly route: Route;
   readonly work: WorkPage | null;
   readonly workRecent: WorkRecentSnapshot | null;
@@ -417,6 +419,8 @@ interface ActiveTranslation {
 export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
   // 기기 판정 문의 마지막으로 알린 값. 초기값 false는 판정 문의 초기 상태와 같다.
   let termDecisionActive = false;
+  // 설정 안내의 표시 id. 같은 문구를 다시 띄울 때는 id를 올려 구분한다.
+  let settingsNoticeSequence = 0;
   let snapshot: RenewalSnapshot = {
     titles: [],
     titlesBusy: false,
@@ -437,6 +441,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     streamingAvailable: Boolean(dependencies.streamingAvailable),
     route: { kind: 'home' },
     legacyWarnings: [],
+    settingsNotice: null,
     work: null,
     workRecent: null,
     savedChapterIds: [],
@@ -1246,12 +1251,18 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         await dependencies.batch?.initialize();
         const saved = await dependencies.settings?.readReadingSettings();
         if (disposed) return;
+        // Gemini 제공자는 정식판 설정에서 빠졌다(#280). 예전에 골라 둔 저장 상태는 로컬 기본 연결로 되돌린다.
+        // Gemini로 번역해 둔 저장본은 그대로 두고, 이 선택만 초기화한다.
+        const hiddenProvider = saved?.selection?.connection.provider === 'gemini';
         if (saved)
           publish({
-            connection: saved.selection?.connection ?? DEFAULT_CONNECTION,
-            selectedModelId: saved.selection?.modelId ?? null,
-            translationMode:
-              saved.selection?.translationMode ?? dependencies.defaultTranslationMode ?? 'legacy',
+            connection: hiddenProvider
+              ? DEFAULT_CONNECTION
+              : saved.selection?.connection ?? DEFAULT_CONNECTION,
+            selectedModelId: hiddenProvider ? null : saved.selection?.modelId ?? null,
+            translationMode: hiddenProvider
+              ? dependencies.defaultTranslationMode ?? 'legacy'
+              : saved.selection?.translationMode ?? dependencies.defaultTranslationMode ?? 'legacy',
             localLimits: undefined,
             fontSize: saved.fontSize,
             theme: saved.theme ?? 'system',
@@ -1264,8 +1275,18 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             lookupWikipedia: saved.lookupWikipedia ?? false,
             lookupNamuwiki: saved.lookupNamuwiki ?? false,
             onDeviceEmbedding: saved.onDeviceEmbedding ?? false,
+            ...(hiddenProvider
+              ? {
+                  settingsNotice: {
+                    id: ++settingsNoticeSequence,
+                    text: 'Google Gemini 제공자가 설정에서 빠져서 로컬 서버 연결로 되돌렸어요. 번역 서버 주소를 확인해 주세요.',
+                  },
+                }
+              : {}),
           });
         initialized = true;
+        // 되돌린 선택을 저장해 두어 다음 시작에는 안내가 다시 나오지 않는다.
+        if (hiddenProvider) persistSettings();
         void restoreOnDeviceEmbedding();
         runAutomaticTranslation();
       } catch {
