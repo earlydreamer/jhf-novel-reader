@@ -144,6 +144,54 @@ async function setup(hasSaved = false, translationAvailable = false) {
   return { ...value, controller };
 }
 afterEach(cleanup);
+it('keeps next unsaved chapter navigation available during another unsettled translation (#289)', async () => {
+  const value = fixture(true);
+  let settle!: () => void;
+  const held = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  const start = vi.fn(async () => held);
+  const controller = manualController({ ...value.dependencies, startTranslation: start });
+  try {
+    await controller.openWork(page.canonicalUrl);
+    await controller.selectChapter(chapters[1]!);
+    controller.changeConnection({
+      provider: 'openai-compatible',
+      baseUrl: 'http://localhost:1234',
+    });
+    await controller.checkConnection();
+    controller.chooseModel('fixture-hymt2');
+    const translation = controller.translate();
+    expect(start).toHaveBeenCalledOnce();
+    controller.back();
+    expect(controller.getSnapshot().route.kind).toBe('work');
+    await controller.selectChapter(chapters[0]!);
+    expect(controller.getSnapshot()).toMatchObject({
+      busy: false,
+      translationActive: true,
+      route: { kind: 'reader', versionId: saved.versionId },
+    });
+    render(<Application controller={controller} />);
+    revealReaderBars();
+    const next = screen.getByRole('button', { name: '다음 화' });
+    expect(next).toBeEnabled();
+    expect(screen.queryByText('회차를 불러오고 있어요.')).toBeNull();
+    fireEvent.click(next);
+    await waitFor(() =>
+      expect(controller.getSnapshot().route).toEqual({
+        kind: 'translation',
+        chapterId: chapters[1]!.chapterId,
+      }),
+    );
+    await controller.translate();
+    expect(start).toHaveBeenCalledOnce();
+    settle();
+    await translation;
+  } finally {
+    settle();
+    controller.dispose();
+  }
+});
 
 describe('automatic chapter dispatch and position writes', () => {
   it('continues from this work only after verifying recent ownership and restores its exact position', async () => {

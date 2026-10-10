@@ -267,7 +267,7 @@ function RouteScreen({
           glossary={readerGlossary}
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
-          busy={state.busy || state.translationActive}
+          busy={state.busy}
           retryParagraphsAvailable={
             state.streamingAvailable && state.connection.provider === 'openai-compatible'
           }
