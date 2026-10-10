@@ -25,6 +25,25 @@ test('ruby pairs become candidates with their reading even when they appear once
     { source: '北嶋', reading: 'きたじま', kind: 'ruby', count: 1, chapterIds: ['c1'] },
   ]);
 });
+test('짧은 이름(한 글자·짧은 히라가나)은 루비가 붙어도 후보로 두지 않는다', () => {
+  const result = scanNameCandidates(
+    [
+      chapter(
+        'c1',
+        ['ちが笑う。魔が来た。北嶋は笑った。'],
+        [
+          { p: 0, start: 0, end: 1, reading: 'ち' },
+          { p: 0, start: 5, end: 6, reading: 'ま' },
+          { p: 0, start: 10, end: 12, reading: 'きたじま' },
+        ],
+      ),
+    ],
+    [],
+  );
+  expect(result).toEqual([
+    { source: '北嶋', reading: 'きたじま', kind: 'ruby', count: 1, chapterIds: ['c1'] },
+  ]);
+});
 test('katakana names need repeated appearances and keep a middle-dot full name as one candidate', () => {
   const result = scanNameCandidates(
     [

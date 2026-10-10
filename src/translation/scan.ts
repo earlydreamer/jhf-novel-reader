@@ -1,5 +1,6 @@
 import type { Chapter } from '../contracts';
 import type { GuidanceTerm } from './guidance';
+import { isUnsafeTermName } from './termMatch';
 
 export type NameCandidate = {
   source: string;
@@ -46,7 +47,8 @@ export function createNameCandidateScan(
     chapterId: string,
     reading?: string,
   ) => {
-    if (knownKeys.has(nameKey(source))) return;
+    // 한 글자·짧은 히라가나는 다른 단어 안에도 흔해 이름 후보로 두지 않는다(#235).
+    if (isUnsafeTermName(source) || knownKeys.has(nameKey(source))) return;
     const key = nameKey(source);
     const entry = found.get(key) ?? {
       source,

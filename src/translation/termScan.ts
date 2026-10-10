@@ -2,6 +2,7 @@ import type { GuidanceTerm } from './guidance';
 import type { Kanjidic } from './kanjidic';
 import { kanaMismatch } from './kanaCheck';
 import { createNameCandidateScan } from './scan';
+import { isUnsafeTermName } from './termMatch';
 
 export type ScanParagraph = {
   text: string;
@@ -108,6 +109,8 @@ export function collectScanCandidates(
 
   const candidates: ScanCandidate[] = [];
   for (const group of groups) {
+    // 용어집·규칙·이름 목록 모두 한 글자·짧은 히라가나 이름은 후보로 올리지 않는다(#235).
+    if (isUnsafeTermName(group.source)) continue;
     // 원문 근거: source를 직접 세고, source가 없으면 별칭으로 맞은 출현을 센다.
     const sourceKey = nameKey(group.source);
     let keys = [sourceKey];
