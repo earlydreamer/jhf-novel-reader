@@ -468,6 +468,16 @@ export function Application({
     document.documentElement.dataset.theme = effectiveTheme;
     platform.setSystemBarsTheme(effectiveTheme);
   }, [effectiveTheme, platform]);
+  // 번역·스캔·채우기가 도는 동안에는 화면이 꺼지지 않게 한다.
+  const longWorkActive =
+    Boolean(state.batch?.active) ||
+    state.termScan?.phase === 'running' ||
+    state.batchFill?.phase === 'running' ||
+    state.translationActive;
+  useEffect(() => {
+    platform.setKeepAwake(longWorkActive);
+  }, [longWorkActive, platform]);
+  useEffect(() => () => platform.setKeepAwake(false), [platform]);
   const main = useRef<HTMLElement>(null);
   const routeKey = JSON.stringify(state.route);
   const firstRoute = useRef(true);

@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SourceBrowserPlugin.class);
         registerPlugin(ModelStreamPlugin.class);
         registerPlugin(ReaderThemePlugin.class);
+        registerPlugin(ScreenAwakePlugin.class);
         super.onCreate(savedInstanceState);
         WindowCompat.enableEdgeToEdge(getWindow());
     }

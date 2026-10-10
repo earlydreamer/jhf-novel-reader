@@ -9,19 +9,30 @@ interface ReaderThemePlugin {
 const ReaderTheme = registerPlugin<ReaderThemePlugin>('ReaderTheme', {
   web: () => ({ applyResolvedTheme: async () => {} }),
 });
+interface ScreenAwakePlugin {
+  setKeepAwake(options: { enabled: boolean }): Promise<void>;
+}
+
+const ScreenAwake = registerPlugin<ScreenAwakePlugin>('ScreenAwake', {
+  web: () => ({ setKeepAwake: async () => {} }),
+});
 let systemBarsThemeQueue: Promise<void> = Promise.resolve();
 let systemBarsThemeOperation = 0;
+// 네이티브에 마지막으로 보낸 값. 같은 값이 반복되면 플러그인을 다시 부르지 않는다.
+let keepAwake = false;
 
 export interface ShellPlatform {
   onBackButton(listener: () => void): () => void;
   moveToBackground(): void;
   setSystemBarsTheme(theme: ResolvedTheme): void;
+  setKeepAwake(enabled: boolean): void;
 }
 
 export const noopShell: ShellPlatform = {
   onBackButton: () => () => {},
   moveToBackground: () => {},
   setSystemBarsTheme: () => {},
+  setKeepAwake: () => {},
 };
 
 export const capacitorShell: ShellPlatform = {
@@ -52,5 +63,11 @@ export const capacitorShell: ShellPlatform = {
         });
       })
       .catch(() => {});
+  },
+  setKeepAwake(enabled) {
+    if (!Capacitor.isNativePlatform() || enabled === keepAwake) return;
+    keepAwake = enabled;
+    // 화면 켜짐 유지는 부가 기능이라 실패해도 긴 작업 자체를 막지 않는다.
+    void ScreenAwake.setKeepAwake({ enabled }).catch(() => {});
   },
 };
