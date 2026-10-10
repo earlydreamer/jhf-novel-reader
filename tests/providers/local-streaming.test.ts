@@ -55,14 +55,7 @@ function fixture(reply?: (body: string, call: number) => string) {
       const lines = [...body.matchAll(/<p id="([A-Za-z]+)">([\s\S]*?)<\/p>/g)];
       const text =
         reply?.(body, calls.length) ??
-        '<main>\n' +
-          lines
-            .map(
-              (m) =>
-                `<p id="${m[1]}">번역${m[1]} ${(m[2]!.match(/__ENT_[0-9]+__/g) ?? []).join(' ')}</p>`,
-            )
-            .join('\n') +
-          '\n</main>';
+        '<main>\n' + lines.map((m) => `<p id="${m[1]}">번역${m[1]}</p>`).join('\n') + '\n</main>';
       const data = delta(text) + ending;
       for (let i = 0; i < data.length; i += 7) onData(data.slice(i, i + 7));
       return { status: 200, url: input.url, headers: {}, data };
@@ -154,8 +147,11 @@ test('shows partial text before the first native response finishes', async () =>
   settle();
   await running;
 });
-test('masks locked names and ruby, restores exact targets, and preserves blank paragraphs', async () => {
-  const f = fixture();
+test('sends locked names as source text, checks their renderings, and preserves blank paragraphs', async () => {
+  const f = fixture(
+    () =>
+      '<main><p id="A">알베르트는 기타지마를 보았다.</p><p id="B">기타지마는 웃었다.</p></main>',
+  );
   const value = await f.provider.translateChapter(
     {
       ...request,
@@ -164,29 +160,28 @@ test('masks locked names and ruby, restores exact targets, and preserves blank p
         paragraphs: [
           {
             id: 'p1',
-            text: 'アルベルトは<ruby>北嶋</ruby>を見た。'
-              .replace('<ruby>', '')
-              .replace('</ruby>', ''),
+            text: 'アルベルトは北嶋を見た。',
             ruby: [{ start: 6, end: 8, reading: 'きたじま' }],
           },
           { id: 'blank', text: '', ruby: [] },
           { id: 'p2', text: '北嶋は笑った。', ruby: [] },
         ],
       },
-      lockedTerms: () => [
-        { source: 'アルベルト', target: '알베르트' },
-        { source: '北嶋', target: '기타지마' },
-      ],
+      requiredTerms: (input) =>
+        [
+          { source: 'アルベルト', target: '알베르트' },
+          { source: '北嶋', target: '기타지마' },
+        ].filter((term) => input.includes(term.source)),
     },
     new AbortController().signal,
   );
-  expect(value.text).toContain('알베르트');
-  expect(value.text).toContain('기타지마');
-  expect(value.text).not.toContain('__ENT_');
-  expect((f.calls[0]!.body.messages as { content: string }[])[0]!.content).not.toContain(
-    'きたじま',
-  );
-  expect(value.text.split('\n\n')[1]).toBe('');
+  const sent = (f.calls[0]!.body.messages as { content: string }[])[0]!.content;
+  // 용어 이름 바로 뒤의 루비 읽기는 모델 입력에서 빠진다.
+  expect(sent).toContain('アルベルトは北嶋を見た。');
+  expect(sent).not.toContain('きたじま');
+  expect(sent).not.toContain('__ENT_');
+  expect(f.calls).toHaveLength(1);
+  expect(value.text).toBe('알베르트는 기타지마를 보았다.\n\n\n\n기타지마는 웃었다.');
 });
 test('retries a defective chunk once, then keeps only defective rows as marked source', async () => {
   const f = fixture(() => '<main><p id="A">정상 문단</p><p id="B">まだ日本語</p></main>');
@@ -247,18 +242,64 @@ test('rejects merged, duplicate or reordered IDs after one retry', async () => {
     expect(result.failedParagraphs).toEqual([0, 1]);
   }
 });
-test('a missing locked entity triggers one retry and marks that line', async () => {
-  const f = fixture(() => '<main><p id="A">다른 이름</p></main>');
-  const result = await f.provider.translateChapter(
+test('a missing rendering is requested once more with the required line and the retry is used', async () => {
+  const f = fixture((_body, call) =>
+    call === 1
+      ? '<main><p id="A">르시아나는 웃었다.</p></main>'
+      : '<main><p id="A">루시아나는 웃었다.</p></main>',
+  );
+  const value = await f.provider.translateChapter(
     {
       ...request,
-      source: { ...chapter, paragraphs: [{ id: 'p1', text: 'ミカエルは笑う。', ruby: [] }] },
-      lockedTerms: () => [{ source: 'ミカエル', target: '미카엘' }],
+      source: { ...source, paragraphs: [{ id: 'p1', text: 'ルシアナは笑った。', ruby: [] }] },
+      requiredTerms: (input) =>
+        input.includes('ルシアナ') ? [{ source: 'ルシアナ', target: '루시아나' }] : [],
     },
     new AbortController().signal,
   );
   expect(f.calls).toHaveLength(2);
-  expect(result.failedParagraphs).toEqual([0]);
+  const first = (f.calls[0]!.body.messages as { content: string }[])[0]!.content;
+  expect(first).toContain('ルシアナは笑った。');
+  expect(first).not.toContain('Required renderings');
+  const retry = (f.calls[1]!.body.messages as { content: string }[]).at(-1)!.content;
+  expect(retry).toContain(
+    'Required renderings for this passage (use exactly):\nルシアナ → 루시아나\n',
+  );
+  expect(value.text).toBe('루시아나는 웃었다.');
+  expect(value.failedParagraphs).toBeUndefined();
+});
+test('a rendering still missing after the retry keeps the last translation instead of failing', async () => {
+  const f = fixture(() => '<main><p id="A">르시아나는 웃었다.</p></main>');
+  const value = await f.provider.translateChapter(
+    {
+      ...request,
+      source: { ...source, paragraphs: [{ id: 'p1', text: 'ルシアナは笑った。', ruby: [] }] },
+      requiredTerms: () => [{ source: 'ルシアナ', target: '루시아나' }],
+    },
+    new AbortController().signal,
+  );
+  expect(f.calls).toHaveLength(2);
+  expect(value.text).toBe('르시아나는 웃었다.');
+  expect(value.failedParagraphs).toBeUndefined();
+});
+test('automatic retry off accepts a paragraph with a missing rendering after one request', async () => {
+  const f = fixture(() => '<main><p id="A">르시아나는 웃었다.</p></main>');
+  const provider = createProviderSession(
+    { ...selection, autoRetryFailed: false },
+    f.transport,
+    secrets,
+  );
+  const value = await provider.translateChapter(
+    {
+      ...request,
+      source: { ...source, paragraphs: [{ id: 'p1', text: 'ルシアナは笑った。', ruby: [] }] },
+      requiredTerms: () => [{ source: 'ルシアナ', target: '루시아나' }],
+    },
+    new AbortController().signal,
+  );
+  expect(f.calls).toHaveLength(1);
+  expect(value.text).toBe('르시아나는 웃었다.');
+  expect(value.failedParagraphs).toBeUndefined();
 });
 test('never retries an unknown transport outcome or an authentication response', async () => {
   for (const error of [
@@ -339,7 +380,7 @@ test('짧은 히라가나 용어는 스트리밍 모델 입력에서 자리표�
     {
       ...request,
       source: { ...source, paragraphs: [{ id: 'p1', text: '……ちょっと心配ですね', ruby: [] }] },
-      lockedTerms: (input) =>
+      requiredTerms: (input) =>
         (appliedGuidance(value, 'n1234ab', input, [])?.terms ?? []).flatMap(({ term, names }) =>
           names.map((name) => ({ source: name, target: term.target })),
         ),
@@ -349,4 +390,87 @@ test('짧은 히라가나 용어는 스트리밍 모델 입력에서 자리표�
   const sent = (f.calls[0]!.body.messages as { content: string }[])[0]!.content;
   expect(sent).toContain('ちょっと心配ですね');
   expect(sent).not.toContain('__ENT_');
+});
+test('용어 이름 바로 뒤의 루비 읽기만 모델 입력에서 빼고 다른 루비는 그대로 둔다', async () => {
+  const f = fixture(() => '<main><p id="A">기타지마는 도쿄를 보았다.</p></main>');
+  const value = await f.provider.translateChapter(
+    {
+      ...request,
+      source: {
+        ...source,
+        paragraphs: [
+          {
+            id: 'p1',
+            text: '北嶋は東京を見た。',
+            ruby: [
+              { start: 0, end: 2, reading: 'きたじま' },
+              { start: 3, end: 5, reading: 'とうきょう' },
+            ],
+          },
+        ],
+      },
+      requiredTerms: (input) =>
+        input.includes('北嶋') ? [{ source: '北嶋', target: '기타지마' }] : [],
+    },
+    new AbortController().signal,
+  );
+  const sent = (f.calls[0]!.body.messages as { content: string }[])[0]!.content;
+  expect(sent).toContain('北嶋は東京《とうきょう》を見た。');
+  expect(sent).not.toContain('きたじま');
+  expect(f.calls).toHaveLength(1);
+  expect(value.text).toBe('기타지마는 도쿄를 보았다.');
+});
+test('기록으로 다시 보내는 이전 문단에도 용어 루비 제거를 적용한다', async () => {
+  const f = fixture(
+    (body) =>
+      '<main>' +
+      [...body.matchAll(/<p id="([A-Za-z]+)">/g)]
+        .map((m) => `<p id="${m[1]}">기타지마 ${m[1]}</p>`)
+        .join('') +
+      '</main>',
+  );
+  await f.provider.translateChapter(
+    {
+      ...request,
+      source: {
+        ...source,
+        paragraphs: Array.from({ length: 9 }, (_, i) =>
+          i === 0
+            ? {
+                id: 'p0',
+                text: '北嶋は東京を見た。',
+                ruby: [
+                  { start: 0, end: 2, reading: 'きたじま' },
+                  { start: 3, end: 5, reading: 'とうきょう' },
+                ],
+              }
+            : { id: `p${i}`, text: '夏の朝、扉を開けた。', ruby: [] },
+        ),
+      },
+      requiredTerms: (input) =>
+        input.includes('北嶋') ? [{ source: '北嶋', target: '기타지마' }] : [],
+    },
+    new AbortController().signal,
+  );
+  expect(f.calls).toHaveLength(2);
+  const history = (f.calls[1]!.body.messages as { content: string }[])[0]!.content;
+  expect(history).toContain('北嶋は東京《とうきょう》を見た。');
+  expect(history).not.toContain('きたじま');
+});
+test('표기 줄을 붙이면 입력 예산을 넘는 재시도는 표기 줄 없이 같은 문단을 보낸다', async () => {
+  const f = fixture(() => '<main><p id="A">르시아나는 웃었다.</p></main>');
+  const value = await f.provider.translateChapter(
+    {
+      ...request,
+      source: { ...source, paragraphs: [{ id: 'p1', text: 'ルシアナは笑った。', ruby: [] }] },
+      requiredTerms: () => [{ source: 'ルシアナ', target: '긴'.repeat(4000) }],
+    },
+    new AbortController().signal,
+  );
+  expect(f.calls).toHaveLength(2);
+  const retry = (f.calls[1]!.body.messages as { content: string }[]).at(-1)!.content;
+  expect(retry).not.toContain('Required renderings');
+  expect(retry).toContain('ルシアナは笑った。');
+  expect(value.text).toBe('르시아나는 웃었다.');
+  expect(value.failedParagraphs).toBeUndefined();
 });

@@ -202,7 +202,7 @@ export function createTitleTranslation(
         ...(local
           ? {
               reference: (input: string) => streamingGuidanceContext(terms, workId, input, []),
-              lockedTerms: (input: string) =>
+              requiredTerms: (input: string) =>
                 (appliedGuidance(terms, workId, input, [])?.terms ?? []).flatMap(
                   ({ term, names }) => names.map((name) => ({ source: name, target: term.target })),
                 ),

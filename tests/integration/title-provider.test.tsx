@@ -54,7 +54,7 @@ function harness(automatic = true) {
         rows
           .map(
             (row) =>
-              `<p id="${row[1]}">${bad ? 'まだ日本語' : row[2]!.includes('__ENT_') ? '앨리스의 아침 ' + row[2]!.match(/__ENT_[0-9]+__/)![0] : row[2] === '夏の物語' ? '여름 이야기' : row[2] === '夏の朝' ? '여름 아침' : '문을 열었다.'}</p>`,
+              `<p id="${row[1]}">${bad ? 'まだ日本語' : row[2]!.includes('アリス') ? '앨리스의 아침' : row[2] === '夏の物語' ? '여름 이야기' : row[2] === '夏の朝' ? '여름 아침' : '문을 열었다.'}</p>`,
           )
           .join('') +
         '</main>';
@@ -160,7 +160,7 @@ test('manual body translation with automatic off also fills only the work and cu
   expect(h.requests).toHaveLength(2);
   app.dispose();
 });
-test('locked names are masked/restored in title translation and Japanese residuals are rejected', async () => {
+test('locked names reach title requests as source text and Japanese residuals are rejected', async () => {
   const h = harness();
   const guidance = createGuidanceRepository(h.files);
   await guidance.save('n1234ab', {
@@ -185,9 +185,10 @@ test('locked names are masked/restored in title translation and Japanese residua
       [{ key: 'n1234ab/1', source: 'アリスの朝' }],
       new AbortController().signal,
     ),
-  ).toEqual(['앨리스의 아침 앨리스']);
+  ).toEqual(['앨리스의 아침']);
   const messages = JSON.stringify(h.requests[0]!.body.messages);
-  expect(messages).toContain('__ENT_0__の朝');
+  expect(messages).toContain('アリスの朝');
+  expect(messages).not.toContain('__ENT_');
   h.setBad(true);
   expect(
     await translate(
@@ -197,6 +198,40 @@ test('locked names are masked/restored in title translation and Japanese residua
       new AbortController().signal,
     ),
   ).toEqual([null]);
+});
+test('a title missing its locked rendering is requested once more with the required line', async () => {
+  const h = harness();
+  const guidance = createGuidanceRepository(h.files);
+  await guidance.save('n1234ab', {
+    terms: [{ source: 'アリス', target: '앨리스', aliases: [], category: '인명', note: '' }],
+    voices: [],
+  });
+  const translate = createTitleTranslation(
+    (selection) => createProviderSession(selection, h.adapters.modelTransport, h.adapters.secrets),
+    guidance,
+    true,
+  );
+  const selection: SelectedModel = {
+    connection: { provider: 'openai-compatible', baseUrl: 'http://localhost:1234', revision: 1 },
+    modelId: 'test-model',
+    limits: DEFAULT_LOCAL_LIMITS,
+  };
+  h.streamPost.mockImplementationOnce(async (request: ModelRequest, _signal, onData) => {
+    h.requests.push(request);
+    const data = sse('<main><p id="A">아침의 문</p></main>');
+    onData(data);
+    return { status: 200, headers: {}, url: request.url, data };
+  });
+  expect(
+    await translate(
+      selection,
+      'n1234ab',
+      [{ key: 'n1234ab/1', source: 'アリスの朝' }],
+      new AbortController().signal,
+    ),
+  ).toEqual(['앨리스의 아침']);
+  expect(h.requests).toHaveLength(2);
+  expect(JSON.stringify(h.requests[1]!.body.messages)).toContain('アリス → 앨리스');
 });
 test('unknown title transport outcomes are propagated without a native replay', async () => {
   const h = harness();

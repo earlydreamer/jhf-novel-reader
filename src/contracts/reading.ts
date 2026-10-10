@@ -67,7 +67,8 @@ export type WholeChapterRequest = {
   onPreview?: (text: string) => void;
   /** 입력 하나에 대한 승인된 참고 데이터. 해당 입력의 지시문 앞에만 붙여 보낸다. */
   reference?: (input: string) => string;
-  lockedTerms?: (input: string) => readonly { source: string; target: string }[];
+  /** 입력 하나에서 확정 매칭된 용어의 표기. 번역문에 이 표기가 없으면 그 문단을 한 번 더 요청한다. */
+  requiredTerms?: (input: string) => readonly { source: string; target: string }[];
   plotSummary?: string;
 };
 export type WholeChapterResult = {
