@@ -57,6 +57,7 @@ test('JSON request is non-streaming, deterministic and asks for the strict schem
     stream: false,
     temperature: 0,
     max_tokens: 1500,
+    reasoning_effort: 'none',
     response_format: {
       type: 'json_schema',
       json_schema: { name: 'glossary', strict: true, schema: request.schema },

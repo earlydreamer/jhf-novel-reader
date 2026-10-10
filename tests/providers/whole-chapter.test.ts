@@ -44,7 +44,12 @@ test('whole_request_has_no_json_or_small_budget', async () => {
   await session('번역', 'stop', calls).translateChapter(request, new AbortController().signal);
   expect(calls).toHaveLength(1);
   const input = calls[0] as { body: Record<string, unknown> };
-  expect(Object.keys(input.body).sort()).toEqual(['messages', 'model', 'stream']);
+  expect(Object.keys(input.body).sort()).toEqual([
+    'messages',
+    'model',
+    'reasoning_effort',
+    'stream',
+  ]);
   expect(input.body.messages).toEqual([
     { role: 'system', content: expect.any(String) },
     { role: 'user', content: '基底《よみ》\n一\n\n\n\n二' },
