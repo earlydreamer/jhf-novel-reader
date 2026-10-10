@@ -506,6 +506,11 @@ export function Application({
     platform.setKeepAwake(longWorkActive);
   }, [longWorkActive, platform]);
   useEffect(() => () => platform.setKeepAwake(false), [platform]);
+  // 첫 화면을 그릴 준비가 되면 스플래시를 내린다. 홈은 서재 목록을 읽은 뒤, 다른 화면은 바로.
+  const appReady = state.route.kind !== 'home' || state.libraryLoaded;
+  useEffect(() => {
+    if (appReady) platform.markReady();
+  }, [appReady, platform]);
   const main = useRef<HTMLElement>(null);
   const routeKey = JSON.stringify(state.route);
   const firstRoute = useRef(true);
