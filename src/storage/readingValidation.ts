@@ -159,6 +159,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     'generation',
     'guidanceHash',
     'repair',
+    'termDecision',
   ]);
   const p = value.provenance;
   if (p.repair !== undefined) {
@@ -186,6 +187,17 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
   text(p.promptVersion);
   if (p.guidanceHash !== undefined)
     check(typeof p.guidanceHash === 'string' && /^[a-f0-9]{64}$/.test(p.guidanceHash));
+  if (p.termDecision !== undefined) {
+    object(p.termDecision, ['confirmed', 'rejected', 'ms']);
+    for (const names of [p.termDecision.confirmed, p.termDecision.rejected]) {
+      check(Array.isArray(names) && names.length <= 50);
+      for (const name of names) {
+        text(name);
+        check(name.length <= 80);
+      }
+    }
+    integer(p.termDecision.ms);
+  }
   if (p.generation !== undefined) {
     object(p.generation, [
       'mode',

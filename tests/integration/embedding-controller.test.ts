@@ -57,10 +57,17 @@ function deferred() {
   return { promise, resolve };
 }
 
-async function openApp(options: { embedding?: FakePort; saved?: Partial<ReadingSettings> } = {}) {
+async function openApp(
+  options: {
+    embedding?: FakePort;
+    saved?: Partial<ReadingSettings>;
+    onTermDecisionChange?: (enabled: boolean) => void;
+  } = {},
+) {
   const saveReadingSettings = vi.fn(async (_value: ReadingSettings) => {});
   const dependencies: RenewalDependencies = {
     embedding: options.embedding,
+    onTermDecisionChange: options.onTermDecisionChange,
     settings: {
       readReadingSettings: async () => ({
         schemaVersion: 2,
@@ -354,5 +361,66 @@ describe('기기 판정 모델 중단·끄기·지우기', () => {
       onDeviceEmbedding: true,
       embeddingModel: { installed: true, error: REMOVE_MESSAGE },
     });
+  });
+});
+
+describe('기기 판정 문 동기화', () => {
+  it('설치된 모델을 저장된 토글로 복원하면 판정 문을 한 번 켠다', async () => {
+    const onTermDecisionChange = vi.fn();
+    await openApp({
+      embedding: fakePort({ initial: present }),
+      saved: { onDeviceEmbedding: true },
+      onTermDecisionChange,
+    });
+
+    expect(onTermDecisionChange.mock.calls).toEqual([[true]]);
+  });
+
+  it('설치되지 않은 저장 토글은 판정 문을 켜지 않는다', async () => {
+    const onTermDecisionChange = vi.fn();
+    await openApp({
+      embedding: fakePort(),
+      saved: { onDeviceEmbedding: true },
+      onTermDecisionChange,
+    });
+
+    expect(onTermDecisionChange).not.toHaveBeenCalled();
+  });
+
+  it('켜기·끄기·지우기에 맞춰 바꾸고 같은 값은 다시 부르지 않는다', async () => {
+    const onTermDecisionChange = vi.fn();
+    const { controller } = await openApp({
+      embedding: fakePort({ initial: present }),
+      onTermDecisionChange,
+    });
+
+    await controller.enableOnDeviceEmbedding();
+    await controller.enableOnDeviceEmbedding();
+    controller.changeAutoTranslate(false);
+    await controller.disableOnDeviceEmbedding();
+    await controller.disableOnDeviceEmbedding();
+    await controller.enableOnDeviceEmbedding();
+    await controller.removeEmbeddingModel();
+
+    expect(onTermDecisionChange.mock.calls).toEqual([[true], [false], [true], [false]]);
+  });
+
+  it('내려받기가 끝나 켜지면 판정 문을 켜고, 실패하면 켜지 않는다', async () => {
+    const onTermDecisionChange = vi.fn();
+    const { controller } = await openApp({ embedding: fakePort(), onTermDecisionChange });
+    await controller.enableOnDeviceEmbedding();
+    expect(onTermDecisionChange.mock.calls).toEqual([[true]]);
+
+    const failing = vi.fn();
+    const failed = await openApp({
+      embedding: fakePort({
+        download: vi.fn(async () => {
+          throw new EmbeddingError('network');
+        }),
+      }),
+      onTermDecisionChange: failing,
+    });
+    await failed.controller.enableOnDeviceEmbedding();
+    expect(failing).not.toHaveBeenCalled();
   });
 });

@@ -130,6 +130,8 @@ export interface RenewalDependencies {
   readonly rangeJudge?: ReturnType<typeof createRangeJudge>;
   /** 기기 안 용어 판정 모델. 네이티브 앱에서만 available이다. */
   readonly embedding?: OnDeviceEmbedding;
+  /** 기기 판정 문이 바뀔 때 부른다. 토글이 켜져 있고 모델이 설치된 경우에만 true다. */
+  readonly onTermDecisionChange?: (enabled: boolean) => void;
   readonly lifecycle?: AppLifecycle;
   readonly browse?: (startUrl?: string) => Promise<{ selectedUrl: string } | null>;
   readonly normalizeInput?: (url: string) => string;
@@ -406,6 +408,8 @@ interface ActiveTranslation {
   readonly selectionOperation: number;
 }
 export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
+  // 기기 판정 문의 마지막으로 알린 값. 초기값 false는 판정 문의 초기 상태와 같다.
+  let termDecisionActive = false;
   let snapshot: RenewalSnapshot = {
     titles: [],
     titlesBusy: false,
@@ -866,6 +870,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ),
       pendingSaveChapter: pending ? (chaptersById.get(pending.source.chapterId) ?? null) : null,
     };
+    // 판정 문은 모든 상태 변경이 지나는 이 자리에서만 맞춘다. 값이 바뀔 때만 알린다.
+    const termDecision = snapshot.onDeviceEmbedding && snapshot.embeddingModel?.installed === true;
+    if (termDecision !== termDecisionActive) {
+      termDecisionActive = termDecision;
+      dependencies.onTermDecisionChange?.(termDecision);
+    }
     listeners.forEach((listener) => listener());
   }
   const chapterLevel = (route: Route) => route.kind === 'translation' || route.kind === 'reader';

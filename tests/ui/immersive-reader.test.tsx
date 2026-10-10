@@ -426,6 +426,28 @@ test('saved translation information uses the displayed version provenance and do
   expect(info).not.toHaveTextContent('987');
 });
 
+test('기기 판정 기록이 있으면 번역 확인 결과에 판정 요약 한 줄을 보여 준다', () => {
+  const base = completed();
+  const openSheet = () => {
+    fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '번역 확인 결과 보기' }));
+    return screen.getByRole('dialog', { name: '번역 확인 결과' });
+  };
+  const version = completed({
+    provenance: {
+      ...base.provenance,
+      termDecision: { confirmed: ['ルシア', 'ケイ'], rejected: ['ボブ'], ms: 42 },
+    },
+  });
+  const { unmount } = render(<ImmersiveReader {...props({ version })} />);
+  expect(openSheet()).toHaveTextContent('기기 판정 · 확정 2개 · 제외 1개 · 42ms');
+  unmount();
+
+  render(<ImmersiveReader {...props({ version: base })} />);
+  expect(openSheet()).not.toHaveTextContent('기기 판정');
+});
+
 test('legacy saved quality without a quality record stays explicitly unrecorded and retains heuristic limits', () => {
   const version = completed({ quality: undefined });
   render(<ImmersiveReader {...props({ version })} />);

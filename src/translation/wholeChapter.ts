@@ -48,6 +48,17 @@ export interface FlowDependencies {
     signal: AbortSignal;
   }) => Promise<'skipped' | 'added'>;
 }
+/**
+ * 판정 기록을 저장 검증 한도(이름 80자·50개) 안에서 만든다. 한도를 넘는 값은 저장 전체를 막으므로 여기서 거른다.
+ */
+function termDecisionRecord(decision: CandidateDecision, ms: number) {
+  const names = (set: ReadonlySet<string>) =>
+    [...set]
+      .filter((name) => !!name.trim() && name.length <= 80)
+      .sort()
+      .slice(0, 50);
+  return { confirmed: names(decision.confirmed), rejected: names(decision.rejected), ms };
+}
 export type PhaseDurations = { sourceMs: number; modelMs: number; validationStorageMs: number };
 export type ParagraphRepair = { base: CompletedTranslation; indexes: readonly number[] };
 export function createWholeChapterFlow(deps: FlowDependencies) {
@@ -205,10 +216,17 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           selected.translationMode === 'stream';
         // 후보 용어 판정(#241): 번역 요청 직전에 회차 입력으로 한 번만 부른다. 실패해도 번역은 판정 없이 계속한다.
         let decision: CandidateDecision | undefined;
+        let decisionMs = 0;
         try {
-          decision =
-            (await deps.decideCandidates?.(normalizeChapterInput(requestSource), guidance)) ??
-            undefined;
+          const decisionStarted = deps.clock.now();
+          const found = await deps.decideCandidates?.(
+            normalizeChapterInput(requestSource),
+            guidance,
+          );
+          if (found) {
+            decision = found;
+            decisionMs = Math.max(0, Math.round(deps.clock.now() - decisionStarted));
+          }
         } catch {
           decision = undefined;
         }
@@ -356,6 +374,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
                   },
                 }
               : {}),
+            ...(decision ? { termDecision: termDecisionRecord(decision, decisionMs) } : {}),
           },
         };
         if (control.signal.aborted || disposed) throw new ReaderError('cancelled', 'unknown');

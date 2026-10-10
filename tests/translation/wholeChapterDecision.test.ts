@@ -2,6 +2,7 @@ import { expect, test, vi } from 'vitest';
 import { createWholeChapterFlow, type FlowDependencies } from '../../src/translation/wholeChapter';
 import type {
   ChapterRef,
+  CompletedTranslation,
   ProviderSession,
   SelectedModel,
   SourceSnapshot,
@@ -42,14 +43,15 @@ const guidance: WorkGuidance = {
 };
 const confirmed: CandidateDecision = { confirmed: new Set(['ルシア']), rejected: new Set() };
 
-function makeFlow(decideCandidates?: Decide) {
+function makeFlow(decideCandidates?: Decide, clock: { now(): number } = { now: () => 0 }) {
   const translate = vi.fn(async () => ({ text: '번역', finishReason: 'complete' as const }));
+  const commit = vi.fn(async (_value: CompletedTranslation) => {});
   const provider: ProviderSession = { listModels: async () => [], translateChapter: translate };
   const flow = createWholeChapterFlow({
     source: { getChapter: vi.fn(async () => chapterSource), getWorkPage: vi.fn() },
     createProvider: () => provider,
     store: {
-      commitVersion: vi.fn(async () => {}),
+      commitVersion: commit,
       saveWorkPage: vi.fn(),
       listWorkIds: vi.fn(async () => []),
       readWork: vi.fn(),
@@ -60,11 +62,11 @@ function makeFlow(decideCandidates?: Decide) {
       readPosition: vi.fn(),
     },
     attempts: { readUnfinished: async () => [], write: async () => {} },
-    clock: { now: () => 0 },
+    clock,
     ...(decideCandidates ? { decideCandidates } : {}),
   });
   flow.setForeground(true);
-  return { flow, translate };
+  return { flow, translate, commit };
 }
 
 function requestOf(translate: { mock: { calls: unknown[][] } }): Request {
@@ -112,4 +114,38 @@ test('판정 함수가 없으면 기존처럼 번역한다', async () => {
   await flow.start(ref, streaming, guidance);
   expect(translate).toHaveBeenCalledTimes(1);
   expect(flow.getSnapshot().phase).toBe('ready');
+});
+
+test('판정이 돌았으면 저장본 provenance에 이름 정렬된 판정 기록과 반올림한 시간을 남긴다', async () => {
+  let now = 0;
+  const decide = vi.fn<Decide>(async () => {
+    now += 12.6;
+    return { confirmed: new Set(['ルシア', 'ケイ']), rejected: new Set(['ボブ']) };
+  });
+  const { flow, commit } = makeFlow(decide, { now: () => now });
+  await flow.start(ref, streaming, guidance);
+  const saved = commit.mock.calls[0]![0];
+  expect(saved.provenance.termDecision).toEqual({
+    confirmed: ['ケイ', 'ルシア'],
+    rejected: ['ボブ'],
+    ms: 13,
+  });
+});
+
+test('판정이 없으면 termDecision 필드를 두지 않고, 판정 기록은 guidanceHash를 바꾸지 않는다', async () => {
+  const withDecision = makeFlow(async () => confirmed);
+  await withDecision.flow.start(ref, streaming, guidance);
+  const withoutDecision = makeFlow(async () => null);
+  await withoutDecision.flow.start(ref, streaming, guidance);
+  const failed = makeFlow(async () => {
+    throw new Error('model down');
+  });
+  await failed.flow.start(ref, streaming, guidance);
+
+  const recorded = withDecision.commit.mock.calls[0]![0].provenance;
+  const plain = withoutDecision.commit.mock.calls[0]![0].provenance;
+  expect(plain).not.toHaveProperty('termDecision');
+  expect(failed.commit.mock.calls[0]![0].provenance).not.toHaveProperty('termDecision');
+  expect(recorded.guidanceHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(recorded.guidanceHash).toBe(plain.guidanceHash);
 });

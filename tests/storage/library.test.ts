@@ -309,3 +309,43 @@ test('부분 인덱스 손상은 pending 삭제 여부가 불명확하므로 재
   expect(await store.readVersion(value.versionId)).toEqual(value);
   expect(writes.filter((p) => p.startsWith('versions/'))).toHaveLength(1);
 });
+
+test('termDecision 기록은 이름 80자·50개·정수 ms 형식을 지키고 기록이 없는 저장본은 그대로 통과한다', async () => {
+  const memory = new Map<string, string>();
+  const files = {
+    read: async (p: string) => memory.get(p) ?? null,
+    write: async (p: string, t: string) => {
+      memory.set(p, t);
+    },
+  };
+  const store = createLibraryStore(files);
+  const withDecision = (termDecision: unknown) =>
+    ({
+      ...value,
+      versionId: 'term-decision',
+      provenance: { ...value.provenance, termDecision },
+    }) as unknown as CompletedTranslation;
+  const valid = {
+    confirmed: ['ルシア', 'ケイ'],
+    rejected: [],
+    ms: 0,
+  };
+  const accepted = withDecision(valid);
+  await store.commitVersion(accepted);
+  expect(await createLibraryStore(files).readVersion('term-decision')).toEqual(accepted);
+
+  const rejected = [
+    { ...valid, confirmed: ['가'.repeat(81)] },
+    { ...valid, rejected: Array.from({ length: 51 }, (_, i) => `n${i}`) },
+    { ...valid, ms: -1 },
+    { ...valid, ms: 1.5 },
+    { ...valid, confirmed: [''] },
+    { ...valid, extra: true },
+    { confirmed: ['ルシア'], ms: 3 },
+  ];
+  for (const termDecision of rejected) {
+    await expect(store.commitVersion(withDecision(termDecision))).rejects.toThrow();
+  }
+  await store.commitVersion(value);
+  expect(await store.readVersion(value.versionId)).toEqual(value);
+});
