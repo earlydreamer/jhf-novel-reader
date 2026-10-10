@@ -98,8 +98,7 @@ export async function translateLocalStream(
   const done = new Map<string, string>(),
     failures: number[] = [];
   let previous: Message[] = [],
-    retries = 0,
-    resends = 0;
+    retries = 0;
   const paragraphIds = new Map(units.map((unit) => [unit.paragraph, unit.id]));
   const assemble = (partial: ReadonlyMap<string, string>) =>
     request.source.paragraphs
@@ -205,7 +204,6 @@ export async function translateLocalStream(
             (!(error instanceof ReaderError) ||
               (error.code === 'timeout_unknown' && error.outcome === 'unknown'));
           if (unknown && send < resendLimit) {
-            resends++;
             continue;
           }
           if (error instanceof ReaderError) throw error;
