@@ -151,6 +151,95 @@ function harness(fault = false, automatic = false) {
   };
 }
 afterEach(cleanup);
+test.each(['chapter', 'paragraphs'] as const)(
+  'cancel during %s retranslation save keeps the old reader and explicitly opens the saved result',
+  async (scope) => {
+    const h = harness();
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    try {
+      await prepareStreaming(h);
+      const chapter = h.app.getSnapshot().work!.chapters[0]!;
+      await h.app.selectChapter(chapter);
+      h.release();
+      await h.app.translate();
+      const base = h.app.getSnapshot().version!;
+      await h.app.savePosition(base.blocks[0]!.id, 17);
+      await h.app.selectChapter(chapter);
+      render(<Application controller={h.app} />);
+      const originalWrite = h.adapters.files.write;
+      h.adapters.files.write = async (path, value) => {
+        if (path.startsWith('versions/')) await saveGate;
+        await originalWrite(path, value);
+      };
+      const translating =
+        scope === 'chapter' ? h.app.retranslateChapter() : h.app.retryParagraphs([2]);
+      await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('saving'));
+      const pending = h.app.getSnapshot().translation.pendingSave!;
+      expect(pending.versionId).not.toBe(base.versionId);
+      const article = screen.getByRole('article', { name: '번역 본문' });
+      const last = article.querySelector<HTMLElement>('[data-reader-index="2"]')!;
+      Object.defineProperty(last, 'offsetTop', { value: 300 });
+      article.scrollTop = 329;
+      fireEvent.scroll(article);
+      await act(async () => {
+        h.app.cancelTranslation();
+        releaseSave();
+        await translating;
+      });
+      expect(h.app.getSnapshot()).toMatchObject({
+        route: { kind: 'translation' },
+        version: { versionId: base.versionId },
+        translationActive: false,
+        translation: { phase: 'ready', completedVersionId: pending.versionId },
+      });
+      const library = createLibraryStore(h.adapters.files);
+      expect(await library.readVersion(pending.versionId)).toEqual(pending);
+      expect(await library.readVersion(base.versionId)).toEqual(base);
+      expect(await library.readPosition(base.versionId)).toMatchObject({
+        versionId: base.versionId,
+        blockId: base.blocks[0]!.id,
+        offset: 17,
+      });
+      expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+      expect(article.querySelector('[data-reader-index="2"]')).toHaveAttribute(
+        'data-block-id',
+        base.blocks[2]!.id,
+      );
+      expect(
+        screen.queryByText('번역을 저장했어요. 저장된 번역을 읽고 있어요.'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: '번역 안내' })).toHaveTextContent(
+        '새 번역을 저장했어요. 지금은 이전 번역을 읽고 있어요.',
+      );
+      expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(2);
+      fireEvent.click(screen.getByRole('button', { name: '저장된 번역 열기' }));
+      await waitFor(() =>
+        expect(h.app.getSnapshot()).toMatchObject({
+          route: { kind: 'reader', versionId: pending.versionId },
+          version: { versionId: pending.versionId },
+          position: { versionId: pending.versionId, blockId: pending.blocks[2]!.id, offset: 29 },
+        }),
+      );
+      expect(screen.queryByRole('button', { name: '저장된 번역 열기' })).not.toBeInTheDocument();
+      expect(await library.readPosition(base.versionId)).toMatchObject({
+        blockId: base.blocks[0]!.id,
+        offset: 17,
+      });
+      expect(await library.readPosition(pending.versionId)).toMatchObject({
+        blockId: pending.blocks[2]!.id,
+        offset: 29,
+      });
+      expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(2);
+    } finally {
+      releaseSave();
+      h.release();
+      h.app.dispose();
+    }
+  },
+);
 test('live reader updates before model settlement, keeps position on save and opens the same saved text', async () => {
   const h = harness();
   await h.app.initialize();

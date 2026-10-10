@@ -130,6 +130,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const route = props.route;
   const onDisplayed = props.onDisplayed;
   const version = ownVersion(props.version, chapter) ? props.version : null;
+  const readingCompletedVersion =
+    !!version && version.versionId === props.translation.completedVersionId;
   const body = useRef<HTMLElement>(null);
   const topBar = useRef<HTMLDivElement>(null);
   const previousScrollTop = useRef(0);
@@ -333,11 +335,17 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   }, [route, version, onDisplayed]);
 
   useEffect(() => {
-    if (props.route !== 'translation' || !version || props.translation.phase !== 'ready') return;
+    if (
+      props.route !== 'translation' ||
+      !version ||
+      !readingCompletedVersion ||
+      props.translation.phase !== 'ready'
+    )
+      return;
     if (announcedSavedVersion.current === version.versionId) return;
     announcedSavedVersion.current = version.versionId;
     showSnackbar('번역을 저장했어요. 저장된 번역을 읽고 있어요.');
-  }, [props.route, props.translation.phase, version, showSnackbar]);
+  }, [props.route, props.translation.phase, readingCompletedVersion, version, showSnackbar]);
 
   useEffect(
     () => () => {
@@ -712,14 +720,24 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         )}
       </div>
     ),
-    props.route === 'translation' && props.translation.phase === 'ready' && !version && (
-      <div key="ready-saved" className="nr-reader-notice">
-        <p>번역을 저장했어요.</p>
-        <Button variant="filled" size="m" onClick={props.onOpenSaved}>
-          저장된 번역 열기
-        </Button>
-      </div>
-    ),
+    props.route === 'translation' &&
+      props.translation.phase === 'ready' &&
+      !active &&
+      !readingCompletedVersion && (
+        <div
+          key={`ready-saved:${props.translation.completedVersionId ?? ''}`}
+          className="nr-reader-notice"
+        >
+          <p>
+            {version
+              ? '새 번역을 저장했어요. 지금은 이전 번역을 읽고 있어요.'
+              : '번역을 저장했어요.'}
+          </p>
+          <Button variant="filled" size="m" onClick={props.onOpenSaved}>
+            저장된 번역 열기
+          </Button>
+        </div>
+      ),
   ];
   const hasNotices = notices.some(Boolean);
   const actionKey = `${chapter.chapterId}:${actionNotices
