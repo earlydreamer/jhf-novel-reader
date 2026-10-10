@@ -28,6 +28,7 @@ import { IconButton } from './components/IconButton';
 import { LinearProgress } from './components/LinearProgress';
 import { Menu } from './components/Menu';
 import { StatusPill } from './components/StatusPill';
+import { Switch } from './components/Switch';
 import { useSnackbar, useSnackbarOffset } from './components/Snackbar';
 import { TopAppBar } from './components/TopAppBar';
 import { useBackHandler } from './shell/backStack';
@@ -975,18 +976,12 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
               </Button>
             ))}
           </fieldset>
-          <label className="nr-reader-switch">
-            <span>
-              용어 강조
-              <small>용어집에 있는 이름을 본문에 표시해요.</small>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={props.termHighlight}
-              onChange={(event) => props.onTermHighlight(event.target.checked)}
-            />
-          </label>
+          <Switch
+            label="용어 강조"
+            description="용어집에 있는 이름을 본문에 표시해요."
+            checked={props.termHighlight}
+            onChange={props.onTermHighlight}
+          />
         </div>
       </BottomSheet>
       <BottomSheet open={qualityOpen} title="번역 확인 결과" onClose={() => setQualityOpen(false)}>

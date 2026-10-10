@@ -491,7 +491,7 @@ test('보기 설정의 용어 강조 스위치는 저장값을 보여 주고 누
 
   fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
   fireEvent.click(screen.getByRole('button', { name: '보기 설정' }));
-  const toggle = screen.getByRole('switch', { name: /용어 강조/ });
+  const toggle = screen.getByRole('switch', { name: '용어 강조' });
   expect(toggle).toBeChecked();
   fireEvent.click(toggle);
   expect(onTermHighlight).toHaveBeenCalledWith(false);
@@ -500,7 +500,7 @@ test('보기 설정의 용어 강조 스위치는 저장값을 보여 주고 누
   render(<ImmersiveReader {...props({ termHighlight: false, onTermHighlight })} />);
   fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
   fireEvent.click(screen.getByRole('button', { name: '보기 설정' }));
-  const off = screen.getByRole('switch', { name: /용어 강조/ });
+  const off = screen.getByRole('switch', { name: '용어 강조' });
   expect(off).not.toBeChecked();
   fireEvent.click(off);
   expect(onTermHighlight).toHaveBeenLastCalledWith(true);

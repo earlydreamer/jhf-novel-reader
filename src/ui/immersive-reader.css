@@ -365,18 +365,6 @@
   font: var(--type-title-medium);
 }
 
-.nr-reader-switch {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.nr-reader-switch small {
-  display: block;
-  opacity: 0.7;
-}
-
 .nr-reader-font-control {
   display: flex;
   align-items: center;
