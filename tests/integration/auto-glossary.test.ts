@@ -111,6 +111,29 @@ it('자동 용어집은 기본으로 켜져 있고 끄면 설정에 false로 저
   controller.dispose();
 });
 
+it('용어 강조는 기본으로 켜져 있고 끄면 설정에 false로 저장되며 다시 켜면 키가 빠진다', async () => {
+  const { controller, saveReadingSettings } = await readyController();
+  expect(controller.getSnapshot().termHighlight).toBe(true);
+
+  controller.changeTermHighlight(false);
+  expect(controller.getSnapshot().termHighlight).toBe(false);
+  await vi.waitFor(() =>
+    expect(saveReadingSettings.mock.calls.at(-1)?.[0]).toMatchObject({ termHighlight: false }),
+  );
+
+  controller.changeTermHighlight(true);
+  await vi.waitFor(() =>
+    expect(saveReadingSettings.mock.calls.at(-1)?.[0]).not.toHaveProperty('termHighlight'),
+  );
+  controller.dispose();
+});
+
+it('저장된 용어 강조 끔 설정을 불러오면 꺼진 상태로 시작한다', async () => {
+  const { controller } = await readyController({ saved: { termHighlight: false } });
+  expect(controller.getSnapshot().termHighlight).toBe(false);
+  controller.dispose();
+});
+
 it('저장된 끔 설정을 불러오면 자동 용어집이 꺼진 상태로 시작한다', async () => {
   const { controller } = await readyController({ saved: { autoGlossary: false } });
   expect(controller.getSnapshot().autoGlossary).toBe(false);

@@ -177,6 +177,16 @@
   font: var(--type-body-small);
 }
 
+/* 리더에서 용어로 강조한 자리. 글자색은 읽기 배경을 따른다. */
+.nr-term {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  border-radius: 2px;
+}
+
 .nr-reader-paragraph--failed {
   padding-inline-start: 12px;
   border-inline-start: 3px solid var(--error);
@@ -349,6 +359,11 @@
   font: var(--type-body-large);
 }
 
+/* 공용 스위치 행의 좌우 여백은 시트 본문 여백과 겹치므로 리더 시트 안에서는 뺀다. */
+.nr-reader-sheet-body .nr-switch-row {
+  padding-inline: 0;
+}
+
 .nr-reader-sheet-body fieldset {
   display: flex;
   flex-wrap: wrap;
@@ -506,4 +521,11 @@
   .nr-immersive-reader > .nr-reader-float {
     transition: none;
   }
+}
+
+.nr-term-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 12px;
 }

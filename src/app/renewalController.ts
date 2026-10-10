@@ -167,6 +167,8 @@ export interface RenewalSnapshot {
   readonly autoTranslate: boolean;
   readonly autoRetryFailed: boolean;
   readonly autoGlossary: boolean;
+  /** 리더 용어 강조. 기본은 켜짐이다. */
+  readonly termHighlight: boolean;
   readonly lookupWikipedia: boolean;
   readonly lookupNamuwiki: boolean;
   readonly embeddingAvailable: boolean;
@@ -338,6 +340,7 @@ export interface RenewalController {
   changeAutoTranslate(enabled: boolean): void;
   changeAutoRetryFailed(enabled: boolean): void;
   changeAutoGlossary(enabled: boolean): void;
+  changeTermHighlight(enabled: boolean): void;
   changeLookupWikipedia(enabled: boolean): void;
   changeLookupNamuwiki(enabled: boolean): void;
   enableOnDeviceEmbedding(): Promise<void>;
@@ -421,6 +424,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     autoTranslate: true,
     autoRetryFailed: true,
     autoGlossary: true,
+    termHighlight: true,
     lookupWikipedia: false,
     lookupNamuwiki: false,
     embeddingAvailable: dependencies.embedding?.available() ?? false,
@@ -511,6 +515,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ...(snapshot.autoTranslate ? {} : { autoTranslate: false }),
       ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
       ...(snapshot.autoGlossary ? {} : { autoGlossary: false }),
+      ...(snapshot.termHighlight ? {} : { termHighlight: false }),
       ...(snapshot.lookupWikipedia ? { lookupWikipedia: true } : {}),
       ...(snapshot.lookupNamuwiki ? { lookupNamuwiki: true } : {}),
       ...(snapshot.onDeviceEmbedding ? { onDeviceEmbedding: true } : {}),
@@ -1252,6 +1257,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             autoTranslate: saved.autoTranslate ?? true,
             autoRetryFailed: saved.autoRetryFailed ?? saved.selection?.autoRetryFailed ?? true,
             autoGlossary: saved.autoGlossary ?? true,
+            termHighlight: saved.termHighlight ?? true,
             lookupWikipedia: saved.lookupWikipedia ?? false,
             lookupNamuwiki: saved.lookupNamuwiki ?? false,
             onDeviceEmbedding: saved.onDeviceEmbedding ?? false,
@@ -2990,6 +2996,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     },
     changeAutoGlossary(enabled) {
       publish({ autoGlossary: enabled });
+      persistSettings();
+    },
+    changeTermHighlight(enabled) {
+      publish({ termHighlight: enabled });
       persistSettings();
     },
     changeLookupWikipedia(enabled) {

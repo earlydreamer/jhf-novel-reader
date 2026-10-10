@@ -119,6 +119,27 @@ test('v2 settings keep the term scan lookup preferences and reject non-boolean v
   ).rejects.toThrow();
 });
 
+test('v2 settings keep the term highlight switch and reject non-boolean values', async () => {
+  const memory = new Map<string, string>();
+  const repository = createReadingSettingsRepository({
+    get: async ({ key }) => ({ value: memory.get(key) ?? null }),
+    set: async ({ key, value }) => {
+      memory.set(key, value);
+    },
+  });
+  const settings = {
+    schemaVersion: 2 as const,
+    selection: null,
+    fontSize: 18,
+    termHighlight: false,
+  };
+  await repository.saveReadingSettings(settings);
+  expect(await repository.readReadingSettings()).toEqual(settings);
+  await expect(
+    repository.saveReadingSettings({ ...settings, termHighlight: 'yes' as never }),
+  ).rejects.toThrow();
+});
+
 test('v2 settings keep the on-device embedding switch and reject non-boolean values', async () => {
   const memory = new Map<string, string>();
   const repository = createReadingSettingsRepository({

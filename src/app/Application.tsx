@@ -4,6 +4,7 @@ import { HomeScreen } from '../ui/HomeScreen';
 import { WorkScreen } from '../ui/WorkScreen';
 import { ImmersiveReader } from '../ui/ImmersiveReader';
 import { SettingsScreen } from '../ui/SettingsScreen';
+import { useReaderGlossary } from '../ui/readerGlossary';
 import { TopAppBar } from '../ui/components/TopAppBar';
 import { IconButton } from '../ui/components/IconButton';
 import { Menu } from '../ui/components/Menu';
@@ -40,6 +41,22 @@ function RouteScreen({
   } | null;
   onWorkDialogRequestHandled(id: number): void;
 }): JSX.Element {
+  // 훅은 조건문 밖에서 부른다. 리더 화면일 때만 작품 용어집을 읽는다.
+  const readerWorkId =
+    state.route.kind === 'translation'
+      ? (state.chapter?.workId ?? null)
+      : state.route.kind === 'reader'
+        ? (state.version?.source.workId ?? null)
+        : null;
+  const glossary = useReaderGlossary({
+    workId: state.guidanceAvailable ? readerWorkId : null,
+    refreshKey: state.version?.versionId,
+    read: controller.readGuidance,
+    save: controller.saveGuidance,
+  });
+  const readerGlossary = glossary
+    ? { ...glossary, locked: state.busy || state.translationActive }
+    : undefined;
   const titles = state.titlesAvailable
     ? {
         entries: state.titles,
@@ -155,6 +172,8 @@ function RouteScreen({
           fontSize={state.fontSize}
           readingBackground={state.readingBackground}
           lineHeight={state.lineHeight}
+          termHighlight={state.termHighlight}
+          glossary={readerGlossary}
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy}
@@ -175,6 +194,7 @@ function RouteScreen({
           onFontSize={controller.changeFontSize}
           onReadingBackground={controller.changeReadingBackground}
           onLineHeight={controller.changeLineHeight}
+          onTermHighlight={controller.changeTermHighlight}
           onPreviewPosition={controller.previewPosition}
           onPosition={(block, offset) => void controller.savePosition(block, offset)}
           onAdjacent={controller.adjacentChapter}
@@ -239,6 +259,8 @@ function RouteScreen({
           fontSize={state.fontSize}
           readingBackground={state.readingBackground}
           lineHeight={state.lineHeight}
+          termHighlight={state.termHighlight}
+          glossary={readerGlossary}
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy || state.translationActive}
@@ -255,6 +277,7 @@ function RouteScreen({
           onFontSize={controller.changeFontSize}
           onReadingBackground={controller.changeReadingBackground}
           onLineHeight={controller.changeLineHeight}
+          onTermHighlight={controller.changeTermHighlight}
           onPreviewPosition={controller.previewPosition}
           onPosition={(block, offset) => void controller.savePosition(block, offset)}
           onAdjacent={controller.adjacentChapter}
