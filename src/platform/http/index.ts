@@ -123,7 +123,7 @@ export type LookupPacing = {
   wait?: (ms: number, signal: AbortSignal) => Promise<void>;
 };
 
-const LOOKUP_USER_AGENT = `JHFNovelReader/${packageInfo.version} (https://github.com/earlydreamer/narou-reader)`;
+const LOOKUP_USER_AGENT = `JHFNovelReader/${packageInfo.version} (https://github.com/earlydreamer/jhf-novel-reader)`;
 // 정확한 주소만 허용한다. 쿼리·경로 규칙은 조회 함수가 쓰는 주소와 한 쌍으로 유지한다.
 const WIKIMEDIA_API =
   /^https:\/\/(?:ja\.wikipedia\.org|ko\.wikipedia\.org|www\.wikidata\.org)\/w\/api\.php\?[^#\s]+$/;

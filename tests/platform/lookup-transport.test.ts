@@ -51,7 +51,7 @@ test('allowed lookup addresses send one bounded GET with the lookup User-Agent a
     headers: { Accept: 'application/json' },
   });
   expect(json?.headers['User-Agent']).toMatch(
-    /^JHFNovelReader\/\d+\.\d+\.\d+ \(https:\/\/github\.com\/earlydreamer\/narou-reader\)$/,
+    /^JHFNovelReader\/\d+\.\d+\.\d+ \(https:\/\/github\.com\/earlydreamer\/jhf-novel-reader\)$/,
   );
   expect(request.mock.calls[1]?.[0]).toMatchObject({
     url: namuSearch,
