@@ -22,7 +22,7 @@ const LOOKUP_LABEL: Record<LookupSource, string> = {
   namuwiki: '나무위키',
 };
 
-function lookupLabel(sources: readonly LookupSource[]): string {
+export function lookupLabel(sources: readonly LookupSource[]): string {
   return sources.map((source) => LOOKUP_LABEL[source]).join(', ');
 }
 
@@ -33,7 +33,7 @@ const CONFIDENCE_LABEL: Record<TermScanChange['confidence'], string> = {
 };
 
 /** 엔진 단계 문구. 모르는 단계는 문구 없이 진행 막대만 보인다. */
-function progressText(progress: TermScanProgress | undefined): string | null {
+export function progressText(progress: TermScanProgress | undefined): string | null {
   if (!progress) return null;
   if (progress.stage === 'collect')
     return `저장된 회차를 읽고 있어요 · ${progress.done}/${progress.total}`;
@@ -47,7 +47,7 @@ function progressText(progress: TermScanProgress | undefined): string | null {
   return null;
 }
 
-function ConfidenceBadges({ change }: { change: TermScanChange }): JSX.Element {
+export function ConfidenceBadges({ change }: { change: TermScanChange }): JSX.Element {
   return (
     <p>
       <span className={`nr-scan-confidence nr-scan-confidence--${change.confidence}`}>
