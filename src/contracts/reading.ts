@@ -130,6 +130,8 @@ export type TranslationState = {
   elapsedMs: number;
   error?: ReaderError;
   pendingSave?: CompletedTranslation;
+  /** 저장을 마친 이번 요청의 버전. 리더가 이 버전을 열었다는 뜻은 아니다. */
+  completedVersionId?: string;
   progress?: { completed: number; total: number };
   /** 번역 중에만 보여 주는 저장 전 미리보기. 저장 기준은 완성본이다. */
   preview?: string;

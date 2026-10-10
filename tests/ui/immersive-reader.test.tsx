@@ -112,7 +112,7 @@ test('저장본으로 전환하면 스낵바로 한 번만 알리고 본문에�
         {...props({
           route: 'translation',
           version: value,
-          translation: { phase: 'ready', elapsedMs: 0 },
+          translation: { phase: 'ready', elapsedMs: 0, completedVersionId: value.versionId },
           ...overrides,
         })}
       />
@@ -127,6 +127,50 @@ test('저장본으로 전환하면 스낵바로 한 번만 알리고 본문에�
 
   view.rerender(ui());
   expect(screen.getAllByText(savedNotice)).toHaveLength(1);
+});
+
+test('새 저장본을 아직 열지 않았으면 이전 번역 안내와 명시적인 열기 동작을 제공한다', () => {
+  const oldVersion = completed();
+  const newVersion = completed({ versionId: 'saved-v2' });
+  const ui = (version: CompletedTranslation) => (
+    <SnackbarProvider>
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version,
+          translation: { phase: 'ready', elapsedMs: 0, completedVersionId: newVersion.versionId },
+        })}
+      />
+    </SnackbarProvider>
+  );
+  const view = render(ui(oldVersion));
+  expect(screen.queryByText(savedNotice)).not.toBeInTheDocument();
+  expect(screen.getByRole('region', { name: '번역 안내' })).toHaveTextContent(
+    '새 번역을 저장했어요. 지금은 이전 번역을 읽고 있어요.',
+  );
+  expect(screen.getByRole('button', { name: '저장된 번역 열기' })).toBeEnabled();
+
+  view.rerender(ui(newVersion));
+  expect(screen.getAllByText(savedNotice)).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: '저장된 번역 열기' })).not.toBeInTheDocument();
+});
+
+test('닫은 저장 완료 안내도 다른 번역 결과가 저장되면 다시 열 수 있다', () => {
+  const ui = (completedVersionId: string) => (
+    <ImmersiveReader
+      {...props({
+        route: 'translation',
+        translation: { phase: 'ready', elapsedMs: 0, completedVersionId },
+      })}
+    />
+  );
+  const view = render(ui('saved-v2'));
+  fireEvent.click(screen.getByRole('button', { name: '안내 닫기' }));
+  view.rerender(ui('saved-v2'));
+  expect(screen.queryByRole('button', { name: '저장된 번역 열기' })).not.toBeInTheDocument();
+
+  view.rerender(ui('saved-v3'));
+  expect(screen.getByRole('button', { name: '저장된 번역 열기' })).toBeEnabled();
 });
 
 test('저장본을 그냥 연 경우에는 저장 전환 스낵바를 띄우지 않는다', () => {

@@ -93,7 +93,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
       await deps.attempts.write({ token, phase: 'complete' });
       unfinished = unfinished.filter((entry) => entry.requestId !== token.requestId);
       completed = value;
-      publish({ phase: 'ready', pendingSave: undefined });
+      publish({ phase: 'ready', pendingSave: undefined, completedVersionId: value.versionId });
     } catch {
       publish({ phase: 'failed', error: new ReaderError('storage'), pendingSave: value });
     }
