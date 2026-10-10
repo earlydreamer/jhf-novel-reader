@@ -14,6 +14,11 @@ const input = `ルシアナが笑った。${PAD}クルシアーノが来た。`;
 const terms: GuidanceTerm[] = [
   { source: 'ルシアナ', target: '루시아나', aliases: ['ルシア'], category: '', note: '' },
 ];
+const two: GuidanceTerm[] = [
+  ...terms,
+  { source: 'ミランダ', target: '미란다', aliases: ['ミラ'], category: '', note: '' },
+];
+const long = `ルシアナが笑った。${PAD}クルシアーノが来た。${PAD}ミランダが来た。${PAD}ミラーが来た。`;
 
 /** 'ルシアナ'가 든 문맥(기준)은 [1,0], 나머지(후보 문맥)는 기준과 코사인이 score인 벡터를 돌려준다. */
 function fakeEmbed(score: number) {
@@ -108,11 +113,6 @@ describe('decideCandidates', () => {
   });
 
   it('maxTexts를 넘는 이름은 보류하고 embed는 한 번만 부른다', async () => {
-    const two: GuidanceTerm[] = [
-      ...terms,
-      { source: 'ミランダ', target: '미란다', aliases: ['ミラ'], category: '', note: '' },
-    ];
-    const long = `ルシアナが笑った。${PAD}クルシアーノが来た。${PAD}ミランダが来た。${PAD}ミラーが来た。`;
     const embed = fakeEmbed(0.9);
     const result = await decideCandidates(long, two, embed, { maxTexts: 3 });
     expect(embed).toHaveBeenCalledTimes(1);
@@ -121,6 +121,42 @@ describe('decideCandidates', () => {
     expect(result.confirmed).toEqual(new Set(['ルシア']));
     expect(result.rejected.has('ミラ')).toBe(false);
     expect(result.confirmed.has('ミラ')).toBe(false);
+  });
+
+  it('묶음마다 나눠 embed하고 모든 이름을 판정한다', async () => {
+    const embed = fakeEmbed(0.9);
+    const result = await decideCandidates(long, two, embed, { chunkSize: 2 });
+    expect(embed).toHaveBeenCalledTimes(2);
+    expect(result.judged).toBe(2);
+  });
+
+  it('시간이 다 되면 앞 묶음으로 판정한 이름만 결과에 남긴다', async () => {
+    const answer = fakeEmbed(0.9);
+    let calls = 0;
+    const embed = vi.fn<EmbedTexts>((texts) => {
+      calls += 1;
+      return calls === 1 ? answer(texts) : new Promise<number[][]>(() => {});
+    });
+    const result = await decideCandidates(long, two, embed, { chunkSize: 2, timeoutMs: 50 });
+    expect(embed).toHaveBeenCalledTimes(2);
+    expect(embed.mock.calls[0]![0]).toHaveLength(2);
+    expect(result.judged).toBe(1);
+    expect(result.confirmed).toEqual(new Set(['ルシア']));
+    expect(result.confirmed.has('ミラ')).toBe(false);
+    expect(result.rejected.has('ミラ')).toBe(false);
+  });
+
+  it('두 번째 묶음에서 embed가 실패해도 앞 판정은 남긴다', async () => {
+    const answer = fakeEmbed(0.9);
+    let calls = 0;
+    const embed = vi.fn<EmbedTexts>(async (texts) => {
+      calls += 1;
+      if (calls > 1) throw new Error('model down');
+      return answer(texts);
+    });
+    const result = await decideCandidates(long, two, embed, { chunkSize: 2 });
+    expect(result.judged).toBe(1);
+    expect(result.confirmed).toEqual(new Set(['ルシア']));
   });
 
   it('시간 초과면 던지지 않고 빈 결과를 돌려준다', async () => {
