@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useLayoutEffect,
   useRef,
   useState,
@@ -251,6 +252,16 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     !!version &&
     oneToOneParagraphs &&
     livePreview === undefined;
+  // 강조 범위는 저장본·용어집·보기 방식이 바뀔 때만 계산한다. 스크롤로 다시 그릴 때마다 모든 문단을 찾지 않는다.
+  const glossaryTerms = props.glossary?.terms;
+  const highlightRanges = useMemo(() => {
+    if (!highlight || !version || !glossaryTerms) return null;
+    return version.source.paragraphs.map((paragraph, index) =>
+      props.showOriginal
+        ? sourceRanges(paragraph.text, glossaryTerms)
+        : translatedRanges(paragraph.text, version.blocks[index]?.text ?? '', glossaryTerms),
+    );
+  }, [highlight, version, glossaryTerms, props.showOriginal]);
   useBackHandler(barsVisible && !overlayOpen, () => {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && topBar.current?.contains(focused)) body.current?.focus();
@@ -407,11 +418,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
 
   // 강조 범위로 나눈 조각을 그린다. 원문 보기는 원문의 용어를, 번역은 원문에 나온 용어의 표기를 찾는다.
   function renderHighlighted(index: number, text: string): ReactNode {
-    const terms = props.glossary?.terms ?? [];
-    const sourceText = version?.source.paragraphs[index]?.text ?? '';
-    const ranges = props.showOriginal
-      ? sourceRanges(sourceText, terms)
-      : translatedRanges(sourceText, text, terms);
+    const ranges = highlightRanges?.[index] ?? [];
     if (!ranges.length) return text || '\u00a0';
     return splitByRanges(text, ranges).map((segment, position) =>
       segment.term ? (
