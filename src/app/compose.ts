@@ -35,6 +35,7 @@ import { createReadingSettingsRepository } from '../storage/settings';
 import { createAttemptRepository } from '../translation/attempts';
 import { createWholeChapterFlow } from '../translation/wholeChapter';
 import { createBatchRepository, createBatchTranslation } from '../translation/batch';
+import { createBatchScanStore } from '../translation/batchScanStore';
 import { createProviderSession } from '../providers/plainText';
 import { listModels } from '../providers/catalog';
 import { createGeminiProviderSession, listGeminiModels } from '../providers/gemini/wholeChapter';
@@ -102,6 +103,7 @@ export function createRenewalApplication(
       flow,
       repository: createBatchRepository(adapters.files),
       guidance,
+      scanStore: createBatchScanStore(adapters.files),
     }),
     clock: adapters.clock,
     lifecycle: adapters.lifecycle,

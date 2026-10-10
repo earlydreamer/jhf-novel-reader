@@ -24,6 +24,7 @@ import {
   type WorkGuidance,
 } from './guidance';
 import { createNameCandidateScan, type NameCandidate } from './scan';
+import type { BatchScanStore } from './batchScanStore';
 import type { ScanChapter } from './termScan';
 
 export type CandidateChoice = { source: string; target: string };
@@ -199,6 +200,7 @@ export function createBatchTranslation(dependencies: {
   flow: WholeChapterFlow;
   repository: BatchRepository;
   guidance?: GuidanceRepository;
+  scanStore?: BatchScanStore;
 }): BatchTranslation {
   let state: BatchState = { record: null, active: false, preparing: false, error: null };
   let foreground = false;
@@ -223,6 +225,54 @@ export function createBatchTranslation(dependencies: {
   async function persist(record: BatchRecord): Promise<void> {
     await dependencies.repository.write(record);
     publish({ record, error: null, errorWorkId: undefined });
+  }
+  const scanStore = dependencies.scanStore;
+  /** 저장본은 chapterId가 같을 때만 쓴다. 읽기 실패는 없는 것으로 보고 원문을 다시 받는다. 읽은 회차는 기억해 다음부터 파일을 읽지 않는다. */
+  async function readSavedScan(
+    recordId: string,
+    index: number,
+    chapterId: string,
+  ): Promise<ScanChapter | null> {
+    if (!scanStore) return null;
+    try {
+      const saved = await scanStore.read(recordId, index);
+      if (saved?.chapterId !== chapterId) return null;
+      scannedChapters.set(chapterId, saved);
+      return saved;
+    } catch {
+      return null;
+    }
+  }
+  /** 저장 실패는 이어하기만 못 하게 할 뿐이므로 스캔을 막지 않는다. */
+  async function keepScan(recordId: string, index: number, chapter: ScanChapter): Promise<void> {
+    try {
+      await scanStore?.write(recordId, index, chapter);
+    } catch {
+      // 저장하지 못한 회차는 다음 스캔에서 다시 받는다.
+    }
+  }
+  async function clearSavedScans(record: BatchRecord): Promise<void> {
+    try {
+      await scanStore?.clear(record.id, record.chapters.length);
+    } catch {
+      // 정리에 실패해도 기록은 이미 바뀌었으므로 무시한다.
+    }
+  }
+  function plainScanChapter(chapterId: string, source: SourceSnapshot): ScanChapter {
+    return {
+      chapterId,
+      paragraphs: source.paragraphs.map(({ text, ruby }) => ({ text, ruby })),
+    };
+  }
+  /** 후보 스캔은 문단의 id를 보지 않으므로, 저장 형식의 회차를 그 입력 모양에 맞춘다. */
+  function candidateInput(chapter: ScanChapter) {
+    return {
+      chapterId: chapter.chapterId,
+      paragraphs: chapter.paragraphs.map((paragraph, index) => ({
+        id: String(index),
+        ...paragraph,
+      })),
+    };
   }
   async function matchesSelection(
     version: Awaited<ReturnType<LibraryStore['listVersions']>>[number],
@@ -348,6 +398,7 @@ export function createBatchTranslation(dependencies: {
       }
       if (cancelled || control.signal.aborted || !foreground || disposed)
         throw new ReaderError('cancelled');
+      const previous = state.record;
       await persist({
         schemaVersion: 1,
         id: crypto.randomUUID(),
@@ -368,6 +419,7 @@ export function createBatchTranslation(dependencies: {
       });
       scannedSources.clear();
       scannedChapters.clear();
+      if (previous) await clearSavedScans(previous);
     } catch {
       publish({
         error: cancelled
@@ -403,7 +455,6 @@ export function createBatchTranslation(dependencies: {
       scanProgress: { completed: 0, total: record.chapters.length },
     });
     scannedSources.clear();
-    scannedChapters.clear();
     try {
       const guidance = (await dependencies.guidance?.read(record.work.workId)) ?? null;
       const candidateScan = createNameCandidateScan(
@@ -411,34 +462,40 @@ export function createBatchTranslation(dependencies: {
         referencePreset(record.selection),
       );
       let completed = 0;
-      for (const chapter of record.chapters) {
-        const source = await dependencies.source.getChapter(chapter, control.signal);
-        if (
-          source.workId !== record.work.workId ||
-          source.chapterId !== chapter.chapterId ||
-          source.canonicalUrl !== chapter.canonicalUrl
-        )
-          throw new ReaderError('source_parse');
+      for (const [index, chapter] of record.chapters.entries()) {
+        // 받은 회차는 메모리·저장본에서 가져와 다시 받지 않는다. 실패나 취소 뒤에도 남겨 이어하기에 쓴다.
+        let scanned =
+          scannedChapters.get(chapter.chapterId) ??
+          (await readSavedScan(record.id, index, chapter.chapterId));
+        if (!scanned) {
+          const source = await dependencies.source.getChapter(chapter, control.signal);
+          if (
+            source.workId !== record.work.workId ||
+            source.chapterId !== chapter.chapterId ||
+            source.canonicalUrl !== chapter.canonicalUrl
+          )
+            throw new ReaderError('source_parse');
+          if (cancelled || control.signal.aborted || !foreground || disposed)
+            throw new ReaderError('cancelled');
+          if (scannedSources.size < SCANNED_SOURCE_CACHE_SIZE)
+            scannedSources.set(chapter.chapterId, source);
+          scanned = plainScanChapter(chapter.chapterId, source);
+          scannedChapters.set(chapter.chapterId, scanned);
+          await keepScan(record.id, index, scanned);
+        }
         if (cancelled || control.signal.aborted || !foreground || disposed)
           throw new ReaderError('cancelled');
-        candidateScan.add(source);
-        if (scannedSources.size < SCANNED_SOURCE_CACHE_SIZE)
-          scannedSources.set(chapter.chapterId, source);
-        scannedChapters.set(chapter.chapterId, {
-          chapterId: chapter.chapterId,
-          paragraphs: source.paragraphs.map(({ text, ruby }) => ({ text, ruby })),
-        });
+        candidateScan.add(candidateInput(scanned));
         publish({ scanProgress: { completed: ++completed, total: record.chapters.length } });
       }
       const candidates = candidateScan.result();
       await persist({ ...record, scan: { status: 'review', candidates } });
     } catch {
       scannedSources.clear();
-      scannedChapters.clear();
       publish({
         error: cancelled
-          ? '후보 스캔을 멈췄어요. 범위 전체를 다시 스캔해 주세요.'
-          : '범위 전체의 원문을 확인하지 못했어요. 일부 후보만 확정하지 않고 스캔을 다시 시도할 수 있어요.',
+          ? '후보 스캔을 멈췄어요. 다시 누르면 받은 회차는 건너뛰고 이어서 스캔해요.'
+          : '범위 전체의 원문을 확인하지 못했어요. 다시 스캔하면 받은 회차는 건너뛰어요.',
       });
     } finally {
       preparation = null;
@@ -453,9 +510,11 @@ export function createBatchTranslation(dependencies: {
     if (!record || record.phase !== 'prepared' || record.scan?.status !== 'review')
       throw new ReaderError('source_parse');
     const chapters: ScanChapter[] = [];
-    for (const chapter of record.chapters) {
+    for (const [index, chapter] of record.chapters.entries()) {
       if (signal.aborted) throw new ReaderError('cancelled');
-      let scanned = scannedChapters.get(chapter.chapterId);
+      let scanned =
+        scannedChapters.get(chapter.chapterId) ??
+        (await readSavedScan(record.id, index, chapter.chapterId));
       if (!scanned) {
         const source = await dependencies.source.getChapter(chapter, signal);
         if (signal.aborted) throw new ReaderError('cancelled');
@@ -465,11 +524,9 @@ export function createBatchTranslation(dependencies: {
           source.canonicalUrl !== chapter.canonicalUrl
         )
           throw new ReaderError('source_parse');
-        scanned = {
-          chapterId: chapter.chapterId,
-          paragraphs: source.paragraphs.map(({ text, ruby }) => ({ text, ruby })),
-        };
+        scanned = plainScanChapter(chapter.chapterId, source);
         scannedChapters.set(chapter.chapterId, scanned);
+        await keepScan(record.id, index, scanned);
       }
       chapters.push(scanned);
       onProgress?.(chapters.length, record.chapters.length);
@@ -548,8 +605,9 @@ export function createBatchTranslation(dependencies: {
         scan: { ...record.scan, status: 'confirmed' as const },
       };
       await persist(next);
-      // 확정 뒤에는 정밀스캔 채우기를 쓰지 않으므로 기억한 원문을 놓는다.
+      // 확정 뒤에는 정밀스캔 채우기를 쓰지 않으므로 기억한 원문과 저장본을 놓는다.
       scannedChapters.clear();
+      await clearSavedScans(record);
     } catch {
       publish({
         error:
@@ -719,6 +777,7 @@ export function createBatchTranslation(dependencies: {
         ? state.record?.work.workId
         : undefined;
     if (activeOwner === workId) return false;
+    const removed = state.record?.work.workId === workId ? state.record : null;
     if (state.record?.work.workId === workId) {
       const clearError = state.errorWorkId === undefined || state.errorWorkId === workId;
       publish({
@@ -734,6 +793,7 @@ export function createBatchTranslation(dependencies: {
       if (source.workId === workId) scannedSources.delete(chapterId);
     for (const chapterId of [...scannedChapters.keys()])
       if (chapterId.startsWith(`${workId}/`)) scannedChapters.delete(chapterId);
+    if (removed) void clearSavedScans(removed);
     return true;
   }
   const unsubscribe = dependencies.flow.subscribe((chapterState) => {
