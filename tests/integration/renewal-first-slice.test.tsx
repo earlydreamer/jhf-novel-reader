@@ -26,7 +26,8 @@ import { createTitleRepository } from '../../src/translation/titles';
 import { StorageError } from '../../src/storage/errors';
 import type { NativeHttpRequest, HttpResponse, AppLifecycle } from '../../src/contracts';
 import { createCacheKey, type CompletedChapter } from '../../src/contracts/legacy';
-import { fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Application } from '../../src/app/Application';
 
 function chooseShellMenu(item: string) {
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
@@ -62,7 +63,7 @@ function harness() {
   let failSave = false,
     holdSave = false;
   const saveGate = deferred<void>();
-  const response = deferred<HttpResponse>();
+  let response = deferred<HttpResponse>();
   let listener: (active: boolean) => void = () => {};
   const lifecycle: AppLifecycle = {
     async isActive() {
@@ -149,6 +150,9 @@ function harness() {
     requests,
     posts,
     settle,
+    holdResponse: () => {
+      response = deferred<HttpResponse>();
+    },
     lifecycle: (active: boolean) => listener(active),
     setFailSave: (value: boolean) => {
       failSave = value;
@@ -360,6 +364,118 @@ it('native composition exposes per-item v1 warnings while retaining saved readin
 async function dispatched(h: ReturnType<typeof harness>, expected = 1) {
   await expect.poll(() => h.posts().length).toBe(expected);
 }
+it.each([
+  { direction: 'next', readerIndex: 0, activeIndex: 0 },
+  { direction: 'next', readerIndex: 0, activeIndex: 1 },
+  { direction: 'previous', readerIndex: 1, activeIndex: 0 },
+  { direction: 'previous', readerIndex: 1, activeIndex: 1 },
+])(
+  'allows $direction saved reading from chapter $readerIndex while chapter $activeIndex is translating (#289)',
+  async ({ readerIndex, activeIndex }) => {
+    const h = harness();
+    let pending: Promise<void> | undefined;
+    const loadGate = deferred<void>();
+    const read = h.adapters.files.read;
+    try {
+      await prepare(h);
+      const saved = await translateOnce(h);
+      const chapters = h.app.getSnapshot().work!.chapters;
+      await h.store.commitVersion({
+        ...saved,
+        versionId: 'saved-first-chapter',
+        source: {
+          ...saved.source,
+          chapterId: chapters[0]!.chapterId,
+          canonicalUrl: chapters[0]!.canonicalUrl,
+          title: chapters[0]!.title,
+        },
+      });
+      await h.app.selectChapter(chapters[activeIndex]!);
+      h.holdResponse();
+      pending = h.app.retranslateChapter();
+      await dispatched(h, 2);
+      h.app.back();
+      h.app.showContents();
+      await h.app.selectChapter(chapters[readerIndex]!);
+      expect(h.app.getSnapshot()).toMatchObject({
+        busy: false,
+        translationActive: true,
+        route: { kind: 'reader' },
+        chapter: { chapterId: chapters[readerIndex]!.chapterId },
+      });
+      render(<Application controller={h.app} />);
+      fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+      const navigation = screen.getByRole('button', {
+        name: readerIndex === 0 ? '다음 화' : '이전 화',
+      });
+      expect(navigation.hasAttribute('disabled')).toBe(false);
+      expect(screen.queryByText('회차를 불러오고 있어요.')).toBeNull();
+      if (readerIndex === 0)
+        expect(screen.getByRole('button', { name: '2화 읽기' }).hasAttribute('disabled')).toBe(
+          false,
+        );
+      fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+      expect(screen.queryByRole('menuitem', { name: '이 화 다시 번역하기' })).toBeNull();
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+      // 실제 저장본 로딩은 계속 이동을 막고 로딩 안내를 보여야 한다.
+      h.adapters.files.read = async (path: string) => {
+        if (path.startsWith('versions/')) await loadGate.promise;
+        return read(path);
+      };
+      let loading!: Promise<void>;
+      await act(async () => {
+        loading = h.app.selectChapter(chapters[readerIndex]!);
+      });
+      expect(h.app.getSnapshot().busy).toBe(true);
+      expect(navigation.hasAttribute('disabled')).toBe(true);
+      expect(screen.getByText('회차를 불러오고 있어요.')).toBeDefined();
+      fireEvent.click(navigation);
+      expect(h.app.getSnapshot().chapter?.chapterId).toBe(chapters[readerIndex]!.chapterId);
+      await act(async () => {
+        loadGate.resolve();
+        await loading;
+      });
+      expect(navigation.hasAttribute('disabled')).toBe(false);
+      expect(screen.queryByText('회차를 불러오고 있어요.')).toBeNull();
+
+      fireEvent.click(navigation);
+      await expect
+        .poll(() => h.app.getSnapshot().version?.source.chapterId)
+        .toBe(chapters[1 - readerIndex]!.chapterId);
+      expect(h.app.getSnapshot()).toMatchObject({
+        busy: false,
+        translationActive: true,
+        route: { kind: 'reader' },
+      });
+      await act(async () => {
+        await h.app.translate();
+        await h.app.retryTranslation();
+      });
+      expect(h.posts()).toHaveLength(2);
+      await act(async () => {
+        h.settle();
+        await pending;
+      });
+      expect(h.app.getSnapshot().translationActive).toBe(false);
+      expect(h.app.getSnapshot().version?.source.chapterId).toBe(
+        chapters[1 - readerIndex]!.chapterId,
+      );
+      expect(h.posts()).toHaveLength(2);
+    } finally {
+      h.adapters.files.read = read;
+      loadGate.resolve();
+      if (pending) {
+        await act(async () => {
+          h.settle();
+          await pending;
+        });
+      }
+      cleanup();
+      h.app.dispose();
+    }
+  },
+);
 it('browse_select_translate_save_read uses actual parser, native transport, catalog and library composition', async () => {
   const h = harness();
   await prepare(h);
