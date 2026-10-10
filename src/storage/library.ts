@@ -792,3 +792,5 @@ export function createLibraryStore(
       }),
   };
 }
+
+export { index as validateLibraryIndex };

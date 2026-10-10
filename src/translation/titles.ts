@@ -1,4 +1,5 @@
 import { ReaderError } from '../contracts';
+import { StorageError } from '../storage/errors';
 import type {
   ProviderSession,
   SelectedModel,
@@ -6,7 +7,7 @@ import type {
   WorkPage,
 } from '../contracts/reading';
 import { digest, Journal, serial, type PrivateFiles } from '../storage/journal';
-import { check, object } from '../storage/validation';
+import { check, object, record } from '../storage/validation';
 import { chapterIdentity, identifier } from '../storage/readingValidation';
 import { appliedGuidance, streamingGuidanceContext, type GuidanceRepository } from './guidance';
 
@@ -40,6 +41,9 @@ export type TitleRecord = {
   attempted: TitleInput[];
 };
 export async function validateTitleRecord(value: unknown): Promise<TitleRecord> {
+  record(value);
+  if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 1)
+    throw new StorageError('unsupported_schema');
   object(value, ['schemaVersion', 'workId', 'entries', 'attempted']);
   check(value.schemaVersion === 1);
   identifier(value.workId);

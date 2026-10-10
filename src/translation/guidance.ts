@@ -1,6 +1,7 @@
 import { ReaderError } from '../contracts';
+import { StorageError } from '../storage/errors';
 import { digest, Journal, serial, type PrivateFiles } from '../storage/journal';
-import { check, object } from '../storage/validation';
+import { check, object, record } from '../storage/validation';
 import { identifier } from '../storage/readingValidation';
 import { findTermMatches } from './termMatch';
 import type { CandidateDecision } from './termDecision';
@@ -71,6 +72,9 @@ function parses(value: string): boolean {
   }
 }
 export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
+  record(value);
+  if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 1)
+    throw new StorageError('unsupported_schema');
   object(value, ['schemaVersion', 'workId', 'hash', 'terms', 'voices', 'plotSummary']);
   if (value.plotSummary !== undefined) string(value.plotSummary, 400);
   check(value.schemaVersion === 1);

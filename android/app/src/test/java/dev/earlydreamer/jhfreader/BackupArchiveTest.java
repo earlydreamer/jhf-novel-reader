@@ -85,8 +85,13 @@ public class BackupArchiveTest {
         return text.replace(from, to).getBytes(StandardCharsets.ISO_8859_1);
     }
 
+    private BackupArchive.PreparedRestore prepare(byte[] archive) throws Exception {
+        return BackupArchive.prepare(filesDir, new ByteArrayInputStream(archive), VALIDATOR, BackupArchive.Limits.DEFAULT);
+    }
+
     private int restore(byte[] archive, BackupArchive.Limits limits) throws Exception {
-        return BackupArchive.restore(filesDir, new ByteArrayInputStream(archive), VALIDATOR, settings, limits);
+        BackupArchive.PreparedRestore prepared = BackupArchive.prepare(filesDir, new ByteArrayInputStream(archive), VALIDATOR, limits);
+        return prepared.commit(prepared.token, settings);
     }
 
     private void assertRejected(byte[] archive) throws Exception {
@@ -114,6 +119,159 @@ public class BackupArchiveTest {
 
     private String read(String path) throws IOException {
         return new String(Files.readAllBytes(new File(filesDir, path).toPath()), StandardCharsets.UTF_8);
+    }
+
+    @Test public void preparingDoesNotReplaceLiveDataBeforeContentValidation() throws Exception {
+        byte[] archive = zip(
+            "manifest.json", manifest(1),
+            "settings.json", "{\"fontSize\":20}",
+            "narou-reader/library/index.json", "invalid schema"
+        );
+        BackupArchive.PreparedRestore prepared = prepare(archive);
+        assertEquals(1, prepared.files);
+        assertEquals("{\"fontSize\":20}", prepared.settings);
+        assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
+        assertEquals("old position", read("narou-reader/positions/keep-2.json"));
+        assertFalse(new File(filesDir, "narou-reader/library/index.json").exists());
+        assertFalse(new File(filesDir, "narou-reader.old").exists());
+        assertEquals(0, settings.calls);
+        assertEquals("invalid schema", read("narou-reader.restore/narou-reader/library/index.json"));
+    }
+
+    @Test public void abortOnlyDeletesStagingAndCannotReuseTheToken() throws Exception {
+        BackupArchive.PreparedRestore prepared = prepare(zip("manifest.json", manifest(1),
+            "settings.json", "{}", "narou-reader/library/index.json", "new"));
+        prepared.abort(prepared.token);
+        assertOldDataIntact();
+        assertThrows(IOException.class, () -> prepared.abort(prepared.token));
+        assertThrows(IOException.class, () -> prepared.commit(prepared.token, settings));
+        assertThrows(IOException.class, () -> prepared.read(prepared.token, "library/index.json"));
+    }
+
+    @Test public void commitUsesExactlyThePreparedBytesAndInvalidatesTheToken() throws Exception {
+        byte[] archive = zip("manifest.json", manifest(1), "settings.json", "{}",
+            "narou-reader/library/index.json", "prepared bytes");
+        BackupArchive.PreparedRestore prepared = prepare(archive);
+        Arrays.fill(archive, (byte) 0);
+        assertEquals("prepared bytes", prepared.read(prepared.token, "library/index.json"));
+        assertEquals(1, prepared.commit(prepared.token, settings));
+        assertEquals("prepared bytes", read("narou-reader/library/index.json"));
+        assertEquals("{}", settings.last);
+        assertThrows(IOException.class, () -> prepared.commit(prepared.token, settings));
+        assertThrows(IOException.class, () -> prepared.list(prepared.token, 0));
+    }
+
+    @Test public void preparedPathsArePagedWithoutReadingAllBodies() throws Exception {
+        String[] entries = new String[2 + 600 * 2];
+        entries[0] = "manifest.json";
+        entries[1] = manifest(600);
+        for (int i = 0; i < 600; i++) {
+            entries[2 + i * 2] = "narou-reader/chapters/" + String.format(java.util.Locale.US, "%04d.json", i);
+            entries[3 + i * 2] = "body-" + i;
+        }
+        BackupArchive.PreparedRestore prepared = prepare(zip(entries));
+        BackupArchive.RestorePage first = prepared.list(prepared.token, 0);
+        assertEquals(256, first.paths.size());
+        assertEquals("chapters/0000.json", first.paths.get(0));
+        assertEquals(Integer.valueOf(256), first.nextOffset);
+        BackupArchive.RestorePage second = prepared.list(prepared.token, first.nextOffset);
+        assertEquals(256, second.paths.size());
+        assertEquals(Integer.valueOf(512), second.nextOffset);
+        BackupArchive.RestorePage last = prepared.list(prepared.token, second.nextOffset);
+        assertEquals(88, last.paths.size());
+        assertNull(last.nextOffset);
+        assertTrue(prepared.list(prepared.token, 600).paths.isEmpty());
+        assertThrows(IOException.class, () -> prepared.list(prepared.token, -1));
+        assertThrows(IOException.class, () -> prepared.list(prepared.token, 601));
+        assertThrows(UnsupportedOperationException.class, () -> first.paths.add("chapters/forged.json"));
+        prepared.abort(prepared.token);
+    }
+
+    @Test public void rejectsStaleTokensAndOverlappingPreparationWithoutChangingEitherTree() throws Exception {
+        byte[] archive = zip("manifest.json", manifest(1), "narou-reader/library/index.json", "prepared");
+        BackupArchive.PreparedRestore prepared = prepare(archive);
+        assertThrows(IOException.class, () -> prepare(archive));
+        assertThrows(IOException.class, () -> prepared.list("stale", 0));
+        assertThrows(IOException.class, () -> prepared.read(null, "library/index.json"));
+        assertThrows(IOException.class, () -> prepared.commit("stale", settings));
+        assertThrows(IOException.class, () -> prepared.abort("stale"));
+        assertEquals("prepared", prepared.read(prepared.token, "library/index.json"));
+        assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
+        assertEquals(0, settings.calls);
+        prepared.abort(prepared.token);
+    }
+
+    @Test public void stagedReadsRejectTraversalAndCanonicalEscapeAndEnforceByteLimit() throws Exception {
+        BackupArchive.PreparedRestore prepared = BackupArchive.prepare(filesDir,
+            new ByteArrayInputStream(zip("manifest.json", manifest(1), "narou-reader/library/index.json", "12345")),
+            VALIDATOR, new BackupArchive.Limits(5, 1024, 10, 1024));
+        for (String path : new String[] {"../manifest.json", "/library/index.json", "library/../index.json",
+            "library/index.json/extra", "library/..", "narou-reader/library/index.json", "library/a\\b.json"}) {
+            assertThrows(path, IOException.class, () -> prepared.read(prepared.token, path));
+        }
+        assertNull(prepared.read(prepared.token, "library/missing.json"));
+        File staged = new File(filesDir, "narou-reader.restore/narou-reader/library/index.json");
+        Files.write(staged.toPath(), "123456".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IOException.class, () -> prepared.read(prepared.token, "library/index.json"));
+        Files.delete(staged.toPath());
+        Files.createSymbolicLink(staged.toPath(), new File(filesDir, "narou-reader/chapters/keep-1.json").toPath());
+        assertThrows(IOException.class, () -> prepared.read(prepared.token, "library/index.json"));
+        Files.delete(staged.toPath());
+        prepared.abort(prepared.token);
+        assertOldDataIntact();
+    }
+
+    @Test public void failedPrepareCleanupPreventsAReplacementSession() throws Exception {
+        byte[] archive = zip("narou-reader/library/index.json", "staged", "manifest.json", manifest(1));
+        File folder = new File(filesDir, "narou-reader.restore/narou-reader/library");
+        BackupArchive.Validator invalid = new BackupArchive.Validator() {
+            @Override public long manifestFiles(String text) throws BackupArchive.InvalidBackupException {
+                assertTrue(folder.setWritable(false, false));
+                throw new BackupArchive.InvalidBackupException("invalid manifest");
+            }
+            @Override public void settings(String text) {}
+        };
+        try {
+            BackupArchive.InvalidBackupException failure = assertThrows(BackupArchive.InvalidBackupException.class,
+                () -> BackupArchive.prepare(filesDir, new ByteArrayInputStream(archive), invalid, BackupArchive.Limits.DEFAULT));
+            assertEquals(1, failure.getSuppressed().length);
+            assertEquals("cannot remove restore staging", failure.getSuppressed()[0].getMessage());
+            assertThrows(IOException.class, () -> prepare(archive));
+            assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
+            assertEquals("staged", read("narou-reader.restore/narou-reader/library/index.json"));
+            assertEquals(0, settings.calls);
+        } finally {
+            assertTrue(folder.setWritable(true, false));
+        }
+    }
+
+    @Test public void preparingDoesNotCleanOrRecoverAPreexistingOldTree() throws Exception {
+        File oldFile = new File(filesDir, "narou-reader.old/old.json");
+        oldFile.getParentFile().mkdirs();
+        Files.write(oldFile.toPath(), "retained".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IOException.class, () -> prepare(zip("manifest.json", manifest(0))));
+        assertEquals("retained", read("narou-reader.old/old.json"));
+        assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
+        assertFalse(new File(filesDir, "narou-reader.restore").exists());
+        assertEquals(0, settings.calls);
+    }
+
+    @Test public void failedAbortBlocksCommitAndNewPreparationUntilCleanupSucceeds() throws Exception {
+        byte[] archive = zip("manifest.json", manifest(1), "narou-reader/library/index.json", "staged");
+        BackupArchive.PreparedRestore prepared = prepare(archive);
+        File folder = new File(filesDir, "narou-reader.restore/narou-reader/library");
+        assertTrue(folder.setWritable(false, false));
+        try {
+            assertThrows(IOException.class, () -> prepared.abort(prepared.token));
+            assertThrows(IOException.class, () -> prepared.commit(prepared.token, settings));
+            assertThrows(IOException.class, () -> prepare(archive));
+            assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
+            assertEquals(0, settings.calls);
+        } finally {
+            assertTrue(folder.setWritable(true, false));
+        }
+        prepared.abort(prepared.token);
+        assertOldDataIntact();
     }
 
     @Test public void restoreReplacesDataAndSettings() throws Exception {
@@ -259,9 +417,64 @@ public class BackupArchiveTest {
         assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
         assertEquals("old position", read("narou-reader/positions/keep-2.json"));
         assertFalse(new File(filesDir, "narou-reader/library/new.json").exists());
-        assertFalse(new File(filesDir, "narou-reader.restore").exists());
+        assertTrue(new File(filesDir, "narou-reader.restore").exists());
         assertFalse(new File(filesDir, "narou-reader.old").exists());
-        assertEquals(Arrays.asList("narou-reader"), Arrays.asList(filesDir.list()));
+        assertEquals(1, settings.calls);
+    }
+
+    @Test public void settingsFailureCanChangeMemoryAndLeavesSessionUnusable() throws Exception {
+        byte[] archive = zip("manifest.json", manifest(1), "settings.json", "{}", "narou-reader/library/new.json", "new");
+        BackupArchive.PreparedRestore prepared = prepare(archive);
+        String[] memory = {"old settings"};
+        IOException failure = assertThrows(IOException.class, () -> prepared.commit(prepared.token, value -> {
+            memory[0] = value;
+            return false;
+        }));
+        assertTrue(failure.getMessage().contains("settings outcome uncertain"));
+        assertEquals("{}", memory[0]);
+        assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
+        assertThrows(IOException.class, () -> prepared.abort(prepared.token));
+        assertThrows(IOException.class, () -> prepared.commit(prepared.token, settings));
+        assertThrows(IOException.class, () -> prepared.list(prepared.token, 0));
+        assertThrows(IOException.class, () -> prepare(archive));
+    }
+
+    @Test public void rollbackFailureRetainsTheOldTreeAndReportsUncertainty() throws Exception {
+        BackupArchive.PreparedRestore prepared = prepare(zip("manifest.json", manifest(1), "settings.json", "{}",
+            "narou-reader/library/new.json", "new"));
+        IOException failure = assertThrows(IOException.class, () -> prepared.commit(prepared.token, value -> {
+            // 새 트리를 다시 임시 위치로 옮기는 rename을 확실하게 실패시킨다.
+            File blocker = new File(filesDir, "narou-reader.restore/narou-reader/blocker");
+            blocker.getParentFile().mkdirs();
+            try {
+                Files.write(blocker.toPath(), new byte[] {1});
+            } catch (IOException unexpected) {
+                throw new IllegalStateException(unexpected);
+            }
+            return false;
+        }));
+        assertTrue(failure.getMessage().contains("rollback failed; old data retained"));
+        assertEquals("old chapter", read("narou-reader.old/chapters/keep-1.json"));
+        assertEquals("old position", read("narou-reader.old/positions/keep-2.json"));
+        assertEquals("new", read("narou-reader/library/new.json"));
+        assertTrue(new File(filesDir, "narou-reader.restore/narou-reader/blocker").exists());
+        assertThrows(IOException.class, () -> prepared.abort(prepared.token));
+    }
+
+    @Test public void placementFailureRestoresOriginalTreeWithoutDeletingTheStage() throws Exception {
+        BackupArchive.PreparedRestore prepared = prepare(zip("manifest.json", manifest(1), "narou-reader/library/new.json", "new"));
+        File stage = new File(filesDir, "narou-reader.restore");
+        assertTrue(stage.setWritable(false, false));
+        try {
+            IOException failure = assertThrows(IOException.class, () -> prepared.commit(prepared.token, settings));
+            assertEquals("cannot place restored data", failure.getMessage());
+            assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
+            assertEquals("new", read("narou-reader.restore/narou-reader/library/new.json"));
+            assertFalse(new File(filesDir, "narou-reader.old").exists());
+            assertEquals(0, settings.calls);
+        } finally {
+            assertTrue(stage.setWritable(true, false));
+        }
     }
 
     @Test public void failureWhileMovingKeepsOldData() throws Exception {
@@ -305,9 +518,10 @@ public class BackupArchiveTest {
         assertEquals(3, count);
 
         File target = temp.newFolder("other");
-        int restored = BackupArchive.restore(
-            target, new java.io.FileInputStream(zip), VALIDATOR, new Recorder(), BackupArchive.Limits.DEFAULT
+        BackupArchive.PreparedRestore prepared = BackupArchive.prepare(
+            target, new java.io.FileInputStream(zip), VALIDATOR, BackupArchive.Limits.DEFAULT
         );
+        int restored = prepared.commit(prepared.token, new Recorder());
         assertEquals(3, restored);
         assertEquals("old chapter", new String(Files.readAllBytes(new File(target, "narou-reader/chapters/keep-1.json").toPath()), StandardCharsets.UTF_8));
         assertEquals("keepdots", new String(Files.readAllBytes(new File(target, "narou-reader/chapters/..tmp").toPath()), StandardCharsets.UTF_8));

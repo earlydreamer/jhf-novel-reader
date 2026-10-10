@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import androidx.activity.result.ActivityResult;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -40,11 +41,13 @@ public final class BackupPlugin extends Plugin {
     private static final String CACHE_ZIP = "jhf-backup-export.zip";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    // 내보내기·복원은 한 번에 하나만 한다. 시작할 때 잡고, 마지막 응답 직전에 푼다.
+    // 내보내기·복원은 한 번에 하나만 한다. 준비된 복원은 commit/abort가 끝날 때까지 잡는다.
     private final AtomicBoolean busy = new AtomicBoolean(false);
     // 내보내기에서 파일 선택 화면이 돌아올 때까지 캐시 zip의 정보를 들고 있는다.
     private volatile File pendingZip;
     private volatile int pendingFiles;
+    // 아래 세션은 단일 executor에서만 읽고 바꾼다. URI는 준비 뒤 보관하거나 다시 열지 않는다.
+    private BackupArchive.PreparedRestore pendingRestore;
 
     @Override
     public void load() {
@@ -120,7 +123,7 @@ public final class BackupPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void restore(PluginCall call) {
+    public void prepareRestore(PluginCall call) {
         if (!busy.compareAndSet(false, true)) {
             call.reject("restore_failed");
             return;
@@ -130,7 +133,7 @@ public final class BackupPlugin extends Plugin {
             .setType("*/*")
             .putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"application/zip", "application/octet-stream"});
         try {
-            startActivityForResult(call, intent, "restoreResult");
+            startActivityForResult(call, intent, "prepareRestoreResult");
         } catch (RuntimeException unavailable) {
             busy.set(false);
             call.reject("restore_failed");
@@ -138,7 +141,7 @@ public final class BackupPlugin extends Plugin {
     }
 
     @ActivityCallback
-    private void restoreResult(PluginCall call, ActivityResult result) {
+    private void prepareRestoreResult(PluginCall call, ActivityResult result) {
         if (call == null) {
             busy.set(false);
             return;
@@ -148,7 +151,7 @@ public final class BackupPlugin extends Plugin {
         if (result.getResultCode() == Activity.RESULT_CANCELED) {
             busy.set(false);
             JSObject response = new JSObject();
-            response.put("restored", false);
+            response.put("prepared", false);
             call.resolve(response);
             return;
         }
@@ -158,32 +161,105 @@ public final class BackupPlugin extends Plugin {
             return;
         }
         executor.execute(() -> {
-            String failure = null;
-            int files = 0;
             try (InputStream in = getContext().getContentResolver().openInputStream(uri)) {
                 if (in == null) throw new IOException("cannot open backup");
-                files = BackupArchive.restore(
-                    getContext().getFilesDir(),
-                    in,
-                    new JsonValidator(),
-                    this::saveSettings,
-                    BackupArchive.Limits.DEFAULT
+                pendingRestore = BackupArchive.prepare(
+                    getContext().getFilesDir(), in, new JsonValidator(), BackupArchive.Limits.DEFAULT
                 );
-            } catch (BackupArchive.InvalidBackupException invalid) {
-                failure = "backup_invalid";
-            } catch (Exception other) {
-                failure = "restore_failed";
-            }
-            busy.set(false);
-            if (failure != null) {
-                call.reject(failure);
+            } catch (Exception failure) {
+                // InputStream.close까지 실패한 경우에도 임시 트리만 정리한다.
+                if (pendingRestore != null) {
+                    try {
+                        pendingRestore.abort(pendingRestore.token);
+                        pendingRestore = null;
+                    } catch (IOException cleanupFailure) {
+                        failure.addSuppressed(cleanupFailure);
+                    }
+                }
+                boolean stagingRemains = new File(getContext().getFilesDir(), BackupArchive.RESTORE_DIR).exists();
+                boolean restartRequired = pendingRestore != null || stagingRemains;
+                busy.set(restartRequired);
+                // 토큰을 돌려주기 전 정리가 실패해도 웹이 기존 런타임을 재개하지 않게 알린다.
+                call.reject(restartRequired ? "restore_restart_required"
+                    : failure instanceof BackupArchive.InvalidBackupException ? "backup_invalid" : "restore_failed");
                 return;
             }
             JSObject response = new JSObject();
-            response.put("restored", true);
-            response.put("files", files);
+            response.put("prepared", true);
+            response.put("token", pendingRestore.token);
+            response.put("files", pendingRestore.files);
+            response.put("settings", pendingRestore.settings == null ? JSONObject.NULL : pendingRestore.settings);
             call.resolve(response);
         });
+    }
+
+    @PluginMethod
+    public void listRestoreFiles(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                Integer offset = call.getInt("offset");
+                if (offset == null) throw new IOException("invalid restore offset");
+                BackupArchive.RestorePage page = restoreSession().list(call.getString("token"), offset);
+                JSObject response = new JSObject();
+                response.put("paths", new JSArray(page.paths));
+                response.put("nextOffset", page.nextOffset == null ? JSONObject.NULL : page.nextOffset);
+                call.resolve(response);
+            } catch (Exception failure) {
+                call.reject("restore_failed");
+            }
+        });
+    }
+
+    @PluginMethod
+    public void readRestoreFile(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String text = restoreSession().read(call.getString("token"), call.getString("path"));
+                JSObject response = new JSObject();
+                response.put("text", text == null ? JSONObject.NULL : text);
+                call.resolve(response);
+            } catch (Exception failure) {
+                call.reject("restore_failed");
+            }
+        });
+    }
+
+    @PluginMethod
+    public void commitRestore(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                int files = restoreSession().commit(call.getString("token"), this::saveSettings);
+                pendingRestore = null;
+                busy.set(false);
+                JSObject response = new JSObject();
+                response.put("restored", true);
+                response.put("files", files);
+                call.resolve(response);
+            } catch (Exception failure) {
+                // 교체·설정 저장 실패는 결과가 불확실하다. 전체 앱 재시작까지 세션과 잠금을 유지한다.
+                call.reject("restore_failed");
+            }
+        });
+    }
+
+    @PluginMethod
+    public void abortRestore(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                restoreSession().abort(call.getString("token"));
+                pendingRestore = null;
+                busy.set(false);
+                call.resolve(new JSObject());
+            } catch (Exception failure) {
+                // 정리하지 못한 임시 트리를 다른 준비 작업이 덮어쓰지 못하게 한다.
+                call.reject("restore_failed");
+            }
+        });
+    }
+
+    private BackupArchive.PreparedRestore restoreSession() throws IOException {
+        if (pendingRestore == null) throw new IOException("no prepared restore session");
+        return pendingRestore;
     }
 
     private void finishExport(File zip) {

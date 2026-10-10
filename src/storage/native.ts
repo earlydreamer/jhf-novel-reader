@@ -6,6 +6,51 @@ import { check } from './validation';
 import { createLibraryStore } from './library';
 import { createReadingSettingsRepository, type PreferenceBackend } from './settings';
 import type { PrivateFiles } from './journal';
+export interface NativeStorageGate {
+  run<T>(action: () => Promise<T>): Promise<T>;
+  pause(): Promise<() => void>;
+}
+/** Park old-runtime I/O while a restore validates and replaces its private store. */
+export function createNativeStorageGate(): NativeStorageGate {
+  let barrier: Promise<void> | null = null;
+  let active = 0;
+  let idle: (() => void) | null = null;
+  return {
+    async run<T>(action: () => Promise<T>): Promise<T> {
+      // No await on the open path: reserve the call before pause can drain it.
+      while (barrier) await barrier;
+      active++;
+      try {
+        return await action();
+      } finally {
+        if (--active === 0) {
+          idle?.();
+          idle = null;
+        }
+      }
+    },
+    async pause() {
+      if (barrier) throw new StorageError('io');
+      let open!: () => void;
+      barrier = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      if (active)
+        await new Promise<void>((resolve) => {
+          idle = resolve;
+        });
+      let resumed = false;
+      return () => {
+        if (resumed) return;
+        resumed = true;
+        barrier = null;
+        open();
+      };
+    },
+  };
+}
+export const nativeStorageGate = createNativeStorageGate();
+
 const platform = () => (Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web');
 function native(getPlatform: () => string) {
   const name = getPlatform();
@@ -23,16 +68,19 @@ export function createNativePrivateFiles(
   backend: Pick<FilesystemPlugin, 'readFile' | 'writeFile' | 'readdir'> &
     Partial<Pick<FilesystemPlugin, 'deleteFile'>> = Filesystem,
   getPlatform: () => string = platform,
+  gate: NativeStorageGate = nativeStorageGate,
 ): PrivateFiles {
   return {
     async list(directory) {
       native(getPlatform);
       check(directory === 'chapters' || directory === 'versions' || directory === 'reading');
       try {
-        const result = await backend.readdir({
-          path: `narou-reader/${directory}`,
-          directory: Directory.LibraryNoCloud,
-        });
+        const result = await gate.run(() =>
+          backend.readdir({
+            path: `narou-reader/${directory}`,
+            directory: Directory.LibraryNoCloud,
+          }),
+        );
         return result.files.filter((file) => file.type === 'file').map((file) => file.name);
       } catch (error) {
         if (
@@ -53,7 +101,7 @@ export function createNativePrivateFiles(
         encoding: Encoding.UTF8,
       };
       try {
-        const result = await backend.readFile(options);
+        const result = await gate.run(() => backend.readFile(options));
         check(typeof result.data === 'string');
         return result.data;
       } catch (error) {
@@ -77,7 +125,7 @@ export function createNativePrivateFiles(
         recursive: true,
       };
       try {
-        await backend.writeFile(options);
+        await gate.run(() => backend.writeFile(options));
       } catch (error) {
         if (
           error &&
@@ -96,10 +144,12 @@ export function createNativePrivateFiles(
       native(getPlatform);
       if (!backend.deleteFile) throw new StorageError('unsupported_platform');
       try {
-        await backend.deleteFile({
-          path: privatePath(path),
-          directory: Directory.LibraryNoCloud,
-        });
+        await gate.run(() =>
+          backend.deleteFile!({
+            path: privatePath(path),
+            directory: Directory.LibraryNoCloud,
+          }),
+        );
       } catch (error) {
         if (
           error &&
@@ -116,12 +166,13 @@ export function createNativePrivateFiles(
 export function createNativePreferences(
   backend: PreferenceBackend = Preferences,
   getPlatform: () => string = platform,
+  gate: NativeStorageGate = nativeStorageGate,
 ): PreferenceBackend {
   return {
     async get(options) {
       native(getPlatform);
       try {
-        return await backend.get(options);
+        return await gate.run(() => backend.get(options));
       } catch (error) {
         throw storageError(error);
       }
@@ -129,7 +180,7 @@ export function createNativePreferences(
     async set(options) {
       native(getPlatform);
       try {
-        await backend.set(options);
+        await gate.run(() => backend.set(options));
       } catch (error) {
         throw storageError(error);
       }
@@ -138,7 +189,7 @@ export function createNativePreferences(
       native(getPlatform);
       if (!backend.remove) throw new StorageError('unsupported_platform');
       try {
-        await backend.remove(options);
+        await gate.run(() => backend.remove!(options));
       } catch (error) {
         throw storageError(error);
       }
