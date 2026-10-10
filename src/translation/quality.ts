@@ -1,5 +1,6 @@
 import type { TranslationQuality } from '../contracts/reading';
 import { appliedGuidance, type GuidanceTerm, type WorkGuidance } from './guidance';
+import type { CandidateDecision } from './termDecision';
 
 /** 가나만 감지한다. 한국어에도 쓰이는 한자나 장음 기호만으로는 잔존을 판정하지 않는다. */
 export function japaneseBlockIndexes(blocks: readonly { text: string }[]): number[] {
@@ -14,15 +15,16 @@ export function checkTranslationQuality(
   blocks: readonly { text: string }[],
   guidance: WorkGuidance | null,
   preset: readonly GuidanceTerm[] = [],
+  decision?: CandidateDecision,
 ): TranslationQuality {
   const output = blocks
     .map((block) => block.text)
     .join('\n\n')
     .normalize('NFKC');
   // 확정 이름이 있는 항목만 검사한다. 후보로만 등장한 이름은 용어로 쓰였다고 볼 수 없다.
-  const terms = (appliedGuidance(guidance, workId, sourceInput, preset)?.terms ?? []).filter(
-    ({ names }) => names.length > 0,
-  );
+  const terms = (
+    appliedGuidance(guidance, workId, sourceInput, preset, decision)?.terms ?? []
+  ).filter(({ names }) => names.length > 0);
   return {
     ruleVersion: 'deterministic-v1',
     japaneseBlocks: japaneseBlockIndexes(blocks),
