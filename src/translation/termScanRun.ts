@@ -41,12 +41,15 @@ export type TermScanChange = {
   confidence: 'high' | 'medium' | 'low';
   reason: string;
   kanaFlag?: boolean; // after가 kanaMismatch로 어긋남(가타카나일 때)
+  shapeFlag?: boolean; // 표기가 원문 이름의 구성(칭호·이름·성)과 어긋남: 일부를 빼거나 원문에 없는 부분을 더함
   evidence: GuidanceEvidence[];
 };
+export type TermScanRemoval = { source: string; target: string; reason: string };
 export type TermScanResult = {
   applied: TermScanChange[]; // 저장한 변경(new 추가, recheck 표기 변경)
   confirmed: number; // recheck인데 표기가 같아 근거만 붙인 수
   suggestions: TermScanChange[]; // 사람 항목과 다른 제안(저장 안 함)
+  removable?: TermScanRemoval[]; // 일반어로 판정된 기계 항목(빼기 제안, 없으면 필드 없음)
   partial: boolean; // 일부 묶음이 실패함
   lookupFailed?: ('wikipedia' | 'namuwiki')[]; // 조회 오류로 이번 실행에서 더 묻지 않은 출처(실패가 없으면 필드 없음)
   counts?: {
@@ -283,6 +286,29 @@ async function judgeCandidates(input: {
   return { voted, lookups, partial, lookupFailed };
 }
 
+/**
+ * 표기가 원문 이름의 구성과 어긋나는지. 가타카나 덩어리와 그 밖의 덩어리(두 글자 이상)를 원문의 부분으로
+ * 센다. 가운뎃점·등호·공백은 경계다. 한 글자 한자 접미사(家·様 등)는 세지 않는다.
+ * - 기존 표기가 새 표기를 품고 더 길면(일부만 남김) 어긋남.
+ * - 표기 어절이 원문 부분보다 적으면(부분을 뺌) 어긋남.
+ * - 원문에 한자가 없는데 표기 어절이 더 많으면(원문에 없는 성 등을 더함) 어긋남.
+ */
+export function shapeMismatch(source: string, after: string, before?: string): boolean {
+  const squeeze = (text: string) => text.replace(/\s+/g, '');
+  if (before !== undefined) {
+    const old = squeeze(before);
+    const next = squeeze(after);
+    if (old !== next && old.includes(next)) return true;
+  }
+  const parts = (
+    source.match(/[\p{Script=Katakana}ー]+|[^\p{Script=Katakana}ー・･＝=\s\u3000]+/gu) ?? []
+  ).filter((part) => /\p{Script=Katakana}/u.test(part) || [...part].length >= 2);
+  const words = after.trim().split(/\s+/).filter(Boolean).length;
+  if (!parts.length || !words) return false;
+  if (words < parts.length) return true;
+  return words > parts.length && !/\p{Script=Han}/u.test(source);
+}
+
 /** 판정 답 하나를 정밀스캔 변경으로 만든다. 가나 불일치·위키백과 충돌·음독 의심이면 신뢰도를 low로 내린다. */
 function changeOf(
   candidate: ScanCandidate,
@@ -294,6 +320,7 @@ function changeOf(
     candidate.script === 'katakana'
       ? kanaMismatch(nameKey(candidate.source), answer.target)
       : undefined;
+  const shapeFlag = shapeMismatch(candidate.source, answer.target, before);
   // 위키백과 정확 연결의 표기와 판정이 다르면 신뢰도를 낮춘다. 위키데이터·나무위키·검색 참고는 신뢰도를 바꾸지 않는다.
   const wikiConflict = hits.some(
     (hit) =>
@@ -310,11 +337,12 @@ function changeOf(
     kind: answer.kind,
     category: answer.category,
     confidence:
-      kanaFlag || wikiConflict || soundedEpithet(candidate, answer.target)
+      kanaFlag || shapeFlag || wikiConflict || soundedEpithet(candidate, answer.target)
         ? 'low'
         : answer.confidence,
     reason: answer.reason,
     ...(kanaFlag !== undefined ? { kanaFlag } : {}),
+    ...(shapeFlag ? { shapeFlag } : {}),
     evidence: evidenceOf(candidate, answer, hits),
   };
 }
@@ -384,6 +412,7 @@ export function createTermScan(deps: {
     // 4. 변경 만들기. 저장 직전 재확인이 필요한 계획(planned)과 바로 제안(suggestions)으로 나눈다.
     const planned: { change: TermScanChange; confirmed: boolean }[] = [];
     const suggestions: TermScanChange[] = [];
+    const removable: TermScanRemoval[] = [];
     const counts = { candidates: candidates.length, common: 0, unchanged: 0, unanswered: 0 };
     for (const candidate of candidates) {
       const answer = voted.get(candidate.source);
@@ -393,6 +422,13 @@ export function createTermScan(deps: {
       }
       if (answer.kind === 'common') {
         counts.common += 1;
+        const existing = candidate.existing;
+        if (existing && existing.origin !== undefined)
+          removable.push({
+            source: candidate.source,
+            target: existing.target,
+            reason: answer.reason,
+          });
         continue;
       }
       const change = changeOf(candidate, answer, lookups.get(candidate.source) ?? []);
@@ -403,6 +439,11 @@ export function createTermScan(deps: {
         } else {
           counts.unchanged += 1;
         }
+        continue;
+      }
+      // 이름 구성이 어긋난 표기는 적용하지 않고 제안으로 돌린다(#253). 새 이름은 제안 적용 때 추가한다.
+      if (change.shapeFlag) {
+        suggestions.push(change);
         continue;
       }
       const same = before !== undefined && compact(before) === compact(change.after);
@@ -498,6 +539,7 @@ export function createTermScan(deps: {
       suggestions: [...suggestions, ...moved],
       partial,
       ...(lookupFailed.length ? { lookupFailed } : {}),
+      ...(removable.length ? { removable } : {}),
       counts,
     };
     sortChanges(result.applied);
@@ -615,26 +657,45 @@ export function revertScanChange(
   return terms.map((item, position) => (position === index ? original : item));
 }
 
+/** 일반어 빼기. 같은 이름의 기계 항목만 지운다. 그사이 사람이 가져간 항목은 그대로 둔다. */
+export function removeCommonTerm(terms: readonly GuidanceTerm[], source: string): GuidanceTerm[] {
+  return terms.filter(
+    (item) => nameKey(item.source) !== nameKey(source) || item.origin === undefined,
+  );
+}
+
 /**
- * 제안 적용. 사람 항목은 표기만 after로 바꾸고 그대로 둔다. 정밀스캔 항목은 표기를 after로 바꾸고
- * 사람이 고른 결정으로 보아 사람 항목으로 만든다(origin·evidence 제거). 그 밖의 기계 항목은 그대로 둔다.
+ * 제안 적용. 같은 이름의 사람 항목은 표기만 after로 바꾸고 그대로 둔다. 같은 이름의 기계 항목(정밀스캔·
+ * 그 밖의 origin)은 표기를 after로 바꾼 사람 항목으로 만든다(origin·evidence 제거). 같은 이름이 없고
+ * 새 이름 제안이면 사람 항목을 끝에 추가한다. 그 밖은 그대로 돌려준다.
  */
 export function applySuggestion(
   terms: readonly GuidanceTerm[],
   change: TermScanChange,
 ): GuidanceTerm[] {
+  const found = terms.some((item) => nameKey(item.source) === nameKey(change.source));
+  if (!found) {
+    if (change.role !== 'new') return [...terms];
+    return [
+      ...terms,
+      {
+        source: change.source,
+        target: change.after,
+        aliases: [],
+        category: change.category,
+        note: '',
+      },
+    ];
+  }
   return terms.map((item) => {
     if (nameKey(item.source) !== nameKey(change.source)) return item;
     if (item.origin === undefined) return { ...item, target: change.after };
-    if (item.origin === 'scan') {
-      return {
-        source: item.source,
-        target: change.after,
-        aliases: [...item.aliases],
-        category: item.category,
-        note: item.note,
-      };
-    }
-    return item;
+    return {
+      source: item.source,
+      target: change.after,
+      aliases: [...item.aliases],
+      category: item.category,
+      note: item.note,
+    };
   });
 }

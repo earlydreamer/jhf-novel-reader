@@ -13,7 +13,7 @@ export type VotedAnswer = JudgeAnswer & {
 const KINDS: readonly JudgeKind[] = ['real', 'work', 'common'];
 const CATEGORIES: readonly string[] = ['인명', '지명', '조직', '작품명', '별명', '호칭', '기타'];
 const SYSTEM =
-  'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Every target must be written in Hangul without kana. Write each reason as one short sentence in Korean.';
+  'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Render every part of the source name (title, epithet, given name, family name) and add no family name, title or other part that the source does not contain, even for well-known real people. Every target must be written in Hangul without kana. Write each reason as one short sentence in Korean.';
 const SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {

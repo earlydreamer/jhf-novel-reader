@@ -18,7 +18,9 @@ import {
   applySuggestion,
   createRangeJudge,
   createTermScan,
+  removeCommonTerm,
   revertScanChange,
+  shapeMismatch,
   type TermScanChange,
   type TermScanProgress,
 } from '../../src/translation/termScanRun';
@@ -686,7 +688,7 @@ test('제안 적용: 정밀스캔 항목에 적용하면 표기만 바뀌고 사
 });
 
 test('기존 정밀스캔 항목은 신뢰도 높음일 때만 바꾸고, 그 밖에는 제안으로 남긴다', async () => {
-  const scanned = term('ルーク', '루크-이전', {
+  const scanned = term('ルーク', '룩', {
     origin: 'scan',
     evidence: [{ kind: 'model', note: '근거' }],
   });
@@ -700,7 +702,7 @@ test('기존 정밀스캔 항목은 신뢰도 높음일 때만 바꾸고, 그 �
   const mediumResult = await run(medium);
   expect(mediumResult.applied).toEqual([]);
   expect(mediumResult.suggestions).toMatchObject([
-    { source: 'ルーク', role: 'suggest', before: '루크-이전', after: '루크', confidence: 'medium' },
+    { source: 'ルーク', role: 'suggest', before: '룩', after: '루크', confidence: 'medium' },
   ]);
   expect(medium.saves).toEqual([]);
 
@@ -1220,4 +1222,105 @@ test('원문에서 찾지 못한 이름은 skipped로 센다', async () => {
   const result = await rangeRun(h, [scanChapter('c1', 'カミラが笑う。')], ['カミラ', 'ミナ']);
   expect(result.counts.candidates).toBe(1);
   expect(result.skipped).toBe(1);
+});
+
+test('이름 구성 검사: 칭호·이름·성의 일부를 빼거나 원문에 없는 성을 더하면 어긋남으로 본다', () => {
+  expect(shapeMismatch('剣聖オダ・ノブナガ', '오다 노부나가', '검성 오다 노부나가')).toBe(true);
+  expect(shapeMismatch('剣聖オダ・ノブナガ', '검성 오다 노부나가')).toBe(false);
+  expect(shapeMismatch('ノブナガ', '오다 노부나가')).toBe(true);
+  expect(shapeMismatch('ノブナガ', '노부나가')).toBe(false);
+  expect(shapeMismatch('織田信長', '오다 노부나가')).toBe(false);
+  expect(shapeMismatch('桶狭間の戦い', '오케하자마 전투')).toBe(false);
+  expect(shapeMismatch('アーケン家', '아켄가')).toBe(false);
+  expect(shapeMismatch('ジャンヌ・ダルク', '잔 다르크')).toBe(false);
+  expect(shapeMismatch('ジャンヌ・ダルク', '잔')).toBe(true);
+});
+
+test('이름 구성이 어긋난 표기는 적용하지 않고 제안으로 돌린다', async () => {
+  const h = harness({
+    versions: {
+      c1: oneVersion(
+        '剣聖オダ・ノブナガが笑う。剣聖オダ・ノブナガは去った。ノブナガが来た。ノブナガは帰った。',
+      ),
+    },
+    terms: [term('剣聖オダ・ノブナガ', '검성 오다 노부나가', { origin: 'model' })],
+    answers: {
+      剣聖オダ・ノブナガ: { target: '오다 노부나가' },
+      ノブナガ: { target: '오다 노부나가' },
+    },
+  });
+  const result = await run(h);
+  expect(result.applied.map((item) => item.source)).not.toContain('剣聖オダ・ノブナガ');
+  expect(result.applied.map((item) => item.source)).not.toContain('ノブナガ');
+  expect(
+    result.suggestions.map((item) => [
+      item.source,
+      item.role,
+      item.before,
+      item.confidence,
+      item.shapeFlag,
+    ]),
+  ).toEqual([
+    ['ノブナガ', 'new', undefined, 'low', true],
+    ['剣聖オダ・ノブナガ', 'recheck', '검성 오다 노부나가', 'low', true],
+  ]);
+  expect(h.saves).toEqual([]);
+  expect(h.state.value?.terms).toEqual([
+    term('剣聖オダ・ノブナガ', '검성 오다 노부나가', { origin: 'model' }),
+  ]);
+});
+
+test('일반어로 판정된 기계 항목은 빼기 목록에 넣고, 사람 항목은 넣지 않는다', async () => {
+  const h = harness({
+    versions: {
+      c1: oneVersion(
+        'ファンタジーが笑う。ファンタジーは去った。ポータルが笑う。ポータルは去った。',
+      ),
+    },
+    terms: [term('ファンタジー', '판타지', { origin: 'model' }), term('ポータル', '포털')],
+    answers: {
+      ファンタジー: { kind: 'common', target: '판타지', reason: '일반 명사예요.' },
+      ポータル: { kind: 'common', target: '포털', reason: '일반 명사예요.' },
+    },
+  });
+  const result = await run(h);
+  expect(result.removable).toEqual([
+    { source: 'ファンタジー', target: '판타지', reason: '일반 명사예요.' },
+  ]);
+  expect(result.counts?.common).toBe(2);
+});
+
+test('제안 적용: 새 이름 제안은 사람 항목으로 끝에 추가하고, 같은 이름의 기계 항목은 사람 항목으로 바꾼다', () => {
+  const model = term('ミナ', '미나-이전', { origin: 'model', aliases: ['ミナ姫'], note: '메모' });
+  const added = change({ source: 'カミラ', role: 'new', after: '카미라', category: '인명' });
+  expect(applySuggestion([model], added)).toEqual([
+    model,
+    { source: 'カミラ', target: '카미라', aliases: [], category: '인명', note: '' },
+  ]);
+  const suggestion = change({
+    source: 'ミナ',
+    role: 'suggest',
+    before: '미나-이전',
+    after: '미나',
+  });
+  const [changed] = applySuggestion([model], suggestion);
+  expect(changed).toEqual({
+    source: 'ミナ',
+    target: '미나',
+    aliases: ['ミナ姫'],
+    category: '',
+    note: '메모',
+  });
+  expect(changed).not.toHaveProperty('origin');
+});
+
+test('일반어 빼기: 같은 이름의 기계 항목만 지우고 사람 항목은 남긴다', () => {
+  const machine = term('ファンタジー', '판타지', { origin: 'model' });
+  const human = term('ポータル', '포털');
+  const scanned = term('ミナ', '미나', {
+    origin: 'scan',
+    evidence: [{ kind: 'model', note: 'n' }],
+  });
+  expect(removeCommonTerm([machine, human, scanned], 'ファンタジー')).toEqual([human, scanned]);
+  expect(removeCommonTerm([human], 'ポータル')).toEqual([human]);
 });

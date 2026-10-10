@@ -90,7 +90,7 @@ test('사람이 입력한 기존 항목은 (human)으로 표시한다', () => {
 test('시스템 지침은 고정 문장과 묶음에 맞는 지침 줄을 담는다', () => {
   const { system } = judgeRequest(batch);
   expect(system).toContain(
-    'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Every target must be written in Hangul without kana. Write each reason as one short sentence in Korean.',
+    'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Render every part of the source name (title, epithet, given name, family name) and add no family name, title or other part that the source does not contain, even for well-known real people. Every target must be written in Hangul without kana. Write each reason as one short sentence in Korean.',
   );
   expect(system).toContain('\nGuides:\n');
   expect(system).toContain("\n- The author's ruby reading is authoritative");

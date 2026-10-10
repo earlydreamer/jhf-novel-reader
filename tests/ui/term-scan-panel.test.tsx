@@ -62,6 +62,7 @@ function renderPanel(overrides: Partial<TermScanPanelProps> = {}): TermScanPanel
     onCancel: vi.fn(),
     onRevert: vi.fn(),
     onApplySuggestion: vi.fn(),
+    onRemoveCommon: vi.fn(),
     sources: { wikipedia: false, namuwiki: false },
     ...overrides,
   };
@@ -165,6 +166,48 @@ test('직접 고친 용어의 제안을 보여 주고 제안 적용을 요청하
   cleanup();
   renderPanel({ state: { ...done, handled: ['乙'] } });
   expect(screen.getByRole('button', { name: '적용했어요' })).toBeDisabled();
+});
+
+test('일반어로 판정된 기계 항목은 용어집에서 빼기를 누르면 빼기를 요청하고, 처리하면 뺐어요로 막는다', () => {
+  const removable: TermScanResult['removable'] = [
+    { source: 'ファンタジー', target: '판타지', reason: '일반 명사예요.' },
+  ];
+  const props = renderPanel({ state: { ...done, result: { ...result, removable } } });
+  expect(screen.getByRole('heading', { name: '일반어로 판정된 자동 항목' })).toBeInTheDocument();
+  expect(screen.getByText('지금 판타지')).toBeInTheDocument();
+  expect(screen.getByText('일반 명사예요.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '용어집에서 빼기' }));
+  expect(props.onRemoveCommon).toHaveBeenCalledWith('ファンタジー');
+  cleanup();
+  renderPanel({ state: { ...done, result: { ...result, removable }, handled: ['ファンタジー'] } });
+  expect(screen.getByRole('button', { name: '뺐어요' })).toBeDisabled();
+});
+
+test('이름 구성 확인이 필요한 제안에는 배지를 보이고, 새 이름 제안은 새 이름이라고 쓴다', () => {
+  const shaped: TermScanChange = {
+    ...suggestion,
+    source: '剣聖オダ・ノブナガ',
+    role: 'recheck',
+    before: '검성 오다 노부나가',
+    after: '오다 노부나가',
+    confidence: 'low',
+    shapeFlag: true,
+  };
+  const fresh: TermScanChange = {
+    source: 'ノブナガ',
+    role: 'new',
+    after: '오다 노부나가',
+    kind: 'real',
+    category: '인명',
+    confidence: 'low',
+    reason: '',
+    shapeFlag: true,
+    evidence: [],
+  };
+  renderPanel({ state: { ...done, result: { ...result, suggestions: [shaped, fresh] } } });
+  expect(screen.getAllByText('이름 구성 확인 필요')).toHaveLength(2);
+  expect(screen.getByText('지금 검성 오다 노부나가 · 제안 오다 노부나가')).toBeInTheDocument();
+  expect(screen.getByText('새 이름 · 제안 오다 노부나가')).toBeInTheDocument();
 });
 
 test('제안이 없으면 제안 섹션을 두지 않는다', () => {

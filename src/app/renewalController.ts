@@ -52,6 +52,7 @@ import type {
 } from '../translation/guidance';
 import {
   applySuggestion,
+  removeCommonTerm,
   revertScanChange,
   type createRangeJudge,
   type createTermScan,
@@ -387,6 +388,7 @@ export interface RenewalController {
   cancelTermScan(): void;
   revertTermScanChange(source: string): Promise<void>;
   applyTermScanSuggestion(source: string): Promise<void>;
+  removeTermScanCommon(source: string): Promise<void>;
   closeTermScan(): void;
   translate(): Promise<void>;
   refreshSource(): Promise<void>;
@@ -2281,6 +2283,16 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const saved = await editTermScanTerms(scan.workId, (terms) => applySuggestion(terms, change));
     if (saved) markTermScanHandled(scan, change.source);
   }
+  async function removeTermScanCommon(source: string): Promise<void> {
+    const scan = snapshot.termScan;
+    if (scan?.phase !== 'done' || !scan.result) return;
+    const item = scan.result.removable?.find((entry) => termKey(entry.source) === termKey(source));
+    if (!item || scan.handled.includes(item.source)) return;
+    const saved = await editTermScanTerms(scan.workId, (terms) =>
+      removeCommonTerm(terms, item.source),
+    );
+    if (saved) markTermScanHandled(scan, item.source);
+  }
   async function translate(repair?: ParagraphRepair): Promise<void> {
     if (termScanRunning()) {
       publish({ error: TERM_SCAN_TRANSLATE_BLOCKED });
@@ -3102,6 +3114,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     cancelTermScan,
     revertTermScanChange,
     applyTermScanSuggestion,
+    removeTermScanCommon,
     closeTermScan,
     readGuidance: async (workId) => (await dependencies.guidance?.read(workId)) ?? null,
     async saveGuidance(workId, draft) {

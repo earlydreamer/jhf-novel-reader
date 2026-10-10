@@ -40,6 +40,7 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   onCancelTermScan?(): void;
   onRevertTermScan?(source: string): void;
   onApplyTermScanSuggestion?(source: string): void;
+  onRemoveTermScanCommon?(source: string): void;
   onCloseTermScan?(): void;
   sources?: TermScanPanelProps['sources'];
   busy: boolean;
@@ -87,6 +88,7 @@ export function WorkScreen({
   onCancelTermScan,
   onRevertTermScan,
   onApplyTermScanSuggestion,
+  onRemoveTermScanCommon,
   onCloseTermScan,
   sources,
 }: WorkScreenProps): JSX.Element {
@@ -542,6 +544,7 @@ export function WorkScreen({
           onCancel={() => onCancelTermScan?.()}
           onRevert={(source) => onRevertTermScan?.(source)}
           onApplySuggestion={(source) => onApplyTermScanSuggestion?.(source)}
+          onRemoveCommon={(source) => onRemoveTermScanCommon?.(source)}
           sources={sources ?? { wikipedia: false, namuwiki: false }}
         />
       </Dialog>
