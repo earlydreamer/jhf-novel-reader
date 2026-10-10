@@ -113,6 +113,10 @@ JHF Novel Reader는 이 불편을 이렇게 풀어요.
 - 공개된 회차만 읽어요. 로그인이나 연령 확인이 필요한 회차는 열지 않아요.
 - 번역 결과는 개인적으로 읽기 위한 것이에요. 원문과 번역을 다시 배포하지 말아 주세요.
 
+## 라이선스
+
+이 앱의 코드는 [MIT 라이선스](LICENSE)로 공개해요. 소설 원문과 번역 결과의 권리는 각 작품의 저작권자에게 있어요.
+
 ## 오픈소스 고지
 
 이 앱에 들어 있는 오픈소스와 라이선스는 앱의 **설정 → 오픈소스 라이선스**와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에서 볼 수 있어요. 나로우 페이지 해석에는 [LNReader](https://github.com/LNReader/lnreader-plugins)의 Syosetu 플러그인 구조를 참고했어요(MIT).
