@@ -7,3 +7,4 @@ dist/
 
 *.jks
 *.keystore
+android/keystore.properties

@@ -32,6 +32,17 @@ if (appVersionParts.size() != 3 || appVersionParts[1] > 99 || appVersionParts[2]
 }
 def appVersionCode = appVersionParts[0] * 10000 + appVersionParts[1] * 100 + appVersionParts[2]
 
+// 릴리스 서명(#272). 키 파일과 비밀번호는 저장소 밖에 두고 android/keystore.properties(git 제외)나
+// 환경 변수 JHF_KEYSTORE_FILE·JHF_KEYSTORE_PASSWORD·JHF_KEY_ALIAS·JHF_KEY_PASSWORD로 넘긴다.
+// 둘 다 없으면 릴리스 빌드는 서명 없이 만들어진다. 절차는 docs/release.md.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def signingValue = { String env, String key -> System.getenv(env) ?: keystoreProperties.getProperty(key) }
+def releaseStoreFile = signingValue('JHF_KEYSTORE_FILE', 'storeFile')
+
 android {
     namespace = "app.narou.reader"
     sourceSets.main.assets.srcDir(provenanceAssets)
@@ -53,8 +64,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (releaseStoreFile) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword signingValue('JHF_KEYSTORE_PASSWORD', 'storePassword')
+                keyAlias signingValue('JHF_KEY_ALIAS', 'keyAlias')
+                keyPassword signingValue('JHF_KEY_PASSWORD', 'keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (releaseStoreFile) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
