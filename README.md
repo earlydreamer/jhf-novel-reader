@@ -61,7 +61,7 @@ JHF Novel Reader는 **내 컴퓨터의 로컬 모델**로 번역해서 이런 �
 | 무엇 | 설명 |
 |---|---|
 | Android 휴대폰 | Android 7.0 이상, 64비트(arm64) |
-| 번역 서버 | OpenAI 호환 API를 제공하는 PC. LM Studio, Ollama, llama.cpp 등으로 모델을 띄워요. 휴대폰에서 접속할 수 있는 주소면 되고, 같은 Wi‑Fi에 없어도 돼요. |
+| 번역 서버 | OpenAI 호환 API를 제공하는 PC. LM Studio, Ollama, llama.cpp 등으로 모델을 띄워요. |
 | 번역 모델 | 일본어→한국어 번역이 되는 모델이면 돼요. Gemma 4 E4B로 실제 사용을 확인했어요. |
 
 ## 처음 쓰기
