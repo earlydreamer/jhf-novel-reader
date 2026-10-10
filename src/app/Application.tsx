@@ -106,7 +106,7 @@ function RouteScreen({
           }
           batchAvailable={
             state.batchAvailable &&
-            state.catalogStatus === 'connected' &&
+            (state.catalogStatus === 'connected' || state.catalogStatus === 'idle') &&
             !!state.selectedModelId &&
             !state.translationActive
           }

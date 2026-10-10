@@ -502,6 +502,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let termScanOriginals = new Map<string, GuidanceTerm>();
   // 시작 전 연결 확인이 도는 동안 true다. 확인이 끝나기 전 두 번째 시작 요청을 막는다.
   let termScanChecking = false;
+  // 미리 번역 준비 전 연결 확인이 도는 동안 true다. 확인이 끝나기 전 두 번째 준비 요청을 막는다.
+  let batchChecking = false;
   let automaticRequest: { chapterId: string; operation: number } | null = null;
   let retryableRepair: ParagraphRepair | null = null;
   const titlesByWork = new Map<string, readonly SavedTitle[]>();
@@ -2659,6 +2661,29 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   async function prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void> {
+    // 앱을 켠 직후에는 저장된 모델로 먼저 연결을 확인한다. 확인 중 두 번째 요청은 조용히 끝낸다.
+    if (batchChecking) return;
+    const needsCheck =
+      !!dependencies.batch &&
+      !!snapshot.work &&
+      initialized &&
+      foreground &&
+      !disposed &&
+      snapshot.catalogStatus === 'idle' &&
+      !!snapshot.selectedModelId;
+    if (needsCheck) {
+      batchChecking = true;
+      try {
+        await checkConnection();
+      } finally {
+        batchChecking = false;
+      }
+      if (disposed || !foreground) return;
+      if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
+        publish({ error: '설정에서 서버를 연결하고 번역 모델을 골라 주세요.' });
+        return;
+      }
+    }
     if (
       !dependencies.batch ||
       !snapshot.work ||
