@@ -142,6 +142,7 @@ test('every unit is sent exactly once in order and the chapter is reassembled wi
       messages: [{ role: 'user', content: LINE_INSTRUCTION + taggedLines(batches[i]!) }],
       stream: false,
       max_tokens: 512,
+      reasoning_effort: 'none',
     }),
   );
   expect(bodies.flatMap((body) => idsOf(contentOf(body)))).toEqual(units.map((u) => u.id));

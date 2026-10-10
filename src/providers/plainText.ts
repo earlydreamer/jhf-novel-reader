@@ -180,6 +180,8 @@ export function createProviderSession(
             model,
             messages,
             stream: false,
+            // thinking 모델이 추론 토큰만 소진하고 번역 결과를 비우는 것을 막는다.
+            reasoning_effort: 'none',
             ...(maxTokens ? { max_tokens: maxTokens } : {}),
           },
           auth,
@@ -267,6 +269,8 @@ export function createProviderSession(
         stream: false,
         temperature: request.temperature ?? 0,
         max_tokens: request.maxTokens,
+        // thinking 모델이 추론 토큰만 소진하고 JSON 응답을 비우는 것을 막는다.
+        reasoning_effort: 'none',
       };
       let data: unknown;
       try {

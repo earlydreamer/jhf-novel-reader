@@ -54,7 +54,11 @@ test('one complete request produces metadata without response/config/usage bodie
     returnedModelMatchesSelection: false,
     quality: 'NOT_ASSESSED_LEXICAL_CUES_ONLY',
   });
-  expect(report.request.parameters).toEqual({ stream: false, temperature: 0 });
+  expect(report.request.parameters).toEqual({
+    stream: false,
+    temperature: 0,
+    reasoning_effort: 'none',
+  });
   expect(report.loaded.config).toEqual({
     context_length: 16384,
     parallel: 4,

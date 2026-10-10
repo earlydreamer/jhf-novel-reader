@@ -191,7 +191,14 @@ export async function translateLocalStream(
           response = await transport.streamPost(
             {
               url,
-              body: { model, messages, stream: true, max_tokens: limits.maxOutputTokens },
+              // thinking 모델이 추론 토큰만 소진하고 번역 결과를 비우는 것을 막는다.
+              body: {
+                model,
+                messages,
+                stream: true,
+                max_tokens: limits.maxOutputTokens,
+                reasoning_effort: 'none',
+              },
               ...(authorization ? { authorization } : {}),
             },
             signal,
