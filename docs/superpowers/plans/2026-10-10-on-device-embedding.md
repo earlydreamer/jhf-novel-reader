@@ -40,7 +40,10 @@
 - 네이티브 크기: `liblitertlm_jni.so` arm64-v8a 22.2MB(gzip 9.7MB), x86_64 26.4MB. 현재 APK 9.0MB.
   - 판정: `abiFilters 'arm64-v8a'`만 넣는다(실사용 기기는 arm64, 에뮬레이터 x86_64 미지원 감수). 예상 APK 약 +22~25MB(라이브러리 비압축 저장 + Kotlin 런타임).
 - 모델: `https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm/resolve/9be6e8b90982095dc05c2bd162e4b954ee4dbac7/embeddinggemma-2-text-270m.litertlm`, 164,626,432바이트, SHA-256 `2d079ee2f6f066b1f368e8d7c819f55214eaef1d0513b312321901f30ab286fb`, Apache-2.0, gated 아님. (Tensor G5/G6 전용 파일은 쓰지 않는다.)
-- 남은 확인: Fold7 로드 시간·배치 지연·메모리, 백엔드(CPU/GPU) 선택, 임계값 초안 → Task 1 구현물로 실측해 채운다.
+- WebView ONNX 대안(같은 날 BlackShark2): transformers.js 4.3.1에서 q4·q8 텍스트 모델 모두 `GatherBlockQuantized` 미구현으로 WASM 세션 생성 실패, WebGPU는 Android 12+ 전용 → 불가. 네이티브로 확정(사용자 승인, APK 약 +23MB).
+- Task 1 구현물 실측(BlackShark2 SKW-H0, SD855, Android 10, CPU 백엔드, FLOAT32, 256차원): 다운로드 165MB 14초·SHA-256 통과, 엔진 첫 로드 약 1.2초, 임베딩 문맥 1개 약 170ms·16개 2.7초·64개 10.8초(개수에 비례), NaN 없음, 네이티브 힙 약 145MB. APK 32.8MB(arm64 전용).
+- 판정 대상 규모(n0421du 1화, 용어집 90개): 매칭 112곳 중 후보 2곳(メロディ in メロディー 등) → 회차당 임베딩 10개 안팎, 약 2~3초 예상.
+- 남은 확인: Fold7 수치, GPU 백엔드 비교, 임계값(Task 3 보정 단계).
 
 ### Task 1: 네이티브 플러그인 — 다운로드·검증·로드·임베딩
 
