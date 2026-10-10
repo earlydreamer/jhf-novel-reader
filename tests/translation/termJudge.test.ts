@@ -90,7 +90,7 @@ test('사람이 입력한 기존 항목은 (human)으로 표시한다', () => {
 test('시스템 지침은 고정 문장과 묶음에 맞는 지침 줄을 담는다', () => {
   const { system } = judgeRequest(batch);
   expect(system).toContain(
-    'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Every target must be written in Hangul without kana.',
+    'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Every target must be written in Hangul without kana. Write each reason as one short sentence in Korean.',
   );
   expect(system).toContain('\nGuides:\n');
   expect(system).toContain("\n- The author's ruby reading is authoritative");
@@ -279,7 +279,7 @@ const hit = (extra: Pick<LookupHit, 'kind' | 'ko'> & Partial<LookupHit>): Lookup
   ...extra,
 });
 const LOOKUP_SENTENCE =
-  'Lookup lines come from Korean Wikipedia, Wikidata or Namuwiki. Prefer a lookup rendering when the contexts refer to the same person, place or work, and ignore it when it clearly refers to something else. For names invented in this story, an author ruby reading still comes first.';
+  'Lookup lines come from Korean Wikipedia, Wikidata or Namuwiki. Prefer a lookup rendering when the contexts refer to the same person, place or work, and ignore it when it clearly refers to something else. For names invented in this story, an author ruby reading still comes first. A "refers to" line only tells who or what the name points to; it is context, not the rendering.';
 
 test('조회 근거는 후보 블록에서 kanji 줄 뒤, contexts 앞에 kind와 exact 표시로 들어간다', () => {
   const lookups = new Map([
@@ -329,4 +329,23 @@ test('조회가 없는 묶음의 요청은 조회 인자가 없을 때와 같고
   ).toEqual(plain);
   expect(plain.user).not.toContain('lookup:');
   expect(plain.system).not.toContain('Lookup lines come from');
+});
+
+test('refers 조회 줄은 가리키는 대상으로 적고, 고정 문장은 표기가 아니라는 설명을 담는다', () => {
+  const epithet = [candidate('美濃の蝮', { script: 'mixed', contexts: ['美濃の蝮が笑う。'] })];
+  const lookups = new Map([
+    ['美濃の蝮', [hit({ kind: 'wikipedia', ko: '사이토 도산', refers: true })]],
+  ]);
+  const { user, system } = judgeRequest(epithet, lookups);
+  expect(user).toContain('lookup: refers to 사이토 도산 (wikipedia search)');
+  expect(user).not.toContain('lookup: 사이토 도산');
+  expect(system).toContain(
+    'A "refers to" line only tells who or what the name points to; it is context, not the rendering.',
+  );
+});
+
+test('시스템 지침은 판정 이유를 한국어 한 문장으로 쓰라고 말한다', () => {
+  expect(judgeRequest(batch).system).toContain(
+    'Write each reason as one short sentence in Korean.\nGuides:\n',
+  );
 });

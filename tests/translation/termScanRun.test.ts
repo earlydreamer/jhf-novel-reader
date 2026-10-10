@@ -75,6 +75,9 @@ const kanjidic = (): Kanjidic => {
   const entries: Record<string, { ko: string[]; en: string[] }> = {
     王: { ko: ['왕'], en: ['king'] },
     都: { ko: ['도'], en: ['city'] },
+    美: { ko: ['미'], en: ['beautiful'] },
+    濃: { ko: ['농'], en: ['thick'] },
+    蝮: { ko: ['복'], en: ['viper'] },
   };
   return { version: 'test', lookup: (char) => entries[char] ?? null };
 };
@@ -129,7 +132,13 @@ function fakeLibrary(versions: Record<string, CompletedTranslation[]>) {
   return { listVersions: async (chapterId: string) => versions[chapterId] ?? [] };
 }
 
-type Entry = { wiki?: string; wikidata?: { id: string; ko: string }; namu?: string };
+type Entry = {
+  wiki?: string;
+  wikidata?: { id: string; ko: string };
+  namu?: string;
+  /** 위키백과 전문 검색 1위 제목 */
+  search?: string;
+};
 /**
  * 가짜 조회 통로. 입력(ja)별 표를 보고 응답하며, 호출은 `출처:입력` 꼴로 calls에 남긴다.
  * fail에 든 출처 접두어의 호출은 connection 오류로 던진다.
@@ -144,7 +153,9 @@ function fakeLookup(
       const { hostname, searchParams } = new URL(url);
       const call =
         hostname === 'ja.wikipedia.org'
-          ? `wikipedia:${searchParams.get('titles')}`
+          ? searchParams.has('srsearch')
+            ? `wikipedia-search:${(searchParams.get('srsearch') ?? '').replace(/"/g, '')}`
+            : `wikipedia:${searchParams.get('titles')}`
           : hostname === 'namu.wiki'
             ? `namu:${searchParams.get('q')}`
             : searchParams.has('search')
@@ -156,7 +167,11 @@ function fakeLookup(
         throw new ReaderError('connection');
       options.onCall?.(call);
       let data: unknown;
-      if (kind === 'wikipedia') {
+      if (kind === 'wikipedia-search') {
+        const ja = (searchParams.get('srsearch') ?? '').replace(/"/g, '');
+        const title = table[ja]?.search;
+        data = { query: { search: title === undefined ? [] : [{ title }] } };
+      } else if (kind === 'wikipedia') {
         const ja = searchParams.get('titles') ?? '';
         const ko = table[ja]?.wiki;
         data = {
@@ -191,6 +206,15 @@ const LOOKUP_TABLE: Record<string, Entry> = {
   カミラ: { wiki: '카미라', wikidata: { id: 'Q1', ko: '카미라-위키데이터' }, namu: '카미라' },
   ハンナ: { wikidata: { id: 'Q2', ko: '한나' } },
 };
+
+const EPITHET_TABLE: Record<string, Entry> = {
+  ...LOOKUP_TABLE,
+  美濃の蝮: { search: '斎藤道三' },
+  斎藤道三: { wiki: '사이토 도산' },
+  王都: { search: '斎藤道三' },
+};
+const EPITHET_TEXT = '美濃の蝮が笑う。美濃の蝮は去った。';
+const EPITHET_RUBY = [{ start: 0, end: 4, reading: 'みののまむし' }];
 
 function harness(input: {
   versions: Record<string, CompletedTranslation[]>;
@@ -765,4 +789,76 @@ test('진행 단계는 수집, 조회, 판정, 저장 순서이고 조회는 후
     { stage: 'judge', done: 3, total: 3 },
     { stage: 'save', done: 1, total: 1 },
   ]);
+});
+
+test('별명 후보는 위키백과·위키데이터가 없으면 위키백과 검색으로 대상을 찾고, 판정 요청에 refers 줄을 넣는다', async () => {
+  const lookup = fakeLookup(EPITHET_TABLE);
+  const h = harness({
+    versions: { c1: oneVersion(EPITHET_TEXT, EPITHET_RUBY) },
+    answers: { 美濃の蝮: { kind: 'work', category: '별명', target: '미노의 살무사' } },
+    lookup,
+  });
+  const result = await run(h, ['c1'], undefined, undefined, { wikipedia: true });
+  expect(lookup.calls).toContain('wikipedia-search:美濃の蝮');
+  expect(lookup.calls).toContain('wikipedia:斎藤道三');
+  expect(h.requests[0]!.user).toContain('lookup: refers to 사이토 도산 (wikipedia search)');
+  expect(result.applied.map((item) => [item.source, item.after, item.confidence])).toEqual([
+    ['美濃の蝮', '미노의 살무사', 'high'],
+  ]);
+});
+
+test('별명이 아닌 후보는 위키백과 검색으로 부르지 않는다', async () => {
+  const lookup = fakeLookup(EPITHET_TABLE);
+  const h = harness({
+    versions: {
+      c1: oneVersion('王都へ行く。王都は遠い。', [{ start: 0, end: 2, reading: 'おうと' }]),
+    },
+    answers: { 王都: { target: '왕도' } },
+    lookup,
+  });
+  await run(h, ['c1'], undefined, undefined, { wikipedia: true });
+  expect(lookup.calls).toContain('wikipedia:王都');
+  expect(lookup.calls.some((call) => call.startsWith('wikipedia-search'))).toBe(false);
+});
+
+test('위키백과 출처가 꺼져 있으면 별명이어도 위키백과 검색으로 부르지 않는다', async () => {
+  const lookup = fakeLookup(EPITHET_TABLE);
+  const h = harness({
+    versions: { c1: oneVersion(EPITHET_TEXT, EPITHET_RUBY) },
+    answers: { 美濃の蝮: { kind: 'work', category: '별명', target: '미노의 살무사' } },
+    lookup,
+  });
+  await run(h, ['c1'], undefined, undefined, { namuwiki: true });
+  expect(lookup.calls.some((call) => call.startsWith('wikipedia'))).toBe(false);
+});
+
+test('음독 의심 별명(蝮=복, 미노의 복)은 low로 내리고, 뜻 번역(미노의 살무사)은 투표 신뢰도를 그대로 쓴다', async () => {
+  const sound = harness({
+    versions: { c1: oneVersion(EPITHET_TEXT, EPITHET_RUBY) },
+    answers: { 美濃の蝮: { kind: 'work', category: '별명', target: '미노의 복' } },
+  });
+  const soundResult = await run(sound);
+  expect(soundResult.applied.map((item) => [item.source, item.confidence])).toEqual([
+    ['美濃の蝮', 'low'],
+  ]);
+
+  const meaning = harness({
+    versions: { c1: oneVersion(EPITHET_TEXT, EPITHET_RUBY) },
+    answers: { 美濃の蝮: { kind: 'work', category: '별명', target: '미노의 살무사' } },
+  });
+  const meaningResult = await run(meaning);
+  expect(meaningResult.applied.map((item) => [item.source, item.confidence])).toEqual([
+    ['美濃の蝮', 'high'],
+  ]);
+});
+
+test('별명이 아닌 후보는 마지막 어절이 한자음과 같아도 음독 규칙을 적용하지 않는다', async () => {
+  const h = harness({
+    versions: {
+      c1: oneVersion('王都へ行く。王都は遠い。', [{ start: 0, end: 2, reading: 'おうと' }]),
+    },
+    answers: { 王都: { target: '왕 도' } },
+  });
+  const result = await run(h);
+  expect(result.applied.map((item) => [item.source, item.confidence])).toEqual([['王都', 'high']]);
 });

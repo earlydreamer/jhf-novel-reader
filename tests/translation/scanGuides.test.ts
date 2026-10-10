@@ -82,3 +82,10 @@ test('어떤 유형에도 맞지 않는 후보는 지침이 없다', () => {
 test('각 지침은 문장을 가진다', () => {
   for (const guide of SCAN_GUIDES) expect(guide.text.length).toBeGreaterThan(0);
 });
+
+test('별명 지침은 뜻으로 옮기고 한자 음을 の 뒤에 잇지 않는다고 말한다', () => {
+  const epithet = SCAN_GUIDES.find((guide) => guide.id === 'epithet');
+  expect(epithet?.text).toBe(
+    'Epithets and nicknames are translated by meaning, not by sound. Use the provided kanji meanings; keep place names transliterated. Never chain the Korean readings of the kanji after の (for example 甲斐の虎 → 가이의 호랑이, not 가이의 호).',
+  );
+});

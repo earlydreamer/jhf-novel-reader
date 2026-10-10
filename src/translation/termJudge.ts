@@ -13,7 +13,7 @@ export type VotedAnswer = JudgeAnswer & {
 const KINDS: readonly JudgeKind[] = ['real', 'work', 'common'];
 const CATEGORIES: readonly string[] = ['인명', '지명', '조직', '작품명', '별명', '호칭', '기타'];
 const SYSTEM =
-  'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Every target must be written in Hangul without kana.';
+  'You decide Korean renderings for names in a Japanese web novel glossary. For each candidate decide: kind ("real" for real-world people, places and works; "work" for names invented in this story; "common" for ordinary words that are not names), category, and the Korean rendering. Use the contexts to understand what the name refers to. Return only JSON that matches the schema. Every target must be written in Hangul without kana. Write each reason as one short sentence in Korean.';
 const SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
@@ -37,7 +37,7 @@ const SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 const LOOKUP_GUIDE =
-  'Lookup lines come from Korean Wikipedia, Wikidata or Namuwiki. Prefer a lookup rendering when the contexts refer to the same person, place or work, and ignore it when it clearly refers to something else. For names invented in this story, an author ruby reading still comes first.';
+  'Lookup lines come from Korean Wikipedia, Wikidata or Namuwiki. Prefer a lookup rendering when the contexts refer to the same person, place or work, and ignore it when it clearly refers to something else. For names invented in this story, an author ruby reading still comes first. A "refers to" line only tells who or what the name points to; it is context, not the rendering.';
 const HANGUL = /\p{Script=Hangul}/u;
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
 const CONTROL = /\p{Cc}/u;
@@ -88,7 +88,11 @@ function candidateBlock(id: string, candidate: ScanCandidate, hits: readonly Loo
     lines.push(`kanji: ${hints.join(' ')}`);
   }
   for (const hit of hits) {
-    lines.push(`lookup: ${hit.ko} (${hit.kind}${hit.exact ? ', exact link' : ''})`);
+    lines.push(
+      hit.refers
+        ? `lookup: refers to ${hit.ko} (${hit.kind} search)`
+        : `lookup: ${hit.ko} (${hit.kind}${hit.exact ? ', exact link' : ''})`,
+    );
   }
   lines.push('contexts:', ...candidate.contexts.map((context) => `- ${context}`));
   return lines.join('\n');

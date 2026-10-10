@@ -10,6 +10,8 @@ export type LookupHit = {
   note: string;
   /** 위키백과 정확 연결이면 true */
   exact: boolean;
+  /** true면 ko는 표기가 아니라 '이름이 가리키는 대상'이다(위키백과 전문 검색 폴백) */
+  refers?: boolean;
 };
 
 const NOTE_LIMIT = 200;
@@ -76,6 +78,36 @@ export async function lookupWikipedia(
       redirected ? `위키백과: ${ja} → ${jaTitle} → ${ko}` : `위키백과: ${jaTitle} → ${ko}`,
     ),
     exact: true,
+  };
+}
+
+/**
+ * 정확한 문서가 없는 별명(예: 美濃の蝮)을 위키백과 전문 검색 1위 문서로 찾는다. 찾은 문서의 한국어 문서가
+ * 가리키는 대상이지 이 이름의 표기가 아니므로 refers를 true로 둔다. 1위가 입력과 같거나 형식이 다르면 null이다.
+ */
+export async function lookupWikipediaSearch(
+  transport: LookupTransport,
+  ja: string,
+  signal: AbortSignal,
+): Promise<LookupHit | null> {
+  const data = await fetchData(
+    transport,
+    `https://ja.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=search&srlimit=1&srsearch=${encodeURIComponent('"' + ja + '"')}`,
+    'json',
+    signal,
+  );
+  const top = first(field(field(data, 'query'), 'search'));
+  const title = field(top, 'title');
+  if (typeof title !== 'string' || title === ja) return null;
+  const target = await lookupWikipedia(transport, title, signal);
+  if (!target) return null;
+  return {
+    kind: 'wikipedia',
+    ko: target.ko,
+    url: target.url,
+    note: note(`위키백과 검색: ${ja} → ${title} → ${target.ko}`),
+    exact: false,
+    refers: true,
   };
 }
 

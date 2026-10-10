@@ -3,6 +3,7 @@ import {
   lookupNamuwiki,
   lookupWikidata,
   lookupWikipedia,
+  lookupWikipediaSearch,
   namuKoreanFor,
 } from '../../src/translation/lookup';
 import { ReaderError, type HttpResponse, type LookupTransport } from '../../src/contracts';
@@ -119,6 +120,68 @@ describe('lookupWikipedia', () => {
   test('an unexpected response shape is null without throwing', async () => {
     const { transport } = fakeTransport(() => ({ error: { code: 'x' } }));
     expect(await lookupWikipedia(transport, ja, signal())).toBeNull();
+  });
+});
+
+describe('lookupWikipediaSearch', () => {
+  const epithet = '美濃の蝮';
+  const target = '斎藤道三';
+
+  test('takes the top full-text search title and reads its Korean link as a non-exact reference', async () => {
+    const { transport, get } = fakeTransport((url) => {
+      if (url.includes('list=search'))
+        return { query: { search: [{ title: target, snippet: '' }] } };
+      return {
+        query: {
+          pages: [{ title: target, langlinks: [{ lang: 'ko', title: '사이토 도산 (무장)' }] }],
+        },
+      };
+    });
+    const hit = await lookupWikipediaSearch(transport, epithet, signal());
+    expect(get.mock.calls[0]?.[0]).toBe(
+      `https://ja.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=search&srlimit=1&srsearch=${encodeURIComponent(`"${epithet}"`)}`,
+    );
+    expect(get.mock.calls[0]?.[1]).toBe('json');
+    expect(get.mock.calls[1]?.[0]).toContain(`titles=${encodeURIComponent(target)}`);
+    expect(hit).toEqual({
+      kind: 'wikipedia',
+      ko: '사이토 도산',
+      url: `https://ko.wikipedia.org/wiki/${encodeURIComponent('사이토_도산_(무장)')}`,
+      note: `위키백과 검색: ${epithet} → ${target} → 사이토 도산`,
+      exact: false,
+      refers: true,
+    });
+  });
+
+  test('no search result, a title equal to the input, or no Korean link is null', async () => {
+    const empty = fakeTransport(() => ({ query: { search: [] } }));
+    expect(await lookupWikipediaSearch(empty.transport, epithet, signal())).toBeNull();
+
+    const same = fakeTransport(() => ({ query: { search: [{ title: epithet }] } }));
+    expect(await lookupWikipediaSearch(same.transport, epithet, signal())).toBeNull();
+    expect(same.get).toHaveBeenCalledTimes(1);
+
+    const noLink = fakeTransport((url) =>
+      url.includes('list=search')
+        ? { query: { search: [{ title: target }] } }
+        : { query: { pages: [{ title: target }] } },
+    );
+    expect(await lookupWikipediaSearch(noLink.transport, epithet, signal())).toBeNull();
+  });
+
+  test('an unexpected search shape is null without throwing', async () => {
+    const { transport } = fakeTransport(() => ({ query: { search: [{ title: 3 }] } }));
+    expect(await lookupWikipediaSearch(transport, epithet, signal())).toBeNull();
+  });
+
+  test('an aborted signal throws cancelled without calling the transport', async () => {
+    const { transport, get } = fakeTransport(() => ({}));
+    const control = new AbortController();
+    control.abort();
+    await expect(lookupWikipediaSearch(transport, epithet, control.signal)).rejects.toMatchObject({
+      code: 'cancelled',
+    });
+    expect(get).not.toHaveBeenCalled();
   });
 });
 
