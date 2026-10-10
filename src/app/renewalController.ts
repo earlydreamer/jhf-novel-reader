@@ -2048,9 +2048,19 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     runAutomaticTranslation();
     requestTitleTranslation();
   }
+  /** 리더(저장본)이거나, 읽으며 번역이 끝난 뒤 번역 경로에서 이 회차의 저장본을 표시 중일 때. */
+  function refreshableChapter(chapter: ChapterRef | null): chapter is ChapterRef {
+    if (!chapter || dependencies.flow?.getSnapshot().pendingSave) return false;
+    if (snapshot.route.kind === 'reader') return true;
+    return (
+      snapshot.route.kind === 'translation' &&
+      snapshot.route.chapterId === chapter.chapterId &&
+      snapshot.version?.source.chapterId === chapter.chapterId
+    );
+  }
   async function refreshSource(): Promise<void> {
     const chapter = snapshot.chapter;
-    if (snapshot.route.kind !== 'reader' || !chapter) return;
+    if (!refreshableChapter(chapter)) return;
     publish({
       sourceChange: 'idle',
       paragraphRepair: false,
@@ -2061,7 +2071,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   // 저장된 회차를 통째로 다시 번역한다(#197). 용어집을 고친 뒤 쓰는 경로. 기존 저장본은 남긴다.
   async function retranslateChapter(): Promise<void> {
     const chapter = snapshot.chapter;
-    if (snapshot.route.kind !== 'reader' || !chapter) return;
+    if (!refreshableChapter(chapter)) return;
     await refreshSource();
     await translate();
   }

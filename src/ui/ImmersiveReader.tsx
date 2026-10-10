@@ -473,7 +473,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     ...(displayVersion
       ? [
           { label: '번역 확인 결과 보기', onSelect: () => setQualityOpen(true) },
-          ...(props.onRetranslate && !props.translationActive
+          ...(props.onRetranslate && !props.translationActive && !pendingSave
             ? [{ label: '이 화 다시 번역하기', onSelect: () => setRetranslateOpen(true) }]
             : []),
           ...(mayRepair
