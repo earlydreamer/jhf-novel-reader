@@ -495,12 +495,50 @@ test('진행 단계는 수집, 판정, 저장 순서로 보고된다', async () 
   ]);
 });
 
-test('후보가 없으면 판정 요청과 저장 없이 빈 결과를 낸다', async () => {
+test('후보가 없으면 판정 요청과 저장 없이 빈 결과와 0 집계를 낸다', async () => {
   const h = harness({ versions: { c1: oneVersion('ただの文章です。') } });
   const result = await run(h);
-  expect(result).toEqual({ applied: [], confirmed: 0, suggestions: [], partial: false });
+  expect(result).toEqual({
+    applied: [],
+    confirmed: 0,
+    suggestions: [],
+    partial: false,
+    counts: { candidates: 0, common: 0, unchanged: 0, unanswered: 0 },
+  });
   expect(h.requests).toEqual([]);
   expect(h.saves).toEqual([]);
+});
+
+test('살펴본 이름을 일반어·답 없음·같은 표기·바뀐 용어로 나눠 센다', async () => {
+  const h = harness({
+    terms: [term('エルザ', '엘자'), term('カミラ', '카밀라', { origin: 'model' })],
+    versions: {
+      c1: oneVersion(
+        'ハンナが笑う。ハンナは去った。ルークが笑う。ルークは去った。エルザが立つ。エルザは座る。カミラが笑う。カミラは去った。',
+      ),
+    },
+    answers: {
+      ハンナ: { kind: 'common', category: '기타', target: '한나' },
+      エルザ: { target: '엘자' },
+      カミラ: { target: '카미라' },
+    },
+  });
+  const result = await run(h);
+  expect(result.counts).toEqual({ candidates: 4, common: 1, unchanged: 1, unanswered: 1 });
+  expect(result.applied.map((item) => item.source)).toEqual(['カミラ']);
+  expect(result.suggestions).toEqual([]);
+});
+
+test('저장 직전에 같은 이름이 생겨 건너뛴 새 후보는 같은 표기로 센다', async () => {
+  const h = harness({
+    versions: { c1: oneVersion('ゴルドが笑う。ゴルドは去った。') },
+    answers: { ゴルド: { target: '고르드' } },
+  });
+  h.hooks.onCall = (call) => {
+    if (call === 1) h.state.value = workGuidance([term('ゴルド', '골드')]);
+  };
+  const result = await run(h);
+  expect(result.counts).toEqual({ candidates: 1, common: 0, unchanged: 1, unanswered: 0 });
 });
 
 test('completeJson이 없는 제공자는 model_missing으로 거부한다', async () => {

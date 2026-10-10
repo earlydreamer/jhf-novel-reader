@@ -157,6 +157,19 @@ export function TermScanPanel({
   return (
     <>
       <p>{`바꾼 용어 ${result.applied.length}개 · 확인한 용어 ${result.confirmed}개 · 제안 ${result.suggestions.length}개`}</p>
+      {result.counts &&
+        (result.counts.candidates === 0 ? (
+          <p>저장된 회차에서 새로 살펴볼 이름을 찾지 못했어요.</p>
+        ) : (
+          <>
+            <p>{`이름 ${result.counts.candidates}개를 살펴봤어요 · 일반어로 뺀 이름 ${result.counts.common}개 · 이미 같은 표기 ${result.counts.unchanged}개`}</p>
+            {result.counts.unanswered > 0 && (
+              <p role="status">
+                {`모델이 답하지 않은 이름이 ${result.counts.unanswered}개 있어요. 다시 정밀스캔하면 판정할 수 있어요.`}
+              </p>
+            )}
+          </>
+        ))}
       {result.partial && <p role="status">일부 판정 요청이 실패해서 나머지 결과만 반영했어요.</p>}
       {result.lookupFailed && result.lookupFailed.length > 0 && (
         <p role="status">

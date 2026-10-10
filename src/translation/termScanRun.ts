@@ -48,6 +48,12 @@ export type TermScanResult = {
   suggestions: TermScanChange[]; // 사람 항목과 다른 제안(저장 안 함)
   partial: boolean; // 일부 묶음이 실패함
   lookupFailed?: ('wikipedia' | 'namuwiki')[]; // 조회 오류로 이번 실행에서 더 묻지 않은 출처(실패가 없으면 필드 없음)
+  counts?: {
+    candidates: number; // 살펴본 이름(후보) 수
+    common: number; // 일반어로 판정해 뺀 수
+    unchanged: number; // 표기가 이미 같아 그대로 둔 수
+    unanswered: number; // 3회 모두 답을 받지 못한 수
+  };
 };
 
 const BATCH_SIZE = 8;
@@ -181,7 +187,14 @@ export function createTermScan(deps: {
     cancelled(signal);
     const terms = (await deps.guidance.read(workId))?.terms ?? [];
     const candidates = collectScanCandidates(chapters, terms, dic);
-    if (!candidates.length) return { applied: [], confirmed: 0, suggestions: [], partial: false };
+    if (!candidates.length)
+      return {
+        applied: [],
+        confirmed: 0,
+        suggestions: [],
+        partial: false,
+        counts: { candidates: 0, common: 0, unchanged: 0, unanswered: 0 },
+      };
 
     // 3. 외부 조회. 통로가 있고 켠 출처가 하나라도 있을 때만 한다. 후보마다 위키백과(없으면 위키데이터)와
     // 나무위키를 묻는다. 오류가 난 출처는 이번 실행에서 다시 묻지 않고, 취소는 그대로 던진다. 결과는 저장하지 않는다.
@@ -271,9 +284,17 @@ export function createTermScan(deps: {
     // 5. 변경 만들기. 저장 직전 재확인이 필요한 계획(planned)과 바로 제안(suggestions)으로 나눈다.
     const planned: { change: TermScanChange; confirmed: boolean }[] = [];
     const suggestions: TermScanChange[] = [];
+    const counts = { candidates: candidates.length, common: 0, unchanged: 0, unanswered: 0 };
     for (const candidate of candidates) {
       const answer = voted.get(candidate.source);
-      if (!answer || answer.kind === 'common') continue;
+      if (!answer) {
+        counts.unanswered += 1;
+        continue;
+      }
+      if (answer.kind === 'common') {
+        counts.common += 1;
+        continue;
+      }
       const before = candidate.existing?.target;
       const kanaFlag =
         candidate.script === 'katakana'
@@ -306,6 +327,8 @@ export function createTermScan(deps: {
       if (candidate.role === 'suggest') {
         if (before !== undefined && compact(before) !== compact(answer.target)) {
           suggestions.push(change);
+        } else {
+          counts.unchanged += 1;
         }
         continue;
       }
@@ -327,7 +350,10 @@ export function createTermScan(deps: {
       );
       for (const { change, confirmed: isConfirmed } of planned) {
         if (change.role === 'new') {
-          if (names.has(nameKey(change.source))) continue;
+          if (names.has(nameKey(change.source))) {
+            counts.unchanged += 1;
+            continue;
+          }
           names.add(nameKey(change.source));
           next.push({
             source: change.source,
@@ -343,11 +369,17 @@ export function createTermScan(deps: {
         }
         const index = next.findIndex((item) => nameKey(item.source) === nameKey(change.source));
         const current = next[index];
-        if (!current) continue;
+        // 저장 직전에 항목이 사라졌다면 아무것도 바꾸지 않았으므로 그대로 둔 수로 센다.
+        if (!current) {
+          counts.unchanged += 1;
+          continue;
+        }
         if (current.origin === undefined) {
-          // 사람이 항목을 가져갔다. 표기가 다를 때만 제안으로 남긴다.
+          // 사람이 항목을 가져갔다. 표기가 다를 때만 제안으로 남기고, 같으면 그대로 둔 수로 센다.
           if (compact(current.target) !== compact(change.after)) {
             moved.push({ ...change, role: 'suggest', before: current.target });
+          } else {
+            counts.unchanged += 1;
           }
           continue;
         }
@@ -393,6 +425,7 @@ export function createTermScan(deps: {
       suggestions: [...suggestions, ...moved],
       partial,
       ...(lookupFailed.length ? { lookupFailed } : {}),
+      counts,
     };
     sortChanges(result.applied);
     sortChanges(result.suggestions);

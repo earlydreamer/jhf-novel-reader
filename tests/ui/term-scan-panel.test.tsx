@@ -168,6 +168,40 @@ test('제안이 없으면 제안 섹션을 두지 않는다', () => {
   expect(screen.queryByRole('heading', { name: '확인이 필요한 제안' })).toBeNull();
 });
 
+const withCounts = (counts: TermScanResult['counts']): ScanState => ({
+  ...done,
+  result: { ...result, counts },
+});
+
+test('완료 화면은 살펴본 이름 수와 빠진 이유를 요약 아래에 보여 준다', () => {
+  renderPanel({ state: withCounts({ candidates: 7, common: 2, unchanged: 1, unanswered: 0 }) });
+  expect(screen.getByText('바꾼 용어 2개 · 확인한 용어 3개 · 제안 1개')).toBeInTheDocument();
+  expect(
+    screen.getByText('이름 7개를 살펴봤어요 · 일반어로 뺀 이름 2개 · 이미 같은 표기 1개'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/답하지 않은 이름/)).toBeNull();
+});
+
+test('모델이 답하지 않은 이름이 있으면 상태 알림으로 다시 스캔을 권한다', () => {
+  renderPanel({ state: withCounts({ candidates: 7, common: 2, unchanged: 1, unanswered: 2 }) });
+  expect(
+    screen.getByText('모델이 답하지 않은 이름이 2개 있어요. 다시 정밀스캔하면 판정할 수 있어요.'),
+  ).toHaveAttribute('role', 'status');
+});
+
+test('살펴볼 이름이 없었으면 그 문구만 보여 준다', () => {
+  renderPanel({ state: withCounts({ candidates: 0, common: 0, unchanged: 0, unanswered: 0 }) });
+  expect(screen.getByText('저장된 회차에서 새로 살펴볼 이름을 찾지 못했어요.')).toBeInTheDocument();
+  expect(screen.queryByText(/살펴봤어요/)).toBeNull();
+});
+
+test('집계가 없는 결과에는 집계 문구를 보이지 않는다', () => {
+  renderPanel({ state: done });
+  expect(screen.queryByText(/살펴봤어요/)).toBeNull();
+  expect(screen.queryByText('저장된 회차에서 새로 살펴볼 이름을 찾지 못했어요.')).toBeNull();
+  expect(screen.queryByText(/답하지 않은 이름/)).toBeNull();
+});
+
 test('일부 판정이 실패했으면 상태 알림으로 알린다', () => {
   renderPanel({ state: { ...done, result: { ...result, partial: true } } });
   expect(screen.getByRole('status')).toHaveTextContent(
