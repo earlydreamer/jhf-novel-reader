@@ -192,6 +192,8 @@ function backupMessage(result: BackupResult, action: BackupAction): string | nul
       return `백업 파일을 저장했어요. 파일 ${result.files}개를 담았어요.`;
     case 'restored':
       return '복원했어요. 앱을 다시 불러올게요.';
+    case 'reload_required':
+      return '복원 결과를 확인하지 못했어요. 화면을 다시 불러올게요. 백업을 다시 하려면 앱을 완전히 종료한 뒤 열어 주세요.';
     case 'cancelled':
       return null;
     case 'invalid':
@@ -265,6 +267,8 @@ export function SettingsScreen({
   // 백업은 한 번에 하나만 한다. 복원이 끝나면 앱을 다시 불러올 때까지 계속 막아 둔다.
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
+  const [backupReloadNeeded, setBackupReloadNeeded] = useState(false);
+  const backupReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [embeddingRemoveConfirm, setEmbeddingRemoveConfirm] = useState(false);
   const embeddingModel = state.embeddingModel;
   const embeddingProgress = embeddingModel?.progress;
@@ -287,6 +291,11 @@ export function SettingsScreen({
     setEmbeddingRemoveConfirm(false);
     onRemoveEmbeddingModel?.();
   }
+  function reloadBackup(): void {
+    if (backupReloadTimer.current !== null) clearTimeout(backupReloadTimer.current);
+    backupReloadTimer.current = null;
+    (onReload ?? (() => window.location.reload()))();
+  }
   async function runBackup(action: BackupAction): Promise<void> {
     if (!backup || backup.locked || backupBusy) return;
     setBackupBusy(true);
@@ -298,9 +307,10 @@ export function SettingsScreen({
       result = { kind: 'failed' };
     }
     setBackupNotice(backupMessage(result, action));
-    if (result.kind === 'restored') {
+    if (result.kind === 'restored' || result.kind === 'reload_required') {
       // 데이터가 통째로 바뀌었으므로 화면 상태를 버리고 다시 불러온다. 이 화면이 닫혀도 예약은 그대로 둔다.
-      setTimeout(onReload ?? (() => window.location.reload()), RELOAD_DELAY_MS);
+      setBackupReloadNeeded(true);
+      backupReloadTimer.current = setTimeout(reloadBackup, RELOAD_DELAY_MS);
       return;
     }
     setBackupBusy(false);
@@ -702,6 +712,11 @@ export function SettingsScreen({
           </p>
           {backup.locked && <p role="status">번역이나 스캔이 끝난 뒤에 백업할 수 있어요.</p>}
           {backupNotice && <p role="status">{backupNotice}</p>}
+          {backupReloadNeeded && (
+            <Button variant="text" onClick={reloadBackup}>
+              화면 다시 불러오기
+            </Button>
+          )}
         </section>
       )}
 

@@ -11,9 +11,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -88,10 +90,103 @@ final class BackupArchive {
     static final class Extracted {
         final int files;
         final String settings;
+        final List<String> paths;
 
-        Extracted(int files, String settings) {
+        Extracted(int files, String settings, List<String> paths) {
             this.files = files;
             this.settings = settings;
+            this.paths = Collections.unmodifiableList(new ArrayList<>(paths));
+        }
+    }
+
+    /** 검증 중인 파일은 이 세션만 소유한다. 라이브 데이터 교체는 commit에서만 한다. */
+    static final class PreparedRestore {
+        final String token = UUID.randomUUID().toString();
+        final int files;
+        final String settings;
+        private final File filesDir;
+        private final File root;
+        private final Limits limits;
+        private final List<String> paths;
+        private State state = State.PREPARED;
+
+        private enum State { PREPARED, ABORTING, COMMITTING, FINISHED, FAILED }
+
+        private PreparedRestore(File filesDir, Extracted extracted, Limits limits) throws IOException {
+            this.filesDir = filesDir;
+            this.root = new File(filesDir, RESTORE_DIR).getCanonicalFile();
+            this.limits = limits;
+            files = extracted.files;
+            settings = extracted.settings;
+            paths = extracted.paths;
+        }
+
+        private void requireToken(String candidate) throws IOException {
+            if (!token.equals(candidate)) throw new IOException("invalid restore token");
+        }
+
+        private void requirePrepared(String candidate) throws IOException {
+            requireToken(candidate);
+            if (state != State.PREPARED) throw new IOException("restore session is no longer prepared");
+            if (!root.isDirectory() || !root.equals(root.getCanonicalFile())) throw new IOException("restore staging changed");
+        }
+
+        synchronized RestorePage list(String candidate, int offset) throws IOException {
+            requirePrepared(candidate);
+            if (offset < 0 || offset > paths.size()) throw new IOException("invalid restore offset");
+            int end = Math.min(offset + 256, paths.size());
+            return new RestorePage(paths.subList(offset, end), end < paths.size() ? end : null);
+        }
+
+        synchronized String read(String candidate, String path) throws IOException {
+            requirePrepared(candidate);
+            if (path == null) throw new IOException("invalid restore path");
+            Matcher match = DATA_ENTRY.matcher(DATA_DIR + "/" + path);
+            if (!match.matches() || !isFileName(match.group(2))) throw new IOException("invalid restore path");
+            File dataRoot = new File(root, DATA_DIR);
+            File target = new File(dataRoot, path);
+            String canonical = target.getCanonicalPath();
+            if (!canonical.startsWith(dataRoot.getAbsolutePath() + File.separator)
+                || !canonical.equals(target.getAbsolutePath())) throw new IOException("outside restore staging");
+            if (Collections.binarySearch(paths, path) < 0 || !target.isFile()) return null;
+            try (InputStream input = new BufferedInputStream(new FileInputStream(target))) {
+                return new String(readSmall(input, limits.entryBytes, new byte[64 * 1024]), StandardCharsets.UTF_8);
+            } catch (InvalidBackupException tooLarge) {
+                throw new IOException("restore file too large", tooLarge);
+            }
+        }
+
+        synchronized void abort(String candidate) throws IOException {
+            requireToken(candidate);
+            if (state != State.PREPARED && state != State.ABORTING) throw new IOException("cannot abort restore session");
+            state = State.ABORTING;
+            deleteRecursively(root);
+            if (root.exists()) throw new IOException("cannot remove restore staging");
+            state = State.FINISHED;
+        }
+
+        /** 교체를 시작한 뒤 실패하면 설정·파일 결과가 불확실할 수 있다. 세션을 재사용하지 않는다. */
+        synchronized int commit(String candidate, SettingsStore store) throws IOException {
+            requirePrepared(candidate);
+            state = State.COMMITTING;
+            try {
+                commitPrepared(filesDir, root, settings, store);
+                state = State.FINISHED;
+                return files;
+            } catch (IOException | RuntimeException failure) {
+                state = State.FAILED;
+                throw failure;
+            }
+        }
+    }
+
+    static final class RestorePage {
+        final List<String> paths;
+        final Integer nextOffset;
+
+        RestorePage(List<String> paths, Integer nextOffset) {
+            this.paths = Collections.unmodifiableList(new ArrayList<>(paths));
+            this.nextOffset = nextOffset;
         }
     }
 
@@ -180,6 +275,7 @@ final class BackupArchive {
         long total = 0;
         int entries = 0;
         int files = 0;
+        List<String> paths = new ArrayList<>();
         Long manifestFiles = null;
         String settings = null;
         try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(source))) {
@@ -221,6 +317,7 @@ final class BackupArchive {
                         out.write(buffer, 0, read);
                     }
                 }
+                paths.add(match.group(1) + "/" + match.group(2));
                 files++;
             }
         } catch (ZipException | EOFException | IllegalArgumentException broken) {
@@ -230,7 +327,8 @@ final class BackupArchive {
         if (manifestFiles == null) throw new InvalidBackupException("no manifest");
         // 항목 경계에서 잘린 zip은 ZipInputStream이 오류 없이 끝내므로 파일 수로 잡는다.
         if (manifestFiles != files) throw new InvalidBackupException("file count mismatch");
-        return new Extracted(files, settings);
+        Collections.sort(paths);
+        return new Extracted(files, settings, paths);
     }
 
     private static byte[] readSmall(InputStream in, long max, byte[] buffer) throws IOException, InvalidBackupException {
@@ -243,53 +341,56 @@ final class BackupArchive {
         return out.toByteArray();
     }
 
-    // ---- 교체 ----
-
-    /**
-     * 복원 전체. 어느 단계에서 실패해도 filesDir/narou-reader는 시작할 때 그대로다.
-     * 설정 저장이 마지막이라, 그 앞에서 실패하면 설정도 바뀌지 않는다.
-     */
-    static int restore(File filesDir, InputStream source, Validator validator, SettingsStore settings, Limits limits)
+    /** 준비 실패와 취소는 임시 폴더만 건드린다. 복구·교체·설정 저장을 하지 않는다. */
+    static PreparedRestore prepare(File filesDir, InputStream source, Validator validator, Limits limits)
         throws IOException, InvalidBackupException {
-        recoverInterruptedSwap(filesDir);
-        deleteLeftovers(filesDir);
-        File live = new File(filesDir, DATA_DIR);
-        File old = new File(filesDir, OLD_DIR);
-        File restoreRoot = new File(filesDir, RESTORE_DIR);
-        if (old.exists() || restoreRoot.exists()) throw new IOException("leftover not removed");
-        Extracted extracted;
+        File root = new File(filesDir, RESTORE_DIR);
+        if (root.exists() || new File(filesDir, OLD_DIR).exists()) throw new IOException("restore already pending");
         try {
-            extracted = extract(source, restoreRoot, validator, limits);
+            return new PreparedRestore(filesDir, extract(source, root, validator, limits), limits);
         } catch (IOException | InvalidBackupException | RuntimeException failure) {
-            deleteRecursively(restoreRoot);
+            deleteRecursively(root);
+            if (root.exists()) failure.addSuppressed(new IOException("cannot remove restore staging"));
             throw failure;
         }
+    }
+
+    // ---- 교체 ----
+
+    /** 검증한 임시 트리만 교체한다. 실패 시 정리로 원래 트리를 잃지 않도록 남겨 둔다. */
+    private static void commitPrepared(File filesDir, File restoreRoot, String value, SettingsStore settings)
+        throws IOException {
+        File live = new File(filesDir, DATA_DIR);
+        File old = new File(filesDir, OLD_DIR);
         File staged = new File(restoreRoot, DATA_DIR);
-        boolean hadLive = live.exists();
-        if (hadLive && !live.renameTo(old)) {
-            deleteRecursively(restoreRoot);
-            throw new IOException("cannot move current data");
+        if (old.exists()) throw new IOException("previous restore still pending");
+        if (!staged.isDirectory() || !staged.getAbsoluteFile().equals(staged.getCanonicalFile())) {
+            throw new IOException("restore staging changed");
         }
+        boolean hadLive = live.exists();
+        if (hadLive && !live.renameTo(old)) throw new IOException("cannot move current data");
         if (!staged.renameTo(live)) {
-            if (hadLive) old.renameTo(live);
-            deleteRecursively(restoreRoot);
-            throw new IOException("cannot place restored data");
+            boolean rolledBack = !hadLive || old.renameTo(live);
+            throw new IOException(rolledBack ? "cannot place restored data" : "cannot place restored data; rollback failed; old data retained");
         }
         boolean saved;
+        RuntimeException saveFailure = null;
         try {
-            saved = settings.commit(extracted.settings);
+            saved = settings.commit(value);
         } catch (RuntimeException failure) {
             saved = false;
+            saveFailure = failure;
         }
         if (!saved) {
-            // 새 데이터를 임시 폴더로 되돌리고 원래 데이터를 제자리로 돌린다. 이름 바꾸기만 쓴다.
-            if (live.renameTo(staged) && hadLive) old.renameTo(live);
-            deleteRecursively(restoreRoot);
-            throw new IOException("cannot save settings");
+            // commit(false)도 설정 메모리를 바꿀 수 있다. 파일을 되돌려도 전체 복원 결과는 불확실하다.
+            boolean movedBack = live.renameTo(staged);
+            boolean rolledBack = movedBack && (!hadLive || old.renameTo(live));
+            throw new IOException(rolledBack ? "cannot save settings; file tree rolled back; settings outcome uncertain"
+                : "cannot save settings; rollback failed; old data retained", saveFailure);
         }
         deleteRecursively(old);
         deleteRecursively(restoreRoot);
-        return extracted.files;
+        if (old.exists() || restoreRoot.exists()) throw new IOException("restore committed; cleanup incomplete");
     }
 
     /** 교체 도중 끊겨 데이터 폴더가 없고 .old만 남았으면 되돌린다. 이름 바꾸기 한 번이라 빠르다. */

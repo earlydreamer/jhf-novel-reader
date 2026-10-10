@@ -1116,7 +1116,7 @@ describe('백업 설정 섹션(#269)', () => {
       options.onRestore ?? (async (): Promise<BackupResult> => ({ kind: 'cancelled' })),
     );
     const onReload = vi.fn();
-    render(
+    const view = render(
       <SettingsScreen
         state={createRenewalController().getSnapshot()}
         onChange={() => {}}
@@ -1135,7 +1135,7 @@ describe('백업 설정 섹션(#269)', () => {
         }
       />,
     );
-    return { onExport, onRestore, onReload };
+    return { onExport, onRestore, onReload, unmount: view.unmount };
   }
 
   it('쓸 수 있을 때만 백업 제목·두 항목·API 키 안내를 정보 앞에 보여 줘요', () => {
@@ -1281,6 +1281,55 @@ describe('백업 설정 섹션(#269)', () => {
     }
   });
 
+  it('교체 결과가 불확실하면 그대로라고 말하지 않고 다시 불러올 수 있어요', async () => {
+    vi.useFakeTimers();
+    try {
+      const { onReload } = renderBackup({ onRestore: async () => ({ kind: 'reload_required' }) });
+      fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '파일 고르기' }));
+      });
+      expect(screen.queryByText('복원하지 못했어요. 지금 데이터는 그대로예요.')).toBeNull();
+      expect(screen.getByText(/복원 결과를 확인하지 못했어요/)).toBeVisible();
+      expect(screen.getByText(/앱을 완전히 종료한 뒤/)).toBeVisible();
+      expect(screen.getByRole('button', { name: RESTORE_ROW })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: '화면 다시 불러오기' }));
+      expect(onReload).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(onReload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it.each(['restored', 'reload_required'] as const)(
+    '설정 화면이 닫혀도 %s 응답 뒤 다시 불러와요',
+    async (kind) => {
+      vi.useFakeTimers();
+      try {
+        let finish!: (result: BackupResult) => void;
+        const { onReload, unmount } = renderBackup({
+          onRestore: () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        });
+        fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
+        fireEvent.click(screen.getByRole('button', { name: '파일 고르기' }));
+        unmount();
+        await act(async () => {
+          finish(kind === 'restored' ? { kind, files: 1 } : { kind });
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+        expect(onReload).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
   it('앱 화면은 주입한 백업 기능을 설정에 연결해요', async () => {
     const backup: BackupPlatform = {
       available: () => true,
