@@ -17,6 +17,8 @@ export const DECISION_LOW = 0.6;
 
 const CONTEXT_CHARS = 40;
 const CONTEXT_LIMIT = 3;
+/** 한 번에 embed할 문맥 수. 느린 기기에서 시간이 다 되어도 앞 묶음 판정은 남긴다. */
+const CHUNK_SIZE = 4;
 const PREFIX = 'task: clustering | query: ';
 /** 경계값 비교에서 부동소수점 오차로 0.85·0.6을 놓치지 않도록 두는 여유. */
 const EPSILON = 1e-9;
@@ -105,43 +107,62 @@ function cosine(left: readonly number[], right: readonly number[]): number {
 
 /**
  * 후보 매칭이 그 용어를 가리키는지 문맥 임베딩으로 확정·제외한다. 보류한 이름은 결과에 넣지 않는다.
- * 판정 실패(시간 초과·embed 오류·벡터 불일치)는 던지지 않고 빈 결과를 돌려준다.
+ * 판정 실패(embed 오류·벡터 불일치)는 던지지 않는다. 문맥은 작은 묶음으로 계산하고, 시간이 다 되거나 embed가 실패하면 그때까지 계산한 이름만 판정한다.
  */
 export async function decideCandidates(
   input: string,
   terms: readonly GuidanceTerm[],
   embed: EmbedTexts,
-  options: { timeoutMs?: number; maxTexts?: number } = {},
+  options: { timeoutMs?: number; maxTexts?: number; chunkSize?: number } = {},
 ): Promise<CandidateDecision> {
   const timeoutMs = options.timeoutMs ?? 3000;
   const maxTexts = options.maxTexts ?? 24;
+  const chunkSize = Math.max(1, options.chunkSize ?? CHUNK_SIZE);
   const { judgments, texts } = plan(input, terms, maxTexts);
   // 판정할 후보가 없으면 임베딩을 부르지 않는다.
   if (!judgments.length) return emptyDecision();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
-  });
+  const deadline = Date.now() + timeoutMs;
+  const vectorOf = new Map<string, number[]>();
+  // 작은 묶음으로 차례로 계산한다. 시간이 다 되거나 embed가 실패하면 멈추고, 그때까지 계산한 문맥으로만 판정한다.
+  for (let index = 0; index < texts.length; index += chunkSize) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const part = texts.slice(index, index + chunkSize);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), remaining);
+    });
+    let vectors: number[][];
+    try {
+      vectors = await Promise.race([Promise.resolve().then(() => embed(part)), timeout]);
+    } catch {
+      break;
+    } finally {
+      clearTimeout(timer);
+    }
+    // 벡터 수가 다르면 어느 문맥의 벡터인지 알 수 없으므로 판정하지 않는다.
+    if (vectors.length !== part.length) return emptyDecision();
+    part.forEach((text, offset) => vectorOf.set(text, vectors[offset]!));
+  }
   try {
-    const vectors = await Promise.race([Promise.resolve().then(() => embed(texts)), timeout]);
-    if (vectors.length !== texts.length) return emptyDecision();
-    const vectorOf = new Map(texts.map((text, index) => [text, vectors[index]!] as const));
     const confirmed = new Set<string>();
     const rejected = new Set<string>();
+    let judged = 0;
     for (const { name, baseline, candidate } of judgments) {
+      // 문맥이 다 계산되지 않은 이름은 판정하지 않는다(시간 초과로 남은 묶음).
+      if (![...baseline, ...candidate].every((text) => vectorOf.has(text))) continue;
       const base = baseline.map((text) => vectorOf.get(text)!);
       const scores = candidate.map((text) => {
         const vector = vectorOf.get(text)!;
         return Math.max(...base.map((reference) => cosine(vector, reference)));
       });
       const score = scores.reduce((sum, value) => sum + value, 0) / scores.length;
+      judged += 1;
       if (score >= DECISION_HIGH - EPSILON) confirmed.add(name);
       else if (score <= DECISION_LOW + EPSILON) rejected.add(name);
     }
-    return { confirmed, rejected, judged: judgments.length };
+    return judged ? { confirmed, rejected, judged } : emptyDecision();
   } catch {
     return emptyDecision();
-  } finally {
-    clearTimeout(timer);
   }
 }
