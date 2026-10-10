@@ -370,6 +370,11 @@
   color: var(--on-surface-variant);
   font: var(--type-body-small);
 }
+.nr-guidance-warning {
+  margin: 4px 0 0;
+  color: var(--error);
+  font: var(--type-body-small);
+}
 /* 용어 정밀스캔 결과 목록(#200). 항목 사이에만 구분선을 둔다. */
 .nr-scan-list {
   list-style: none;

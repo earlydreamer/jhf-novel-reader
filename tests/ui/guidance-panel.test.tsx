@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { GuidancePanel } from '../../src/ui/GuidancePanel';
 import type { GuidanceDraft, WorkGuidance } from '../../src/translation/guidance';
 
@@ -90,4 +90,21 @@ test('자동 생성 항목의 한국어 표기를 고쳐 저장하면 출처가 
     origin: 'scan',
     evidence: [{ kind: 'kanjidic', note: '근거' }],
   });
+});
+
+test('한 글자나 짧은 히라가나 이름이 있는 항목에만 번역 제외 안내가 붙는다', async () => {
+  renderPanel(
+    guidanceWith([
+      { source: 'ち', target: '루시아나', aliases: [], category: '', note: '' },
+      { source: 'ミナ', target: '미나', aliases: ['ゆい'], category: '', note: '' },
+      { source: 'ルシアナ', target: '루시아나', aliases: [], category: '', note: '' },
+    ]),
+  );
+  const warning =
+    '한 글자이거나 짧은 히라가나 원문은 다른 단어 안에도 들어 있어서 번역에 쓰지 않아요.';
+  await waitFor(() => expect(screen.getAllByText(warning)).toHaveLength(2));
+  const normal = screen.getByLabelText('용어 3 원문').closest('fieldset')!;
+  expect(within(normal).queryByText(warning)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '용어 추가' }));
+  expect(screen.getAllByText(warning)).toHaveLength(2);
 });
