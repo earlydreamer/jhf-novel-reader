@@ -173,7 +173,7 @@ test('일반어로 판정된 기계 항목은 용어집에서 빼기를 누르�
     { source: 'ファンタジー', target: '판타지', reason: '일반 명사예요.' },
   ];
   const props = renderPanel({ state: { ...done, result: { ...result, removable } } });
-  expect(screen.getByRole('heading', { name: '일반어로 판정된 자동 항목' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '일반어로 보이는 자동 항목' })).toBeInTheDocument();
   expect(screen.getByText('지금 판타지')).toBeInTheDocument();
   expect(screen.getByText('일반 명사예요.')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '용어집에서 빼기' }));

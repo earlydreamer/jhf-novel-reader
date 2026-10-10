@@ -241,10 +241,10 @@ export function TermScanPanel({
       )}
       {result.removable && result.removable.length > 0 && (
         <section>
-          <h3>일반어로 판정된 자동 항목</h3>
+          <h3>일반어로 보이는 자동 항목</h3>
           <p>
-            자동으로 넣은 항목 중 이름이 아닌 것 같은 항목이에요. 빼면 번역 때 이 표기를 강제하지
-            않아요.
+            자동으로 넣은 항목 중 일반어로 보이는 항목이에요. 이름이라면 그대로 두세요. 빼면 번역 때
+            이 표기를 강제하지 않아요.
           </p>
           <ul className="nr-scan-list">
             {result.removable.map((item) => {

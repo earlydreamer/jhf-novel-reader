@@ -6,6 +6,7 @@ export type JudgeKind = 'real' | 'work' | 'common';
 export type JudgeAnswer = { kind: JudgeKind; category: string; target: string; reason: string };
 export type VotedAnswer = JudgeAnswer & {
   votes: number;
+  kindVotes: number; // 고른 kind에 표를 준 run 수
   total: number;
   confidence: 'high' | 'medium' | 'low';
 };
@@ -133,7 +134,7 @@ export function parseJudge(
 
 /**
  * 여러 회차의 판정을 후보별로 다수결한다. 목표는 공백을 뺀 기준으로 세고, 동률이면 run 순서상
- * 먼저 나온 것을 고른다. 답이 없는 run은 total에만 센다.
+ * 먼저 나온 것을 고른다. 답이 없는 run은 total에만 센다. kindVotes는 고른 종류의 표 수다.
  */
 export function voteJudgements(
   runs: readonly Map<string, JudgeAnswer>[],
@@ -157,6 +158,7 @@ export function voteJudgements(
       target: target.item.target,
       reason: target.item.reason,
       votes,
+      kindVotes: kind.votes,
       total,
       confidence: votes === total && total >= 3 ? 'high' : votes >= 2 ? 'medium' : 'low',
     });
