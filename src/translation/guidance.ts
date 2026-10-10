@@ -194,6 +194,12 @@ export function streamingGuidanceContext(
     '\n'
   );
 }
+const shortHiragana = /^[\p{Script=Hiragana}ー]{1,2}$/u;
+/** 다른 단어 안에도 흔히 들어 있어 이름으로 찾으면 안 되는 원문: 한 글자, 또는 두 글자 이하 히라가나(장음 포함)만. */
+export function isUnsafeTermName(name: string): boolean {
+  const compact = name.normalize('NFKC').replace(/\s/g, '');
+  return [...compact].length <= 1 || shortHiragana.test(compact);
+}
 /** 긴 이름부터 매칭하고 그 구간을 가려서, 긴 이름 안에 포함된 짧은 이름이 따로 매칭되지 않게 한다. */
 function matchedNames(input: string, names: string[]): Set<string> {
   let masked = input;
@@ -228,9 +234,12 @@ export function appliedGuidance(
   ];
   const voiceList = value?.voices ?? [];
   // 용어와 말투는 따로 가린다. 같은 인물의 용어 별칭(긴 이름)이 말투 이름(짧은 이름)을 가리면 말투 지시가 빠진다.
+  // 한 글자·짧은 히라가나 이름은 일반 단어 안에서 잘못 잡히므로 용어 이름 후보에서 뺀다.
   const termNames = matchedNames(
     input,
-    candidates.flatMap((term) => [term.source, ...term.aliases]),
+    candidates
+      .flatMap((term) => [term.source, ...term.aliases])
+      .filter((name) => !isUnsafeTermName(name)),
   );
   const voiceNames = matchedNames(
     input,

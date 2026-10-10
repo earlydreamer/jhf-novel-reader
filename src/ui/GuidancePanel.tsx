@@ -1,5 +1,14 @@
 import { useEffect, useState, type JSX } from 'react';
-import type { GuidanceDraft, GuidanceTerm, WorkGuidance } from '../translation/guidance';
+import {
+  isUnsafeTermName,
+  type GuidanceDraft,
+  type GuidanceTerm,
+  type WorkGuidance,
+} from '../translation/guidance';
+
+/** 원문이나 별칭에 번역 제외 대상(한 글자·짧은 히라가나)이 있는지. 아직 비어 있는 입력칸은 세지 않는다. */
+const hasUnsafeName = (term: GuidanceTerm) =>
+  [term.source, ...term.aliases].some((name) => name.trim() && isUnsafeTermName(name));
 
 /** 사람이 고친 항목은 출처와 근거를 지워 기계가 덮어쓰지 않는 사람 항목이 된다. 'auto'는 기존 동작을 유지한다. */
 function humanized(term: GuidanceTerm): GuidanceTerm {
@@ -132,6 +141,11 @@ export function GuidancePanel({
                   </ul>
                 ) : null}
               </>
+            )}
+            {hasUnsafeName(term) && (
+              <p className="nr-guidance-warning">
+                한 글자이거나 짧은 히라가나 원문은 다른 단어 안에도 들어 있어서 번역에 쓰지 않아요.
+              </p>
             )}
             {(['source', 'target', 'category', 'note'] as const).map((key) => (
               <label key={key}>

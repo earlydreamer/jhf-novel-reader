@@ -1,5 +1,5 @@
 import type { ProviderSession, SelectedModel, SourceSnapshot } from '../contracts/reading';
-import type { GuidanceRepository, GuidanceTerm } from './guidance';
+import { isUnsafeTermName, type GuidanceRepository, type GuidanceTerm } from './guidance';
 import { createNameCandidateScan } from './scan';
 
 export type GlossaryProposal = { source: string; target: string; category: string };
@@ -81,8 +81,8 @@ export function glossaryRequest(
 }
 
 /**
- * 응답 검증: 배열 아님·형식 오류는 []. 각 항목은 원문에 실제로 나오고, 표기에 한글이 있고 가나가 없고,
- * 80자 이하. 최대 40개, NFKC 기준 중복 제거. 분류가 목록에 없으면 '기타'로 둔다.
+ * 응답 검증: 배열 아님·형식 오류는 []. 각 항목은 원문에 실제로 나오고, 한 글자·짧은 히라가나 원문이 아니고,
+ * 표기에 한글이 있고 가나가 없고, 80자 이하. 최대 40개, NFKC 기준 중복 제거. 분류가 목록에 없으면 '기타'로 둔다.
  */
 export function parseGlossaryProposals(value: unknown, chapterText: string): GlossaryProposal[] {
   const list = Array.isArray(value)
@@ -103,6 +103,7 @@ export function parseGlossaryProposals(value: unknown, chapterText: string): Glo
       !source ||
       source.length > MAX_NAME_LENGTH ||
       CONTROL.test(source) ||
+      isUnsafeTermName(source) ||
       !chapterText.includes(source)
     )
       continue;

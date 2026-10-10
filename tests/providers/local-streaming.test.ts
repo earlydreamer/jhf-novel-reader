@@ -9,7 +9,11 @@ import {
   type WholeChapterRequest,
 } from '../../src/contracts';
 import { source } from './wholeChapterFixture';
-import { plotSummaryWithoutNames } from '../../src/translation/guidance';
+import {
+  appliedGuidance,
+  plotSummaryWithoutNames,
+  type WorkGuidance,
+} from '../../src/translation/guidance';
 const selection = {
   connection: {
     provider: 'openai-compatible' as const,
@@ -321,4 +325,28 @@ test('plot summary excludes known source names, targets, aliases and voice names
       plotSummary: 'ミカエル/미카엘/ミカ는 마을을 떠났다.',
     }),
   ).toBe('//는 마을을 떠났다.');
+});
+test('짧은 히라가나 용어는 스트리밍 모델 입력에서 자리표시로 가리지 않는다', async () => {
+  const value: WorkGuidance = {
+    schemaVersion: 1,
+    workId: 'n1234ab',
+    hash: 'hash',
+    terms: [{ source: 'ち', target: '루시아나', aliases: [], category: '', note: '' }],
+    voices: [],
+  };
+  const f = fixture();
+  await f.provider.translateChapter(
+    {
+      ...request,
+      source: { ...source, paragraphs: [{ id: 'p1', text: '……ちょっと心配ですね', ruby: [] }] },
+      lockedTerms: (input) =>
+        (appliedGuidance(value, 'n1234ab', input, [])?.terms ?? []).flatMap(({ term, names }) =>
+          names.map((name) => ({ source: name, target: term.target })),
+        ),
+    },
+    new AbortController().signal,
+  );
+  const sent = (f.calls[0]!.body.messages as { content: string }[])[0]!.content;
+  expect(sent).toContain('ちょっと心配ですね');
+  expect(sent).not.toContain('__ENT_');
 });

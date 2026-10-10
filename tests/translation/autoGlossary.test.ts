@@ -409,3 +409,15 @@ test('createAutoGlossary sends only the first 12,000 characters of the chapter',
   expect(request?.user.endsWith('あ'.repeat(12000))).toBe(true);
   expect(request?.user).not.toContain('末尾');
 });
+test('parse drops a one-character or short hiragana source even when the chapter contains it', () => {
+  const result = parseGlossaryProposals(
+    {
+      terms: [
+        { source: 'ち', target: '루시아나', category: '인명' },
+        { source: '北嶋', target: '기타지마', category: '인명' },
+      ],
+    },
+    '……ちょっと北嶋は笑った。',
+  );
+  expect(result).toEqual([{ source: '北嶋', target: '기타지마', category: '인명' }]);
+});

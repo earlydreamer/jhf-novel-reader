@@ -1,8 +1,10 @@
 import { expect, test } from 'vitest';
 import {
+  appliedGuidance,
   appliedGuidanceHash,
   guidanceContext,
   isMachineTerm,
+  isUnsafeTermName,
   validateGuidance,
   type GuidanceTerm,
   type WorkGuidance,
@@ -207,4 +209,39 @@ test('model과 scan 항목은 번역에 적용되고 auto 후보는 적용되지
   expect(context).toContain('ミナ translates to 미나');
   expect(context).toContain('カイ translates to 카이');
   expect(context).not.toContain('リン translates');
+});
+test('한 글자와 두 글자 이하 히라가나(장음 포함) 원문은 이름으로 쓰기 안전하지 않다', () => {
+  for (const name of ['ち', '希', 'ゆい', 'ゆー', 'ー', ' ち ']) {
+    expect(isUnsafeTermName(name)).toBe(true);
+  }
+  for (const name of ['さくら', 'ルシアナ', '希美', '魔王']) {
+    expect(isUnsafeTermName(name)).toBe(false);
+  }
+});
+test('짧은 히라가나 원문은 긴 이름 안에서 적용되지 않고 긴 이름만 적용된다', () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [
+      { source: 'ち', target: '루시아나', aliases: [], category: '', note: '' },
+      { source: 'ルシアナ', target: '루시아나', aliases: [], category: '', note: '' },
+    ],
+    voices: [],
+  };
+  const applied = appliedGuidance(value, 'n1234ab', 'ちょっと、ルシアナ', []);
+  expect(applied?.terms.map(({ term, names }) => [term.source, names])).toEqual([
+    ['ルシアナ', ['ルシアナ']],
+  ]);
+  expect(guidanceContext(value, 'n1234ab', 'ちょっと、ルシアナ')).not.toContain('ち translates');
+  expect(guidanceContext(value, 'n1234ab', 'ちょっと心配ですね')).toBe('');
+});
+test('짧은 히라가나 별칭만 빠지고 같은 항목의 긴 원문은 남는다', () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [{ source: 'ルシアナ', target: '루시아나', aliases: ['ゆい'], category: '', note: '' }],
+    voices: [],
+  };
+  expect(appliedGuidance(value, 'n1234ab', 'ゆいとルシアナ', [])?.terms[0]?.names).toEqual([
+    'ルシアナ',
+  ]);
+  expect(guidanceContext(value, 'n1234ab', 'ゆいが来た。')).toBe('');
 });
