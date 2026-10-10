@@ -481,6 +481,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   // 스캔을 소유한 작품. 스냅샷은 running을 publish해야 갱신되므로 삭제 판정은 이 변수로 한다.
   let termScanOwner: string | null = null;
   let termScanOriginals = new Map<string, GuidanceTerm>();
+  // 시작 전 연결 확인이 도는 동안 true다. 확인이 끝나기 전 두 번째 시작 요청을 막는다.
+  let termScanChecking = false;
   let automaticRequest: { chapterId: string; operation: number } | null = null;
   let retryableRepair: ParagraphRepair | null = null;
   const titlesByWork = new Map<string, readonly SavedTitle[]>();
@@ -1957,6 +1959,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   async function startTermScan(workId: string): Promise<void> {
     const scan = dependencies.termScan;
     if (!scan || disposed || !initialized || !foreground || removingWorkIds.has(workId)) return;
+    // 연결 확인 중에 온 두 번째 요청은 확인이 끝날 때까지 기다리지 않고 조용히 끝낸다.
+    if (termScanChecking) return;
+    termScanChecking = true;
+    try {
+      if (snapshot.catalogStatus === 'idle' && snapshot.selectedModelId) await checkConnection();
+    } finally {
+      termScanChecking = false;
+    }
+    if (disposed || !foreground) return;
     if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
       publish({ error: TERM_SCAN_CONNECTION_MESSAGE });
       return;

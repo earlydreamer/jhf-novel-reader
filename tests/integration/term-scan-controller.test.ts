@@ -167,6 +167,40 @@ async function connectedApp(
   return app;
 }
 
+/** 앱을 켠 직후처럼 저장된 모델만 있고 연결 확인은 아직 안 한 상태(catalogStatus idle)를 만든다. */
+async function restoredApp(deps: Partial<RenewalDependencies> = {}) {
+  const session: ProviderSession = {
+    listModels: async () => [
+      { id: 'local', displayName: 'local', supportsGeneration: true, contextTokens: 8192 },
+    ],
+    translateChapter: vi.fn(async () => ({ text: '', finishReason: 'complete' as const })),
+  };
+  const app = createRenewalController({
+    library: library(true),
+    source: { getWorkPage: async () => page, getChapter: async () => version.source } as never,
+    connect: async () => session,
+    settings: {
+      readReadingSettings: async () => ({
+        schemaVersion: 2,
+        selection: {
+          connection: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://localhost:1234',
+            revision: 1,
+          },
+          modelId: 'local',
+        },
+        fontSize: 18,
+      }),
+      saveReadingSettings: async () => {},
+    } as never,
+    ...deps,
+  });
+  await app.initialize();
+  await app.openWork(page.canonicalUrl);
+  return app;
+}
+
 const recheck: TermScanChange = {
   source: '갑',
   role: 'recheck',
@@ -210,6 +244,72 @@ it('연결이 없으면 스캔을 시작하지 않고 연결 안내만 띄운다
   expect(scan).not.toHaveBeenCalled();
   expect(bare.getSnapshot().error).toBe(CONNECTION_MESSAGE);
   expect(bare.getSnapshot().termScan).toBeNull();
+});
+
+it('앱을 켠 직후 연결 확인이 안 됐어도 저장된 모델로 먼저 확인하고 스캔을 시작한다', async () => {
+  const scan = vi.fn<TermScan>(async () => emptyResult);
+  const connect = vi.fn(async () => ({
+    listModels: async () => [
+      { id: 'local', displayName: 'local', supportsGeneration: true, contextTokens: 8192 },
+    ],
+    translateChapter: vi.fn(async () => ({ text: '', finishReason: 'complete' as const })),
+  }));
+  const app = await restoredApp({ termScan: scan, connect: connect as never });
+  expect(app.getSnapshot()).toMatchObject({ catalogStatus: 'idle', selectedModelId: 'local' });
+  const before = connect.mock.calls.length;
+
+  await app.startTermScan(page.workId);
+  expect(connect.mock.calls.length).toBeGreaterThan(before);
+  expect(scan).toHaveBeenCalledTimes(1);
+  expect(app.getSnapshot()).toMatchObject({ error: null, termScan: { phase: 'done' } });
+  app.dispose();
+});
+
+it('연결 확인이 실패하면 스캔을 시작하지 않고 기존 연결 안내를 띄운다', async () => {
+  const scan = vi.fn<TermScan>(async () => emptyResult);
+  const app = await restoredApp({
+    termScan: scan,
+    connect: async () => {
+      throw new Error('offline');
+    },
+  });
+  await app.startTermScan(page.workId);
+  expect(scan).not.toHaveBeenCalled();
+  expect(app.getSnapshot().error).toBe(CONNECTION_MESSAGE);
+  expect(app.getSnapshot().termScan).toBeNull();
+  app.dispose();
+});
+
+it('연결 확인 중 두 번째 시작 요청은 아무것도 하지 않아 스캔이 두 번 시작되지 않는다', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let gated = false;
+  const scan = vi.fn<TermScan>(async () => emptyResult);
+  const app = await restoredApp({
+    termScan: scan,
+    connect: async () => {
+      if (gated) await gate;
+      return {
+        listModels: async () => [
+          { id: 'local', displayName: 'local', supportsGeneration: true, contextTokens: 8192 },
+        ],
+        translateChapter: vi.fn(async () => ({ text: '', finishReason: 'complete' as const })),
+      };
+    },
+  });
+  gated = true;
+
+  const first = app.startTermScan(page.workId);
+  await vi.waitFor(() => expect(app.getSnapshot().catalogStatus).toBe('checking'));
+  await app.startTermScan(page.workId);
+  expect(app.getSnapshot().error).toBeNull();
+
+  release();
+  await first;
+  expect(scan).toHaveBeenCalledTimes(1);
+  app.dispose();
 });
 
 it('Gemini 연결에서는 로컬 모델 연결만 쓸 수 있다고 안내한다', async () => {
