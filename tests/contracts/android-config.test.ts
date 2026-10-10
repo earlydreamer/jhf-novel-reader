@@ -18,7 +18,9 @@ it('keeps the generated native smoke test aligned with the application ID', () =
     'utf8',
   );
   expect(config).toContain("appId: 'dev.earlydreamer.jhfreader'");
-  expect(instrumented).toContain('assertEquals("dev.earlydreamer.jhfreader", appContext.getPackageName())');
+  expect(instrumented).toContain(
+    'assertEquals("dev.earlydreamer.jhfreader", appContext.getPackageName())',
+  );
 });
 it('disables native bridge argument logging even in debug builds', () => {
   const config = readFileSync('capacitor.config.ts', 'utf8');
