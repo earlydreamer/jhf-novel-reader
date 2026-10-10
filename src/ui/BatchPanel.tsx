@@ -1,6 +1,10 @@
 import { useRef, type JSX } from 'react';
 import type { BatchState, ChapterRange, CandidateChoice } from '../translation/batch';
+import type { RenewalSnapshot } from '../app/renewalController';
 import { CandidateReview } from './CandidateReview';
+import { Button } from './components/Button';
+import { LinearProgress } from './components/LinearProgress';
+import { lookupLabel, progressText } from './TermScanPanel';
 import { readableModelName } from '../providers/modelName';
 export interface BatchPanelProps {
   workId: string;
@@ -10,10 +14,99 @@ export interface BatchPanelProps {
   onRunBatch?(retryUncertain?: boolean): void;
   onScanBatch?(): void;
   onConfirmBatchCandidates?(choices: readonly CandidateChoice[]): void;
+  /** 정밀스캔으로 후보 표기 채우기. 연결 조건은 fillAllowed로 Application이 정한다. */
+  batchFill?: RenewalSnapshot['batchFill'];
+  fillAllowed?: boolean;
+  onFillBatch?(): void;
+  onCancelBatchFill?(): void;
   onCancelBatch?(): void;
   onRetryBatchSave?(): void;
   onSettings?(): void;
   globalBlocked?: boolean;
+}
+
+type BatchFill = NonNullable<RenewalSnapshot['batchFill']>;
+
+/** 정밀스캔 채우기 구역. 상태별 문구와 버튼만 보여 주고 결과 적용은 CandidateReview가 한다. */
+function FillSection({
+  fill,
+  disabled,
+  onFill,
+  onCancel,
+}: {
+  fill: BatchFill | null;
+  disabled: boolean;
+  onFill(): void;
+  onCancel(): void;
+}): JSX.Element {
+  if (!fill) {
+    return (
+      <>
+        <p>
+          모델이 원문 문맥과 한자 뜻을 보고 후보 표기를 채워요. 채운 표기는 확정하기 전에 고칠 수
+          있어요.
+        </p>
+        <Button variant="tonal" disabled={disabled} onClick={onFill}>
+          정밀스캔으로 표기 채우기
+        </Button>
+      </>
+    );
+  }
+  if (fill.phase === 'running') {
+    const text = progressText(fill.progress);
+    const progress = fill.progress;
+    const value = progress && progress.total > 0 ? progress.done / progress.total : undefined;
+    return (
+      <>
+        {text && <p>{text}</p>}
+        <LinearProgress label={text ?? '표기 채우기 진행'} value={value} />
+        <Button variant="text" onClick={onCancel}>
+          중단
+        </Button>
+      </>
+    );
+  }
+  if (fill.phase === 'failed') {
+    return (
+      <>
+        <p role="alert">{fill.error}</p>
+        <Button variant="tonal" disabled={disabled} onClick={onFill}>
+          다시 시도하기
+        </Button>
+      </>
+    );
+  }
+  if (fill.phase === 'cancelled') {
+    return (
+      <>
+        <p>표기 채우기를 중단했어요.</p>
+        <Button variant="text" disabled={disabled} onClick={onFill}>
+          다시 채우기
+        </Button>
+      </>
+    );
+  }
+  const result = fill.result;
+  if (!result) return <></>;
+  return (
+    <>
+      <p>
+        표기 {result.suggestions.length}개를 채웠어요 · 일반어로 판정 {result.common.length}개
+      </p>
+      {result.counts.unanswered > 0 && (
+        <p role="status">모델이 답하지 않은 이름이 {result.counts.unanswered}개 있어요.</p>
+      )}
+      {result.partial && <p role="status">일부 판정 요청이 실패해서 나머지 결과만 채웠어요.</p>}
+      {result.lookupFailed && result.lookupFailed.length > 0 && (
+        <p role="status">
+          {`${lookupLabel(result.lookupFailed)} 조회가 안 돼서 그 근거 없이 판정했어요.`}
+        </p>
+      )}
+      <Button variant="text" disabled={disabled} onClick={onFill}>
+        다시 채우기
+      </Button>
+    </>
+  );
 }
 export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const first = useRef<HTMLInputElement>(null);
@@ -22,7 +115,13 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const record = props.batch?.record?.work.workId === props.workId ? props.batch.record : null;
   const active = props.batch?.active ?? false;
   const awaitingSave = props.batch?.record?.phase === 'saving';
-  const canPrepare = props.batchAvailable && !props.globalBlocked && !active && !awaitingSave;
+  // 정밀스캔 채우기는 용어집 잠금을 쓰므로 진행 중에는 미리 번역 준비도 막는다.
+  const filling = props.batchFill?.phase === 'running';
+  const canPrepare =
+    props.batchAvailable && !props.globalBlocked && !active && !awaitingSave && !filling;
+  // 채우기 결과는 이 기록의 것만 쓴다.
+  const fill = record && props.batchFill?.recordId === record.id ? props.batchFill : null;
+  const fillResult = fill?.phase === 'done' ? fill.result : undefined;
   return (
     <section className="nr-batch-panel" aria-label="일괄 번역">
       <h2>미리 번역하기</h2>
@@ -112,12 +211,26 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             </>
           )}
           {record.phase === 'prepared' && record.scan?.status === 'review' && (
-            <CandidateReview
-              key={record.id}
-              candidates={record.scan.candidates}
-              disabled={!canPrepare}
-              onConfirm={props.onConfirmBatchCandidates}
-            />
+            <>
+              {props.fillAllowed && record.scan.candidates.length > 0 && (
+                <section aria-label="정밀스캔으로 표기 채우기">
+                  <FillSection
+                    fill={fill}
+                    disabled={!canPrepare}
+                    onFill={() => props.onFillBatch?.()}
+                    onCancel={() => props.onCancelBatchFill?.()}
+                  />
+                </section>
+              )}
+              <CandidateReview
+                key={record.id}
+                candidates={record.scan.candidates}
+                disabled={!canPrepare}
+                onConfirm={props.onConfirmBatchCandidates}
+                suggestions={fillResult?.suggestions}
+                common={fillResult?.common}
+              />
+            </>
           )}
           {record.scan?.status === 'confirmed' && (
             <p>후보 확인을 마쳤어요. 확정한 작품 용어집으로 각 회차를 순서대로 번역해요.</p>

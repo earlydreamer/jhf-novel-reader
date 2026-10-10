@@ -45,7 +45,7 @@ import { ReaderError } from '../contracts';
 import { createGuidanceRepository } from '../translation/guidance';
 import { createAutoGlossary } from '../translation/autoGlossary';
 import { createTitleRepository, createTitleTranslation } from '../translation/titles';
-import { createTermScan } from '../translation/termScanRun';
+import { createRangeJudge, createTermScan } from '../translation/termScanRun';
 import { loadKanjidic } from '../translation/kanjidic';
 export function createRenewalApplication(
   adapters: ApplicationAdapters & {
@@ -84,6 +84,9 @@ export function createRenewalApplication(
     guidance,
     termScan: guidance
       ? createTermScan({ createProvider, guidance, library, loadKanjidic, lookup: lookupTransport })
+      : undefined,
+    rangeJudge: guidance
+      ? createRangeJudge({ createProvider, guidance, loadKanjidic, lookup: lookupTransport })
       : undefined,
     titles: createTitleRepository(adapters.files),
     translateTitles: createTitleTranslation(

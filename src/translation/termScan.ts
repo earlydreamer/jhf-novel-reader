@@ -41,12 +41,15 @@ type Group = { source: string; existing?: GuidanceTerm; aliasKeys: string[] };
 /**
  * 회차 원문에서 정밀스캔 후보를 모은다(모델·네트워크 없음). 규칙 후보와 용어집 항목을 한 이름으로
  * 합치고, 원문에서 직접 세서 근거(발췌·루비·한자 힌트·발음 대조)를 붙인다.
+ * only가 있으면 그 이름 목록으로 후보를 좁힌다. 목록 이름은 규칙에 안 잡혀도 원문에 있으면 후보가 되고,
+ * 상한은 목록 길이(최대 200)이며 limit은 무시한다.
  */
 export function collectScanCandidates(
   chapters: readonly ScanChapter[],
   terms: readonly GuidanceTerm[],
   dic?: Kanjidic | null,
   limit = 60,
+  only?: readonly string[],
 ): ScanCandidate[] {
   const paragraphs: Paragraph[] = chapters.flatMap((chapter) =>
     chapter.paragraphs.map((paragraph) => ({
@@ -95,6 +98,13 @@ export function collectScanCandidates(
     const key = nameKey(rule.source);
     if (!groupByKey.has(key)) groupByKey.set(key, addGroup(rule.source));
   }
+  // 이름 목록: 규칙·용어집에 없는 목록 이름도 그룹으로 더해, 원문에 있으면 후보가 되게 한다.
+  if (only) {
+    for (const name of only) {
+      const key = nameKey(name);
+      if (!groupByKey.has(key)) groupByKey.set(key, addGroup(name));
+    }
+  }
 
   const candidates: ScanCandidate[] = [];
   for (const group of groups) {
@@ -131,16 +141,21 @@ export function collectScanCandidates(
     });
   }
 
+  // 이름 목록이 있으면 목록에 든 이름(NFKC 키)만 남기고 상한은 목록 길이로 정한다.
+  const onlyKeys = only ? new Set(only.map(nameKey)) : undefined;
+  const picked = onlyKeys
+    ? candidates.filter((candidate) => onlyKeys.has(nameKey(candidate.source)))
+    : candidates;
   // 사람·기계 항목을 먼저, 그다음 새 후보. 같은 그룹 안에서는 등장 횟수, 이후 코드포인트 순.
   const rank = (candidate: ScanCandidate) => (candidate.role === 'new' ? 1 : 0);
-  return candidates
+  return picked
     .sort(
       (left, right) =>
         rank(left) - rank(right) ||
         right.count - left.count ||
         compareCodePoints(left.source, right.source),
     )
-    .slice(0, limit);
+    .slice(0, only ? Math.min(only.length, 200) : limit);
 }
 
 function findHits(paragraphs: readonly Paragraph[], key: string): Hit[] {

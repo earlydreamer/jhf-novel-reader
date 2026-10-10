@@ -24,6 +24,7 @@ import {
   type WorkGuidance,
 } from './guidance';
 import { createNameCandidateScan, type NameCandidate } from './scan';
+import type { ScanChapter } from './termScan';
 
 export type CandidateChoice = { source: string; target: string };
 type RangeScan = { status: 'pending' | 'review' | 'confirmed'; candidates: NameCandidate[] };
@@ -71,6 +72,11 @@ export interface BatchTranslation {
   ): Promise<void>;
   run(retryUncertain?: boolean): Promise<void>;
   scan(): Promise<void>;
+  /** review 단계 범위의 원문을 회차 순서대로 돌려준다. 범위 스캔에서 받은 원문은 다시 받지 않는다. */
+  scanChapters(
+    signal: AbortSignal,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<ScanChapter[]>;
   confirmCandidates(choices: readonly CandidateChoice[]): Promise<void>;
   cancel(): void;
   clearWork(workId: string): boolean;
@@ -200,6 +206,8 @@ export function createBatchTranslation(dependencies: {
   let cancelled = false;
   let preparation: AbortController | null = null;
   const scannedSources = new Map<string, SourceSnapshot>();
+  // 범위 스캔에서 받은 회차 원문(정밀스캔 채우기용). 범위 전체를 기억하므로 scannedSources와 달리 개수 상한이 없다.
+  const scannedChapters = new Map<string, ScanChapter>();
   const listeners = new Set<(state: BatchState) => void>();
   function publish(update: Partial<BatchState>): void {
     const next = { ...state, ...update };
@@ -359,6 +367,7 @@ export function createBatchTranslation(dependencies: {
           : {}),
       });
       scannedSources.clear();
+      scannedChapters.clear();
     } catch {
       publish({
         error: cancelled
@@ -394,6 +403,7 @@ export function createBatchTranslation(dependencies: {
       scanProgress: { completed: 0, total: record.chapters.length },
     });
     scannedSources.clear();
+    scannedChapters.clear();
     try {
       const guidance = (await dependencies.guidance?.read(record.work.workId)) ?? null;
       const candidateScan = createNameCandidateScan(
@@ -414,12 +424,17 @@ export function createBatchTranslation(dependencies: {
         candidateScan.add(source);
         if (scannedSources.size < SCANNED_SOURCE_CACHE_SIZE)
           scannedSources.set(chapter.chapterId, source);
+        scannedChapters.set(chapter.chapterId, {
+          chapterId: chapter.chapterId,
+          paragraphs: source.paragraphs.map(({ text, ruby }) => ({ text, ruby })),
+        });
         publish({ scanProgress: { completed: ++completed, total: record.chapters.length } });
       }
       const candidates = candidateScan.result();
       await persist({ ...record, scan: { status: 'review', candidates } });
     } catch {
       scannedSources.clear();
+      scannedChapters.clear();
       publish({
         error: cancelled
           ? '후보 스캔을 멈췄어요. 범위 전체를 다시 스캔해 주세요.'
@@ -429,6 +444,37 @@ export function createBatchTranslation(dependencies: {
       preparation = null;
       publish({ active: false, scanProgress: undefined });
     }
+  }
+  async function scanChapters(
+    signal: AbortSignal,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<ScanChapter[]> {
+    const record = state.record;
+    if (!record || record.phase !== 'prepared' || record.scan?.status !== 'review')
+      throw new ReaderError('source_parse');
+    const chapters: ScanChapter[] = [];
+    for (const chapter of record.chapters) {
+      if (signal.aborted) throw new ReaderError('cancelled');
+      let scanned = scannedChapters.get(chapter.chapterId);
+      if (!scanned) {
+        const source = await dependencies.source.getChapter(chapter, signal);
+        if (signal.aborted) throw new ReaderError('cancelled');
+        if (
+          source.workId !== record.work.workId ||
+          source.chapterId !== chapter.chapterId ||
+          source.canonicalUrl !== chapter.canonicalUrl
+        )
+          throw new ReaderError('source_parse');
+        scanned = {
+          chapterId: chapter.chapterId,
+          paragraphs: source.paragraphs.map(({ text, ruby }) => ({ text, ruby })),
+        };
+        scannedChapters.set(chapter.chapterId, scanned);
+      }
+      chapters.push(scanned);
+      onProgress?.(chapters.length, record.chapters.length);
+    }
+    return chapters;
   }
   async function confirmCandidates(choices: readonly CandidateChoice[]): Promise<void> {
     const record = state.record;
@@ -502,6 +548,8 @@ export function createBatchTranslation(dependencies: {
         scan: { ...record.scan, status: 'confirmed' as const },
       };
       await persist(next);
+      // 확정 뒤에는 정밀스캔 채우기를 쓰지 않으므로 기억한 원문을 놓는다.
+      scannedChapters.clear();
     } catch {
       publish({
         error:
@@ -684,6 +732,8 @@ export function createBatchTranslation(dependencies: {
     }
     for (const [chapterId, source] of scannedSources)
       if (source.workId === workId) scannedSources.delete(chapterId);
+    for (const chapterId of [...scannedChapters.keys()])
+      if (chapterId.startsWith(`${workId}/`)) scannedChapters.delete(chapterId);
     return true;
   }
   const unsubscribe = dependencies.flow.subscribe((chapterState) => {
@@ -693,6 +743,7 @@ export function createBatchTranslation(dependencies: {
     initialize,
     prepare,
     scan,
+    scanChapters,
     confirmCandidates,
     run,
     cancel,
@@ -718,6 +769,7 @@ export function createBatchTranslation(dependencies: {
       unsubscribe();
       listeners.clear();
       scannedSources.clear();
+      scannedChapters.clear();
     },
   };
 }

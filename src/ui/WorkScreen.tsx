@@ -72,6 +72,10 @@ export function WorkScreen({
   onRunBatch,
   onScanBatch,
   onConfirmBatchCandidates,
+  batchFill,
+  fillAllowed,
+  onFillBatch,
+  onCancelBatchFill,
   onCancelBatch,
   onRetryBatchSave,
   onSettings,
@@ -514,6 +518,10 @@ export function WorkScreen({
           onRunBatch={onRunBatch}
           onScanBatch={onScanBatch}
           onConfirmBatchCandidates={onConfirmBatchCandidates}
+          batchFill={batchFill}
+          fillAllowed={fillAllowed}
+          onFillBatch={onFillBatch}
+          onCancelBatchFill={onCancelBatchFill}
           onCancelBatch={recentOwnsWork ? onCancelBatch : undefined}
           onRetryBatchSave={recentOwnsWork ? onRetryBatchSave : undefined}
           onSettings={onSettings}

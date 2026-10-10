@@ -48,7 +48,9 @@ import type {
 import {
   applySuggestion,
   revertScanChange,
+  type createRangeJudge,
   type createTermScan,
+  type RangeJudgeResult,
   type TermScanProgress,
   type TermScanResult,
 } from '../translation/termScanRun';
@@ -119,6 +121,8 @@ export interface RenewalDependencies {
   readonly batch?: BatchTranslation;
   readonly guidance?: GuidanceRepository;
   readonly termScan?: ReturnType<typeof createTermScan>;
+  /** 미리 번역 후보를 정밀스캔 판정으로 채우는 엔진. 저장하지 않고 결과만 돌려준다. */
+  readonly rangeJudge?: ReturnType<typeof createRangeJudge>;
   readonly lifecycle?: AppLifecycle;
   readonly browse?: (startUrl?: string) => Promise<{ selectedUrl: string } | null>;
   readonly normalizeInput?: (url: string) => string;
@@ -212,6 +216,15 @@ export interface RenewalSnapshot {
     handled: readonly string[];
     error?: string;
   } | null;
+  readonly batchFillAvailable: boolean;
+  /** 미리 번역 검토 후보를 정밀스캔으로 채우는 상태. recordId로 어느 기록의 결과인지 밝힌다. */
+  readonly batchFill: {
+    recordId: string;
+    phase: 'running' | 'done' | 'failed' | 'cancelled';
+    progress?: TermScanProgress;
+    result?: RangeJudgeResult;
+    error?: string;
+  } | null;
 }
 const DEFAULT_CONNECTION: ConnectionConfig = {
   provider: 'openai-compatible',
@@ -282,6 +295,8 @@ const TERM_SCAN_FAILED_MESSAGE =
 const TERM_SCAN_TRANSLATE_BLOCKED = '용어 정밀스캔이 끝난 뒤 번역할 수 있어요.';
 const TERM_SCAN_EDIT_BUSY_MESSAGE = '번역이 끝난 뒤 용어집을 고칠 수 있어요.';
 const TERM_SCAN_SAVE_FAILED_MESSAGE = '용어집을 저장하지 못했어요. 다시 시도해 주세요.';
+const TERM_FILL_FAILED_MESSAGE =
+  '정밀스캔으로 표기를 채우지 못했어요. 연결을 확인하고 다시 시도해 주세요.';
 const termKey = (source: string) => source.normalize('NFKC');
 
 export interface RenewalController {
@@ -325,6 +340,8 @@ export interface RenewalController {
   runBatch(retryUncertain?: boolean): Promise<void>;
   scanBatch(): Promise<void>;
   confirmBatchCandidates(choices: readonly CandidateChoice[]): Promise<void>;
+  fillBatchCandidates(): Promise<void>;
+  cancelBatchFill(): void;
   cancelBatch(): void;
   retryBatchSave(): Promise<void>;
   openBatch(): void;
@@ -405,6 +422,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     guidanceAvailable: Boolean(dependencies.guidance),
     termScanAvailable: Boolean(dependencies.termScan),
     termScan: null,
+    batchFillAvailable: Boolean(dependencies.rangeJudge),
+    batchFill: null,
   };
   const listeners = new Set<() => void>();
   const history: Route[] = [];
@@ -2043,6 +2062,108 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   function cancelTermScan(): void {
     termScanAbort?.abort();
   }
+  /**
+   * 미리 번역 검토 후보의 표기를 정밀스캔 판정으로 채운다. 용어집에는 저장하지 않고 검토 화면에 제안으로만 남긴다.
+   * 정밀스캔과 같은 잠금을 써서 진행 중에는 번역·미리 번역·정밀스캔·작품 삭제가 막힌다.
+   */
+  async function fillBatchCandidates(): Promise<void> {
+    const judge = dependencies.rangeJudge;
+    if (!judge || disposed || !initialized || !foreground) return;
+    // 연결 확인 중에 온 요청은 확인이 끝날 때까지 기다리지 않고 조용히 끝낸다.
+    if (termScanChecking) return;
+    termScanChecking = true;
+    try {
+      if (snapshot.catalogStatus === 'idle' && snapshot.selectedModelId) await checkConnection();
+    } finally {
+      termScanChecking = false;
+    }
+    if (disposed || !foreground) return;
+    if (snapshot.catalogStatus !== 'connected' || !snapshot.selectedModelId) {
+      publish({ error: TERM_SCAN_CONNECTION_MESSAGE });
+      return;
+    }
+    if (snapshot.connection.provider !== 'openai-compatible') {
+      publish({ error: TERM_SCAN_GEMINI_MESSAGE });
+      return;
+    }
+    const batch = dependencies.batch;
+    if (!batch) return;
+    if (termScanRunning() || activeTranslation || dependencies.flow?.active || batch.active) {
+      publish({ error: TERM_SCAN_BUSY_MESSAGE });
+      return;
+    }
+    const record = snapshot.batch?.record;
+    const candidates = record?.scan?.candidates ?? [];
+    if (
+      !record ||
+      record.phase !== 'prepared' ||
+      record.scan?.status !== 'review' ||
+      !candidates.length ||
+      removingWorkIds.has(record.work.workId)
+    )
+      return;
+    const workId = record.work.workId;
+    const recordId = record.id;
+    const selection: SelectedModel = {
+      connection: snapshot.connection,
+      modelId: snapshot.selectedModelId,
+      translationMode: snapshot.translationMode,
+      ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
+      ...(snapshot.connection.provider === 'openai-compatible' && snapshot.localLimits
+        ? { limits: { ...snapshot.localLimits } }
+        : {}),
+    };
+    // 첫 await 전에 세워 둬야 두 번째 요청이 진행 중으로 보고 막힌다.
+    const control = new AbortController();
+    termScanAbort = control;
+    termScanOwner = workId;
+    try {
+      await stopTitles();
+      publish({ batchFill: { recordId, phase: 'running' } });
+      const chapters = await batch.scanChapters(control.signal, (done, total) => {
+        if (control.signal.aborted || termScanAbort !== control) return;
+        publish({
+          batchFill: { recordId, phase: 'running', progress: { stage: 'collect', done, total } },
+        });
+      });
+      const result = await judge({
+        workId,
+        chapters,
+        names: candidates.map((candidate) => candidate.source),
+        selection,
+        signal: control.signal,
+        sources: { wikipedia: snapshot.lookupWikipedia, namuwiki: snapshot.lookupNamuwiki },
+        onProgress(progress) {
+          const running = snapshot.batchFill;
+          if (control.signal.aborted || termScanAbort !== control) return;
+          if (running?.recordId !== recordId || running.phase !== 'running') return;
+          publish({ batchFill: { ...running, progress } });
+        },
+      });
+      // 취소 뒤에 끝난 결과는 버리고 취소로 남긴다.
+      if (control.signal.aborted) throw new ReaderError('cancelled');
+      publish({ batchFill: { recordId, phase: 'done', result } });
+    } catch (error) {
+      const cancelledByUser =
+        control.signal.aborted || (error instanceof ReaderError && error.code === 'cancelled');
+      publish({
+        batchFill: cancelledByUser
+          ? { recordId, phase: 'cancelled' }
+          : { recordId, phase: 'failed', error: TERM_FILL_FAILED_MESSAGE },
+      });
+    } finally {
+      if (termScanAbort === control) {
+        termScanAbort = null;
+        termScanOwner = null;
+      }
+      // 채우기 중 미뤄 둔 자동 번역과 제목 번역을 이어 간다.
+      runAutomaticTranslation();
+      requestTitleTranslation();
+    }
+  }
+  function cancelBatchFill(): void {
+    if (snapshot.batchFill?.phase === 'running') termScanAbort?.abort();
+  }
   function closeTermScan(): void {
     if (termScanRunning()) return;
     termScanOriginals = new Map();
@@ -2544,6 +2665,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       !snapshot.selectedModelId ||
       snapshot.catalogStatus !== 'connected' ||
       activeTranslation ||
+      termScanRunning() ||
       !initialized ||
       !foreground ||
       disposed ||
@@ -2797,6 +2919,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     prepareBatch,
     scanBatch,
     confirmBatchCandidates,
+    fillBatchCandidates,
+    cancelBatchFill,
     runBatch,
     cancelBatch: () => dependencies.batch?.cancel(),
     retryBatchSave,

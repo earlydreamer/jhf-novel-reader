@@ -114,6 +114,12 @@ function RouteScreen({
           onRunBatch={(retryUncertain) => void controller.runBatch(retryUncertain)}
           onScanBatch={() => void controller.scanBatch()}
           onConfirmBatchCandidates={(choices) => void controller.confirmBatchCandidates(choices)}
+          batchFill={state.batchFill}
+          fillAllowed={
+            state.batchFillAvailable && state.connection.provider === 'openai-compatible'
+          }
+          onFillBatch={() => void controller.fillBatchCandidates()}
+          onCancelBatchFill={controller.cancelBatchFill}
           onCancelBatch={controller.cancelBatch}
           onRetryBatchSave={() => void controller.retryBatchSave()}
           onSettings={() => controller.navigate({ kind: 'settings' })}
