@@ -248,7 +248,7 @@ it('서재 일괄 번역 카드는 번역 제목이 있으면 번역 제목을 �
       cursor: 0,
       completed: 0,
       skipped: 0,
-      phase: 'prepared',
+      phase: 'running',
     },
     active: false,
     preparing: false,
@@ -265,6 +265,127 @@ it('서재 일괄 번역 카드는 번역 제목이 있으면 번역 제목을 �
   );
   expect(card).not.toHaveTextContent('번역 대상 작품');
   expect(within(card).getByText('번역된 작품')).not.toHaveAttribute('lang');
+  controller.dispose();
+});
+
+it('미리 번역이 중단·시작 전이면 서재 카드를 숨기고, 확인 필요면 보여 준다(#282)', async () => {
+  const translated = work('n5678bb', '번역 대상 작품');
+  const { library } = libraryHarness([translated]);
+  const idle: BatchState = { record: null, active: false, preparing: false, error: null };
+  let emitBatch = (_state: BatchState) => {};
+  const batch = {
+    initialize: vi.fn(async () => {}),
+    setForeground: vi.fn(),
+    getSnapshot: () => idle,
+    subscribe: vi.fn((listener: (state: BatchState) => void) => {
+      emitBatch = listener;
+      return () => {};
+    }),
+    dispose: vi.fn(),
+  } as unknown as NonNullable<RenewalDependencies['batch']>;
+  const record = {
+    schemaVersion: 1 as const,
+    id: 'batch-fixture',
+    createdAt: '2026-10-08T00:00:00Z',
+    work: translated,
+    selection: {
+      connection: { provider: 'openai-compatible' as const, baseUrl: '', revision: 0 },
+      modelId: 'fixture-model',
+      translationMode: 'legacy' as const,
+    },
+    chapters: translated.chapters,
+    retranslate: false,
+    alreadySaved: 0,
+    cursor: 0,
+    completed: 0,
+    skipped: 0,
+    phase: 'paused' as const,
+  };
+  const controller = createRenewalController({ library, batch });
+  render(<Application controller={controller} />);
+  await screen.findByText('번역 대상 작품');
+
+  act(() =>
+    emitBatch({
+      record: { ...record, phase: 'paused' },
+      active: false,
+      preparing: false,
+      error: null,
+    }),
+  );
+  expect(screen.queryByLabelText('일괄 번역 상태')).toBeNull();
+  act(() =>
+    emitBatch({
+      record: { ...record, phase: 'prepared' },
+      active: false,
+      preparing: false,
+      error: null,
+    }),
+  );
+  expect(screen.queryByLabelText('일괄 번역 상태')).toBeNull();
+  act(() =>
+    emitBatch({
+      record: { ...record, phase: 'unknown' },
+      active: false,
+      preparing: false,
+      error: null,
+    }),
+  );
+  await screen.findByLabelText('일괄 번역 상태');
+  controller.dispose();
+});
+
+it('미리 번역 안내를 닫으면 저장하고 닫힌 기록은 다시 표시하지 않는다(#282)', async () => {
+  const translated = work('n5678bb', '번역 대상 작품');
+  const { library } = libraryHarness([translated]);
+  const idle: BatchState = { record: null, active: false, preparing: false, error: null };
+  let emitBatch = (_state: BatchState) => {};
+  const dismissNotice = vi.fn();
+  const batch = {
+    initialize: vi.fn(async () => {}),
+    setForeground: vi.fn(),
+    getSnapshot: () => idle,
+    dismissNotice,
+    subscribe: vi.fn((listener: (state: BatchState) => void) => {
+      emitBatch = listener;
+      return () => {};
+    }),
+    dispose: vi.fn(),
+  } as unknown as NonNullable<RenewalDependencies['batch']>;
+  const running: BatchState = {
+    record: {
+      schemaVersion: 1,
+      id: 'batch-fixture',
+      createdAt: '2026-10-08T00:00:00Z',
+      work: translated,
+      selection: {
+        connection: { provider: 'openai-compatible', baseUrl: '', revision: 0 },
+        modelId: 'fixture-model',
+        translationMode: 'legacy',
+      },
+      chapters: translated.chapters,
+      retranslate: false,
+      alreadySaved: 0,
+      cursor: 0,
+      completed: 0,
+      skipped: 0,
+      phase: 'running',
+    },
+    active: false,
+    preparing: false,
+    error: null,
+  };
+  const controller = createRenewalController({ library, batch });
+  render(<Application controller={controller} />);
+  await screen.findByText('번역 대상 작품');
+  act(() => emitBatch(running));
+
+  const card = await screen.findByLabelText('일괄 번역 상태');
+  fireEvent.click(within(card).getByRole('button', { name: '일괄 번역 안내 닫기' }));
+  expect(dismissNotice).toHaveBeenCalledTimes(1);
+
+  act(() => emitBatch({ ...running, record: { ...running.record!, dismissed: true } }));
+  await waitFor(() => expect(screen.queryByLabelText('일괄 번역 상태')).toBeNull());
   controller.dispose();
 });
 
