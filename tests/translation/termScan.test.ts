@@ -134,3 +134,35 @@ test('정렬은 사람·기계 항목 먼저, 등장 횟수 내림차순, 같으
   const limited = collectScanCandidates(chapters, glossary, null, 2);
   expect(limited.map((item) => item.source)).toEqual(['ルク', 'カイ']);
 });
+
+test('이름 목록을 주면 목록 밖 후보는 빼고, 규칙에 안 잡힌 목록 이름도 원문에 있으면 후보가 되며, 원문에 없으면 뺀다', () => {
+  const result = collectScanCandidates(
+    [
+      chapter('c1', [
+        'アルベルトは剣を抜いた。ルカは去った。アルベルトが笑う。ルカが笑う。ミナは王都へ行く。',
+      ]),
+    ],
+    [term('王都')],
+    null,
+    60,
+    ['アルベルト', 'ミナ', 'ギルド'],
+  );
+  expect(result.map((item) => [item.source, item.role, item.count])).toEqual([
+    ['アルベルト', 'new', 2],
+    ['ミナ', 'new', 1],
+  ]);
+});
+
+test('이름 목록을 주면 limit 인자를 무시하고 목록 길이(최대 200)를 상한으로 쓴다', () => {
+  const syllable = (index: number) => String.fromCharCode(0x30a1 + index);
+  const names = Array.from(
+    { length: 201 },
+    (_, index) => `カ${syllable(index % 84)}${syllable(Math.floor(index / 84))}`,
+  );
+  const text = names.map((name) => `${name}が笑う。`).join('');
+  const result = collectScanCandidates([chapter('c1', [text])], [], null, 1, names);
+  expect(result).toHaveLength(200);
+  expect(
+    collectScanCandidates([chapter('c1', [text])], [], null, 1, names.slice(0, 3)),
+  ).toHaveLength(3);
+});

@@ -6,6 +6,7 @@ import type {
   SelectedModel,
 } from '../../src/contracts/reading';
 import type { Kanjidic } from '../../src/translation/kanjidic';
+import type { ScanChapter } from '../../src/translation/termScan';
 import type {
   GuidanceDraft,
   GuidanceRepository,
@@ -15,6 +16,7 @@ import type {
 import type { JudgeKind } from '../../src/translation/termJudge';
 import {
   applySuggestion,
+  createRangeJudge,
   createTermScan,
   revertScanChange,
   type TermScanChange,
@@ -1068,4 +1070,132 @@ test('별명이 아닌 후보는 마지막 어절이 한자음과 같아도 음�
   });
   const result = await run(h);
   expect(result.applied.map((item) => [item.source, item.confidence])).toEqual([['王都', 'high']]);
+});
+
+const scanChapter = (chapterId: string, text: string): ScanChapter => ({
+  chapterId,
+  paragraphs: [{ text, ruby: [] }],
+});
+
+function rangeHarness(input: {
+  terms?: GuidanceTerm[];
+  answers?: Record<string, Answer>;
+  lookup?: { transport: LookupTransport };
+}) {
+  const hooks: ProviderHooks = {};
+  const provider = fakeProvider(input.answers ?? {}, hooks);
+  const guidance = fakeGuidance(input.terms ?? []);
+  const judge = createRangeJudge({
+    createProvider: () => provider.session,
+    guidance: guidance.repository,
+    loadKanjidic: async () => kanjidic(),
+    ...(input.lookup ? { lookup: input.lookup.transport } : {}),
+  });
+  return { judge, requests: provider.requests, ...guidance };
+}
+type RangeHarness = ReturnType<typeof rangeHarness>;
+
+const rangeRun = (
+  h: RangeHarness,
+  chapters: ScanChapter[],
+  names: string[],
+  options: {
+    sources?: { wikipedia?: boolean; namuwiki?: boolean };
+    onProgress?(progress: TermScanProgress): void;
+    signal?: AbortSignal;
+  } = {},
+) =>
+  h.judge({
+    workId: 'w1',
+    chapters,
+    names,
+    selection,
+    signal: options.signal ?? new AbortController().signal,
+    ...(options.sources ? { sources: options.sources } : {}),
+    ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+  });
+
+test('범위 판정은 일반어와 답 없음을 세고, 제안만 new로 내며, 용어집에 저장하지 않는다', async () => {
+  const h = rangeHarness({
+    terms: [term('カミラ', '카밀라')],
+    answers: {
+      カミラ: { target: '카미라' },
+      ハンナ: { kind: 'common', category: '기타', target: '한나' },
+    },
+  });
+  const result = await rangeRun(
+    h,
+    [scanChapter('c1', 'カミラが笑う。カミラは去った。ハンナが笑う。ベルナが笑う。')],
+    ['カミラ', 'ハンナ', 'ベルナ', 'ミナ'],
+  );
+  expect(result.suggestions).toHaveLength(1);
+  expect(result.suggestions[0]).toMatchObject({ source: 'カミラ', role: 'new', after: '카미라' });
+  expect(result.suggestions[0]).not.toHaveProperty('before');
+  expect(result.common).toEqual(['ハンナ']);
+  expect(result.counts).toEqual({ candidates: 3, common: 1, unchanged: 0, unanswered: 1 });
+  expect(result.partial).toBe(false);
+  expect(result).not.toHaveProperty('lookupFailed');
+  expect(h.saves).toEqual([]);
+});
+
+test('제안은 신뢰도 낮은 순으로 정렬하고, 가나 불일치 항목은 low다', async () => {
+  const h = rangeHarness({
+    answers: { ルーク: { target: '소피아' }, カミラ: { target: '카미라' } },
+  });
+  const result = await rangeRun(
+    h,
+    [scanChapter('c1', 'ルークが笑う。カミラが笑う。')],
+    ['カミラ', 'ルーク'],
+  );
+  expect(result.suggestions.map((item) => [item.source, item.confidence, item.kanaFlag])).toEqual([
+    ['ルーク', 'low', true],
+    ['カミラ', 'high', false],
+  ]);
+});
+
+test('외부 조회를 켜면 제안 근거에 조회 hit이 model 앞에 붙고, 조회와 모델 요청은 하나씩 나간다', async () => {
+  const lookup = fakeLookup(LOOKUP_TABLE);
+  const h = rangeHarness({
+    answers: { カミラ: { target: '카미라' } },
+    lookup: { transport: lookup.transport },
+  });
+  const progress: TermScanProgress[] = [];
+  const result = await rangeRun(
+    h,
+    [scanChapter('c1', 'カミラが笑う。カミラは去った。')],
+    ['カミラ'],
+    {
+      sources: { wikipedia: true },
+      onProgress: (item) => progress.push(item),
+    },
+  );
+  expect(lookup.calls).toEqual(['wikipedia:カミラ']);
+  expect(h.requests).toHaveLength(3);
+  expect(result.suggestions[0]?.evidence.map((item) => item.kind)).toEqual(['wikipedia', 'model']);
+  expect(progress.map((item) => item.stage)).toEqual(['lookup', 'judge', 'judge', 'judge']);
+});
+
+test('후보가 없으면 판정 요청 없이 0 집계의 빈 결과를 낸다', async () => {
+  const h = rangeHarness({ answers: { カミラ: { target: '카미라' } } });
+  const result = await rangeRun(h, [scanChapter('c1', 'カミラが笑う。')], ['ミナ']);
+  expect(result).toEqual({
+    suggestions: [],
+    common: [],
+    partial: false,
+    counts: { candidates: 0, common: 0, unchanged: 0, unanswered: 0 },
+  });
+  expect(h.requests).toEqual([]);
+});
+
+test('이미 취소된 신호로 부르면 cancelled로 끝나고 판정하지 않는다', async () => {
+  const h = rangeHarness({ answers: { カミラ: { target: '카미라' } } });
+  const controller = new AbortController();
+  controller.abort();
+  await expect(
+    rangeRun(h, [scanChapter('c1', 'カミラが笑う。カミラは去った。')], ['カミラ'], {
+      signal: controller.signal,
+    }),
+  ).rejects.toMatchObject({ code: 'cancelled' });
+  expect(h.requests).toEqual([]);
+  expect(h.saves).toEqual([]);
 });
