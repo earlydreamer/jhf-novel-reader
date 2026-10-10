@@ -1168,3 +1168,198 @@ test('번역이 진행 중이면 이 화 다시 번역하기를 메뉴에 두지
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   expect(screen.queryByRole('menuitem', { name: '이 화 다시 번역하기' })).not.toBeInTheDocument();
 });
+
+// 리더 용어 강조·편집·추가 (#265)
+const lucianaTerm = {
+  source: 'ルシアナ',
+  target: '루시아나',
+  aliases: [],
+  category: '사람',
+  note: '',
+};
+
+function termVersion(): CompletedTranslation {
+  return completed({
+    source: {
+      ...source,
+      paragraphs: [
+        { id: 'p1', text: 'ルシアナが笑った。', ruby: [] },
+        { id: 'p2', text: '公爵が来た。', ruby: [] },
+      ],
+    },
+    blocks: [
+      { id: 'b1', text: '루시아나가 웃었다.' },
+      { id: 'b2', text: '공작이 왔다.' },
+    ],
+  });
+}
+
+function makeGlossary(overrides: Partial<NonNullable<ImmersiveReaderProps['glossary']>> = {}) {
+  return {
+    terms: [lucianaTerm],
+    locked: false,
+    saveTerm: vi.fn(async () => true),
+    deleteTerm: vi.fn(async () => true),
+    ...overrides,
+  };
+}
+
+function renderTerms(overrides: Partial<ImmersiveReaderProps> = {}) {
+  const glossary = makeGlossary();
+  render(
+    <SnackbarProvider>
+      <ImmersiveReader {...props({ version: termVersion(), glossary, ...overrides })} />
+    </SnackbarProvider>,
+  );
+  return glossary;
+}
+
+async function longPress(element: Element): Promise<void> {
+  fireEvent.pointerDown(element, { clientX: 10, clientY: 10, pointerId: 1 });
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  fireEvent.pointerUp(element, { pointerId: 1 });
+}
+
+test('용어 강조를 켜면 번역 문단의 용어 표기만 mark로 그린다', () => {
+  renderTerms();
+  const marks = document.querySelectorAll('mark');
+  expect(marks).toHaveLength(1);
+  expect(marks[0]).toHaveAttribute('data-term-source', 'ルシアナ');
+  expect(marks[0]).toHaveTextContent('루시아나');
+  expect(screen.getByText('공작이 왔다.').closest('mark')).toBeNull();
+  cleanup();
+
+  renderTerms({ termHighlight: false });
+  expect(document.querySelector('mark')).toBeNull();
+});
+
+test('원문 보기에서는 원문의 용어를 mark로 그린다', () => {
+  renderTerms({ showOriginal: true });
+  const marks = document.querySelectorAll('mark');
+  expect(marks).toHaveLength(1);
+  expect(marks[0]).toHaveTextContent('ルシアナ');
+});
+
+test('glossary가 없으면 mark도 용어 추가하기도 없다', async () => {
+  vi.useFakeTimers();
+  render(<ImmersiveReader {...props({ version: termVersion() })} />);
+  expect(document.querySelector('mark')).toBeNull();
+  await longPress(screen.getByText('공작이 왔다.'));
+  expect(screen.getByRole('dialog', { name: '문단 작업' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '용어 추가하기' })).not.toBeInTheDocument();
+});
+
+test('용어를 길게 누르면 문단 시트 대신 용어 시트가 열린다', async () => {
+  vi.useFakeTimers();
+  renderTerms();
+  await longPress(document.querySelector('mark')!);
+
+  const sheet = screen.getByRole('dialog', { name: 'ルシアナ' });
+  expect(within(sheet).getByText('표기 루시아나')).toBeInTheDocument();
+  expect(within(sheet).getByText('분류 사람')).toBeInTheDocument();
+  expect(within(sheet).getByRole('button', { name: '편집하기' })).toBeEnabled();
+  expect(within(sheet).getByRole('button', { name: '삭제하기' })).toBeEnabled();
+  expect(screen.queryByRole('dialog', { name: '문단 작업' })).not.toBeInTheDocument();
+});
+
+test('용어 시트에서 삭제하면 확인 뒤 deleteTerm을 부르고 스낵바로 알린다', async () => {
+  vi.useFakeTimers();
+  const glossary = renderTerms();
+  await longPress(document.querySelector('mark')!);
+  fireEvent.click(screen.getByRole('button', { name: '삭제하기' }));
+
+  const confirm = screen.getByRole('dialog', { name: '‘ルシアナ’ 용어를 지울까요?' });
+  expect(within(confirm).getByText(/이미 번역한 회차는 그대로예요/)).toBeInTheDocument();
+  await act(async () => {
+    fireEvent.click(within(confirm).getByRole('button', { name: '지우기' }));
+  });
+
+  expect(glossary.deleteTerm).toHaveBeenCalledWith('ルシアナ');
+  expect(screen.getByText('용어를 지웠어요.')).toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: /용어를 지울까요/ })).not.toBeInTheDocument();
+});
+
+test('용어 시트에서 편집하면 바뀐 항목과 이전 원문으로 saveTerm을 부른다', async () => {
+  vi.useFakeTimers();
+  const glossary = renderTerms();
+  await longPress(document.querySelector('mark')!);
+  fireEvent.click(screen.getByRole('button', { name: '편집하기' }));
+
+  const editor = screen.getByRole('dialog', { name: '용어 편집하기' });
+  fireEvent.change(within(editor).getByLabelText('번역 표기'), { target: { value: '루시아나님' } });
+  await act(async () => {
+    fireEvent.click(within(editor).getByRole('button', { name: '저장' }));
+  });
+
+  expect(glossary.saveTerm).toHaveBeenCalledWith(
+    { ...lucianaTerm, target: '루시아나님' },
+    'ルシアナ',
+  );
+  expect(screen.getByText('용어집에 저장했어요. 다음 번역부터 적용돼요.')).toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: '용어 편집하기' })).not.toBeInTheDocument();
+});
+
+test('강조 없는 자리를 길게 누르면 문단 시트에서 용어를 바로 추가할 수 있다', async () => {
+  vi.useFakeTimers();
+  renderTerms();
+  await longPress(screen.getByText('공작이 왔다.'));
+
+  const sheet = screen.getByRole('dialog', { name: '문단 작업' });
+  expect(within(sheet).queryByText('이 문단의 용어')).not.toBeInTheDocument();
+  fireEvent.click(within(sheet).getByRole('button', { name: '용어 추가하기' }));
+
+  const editor = screen.getByRole('dialog', { name: '용어 추가하기' });
+  expect(within(editor).getByRole('button', { name: '公爵' })).toBeInTheDocument();
+});
+
+test('용어가 있는 문단의 시트는 이 문단의 용어를 보여 주고 누르면 용어 시트를 연다', async () => {
+  vi.useFakeTimers();
+  renderTerms();
+  await longPress(document.querySelector('[data-reader-index="0"]')!);
+
+  const sheet = screen.getByRole('dialog', { name: '문단 작업' });
+  expect(within(sheet).getByText('이 문단의 용어')).toBeInTheDocument();
+  fireEvent.click(within(sheet).getByRole('button', { name: 'ルシアナ · 루시아나' }));
+
+  expect(screen.getByRole('dialog', { name: 'ルシアナ' })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: '문단 작업' })).not.toBeInTheDocument();
+});
+
+test('번역 중이라 잠겨 있으면 편집하기·삭제하기를 막고 이유를 보여 준다', async () => {
+  vi.useFakeTimers();
+  render(
+    <SnackbarProvider>
+      <ImmersiveReader
+        {...props({ version: termVersion(), glossary: makeGlossary({ locked: true }) })}
+      />
+    </SnackbarProvider>,
+  );
+  await longPress(document.querySelector('mark')!);
+
+  const sheet = screen.getByRole('dialog', { name: 'ルシアナ' });
+  expect(within(sheet).getByText('번역 중에는 용어집을 고칠 수 없어요.')).toBeInTheDocument();
+  expect(within(sheet).getByRole('button', { name: '편집하기' })).toBeDisabled();
+  expect(within(sheet).getByRole('button', { name: '삭제하기' })).toBeDisabled();
+});
+
+test('saveTerm이 false를 돌려주면 저장하지 못했다고 알리고 창을 유지한다', async () => {
+  vi.useFakeTimers();
+  const glossary = makeGlossary({ saveTerm: vi.fn(async () => false) });
+  render(
+    <SnackbarProvider>
+      <ImmersiveReader {...props({ version: termVersion(), glossary })} />
+    </SnackbarProvider>,
+  );
+  await longPress(document.querySelector('mark')!);
+  fireEvent.click(screen.getByRole('button', { name: '편집하기' }));
+  const editor = screen.getByRole('dialog', { name: '용어 편집하기' });
+  fireEvent.change(within(editor).getByLabelText('번역 표기'), { target: { value: '루시아나님' } });
+  await act(async () => {
+    fireEvent.click(within(editor).getByRole('button', { name: '저장' }));
+  });
+
+  expect(
+    screen.getByText('지금은 용어집을 저장하지 못했어요. 번역이 끝난 뒤 다시 시도해 주세요.'),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: '용어 편집하기' })).toBeInTheDocument();
+});

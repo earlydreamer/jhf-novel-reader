@@ -8,6 +8,7 @@ import {
   type JSX,
   type MouseEvent,
   type PointerEvent,
+  type ReactNode,
   type UIEvent,
 } from 'react';
 import type {
@@ -20,6 +21,7 @@ import type {
 import type { ErrorCode } from '../contracts';
 import type { CatalogStatus, SourceChangeStatus } from '../app/renewalController';
 import { japaneseBlockIndexes } from '../translation/quality';
+import type { GuidanceTerm } from '../translation/guidance';
 import { displayedTitle, type SavedTitle } from '../translation/titles';
 import { BottomSheet, Dialog } from './components/Modal';
 import { Button } from './components/Button';
@@ -31,6 +33,9 @@ import { StatusPill } from './components/StatusPill';
 import { Switch } from './components/Switch';
 import { useSnackbar, useSnackbarOffset } from './components/Snackbar';
 import { TopAppBar } from './components/TopAppBar';
+import type { ReaderGlossary } from './readerGlossary';
+import { TermEditor } from './TermEditor';
+import { paragraphTerms, sourceRanges, splitByRanges, translatedRanges } from './termHighlight';
 import { useBackHandler } from './shell/backStack';
 import './immersive-reader.css';
 
@@ -62,6 +67,8 @@ export interface ImmersiveReaderProps {
   retryParagraphsAvailable: boolean;
   pendingSaveElsewhere?: boolean;
   titles?: { entries: readonly SavedTitle[]; busy: boolean };
+  /** 작품 용어집. 없으면 용어 강조·편집·추가를 제공하지 않는다. */
+  glossary?: ReaderGlossary & { locked: boolean };
   onBack(): void;
   onShowOriginal(value: boolean): void;
   onFontSize(value: number): void;
@@ -90,6 +97,8 @@ export interface ImmersiveReaderProps {
 type ParagraphAnchor = { index: number; offset: number };
 const LONG_PRESS_MS = 500;
 const CENTER_TAP = 0.2;
+const GLOSSARY_SAVE_FAILED =
+  '지금은 용어집을 저장하지 못했어요. 번역이 끝난 뒤 다시 시도해 주세요.';
 const translationFailureMessages: Partial<Record<ErrorCode, string>> = {
   auth: '서버 인증에 실패했어요. 연결 설정에서 인증 정보를 확인해 주세요.',
   connection: '서버에 연결하지 못했어요. 주소와 서버 상태를 확인해 주세요.',
@@ -142,6 +151,13 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const [infoOpen, setInfoOpen] = useState(false);
   const [retranslateOpen, setRetranslateOpen] = useState(false);
   const [paragraphSheet, setParagraphSheet] = useState<number | null>(null);
+  const [termSheet, setTermSheet] = useState<GuidanceTerm | null>(null);
+  const [editor, setEditor] = useState<{
+    mode: 'add' | 'edit';
+    initial?: GuidanceTerm;
+    sourceText?: string;
+  } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<GuidanceTerm | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedParagraphs, setSelectedParagraphs] = useState<number[]>([]);
   const [titleEditorOpen, setTitleEditorOpen] = useState(false);
@@ -224,7 +240,17 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     qualityOpen ||
     infoOpen ||
     paragraphSheet !== null ||
+    termSheet !== null ||
+    editor !== null ||
+    confirmDelete !== null ||
     titleEditorOpen;
+  // 용어 강조는 원문과 번역이 일대일이고 저장본을 읽을 때만 켠다. 미리보기 중에는 문단이 바뀐다.
+  const highlight =
+    props.termHighlight &&
+    !!props.glossary &&
+    !!version &&
+    oneToOneParagraphs &&
+    livePreview === undefined;
   useBackHandler(barsVisible && !overlayOpen, () => {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && topBar.current?.contains(focused)) body.current?.focus();
@@ -365,10 +391,43 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     if (selectionMode || (event.target as HTMLElement).closest('button,a,input,select,textarea'))
       return;
     pointerOrigin.current = { x: event.clientX, y: event.clientY };
+    // 타이머가 돌 때는 이벤트가 이미 지나갔으므로 누른 자리의 용어 표시를 미리 읽어 둔다.
+    const termSource = (event.target as HTMLElement).closest<HTMLElement>('[data-term-source]')
+      ?.dataset.termSource;
     longPressTimer.current = setTimeout(() => {
       swallowClick.current = true;
-      setParagraphSheet(index);
+      const found =
+        termSource === undefined
+          ? undefined
+          : props.glossary?.terms.find((item) => item.source === termSource);
+      if (found) setTermSheet(found);
+      else setParagraphSheet(index);
     }, LONG_PRESS_MS);
+  }
+
+  // 강조 범위로 나눈 조각을 그린다. 원문 보기는 원문의 용어를, 번역은 원문에 나온 용어의 표기를 찾는다.
+  function renderHighlighted(index: number, text: string): ReactNode {
+    const terms = props.glossary?.terms ?? [];
+    const sourceText = version?.source.paragraphs[index]?.text ?? '';
+    const ranges = props.showOriginal
+      ? sourceRanges(sourceText, terms)
+      : translatedRanges(sourceText, text, terms);
+    if (!ranges.length) return text || '\u00a0';
+    return splitByRanges(text, ranges).map((segment, position) =>
+      segment.term ? (
+        <mark key={position} className="nr-term" data-term-source={segment.term.source}>
+          {segment.text}
+        </mark>
+      ) : (
+        segment.text
+      ),
+    );
+  }
+
+  async function deleteConfirmed(term: GuidanceTerm): Promise<void> {
+    const ok = (await props.glossary?.deleteTerm(term.source)) ?? false;
+    setConfirmDelete(null);
+    showSnackbar(ok ? '용어를 지웠어요.' : GLOSSARY_SAVE_FAILED);
   }
 
   function cancelLongPress(): void {
@@ -829,7 +888,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
                 {isFailed && (
                   <span className="nr-reader-failed-label">번역하지 못해 원문으로 남겼어요.</span>
                 )}
-                {text || '\u00a0'}
+                {highlight && !isFailed ? renderHighlighted(index, text) : text || '\u00a0'}
                 {isFailed && mayRepair && (
                   <Button
                     variant="text"
@@ -1089,11 +1148,99 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
                 이 문단 원문 보기
               </Button>
             )}
+          {props.glossary && version && oneToOneParagraphs && paragraphSheet !== null && (
+            <ParagraphTermActions
+              sourceText={version.source.paragraphs[paragraphSheet]?.text ?? ''}
+              glossary={props.glossary}
+              onAdd={(sourceText) => {
+                setParagraphSheet(null);
+                setEditor({ mode: 'add', sourceText });
+              }}
+              onOpen={(item) => {
+                setParagraphSheet(null);
+                setTermSheet(item);
+              }}
+            />
+          )}
           {!oneToOneParagraphs && (
             <p>원문과 번역 문단이 일대일로 대응하지 않아 문단별 작업을 제공하지 않아요.</p>
           )}
         </div>
       </BottomSheet>
+      <BottomSheet
+        open={termSheet !== null}
+        title={termSheet?.source ?? ''}
+        onClose={() => setTermSheet(null)}
+      >
+        {termSheet && (
+          <div className="nr-reader-sheet-body">
+            <p>표기 {termSheet.target}</p>
+            {termSheet.category && <p>분류 {termSheet.category}</p>}
+            {termSheet.note && <p>{termSheet.note}</p>}
+            {termSheet.origin === 'model' && <p>자동 생성</p>}
+            {termSheet.origin === 'scan' && <p>정밀스캔</p>}
+            {props.glossary?.locked && <p role="status">번역 중에는 용어집을 고칠 수 없어요.</p>}
+            <Button
+              variant="text"
+              disabled={props.glossary?.locked}
+              onClick={() => {
+                setTermSheet(null);
+                setEditor({ mode: 'edit', initial: termSheet });
+              }}
+            >
+              편집하기
+            </Button>
+            <Button
+              variant="text"
+              disabled={props.glossary?.locked}
+              onClick={() => {
+                setTermSheet(null);
+                setConfirmDelete(termSheet);
+              }}
+            >
+              삭제하기
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
+      <Dialog
+        open={confirmDelete !== null}
+        title={`‘${confirmDelete?.source ?? ''}’ 용어를 지울까요?`}
+        onClose={() => setConfirmDelete(null)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setConfirmDelete(null)}>
+              취소
+            </Button>
+            <Button
+              variant="filled"
+              onClick={() => confirmDelete && void deleteConfirmed(confirmDelete)}
+            >
+              지우기
+            </Button>
+          </>
+        }
+      >
+        <p>다음 번역부터 이 표기를 쓰지 않아요. 이미 번역한 회차는 그대로예요.</p>
+      </Dialog>
+      {props.glossary && (
+        <TermEditor
+          open={editor !== null}
+          mode={editor?.mode ?? 'add'}
+          initial={editor?.initial}
+          sourceText={editor?.sourceText}
+          terms={props.glossary.terms}
+          locked={props.glossary.locked}
+          onCancel={() => setEditor(null)}
+          onSave={async (term, previous) => {
+            const ok = await props.glossary!.saveTerm(term, previous);
+            if (ok) setEditor(null);
+            showSnackbar(
+              ok ? '용어집에 저장했어요. 다음 번역부터 적용돼요.' : GLOSSARY_SAVE_FAILED,
+            );
+          }}
+        />
+      )}
       <Dialog
         open={titleEditorOpen}
         title="회차 제목 직접 수정하기"
@@ -1153,6 +1300,38 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         </p>
       </Dialog>
     </section>
+  );
+}
+
+// 문단 시트의 용어 항목. 용어 추가 버튼과 이 문단에 나온 용어 목록을 보여 준다.
+function ParagraphTermActions({
+  sourceText,
+  glossary,
+  onAdd,
+  onOpen,
+}: {
+  sourceText: string;
+  glossary: ReaderGlossary & { locked: boolean };
+  onAdd(sourceText: string): void;
+  onOpen(term: GuidanceTerm): void;
+}): JSX.Element {
+  const found = paragraphTerms(sourceText, glossary.terms);
+  return (
+    <>
+      <Button variant="text" disabled={glossary.locked} onClick={() => onAdd(sourceText)}>
+        용어 추가하기
+      </Button>
+      {found.length > 0 && (
+        <>
+          <p>이 문단의 용어</p>
+          {found.map((item) => (
+            <Button key={item.source} variant="text" onClick={() => onOpen(item)}>
+              {`${item.source} · ${item.target}`}
+            </Button>
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
