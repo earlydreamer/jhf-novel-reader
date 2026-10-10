@@ -202,6 +202,72 @@ it('번역 제목이 없는 서재 행은 원문을 일본어로 표시하고 �
   controller.dispose();
 });
 
+it('서재 일괄 번역 카드는 번역 제목이 있으면 번역 제목을 보여 준다(#270)', async () => {
+  const translated = work('n5678bb', '번역 대상 작품');
+  const { library } = libraryHarness([translated]);
+  const titles: TitleRepository = {
+    read: async () => [
+      {
+        key: translated.workId,
+        source: translated.title,
+        target: '번역된 작품',
+        origin: 'user',
+        updatedAt: '2026-10-08T00:00:00Z',
+      },
+    ],
+    readAttempts: async () => [],
+    recordAttempt: async () => {},
+    save: async (_workId, entries) => entries,
+  };
+  const idle: BatchState = { record: null, active: false, preparing: false, error: null };
+  let emitBatch = (_state: BatchState) => {};
+  const batch = {
+    initialize: vi.fn(async () => {}),
+    setForeground: vi.fn(),
+    getSnapshot: () => idle,
+    subscribe: vi.fn((listener: (state: BatchState) => void) => {
+      emitBatch = listener;
+      return () => {};
+    }),
+    dispose: vi.fn(),
+  } as unknown as NonNullable<RenewalDependencies['batch']>;
+  const running: BatchState = {
+    record: {
+      schemaVersion: 1,
+      id: 'batch-fixture',
+      createdAt: '2026-10-08T00:00:00Z',
+      work: translated,
+      selection: {
+        connection: { provider: 'openai-compatible', baseUrl: '', revision: 0 },
+        modelId: 'fixture-model',
+        translationMode: 'legacy',
+      },
+      chapters: translated.chapters,
+      retranslate: false,
+      alreadySaved: 0,
+      cursor: 0,
+      completed: 0,
+      skipped: 0,
+      phase: 'prepared',
+    },
+    active: false,
+    preparing: false,
+    error: null,
+  };
+  const controller = createRenewalController({ library, titles, batch });
+  render(<Application controller={controller} />);
+  await screen.findByText('번역된 작품');
+  act(() => emitBatch(running));
+
+  const card = await screen.findByLabelText('일괄 번역 상태');
+  await waitFor(() =>
+    expect(card).toHaveTextContent('번역된 작품의 일괄 번역을 이어서 확인할 수 있어요.'),
+  );
+  expect(card).not.toHaveTextContent('번역 대상 작품');
+  expect(within(card).getByText('번역된 작품')).not.toHaveAttribute('lang');
+  controller.dispose();
+});
+
 it('새 작품을 URL로 열고 서재로 돌아오면 즉시 목록에 등록된다', async () => {
   const added = work('n5678bb', '새 작품');
   const { library } = libraryHarness();
@@ -1399,9 +1465,7 @@ describe('목차 회차 시트의 저장본 삭제', () => {
   it('확인하면 지우고 행 상태·저장 수가 바뀌고 알림이 뜬다', async () => {
     const { target, library, controller } = await openFirstSavedWork('n3131ff', '확인 삭제 작품');
     expect(screen.getByText(`전체 2화 · 1화 저장됨`)).toBeVisible();
-    expect(screen.getByRole('button', { name: '1화 1화 제목' })).toHaveAccessibleDescription(
-      /저장됨/,
-    );
+    expect(screen.getByRole('button', { name: '1화 제목' })).toHaveAccessibleDescription(/저장됨/);
 
     const confirm = await confirmRemoveDialog(1);
     expect(confirm).toHaveTextContent('되돌릴 수 없어요');
@@ -1413,7 +1477,7 @@ describe('목차 회차 시트의 저장본 삭제', () => {
       { activeBatchWorkId: undefined },
     );
     expect(screen.queryByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeNull();
-    expect(screen.getByRole('button', { name: '1화 1화 제목' })).not.toHaveAccessibleDescription(
+    expect(screen.getByRole('button', { name: '1화 제목' })).not.toHaveAccessibleDescription(
       /저장됨/,
     );
     expect(screen.getByText(`전체 2화 · 0화 저장됨`)).toBeVisible();
@@ -1430,9 +1494,7 @@ describe('목차 회차 시트의 저장본 삭제', () => {
       expect(screen.queryByRole('dialog', { name: '1화 저장본을 삭제할까요?' })).toBeNull(),
     );
     expect(library.removeChapterVersions).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: '1화 1화 제목' })).toHaveAccessibleDescription(
-      /저장됨/,
-    );
+    expect(screen.getByRole('button', { name: '1화 제목' })).toHaveAccessibleDescription(/저장됨/);
     controller.dispose();
   });
 

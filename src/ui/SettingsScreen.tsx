@@ -415,7 +415,7 @@ export function SettingsScreen({
   const authDisabled = !state.connectionAvailable || checking || !state.connection.baseUrl;
 
   return (
-    <section aria-label="설정">
+    <section className="nr-settings" aria-label="설정">
       <h1 className="nr-visually-hidden">설정</h1>
 
       <section aria-labelledby="settings-server">
@@ -625,7 +625,7 @@ export function SettingsScreen({
         {onAutoRetryFailed && (
           <Switch
             label="실패한 문단 자동으로 다시 번역"
-            description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 연결이 끊긴 요청은 자동으로 다시 보내지 않아요."
+            description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 로컬 서버가 응답 없이 멈춘 요청도 한 번 다시 보내요."
             checked={state.autoRetryFailed}
             onChange={onAutoRetryFailed}
           />

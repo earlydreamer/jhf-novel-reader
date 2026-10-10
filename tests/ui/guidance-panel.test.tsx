@@ -17,7 +17,6 @@ function renderPanel(value: WorkGuidance, onSave = vi.fn()) {
     guidanceWith(draft.terms),
   );
   render(<GuidancePanel workId="n1234ab" locked={false} onRead={onRead} onSave={onSave} />);
-  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
   return onSave;
 }
 

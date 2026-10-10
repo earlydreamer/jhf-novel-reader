@@ -62,7 +62,18 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
       )}
       {state.batch?.record && state.batch.record.phase !== 'complete' && (
         <aside className="nr-notice" aria-label="일괄 번역 상태">
-          <p>{state.batch.record.work.title}의 일괄 번역을 이어서 확인할 수 있어요.</p>
+          <p>
+            <span
+              lang={titleLang(
+                state.recentTitles,
+                state.batch.record.work.workId,
+                state.batch.record.work.title,
+              )}
+            >
+              {state.recentTitles[state.batch.record.work.workId] ?? state.batch.record.work.title}
+            </span>
+            의 일괄 번역을 이어서 확인할 수 있어요.
+          </p>
           <Button variant="text" onClick={props.onOpenBatch}>
             일괄 번역 보기
           </Button>

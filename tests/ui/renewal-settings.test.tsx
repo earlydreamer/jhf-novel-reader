@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -201,6 +202,45 @@ describe('Android 목록형 설정', () => {
     const translation = screen.getByRole('region', { name: '번역 방식' });
     expect(within(translation).getByText('최근 번역 시간')).toBeVisible();
     expect(within(translation).getByText('아직 기록이 없어요')).toBeVisible();
+    value.controller.dispose();
+  });
+
+  it('설정 섹션의 목록 항목이 아닌 내용만 같은 왼쪽 선 규칙에 걸려요(#270)', async () => {
+    const value = await setup();
+
+    const root = screen.getByRole('region', { name: '설정' });
+    expect(root).toHaveClass('nr-settings');
+    // application.css의 규칙과 같은 선택자. 규칙 원문이 바뀌면 이 시험도 함께 고친다.
+    const aligned = [
+      ...root.querySelectorAll('.nr-settings > section > :not(.nr-list-item, .nr-switch-row)'),
+    ];
+    const server = screen.getByRole('region', { name: '번역 서버' });
+    expect(aligned).toContain(within(server).getByRole('heading', { name: '번역 서버' }));
+    expect(aligned).toContain(
+      within(server).getByLabelText('서버 주소').closest('.nr-address-preset'),
+    );
+    expect(aligned).toContain(within(server).getByRole('button', { name: '연결 확인하기' }));
+    // 목록 항목·스위치 행(자체 padding), 푸터, 대화상자는 걸리지 않는다.
+    expect(aligned).not.toContain(within(server).getByText('연결 상태').closest('.nr-list-item'));
+    expect(aligned.some((element) => element.classList.contains('nr-switch-row'))).toBe(false);
+    expect(aligned.some((element) => element.classList.contains('nr-list-item'))).toBe(false);
+    expect(aligned.some((element) => element.closest('.nr-settings-footer'))).toBe(false);
+    expect(aligned.some((element) => element.closest('.nr-modal'))).toBe(false);
+    const rule = readFileSync('src/app/application.css', 'utf8');
+    expect(rule).toMatch(
+      /\.nr-settings > section > :not\(\.nr-list-item, \.nr-switch-row\) \{\s*margin-inline: 16px;\s*\}/,
+    );
+    value.controller.dispose();
+  });
+
+  it('실패한 문단 자동 재번역 설명은 로컬 서버 재전송을 함께 알려요(#270)', async () => {
+    const value = await setup();
+
+    expect(
+      screen.getByText(
+        '읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 로컬 서버가 응답 없이 멈춘 요청도 한 번 다시 보내요.',
+      ),
+    ).toBeVisible();
     value.controller.dispose();
   });
 
