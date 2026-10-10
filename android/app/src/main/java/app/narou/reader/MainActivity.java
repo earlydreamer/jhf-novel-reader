@@ -38,6 +38,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ReaderThemePlugin.class);
         registerPlugin(ScreenAwakePlugin.class);
         registerPlugin(AppReadyPlugin.class);
+        registerPlugin(BackupPlugin.class);
         super.onCreate(savedInstanceState);
         WindowCompat.enableEdgeToEdge(getWindow());
     }
