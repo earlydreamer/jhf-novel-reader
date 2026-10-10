@@ -232,7 +232,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             ...(chapterReference ? { reference } : {}),
             ...(streaming
               ? {
-                  lockedTerms: (input: string) =>
+                  requiredTerms: (input: string) =>
                     (appliedGuidance(guidance, chapter.workId, input, [])?.terms ?? []).flatMap(
                       ({ term, names }) => names.map((source) => ({ source, target: term.target })),
                     ),
