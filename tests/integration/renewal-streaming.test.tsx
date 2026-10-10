@@ -738,3 +738,54 @@ test('retranslate right after a live translation finish restarts from the transl
   expect(h.app.getSnapshot().translation.phase).toBe('ready');
   h.app.dispose();
 });
+test.each(['retranslateChapter', 'refreshSource'] as const)(
+  '%s preserves pending storage recovery after a retranslation save fails (#286)',
+  async (action) => {
+    const h = harness();
+    try {
+      await prepareStreaming(h);
+      const chapter = h.app.getSnapshot().work!.chapters[0]!;
+      await h.app.selectChapter(chapter);
+      h.release();
+      await h.app.translate();
+      const base = h.app.getSnapshot().version!;
+      await h.app.selectChapter(chapter);
+      h.failSave(true);
+      await h.app.retranslateChapter();
+      const pending = h.app.getSnapshot().translation.pendingSave!;
+      expect(pending).toBeDefined();
+      expect(pending.versionId).not.toBe(base.versionId);
+      render(<Application controller={h.app} />);
+      const article = screen.getByRole('article', { name: '번역 본문' });
+      expect(screen.getByRole('button', { name: '저장 다시 하기' })).toBeEnabled();
+      const posts = h.requests.filter((request) => request.method === 'POST').length;
+
+      await act(() => h.app[action]());
+
+      expect(h.app.getSnapshot().translation).toMatchObject({
+        phase: 'failed',
+        pendingSave: { versionId: pending.versionId },
+      });
+      expect(h.app.getSnapshot().version?.versionId).toBe(base.versionId);
+      expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+      expect(screen.getByRole('button', { name: '저장 다시 하기' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+      fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+      expect(
+        screen.queryByRole('menuitem', { name: '이 화 다시 번역하기' }),
+      ).not.toBeInTheDocument();
+
+      h.failSave(false);
+      await act(() => h.app.retrySave());
+      expect(h.app.getSnapshot().version?.versionId).toBe(pending.versionId);
+      expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(posts);
+      const versions = await createLibraryStore(h.adapters.files).listVersions(chapter.chapterId);
+      expect(versions.map((version) => version.versionId)).toEqual(
+        expect.arrayContaining([base.versionId, pending.versionId]),
+      );
+    } finally {
+      h.release();
+      h.app.dispose();
+    }
+  },
+);

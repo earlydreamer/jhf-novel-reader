@@ -2027,7 +2027,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   /** 리더(저장본)이거나, 읽으며 번역이 끝난 뒤 번역 경로에서 이 회차의 저장본을 표시 중일 때. */
   function refreshableChapter(chapter: ChapterRef | null): chapter is ChapterRef {
-    if (!chapter) return false;
+    if (!chapter || dependencies.flow?.getSnapshot().pendingSave) return false;
     if (snapshot.route.kind === 'reader') return true;
     return (
       snapshot.route.kind === 'translation' &&
