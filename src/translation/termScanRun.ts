@@ -8,7 +8,13 @@ import type {
 import { kanaMismatch } from './kanaCheck';
 import type { GuidanceEvidence, GuidanceRepository, GuidanceTerm } from './guidance';
 import type { Kanjidic } from './kanjidic';
-import { lookupNamuwiki, lookupWikidata, lookupWikipedia, type LookupHit } from './lookup';
+import {
+  lookupNamuwiki,
+  lookupWikidata,
+  lookupWikipedia,
+  lookupWikipediaSearch,
+  type LookupHit,
+} from './lookup';
 import {
   judgeRequest,
   parseJudge,
@@ -57,6 +63,25 @@ const CONFIDENCE_RANK: Record<TermScanChange['confidence'], number> = {
 
 const nameKey = (name: string) => name.normalize('NFKC');
 const compact = (value: string) => value.replace(/\s+/g, '');
+
+/**
+ * 별명(の 뒤 조각의 한자를 한국어 음으로 이은 값)이 판정 표기의 마지막 어절과 같으면 음독 의심이다.
+ * 예: 美濃の蝮(蝮=복)의 판정 '미노의 복'. 뜻으로 옮긴 '미노의 살무사'는 여기 걸리지 않는다.
+ */
+function soundedEpithet(candidate: ScanCandidate, target: string): boolean {
+  if (!candidate.source.includes('の')) return false;
+  const parts = candidate.source.split('の');
+  const tail = [...(parts[parts.length - 1] ?? '')];
+  if (!tail.length) return false;
+  let sound = '';
+  for (const char of tail) {
+    const ko = candidate.kanji?.find((hint) => hint.char === char)?.ko[0];
+    if (!ko) return false;
+    sound += ko;
+  }
+  const words = target.trim().split(/\s+/);
+  return words[words.length - 1] === sound;
+}
 
 /** 근거 문구를 저장 제한(200 UTF-16 단위) 안으로 줄이고 제어문자는 공백으로 바꾼다. */
 function clip(text: string): string {
@@ -181,12 +206,15 @@ export function createTermScan(deps: {
         const name = candidate.source;
         const hits: LookupHit[] = [];
         if (sources?.wikipedia && !failed.has('wikipedia')) {
-          const hit = await attempt(
-            'wikipedia',
-            async () =>
+          const hit = await attempt('wikipedia', async () => {
+            const exact =
               (await lookupWikipedia(transport, name, signal)) ??
-              (await lookupWikidata(transport, name, signal)),
-          );
+              (await lookupWikidata(transport, name, signal));
+            // 별명만 전문 검색으로 대상을 찾는다. 일반 이름을 검색 1위 문서에 엉뚱하게 붙이지 않는다.
+            if (!exact && name.includes('の'))
+              return lookupWikipediaSearch(transport, name, signal);
+            return exact;
+          });
           if (hit) hits.push(hit);
         }
         if (sources?.namuwiki && !failed.has('namuwiki')) {
@@ -252,10 +280,13 @@ export function createTermScan(deps: {
           ? kanaMismatch(nameKey(candidate.source), answer.target)
           : undefined;
       const hits = lookups.get(candidate.source) ?? [];
-      // 위키백과 정확 연결의 표기와 판정이 다르면 신뢰도를 낮춘다. 위키데이터·나무위키는 신뢰도를 바꾸지 않는다.
+      // 위키백과 정확 연결의 표기와 판정이 다르면 신뢰도를 낮춘다. 위키데이터·나무위키·검색 참고는 신뢰도를 바꾸지 않는다.
       const wikiConflict = hits.some(
         (hit) =>
-          hit.kind === 'wikipedia' && hit.exact && compact(hit.ko) !== compact(answer.target),
+          hit.kind === 'wikipedia' &&
+          hit.exact &&
+          !hit.refers &&
+          compact(hit.ko) !== compact(answer.target),
       );
       const change: TermScanChange = {
         source: candidate.source,
@@ -264,7 +295,10 @@ export function createTermScan(deps: {
         after: answer.target,
         kind: answer.kind,
         category: answer.category,
-        confidence: kanaFlag || wikiConflict ? 'low' : answer.confidence,
+        confidence:
+          kanaFlag || wikiConflict || soundedEpithet(candidate, answer.target)
+            ? 'low'
+            : answer.confidence,
         reason: answer.reason,
         ...(kanaFlag !== undefined ? { kanaFlag } : {}),
         evidence: evidenceOf(candidate, answer, hits),

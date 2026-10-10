@@ -17,7 +17,7 @@ export const SCAN_GUIDES: readonly ScanGuide[] = [
   {
     id: 'epithet',
     when: (candidate) => candidate.source.includes('の') || candidate.script === 'mixed',
-    text: 'Epithets and nicknames are translated by meaning, not by sound. Use the provided kanji meanings; keep place names transliterated (for example 甲斐の虎 → 가이의 호랑이).',
+    text: 'Epithets and nicknames are translated by meaning, not by sound. Use the provided kanji meanings; keep place names transliterated. Never chain the Korean readings of the kanji after の (for example 甲斐の虎 → 가이의 호랑이, not 가이의 호).',
   },
   {
     id: 'sino',
