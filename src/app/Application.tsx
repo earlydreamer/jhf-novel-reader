@@ -128,6 +128,7 @@ function RouteScreen({
           onCancelTermScan={controller.cancelTermScan}
           onRevertTermScan={(source) => void controller.revertTermScanChange(source)}
           onApplyTermScanSuggestion={(source) => void controller.applyTermScanSuggestion(source)}
+          onRemoveTermScanCommon={(source) => void controller.removeTermScanCommon(source)}
           onCloseTermScan={controller.closeTermScan}
           sources={{ wikipedia: state.lookupWikipedia, namuwiki: state.lookupNamuwiki }}
         />

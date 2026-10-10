@@ -12,6 +12,7 @@ export interface TermScanPanelProps {
   onCancel(): void;
   onRevert(source: string): void;
   onApplySuggestion(source: string): void;
+  onRemoveCommon(source: string): void;
   sources: { wikipedia: boolean; namuwiki: boolean };
 }
 
@@ -56,6 +57,9 @@ export function ConfidenceBadges({ change }: { change: TermScanChange }): JSX.El
       {change.kanaFlag && (
         <span className="nr-scan-confidence nr-scan-confidence--flag">발음 확인 필요</span>
       )}
+      {change.shapeFlag && (
+        <span className="nr-scan-confidence nr-scan-confidence--flag">이름 구성 확인 필요</span>
+      )}
     </p>
   );
 }
@@ -87,6 +91,7 @@ export function TermScanPanel({
   onCancel,
   onRevert,
   onApplySuggestion,
+  onRemoveCommon,
   sources,
 }: TermScanPanelProps): JSX.Element {
   const scan = state?.workId === workId ? state : null;
@@ -213,7 +218,11 @@ export function TermScanPanel({
                   <p>
                     <span lang="ja">{item.source}</span>
                   </p>
-                  <p>{`지금 ${item.before ?? ''} · 제안 ${item.after}`}</p>
+                  <p>
+                    {item.before === undefined
+                      ? `새 이름 · 제안 ${item.after}`
+                      : `지금 ${item.before} · 제안 ${item.after}`}
+                  </p>
                   <ConfidenceBadges change={item} />
                   <p>{item.reason}</p>
                   <EvidenceList evidence={item.evidence} />
@@ -223,6 +232,35 @@ export function TermScanPanel({
                     onClick={() => onApplySuggestion(item.source)}
                   >
                     {done ? '적용했어요' : '제안 적용'}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+      {result.removable && result.removable.length > 0 && (
+        <section>
+          <h3>일반어로 판정된 자동 항목</h3>
+          <p>
+            자동으로 넣은 항목 중 이름이 아닌 것 같은 항목이에요. 빼면 번역 때 이 표기를 강제하지
+            않아요.
+          </p>
+          <ul className="nr-scan-list">
+            {result.removable.map((item) => {
+              const done = handled.includes(item.source);
+              return (
+                <li key={item.source}>
+                  <p>
+                    <span lang="ja">{item.source}</span> <span>{`지금 ${item.target}`}</span>
+                  </p>
+                  <p>{item.reason}</p>
+                  <Button
+                    variant="text"
+                    disabled={done}
+                    onClick={() => onRemoveCommon(item.source)}
+                  >
+                    {done ? '뺐어요' : '용어집에서 빼기'}
                   </Button>
                 </li>
               );
