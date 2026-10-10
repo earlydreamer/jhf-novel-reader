@@ -396,7 +396,7 @@ test('확인 필요 상태는 로컬 서버면 재요청 비용 없는 문구와
   render(<BatchPanel {...props} />);
   expect(
     screen.getByText(
-      '서버에서 응답을 받지 못했어요. 한 번 다시 보냈지만 결과를 확인하지 못했어요. 재개하면 이 회차를 다시 요청해요.',
+      '이전 요청 결과를 확인하지 못했어요. 로컬 서버라 다시 요청해도 비용은 들지 않아요. 재개하면 이 회차를 다시 요청해요.',
     ),
   ).toBeVisible();
   expect(screen.queryByText(/비용이 생길 수/)).not.toBeInTheDocument();

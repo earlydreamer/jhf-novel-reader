@@ -127,7 +127,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   // 채우기 결과는 이 기록의 것만 쓴다.
   const fill = record && props.batchFill?.recordId === record.id ? props.batchFill : null;
   const fillResult = fill?.phase === 'done' ? fill.result : undefined;
-  // 로컬 서버는 재요청에 비용이 없다. 문구와 버튼은 연결 종류에 맞춘다.
+  // 로컬 서버는 다시 요청해도 비용이 없다. 문구와 버튼은 연결 종류에 맞춘다.
   const local = record?.selection.connection.provider === 'openai-compatible';
   return (
     <section className="nr-batch-panel" aria-label="일괄 번역">
@@ -263,7 +263,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             <>
               <p>
                 {local
-                  ? '서버에서 응답을 받지 못했어요. 한 번 다시 보냈지만 결과를 확인하지 못했어요. 재개하면 이 회차를 다시 요청해요.'
+                  ? '이전 요청 결과를 확인하지 못했어요. 로컬 서버라 다시 요청해도 비용은 들지 않아요. 재개하면 이 회차를 다시 요청해요.'
                   : '이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.'}
               </p>
               <button
