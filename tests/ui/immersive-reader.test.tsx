@@ -448,6 +448,24 @@ test('기기 판정 기록이 있으면 번역 확인 결과에 판정 요약 �
   expect(openSheet()).not.toHaveTextContent('기기 판정');
 });
 
+test('판정한 이름 수가 기록되어 있으면 판정 요약 줄에 판정 수를 함께 보여 준다', () => {
+  const base = completed();
+  const openSheet = () => {
+    fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '번역 확인 결과 보기' }));
+    return screen.getByRole('dialog', { name: '번역 확인 결과' });
+  };
+  const version = completed({
+    provenance: {
+      ...base.provenance,
+      termDecision: { confirmed: ['ルシア', 'ケイ'], rejected: ['ボブ'], judged: 4, ms: 42 },
+    },
+  });
+  render(<ImmersiveReader {...props({ version })} />);
+  expect(openSheet()).toHaveTextContent('기기 판정 · 4개 판정 · 확정 2개 · 제외 1개 · 42ms');
+});
+
 test('legacy saved quality without a quality record stays explicitly unrecorded and retains heuristic limits', () => {
   const version = completed({ quality: undefined });
   render(<ImmersiveReader {...props({ version })} />);

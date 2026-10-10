@@ -102,10 +102,14 @@ export type CompletedTranslation = {
     generation?: SegmentedGeneration;
     guidanceHash?: string;
     repair?: { baseVersionId: string; paragraphIndexes: readonly number[] };
-    /** 번역 전 기기 용어 판정 결과(#241). 판정이 돌았을 때만 있고, 이름은 정렬돼 있다. */
+    /**
+     * 번역 전 기기 용어 판정 결과(#241). 판정한 이름이 하나 이상일 때만 있고, 이름은 정렬돼 있다.
+     * judged는 이전 버전 저장본에 없을 수 있어 선택 필드다.
+     */
     termDecision?: {
       readonly confirmed: readonly string[];
       readonly rejected: readonly string[];
+      readonly judged?: number;
       readonly ms: number;
     };
   };

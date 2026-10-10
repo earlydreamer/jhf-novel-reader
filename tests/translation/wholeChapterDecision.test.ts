@@ -41,7 +41,11 @@ const guidance: WorkGuidance = {
   terms: [{ source: 'ルシアナ', target: '루시아나', aliases: ['ルシア'], category: '', note: '' }],
   voices: [],
 };
-const confirmed: CandidateDecision = { confirmed: new Set(['ルシア']), rejected: new Set() };
+const confirmed: CandidateDecision = {
+  confirmed: new Set(['ルシア']),
+  rejected: new Set(),
+  judged: 1,
+};
 
 function makeFlow(decideCandidates?: Decide, clock: { now(): number } = { now: () => 0 }) {
   const translate = vi.fn(async () => ({ text: '번역', finishReason: 'complete' as const }));
@@ -120,7 +124,7 @@ test('판정이 돌았으면 저장본 provenance에 이름 정렬된 판정 기
   let now = 0;
   const decide = vi.fn<Decide>(async () => {
     now += 12.6;
-    return { confirmed: new Set(['ルシア', 'ケイ']), rejected: new Set(['ボブ']) };
+    return { confirmed: new Set(['ルシア', 'ケイ']), rejected: new Set(['ボブ']), judged: 3 };
   });
   const { flow, commit } = makeFlow(decide, { now: () => now });
   await flow.start(ref, streaming, guidance);
@@ -128,7 +132,23 @@ test('판정이 돌았으면 저장본 provenance에 이름 정렬된 판정 기
   expect(saved.provenance.termDecision).toEqual({
     confirmed: ['ケイ', 'ルシア'],
     rejected: ['ボブ'],
+    judged: 3,
     ms: 13,
+  });
+});
+
+test('판정한 이름이 없으면(judged 0) termDecision을 남기지 않고, 하나라도 판정했으면 남긴다', async () => {
+  const none = makeFlow(async () => ({ confirmed: new Set(), rejected: new Set(), judged: 0 }));
+  await none.flow.start(ref, streaming, guidance);
+  expect(none.commit.mock.calls[0]![0].provenance).not.toHaveProperty('termDecision');
+
+  const held = makeFlow(async () => ({ confirmed: new Set(), rejected: new Set(), judged: 1 }));
+  await held.flow.start(ref, streaming, guidance);
+  expect(held.commit.mock.calls[0]![0].provenance.termDecision).toEqual({
+    confirmed: [],
+    rejected: [],
+    judged: 1,
+    ms: 0,
   });
 });
 

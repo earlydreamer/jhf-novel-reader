@@ -310,7 +310,7 @@ test('부분 인덱스 손상은 pending 삭제 여부가 불명확하므로 재
   expect(writes.filter((p) => p.startsWith('versions/'))).toHaveLength(1);
 });
 
-test('termDecision 기록은 이름 80자·50개·정수 ms 형식을 지키고 기록이 없는 저장본은 그대로 통과한다', async () => {
+test('termDecision 기록은 이름 80자·50개·정수 ms·judged 형식을 지키고 기록이 없는 저장본은 그대로 통과한다', async () => {
   const memory = new Map<string, string>();
   const files = {
     read: async (p: string) => memory.get(p) ?? null,
@@ -319,10 +319,10 @@ test('termDecision 기록은 이름 80자·50개·정수 ms 형식을 지키고 
     },
   };
   const store = createLibraryStore(files);
-  const withDecision = (termDecision: unknown) =>
+  const withDecision = (termDecision: unknown, versionId = 'term-decision') =>
     ({
       ...value,
-      versionId: 'term-decision',
+      versionId,
       provenance: { ...value.provenance, termDecision },
     }) as unknown as CompletedTranslation;
   const valid = {
@@ -330,15 +330,22 @@ test('termDecision 기록은 이름 80자·50개·정수 ms 형식을 지키고 
     rejected: [],
     ms: 0,
   };
+  // judged가 없는 기록은 이전 버전(#241)이 남긴 저장본이라 계속 읽혀야 한다.
   const accepted = withDecision(valid);
   await store.commitVersion(accepted);
   expect(await createLibraryStore(files).readVersion('term-decision')).toEqual(accepted);
+
+  const counted = withDecision({ ...valid, judged: 2 }, 'term-decision-judged');
+  await store.commitVersion(counted);
+  expect(await createLibraryStore(files).readVersion('term-decision-judged')).toEqual(counted);
 
   const rejected = [
     { ...valid, confirmed: ['가'.repeat(81)] },
     { ...valid, rejected: Array.from({ length: 51 }, (_, i) => `n${i}`) },
     { ...valid, ms: -1 },
     { ...valid, ms: 1.5 },
+    { ...valid, judged: -1 },
+    { ...valid, judged: 1.5 },
     { ...valid, confirmed: [''] },
     { ...valid, extra: true },
     { confirmed: ['ルシア'], ms: 3 },

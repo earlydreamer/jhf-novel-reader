@@ -3,7 +3,12 @@ import { findTermMatches, type TermMatch } from './termMatch';
 
 /** 정규화된 벡터를 돌려주는 임베딩 함수. 기기 모델 연결은 주입받는 쪽이 맡는다. */
 export type EmbedTexts = (texts: readonly string[]) => Promise<number[][]>;
-export type CandidateDecision = { confirmed: ReadonlySet<string>; rejected: ReadonlySet<string> };
+export type CandidateDecision = {
+  confirmed: ReadonlySet<string>;
+  rejected: ReadonlySet<string>;
+  /** 점수를 낸 이름 수(보류 포함). 기준 없음·상한 초과로 건너뛴 이름은 세지 않는다. */
+  judged: number;
+};
 
 /** 기준 문맥과의 유사도가 이 값 이상이면 확정한다. */
 export const DECISION_HIGH = 0.85;
@@ -18,7 +23,11 @@ const EPSILON = 1e-9;
 
 type Judgment = { name: string; baseline: string[]; candidate: string[] };
 
-const emptyDecision = (): CandidateDecision => ({ confirmed: new Set(), rejected: new Set() });
+const emptyDecision = (): CandidateDecision => ({
+  confirmed: new Set(),
+  rejected: new Set(),
+  judged: 0,
+});
 
 /** 자리 앞뒤 40자(코드포인트)를 잘라 임베딩 입력 한 줄로 만든다. 줄바꿈은 공백으로 바꾼다. */
 function contextAt(chars: readonly string[], start: number, end: number): string {
@@ -29,8 +38,9 @@ function contextAt(chars: readonly string[], start: number, end: number): string
 }
 
 /**
- * 판정 대상을 고른다. 확정 문맥이 없는 후보는 빼고, 새로 필요한 문장 수가 maxTexts를 넘는 이름도 뺀다.
- * 같은 문장은 한 번만 세므로 같은 용어의 기준 문맥은 여러 후보가 공유한다.
+ * 판정 대상을 고른다. 후보 자리가 있는 이름이면 확정 자리 유무와 상관없이 본다.
+ * 기준은 같은 용어(그 이름 포함)의 확정 자리이고, 확정 문맥이 없으면 기준이 없으므로 뺀다.
+ * 새로 필요한 문장 수가 maxTexts를 넘는 이름도 뺀다. 같은 문장은 한 번만 세므로 같은 용어의 기준 문맥은 여러 후보가 공유한다.
  */
 function plan(
   input: string,
@@ -44,14 +54,13 @@ function plan(
     for (const name of [term.source, ...term.aliases]) if (!owner.has(name)) owner.set(name, term);
   }
   const matches = findTermMatches(input, [...owner.keys()]);
-  const confirmedNames = new Set(matches.filter((m) => m.confirmed).map((m) => m.name));
   const confirmedByTerm = new Map<GuidanceTerm, TermMatch[]>();
   const candidateByName = new Map<string, TermMatch[]>();
   for (const match of matches) {
     const term = owner.get(match.name)!;
     if (match.confirmed) {
       confirmedByTerm.set(term, [...(confirmedByTerm.get(term) ?? []), match]);
-    } else if (!confirmedNames.has(match.name)) {
+    } else {
       candidateByName.set(match.name, [...(candidateByName.get(match.name) ?? []), match]);
     }
   }
@@ -129,7 +138,7 @@ export async function decideCandidates(
       if (score >= DECISION_HIGH - EPSILON) confirmed.add(name);
       else if (score <= DECISION_LOW + EPSILON) rejected.add(name);
     }
-    return { confirmed, rejected };
+    return { confirmed, rejected, judged: judgments.length };
   } catch {
     return emptyDecision();
   } finally {

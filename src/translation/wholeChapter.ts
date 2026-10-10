@@ -57,7 +57,12 @@ function termDecisionRecord(decision: CandidateDecision, ms: number) {
       .filter((name) => !!name.trim() && name.length <= 80)
       .sort()
       .slice(0, 50);
-  return { confirmed: names(decision.confirmed), rejected: names(decision.rejected), ms };
+  return {
+    confirmed: names(decision.confirmed),
+    rejected: names(decision.rejected),
+    judged: decision.judged,
+    ms,
+  };
 }
 export type PhaseDurations = { sourceMs: number; modelMs: number; validationStorageMs: number };
 export type ParagraphRepair = { base: CompletedTranslation; indexes: readonly number[] };
@@ -374,7 +379,10 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
                   },
                 }
               : {}),
-            ...(decision ? { termDecision: termDecisionRecord(decision, decisionMs) } : {}),
+            // 판정할 이름이 없던 회차(judged 0)는 기록을 남기지 않는다.
+            ...(decision && decision.judged > 0
+              ? { termDecision: termDecisionRecord(decision, decisionMs) }
+              : {}),
           },
         };
         if (control.signal.aborted || disposed) throw new ReaderError('cancelled', 'unknown');
