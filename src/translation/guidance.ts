@@ -3,6 +3,7 @@ import { digest, Journal, serial, type PrivateFiles } from '../storage/journal';
 import { check, object } from '../storage/validation';
 import { identifier } from '../storage/readingValidation';
 import { findTermMatches } from './termMatch';
+import type { CandidateDecision } from './termDecision';
 
 export { isUnsafeTermName } from './termMatch';
 
@@ -179,8 +180,9 @@ export function streamingGuidanceContext(
   workId: string,
   input: string,
   preset: readonly GuidanceTerm[],
+  decision?: CandidateDecision,
 ): string {
-  const applied = appliedGuidance(value, workId, input, preset);
+  const applied = appliedGuidance(value, workId, input, preset, decision);
   if (!applied) return '';
   return (
     'Translation notes (reference data):\n' +
@@ -219,12 +221,16 @@ type AppliedGuidance = {
   terms: { term: GuidanceTerm; names: string[]; candidateNames: string[] }[];
   voices: GuidanceVoice[];
 };
-/** 입력에 실제로 등장한 용어(등장한 이름 포함)와 말투만 고른다. 주입 형식과 적용 해시가 같은 매칭을 쓴다. */
+/**
+ * 입력에 실제로 등장한 용어(등장한 이름 포함)와 말투만 고른다. 주입 형식과 적용 해시가 같은 매칭을 쓴다.
+ * decision이 있으면 후보 이름을 확정(names)하거나 제외(candidateNames에서 뺌)한다. 해시에는 쓰지 않는다.
+ */
 export function appliedGuidance(
   value: WorkGuidance | null,
   workId: string,
   input: string,
   preset: readonly GuidanceTerm[],
+  decision?: CandidateDecision,
 ): AppliedGuidance | null {
   if (value && value.workId !== workId) throw new ReaderError('storage');
   const workTerms = (value?.terms ?? []).filter((term) => term.origin !== 'auto');
@@ -252,12 +258,16 @@ export function appliedGuidance(
   const terms = candidates
     .map((term) => {
       const names = [term.source, ...term.aliases];
+      // 확정된 적이 없고 후보로만 등장한 이름만 판정 대상이다.
+      const pending = names.filter(
+        (name) => !confirmedNames.has(name) && candidateOnlyPool.has(name),
+      );
+      const promoted = new Set(pending.filter((name) => decision?.confirmed.has(name)));
       return {
         term,
-        names: names.filter((name) => confirmedNames.has(name)),
-        // 확정된 적이 없고 후보로만 등장한 이름만 후보로 둔다.
-        candidateNames: names.filter(
-          (name) => !confirmedNames.has(name) && candidateOnlyPool.has(name),
+        names: names.filter((name) => confirmedNames.has(name) || promoted.has(name)),
+        candidateNames: pending.filter(
+          (name) => !promoted.has(name) && !decision?.rejected.has(name),
         ),
       };
     })
@@ -272,8 +282,9 @@ export function guidanceContext(
   workId: string,
   input: string,
   preset: readonly GuidanceTerm[] = [],
+  decision?: CandidateDecision,
 ): string {
-  const applied = appliedGuidance(value, workId, input, preset);
+  const applied = appliedGuidance(value, workId, input, preset, decision);
   if (!applied) return '';
   const terms = applied.terms.flatMap(({ term, names, candidateNames }) => [
     ...names.map(

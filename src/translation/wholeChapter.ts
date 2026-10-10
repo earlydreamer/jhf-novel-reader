@@ -27,6 +27,7 @@ import {
 import { normalizeChapterInput } from '../providers/plainText';
 import { contextHints, referencePreset } from './preset';
 import { checkTranslationQuality } from './quality';
+import type { CandidateDecision } from './termDecision';
 export interface FlowDependencies {
   source: RenewalSource;
   createProvider(selection: SelectedModel): ProviderSession;
@@ -34,6 +35,11 @@ export interface FlowDependencies {
   attempts: AttemptRepository;
   clock: { now(): number };
   guidance?: GuidanceRepository;
+  /** 번역 요청 전 후보 용어 판정(#241). null이면 판정하지 않는다. 던지면 판정 없이 번역한다. */
+  decideCandidates?: (
+    input: string,
+    guidance: WorkGuidance | null,
+  ) => Promise<CandidateDecision | null>;
   /** 번역 직전 자동 용어집(#192). 없으면 건너뛴다. */
   autoGlossary?: (input: {
     workId: string;
@@ -197,12 +203,21 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         const streaming =
           selected.connection.provider === 'openai-compatible' &&
           selected.translationMode === 'stream';
+        // 후보 용어 판정(#241): 번역 요청 직전에 회차 입력으로 한 번만 부른다. 실패해도 번역은 판정 없이 계속한다.
+        let decision: CandidateDecision | undefined;
+        try {
+          decision =
+            (await deps.decideCandidates?.(normalizeChapterInput(requestSource), guidance)) ??
+            undefined;
+        } catch {
+          decision = undefined;
+        }
         // 문형 힌트는 구간 번역에서만, 그 구간에 해당 문형이 있을 때만 참고 데이터 앞에 붙는다.
         const reference = (input: string) => {
           const hints = segmented ? contextHints(input) : '';
           const terms = streaming
-            ? streamingGuidanceContext(guidance, chapter.workId, input, preset)
-            : guidanceContext(guidance, chapter.workId, input, preset);
+            ? streamingGuidanceContext(guidance, chapter.workId, input, preset, decision)
+            : guidanceContext(guidance, chapter.workId, input, preset, decision);
           return hints ? hints + (terms || '\n') : terms;
         };
         const chapterReference = reference(normalizeChapterInput(requestSource));
@@ -233,8 +248,10 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             ...(streaming
               ? {
                   requiredTerms: (input: string) =>
-                    (appliedGuidance(guidance, chapter.workId, input, [])?.terms ?? []).flatMap(
-                      ({ term, names }) => names.map((source) => ({ source, target: term.target })),
+                    (
+                      appliedGuidance(guidance, chapter.workId, input, [], decision)?.terms ?? []
+                    ).flatMap(({ term, names }) =>
+                      names.map((source) => ({ source, target: term.target })),
                     ),
                   plotSummary: plotSummaryWithoutNames(guidance),
                 }
@@ -314,6 +331,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             blocks,
             guidance,
             preset,
+            decision,
           ),
           createdAt: new Date().toISOString(),
           provenance: {
