@@ -22,7 +22,12 @@ import {
 } from '../../src/translation/termScanRun';
 
 type Answer = { kind?: JudgeKind; category?: string; target: string; reason?: string };
-type ProviderHooks = { onCall?: (call: number) => void; fail?: (call: number) => boolean };
+type ProviderHooks = {
+  onCall?: (call: number) => void;
+  fail?: (call: number) => boolean;
+  /** 요청 하나를 잡아 두는 대기. 동시에 나간 요청 수를 재는 데 쓴다. */
+  wait?: (call: number) => Promise<void>;
+};
 type Request = { system: string; user: string; temperature?: number };
 
 const NOW = '2026-10-03T00:00:00Z';
@@ -93,6 +98,7 @@ function fakeProvider(answers: Record<string, Answer>, hooks: ProviderHooks) {
       requests.push(request);
       const call = requests.length;
       hooks.onCall?.(call);
+      await hooks.wait?.(call);
       if (hooks.fail?.(call)) throw new Error('boom');
       const items = [...request.user.matchAll(/^\[(c\d+)\] (.+)$/gm)].flatMap(([, id, source]) => {
         const answer = answers[source ?? ''];
@@ -202,6 +208,62 @@ function fakeLookup(
   return { transport, calls };
 }
 
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/**
+ * fakeLookup을 감싼다. manual이면 각 호출이 release()로 풀릴 때까지 기다리고, 아니면 잠깐 뒤에 응답한다.
+ * stats.peak는 동시에 나간 조회 호출의 최대 수다.
+ */
+function trackedLookup(table: Record<string, Entry>, options: { manual?: boolean } = {}) {
+  const inner = fakeLookup(table);
+  const gates: (() => void)[] = [];
+  const stats = { active: 0, peak: 0 };
+  const transport: LookupTransport = {
+    get: async (url, responseType, signal) => {
+      stats.active += 1;
+      stats.peak = Math.max(stats.peak, stats.active);
+      try {
+        if (options.manual) await new Promise<void>((resolve) => gates.push(resolve));
+        else await settle();
+        return await inner.transport.get(url, responseType, signal);
+      } finally {
+        stats.active -= 1;
+      }
+    },
+  };
+  const release = () => gates.shift()?.();
+  return { transport, calls: inner.calls, gates, release, stats };
+}
+type TrackedLookup = ReturnType<typeof trackedLookup>;
+
+/** 후보 아홉 개. 묶음은 8개와 1개로 나뉘고, 조회는 위키백과 정확 연결 한 번으로 끝난다. */
+const NINE_NAMES = [
+  'アルフ',
+  'ベルナ',
+  'カルロ',
+  'ダリア',
+  'エルザ',
+  'フレイ',
+  'ゴルド',
+  'ハンナ',
+  'イリス',
+];
+const NINE_TEXT = NINE_NAMES.map((name) => `${name}が${name}に会う。`).join('');
+const NINE_TABLE: Record<string, Entry> = Object.fromEntries(
+  NINE_NAMES.map((name): [string, Entry] => [name, { wiki: `${name}-위키` }]),
+);
+const NINE_ANSWERS: Record<string, Answer> = Object.fromEntries(
+  NINE_NAMES.map((name): [string, Answer] => [name, { target: '이름' }]),
+);
+
+/** 풀려 있는 조회 호출을 하나씩 풀고, 더 기다리는 호출이 없을 때까지 돈다. */
+async function releaseEach(lookup: TrackedLookup) {
+  while (lookup.gates.length) {
+    lookup.release();
+    await settle();
+  }
+}
+
 const LOOKUP_TABLE: Record<string, Entry> = {
   カミラ: { wiki: '카미라', wikidata: { id: 'Q1', ko: '카미라-위키데이터' }, namu: '카미라' },
   ハンナ: { wikidata: { id: 'Q2', ko: '한나' } },
@@ -221,7 +283,7 @@ function harness(input: {
   terms?: GuidanceTerm[];
   answers?: Record<string, Answer>;
   loadKanjidic?: () => Promise<Kanjidic>;
-  lookup?: ReturnType<typeof fakeLookup>;
+  lookup?: { transport: LookupTransport };
 }) {
   const hooks: ProviderHooks = {};
   const provider = fakeProvider(input.answers ?? {}, hooks);
@@ -827,6 +889,113 @@ test('진행 단계는 수집, 조회, 판정, 저장 순서이고 조회는 후
     { stage: 'judge', done: 3, total: 3 },
     { stage: 'save', done: 1, total: 1 },
   ]);
+});
+
+test('첫 묶음 조회가 끝나면 둘째 묶음 조회를 기다리지 않고 첫 묶음을 판정한다', async () => {
+  const lookup = trackedLookup(NINE_TABLE, { manual: true });
+  const h = harness({ versions: { c1: oneVersion(NINE_TEXT) }, answers: NINE_ANSWERS, lookup });
+  const finished = run(h, ['c1'], undefined, undefined, { wikipedia: true });
+  await settle();
+  for (let index = 0; index < 8; index += 1) {
+    lookup.release();
+    await settle();
+  }
+  // 첫 묶음 8개 조회가 끝났고, 둘째 묶음(1개) 조회는 아직 대기 중이다.
+  expect(lookup.calls).toHaveLength(8);
+  expect(lookup.gates).toHaveLength(1);
+  expect(h.requests).toHaveLength(3);
+  for (const call of lookup.calls) {
+    expect(h.requests[0]!.user).toContain(
+      `lookup: ${call.slice('wikipedia:'.length)}-위키 (wikipedia, exact link)`,
+    );
+  }
+  await releaseEach(lookup);
+  const result = await finished;
+  expect(result.applied).toHaveLength(NINE_NAMES.length);
+  expect(lookup.stats.peak).toBe(1);
+});
+
+test('판정이 조회와 겹치면 판정 진행에 외부 사전 진행을 붙이고, 조회가 끝나면 그 줄을 뺀다', async () => {
+  const lookup = trackedLookup(NINE_TABLE, { manual: true });
+  const h = harness({ versions: { c1: oneVersion(NINE_TEXT) }, answers: NINE_ANSWERS, lookup });
+  const progress: TermScanProgress[] = [];
+  const finished = run(h, ['c1'], (item) => progress.push(item), undefined, { wikipedia: true });
+  await settle();
+  for (let index = 0; index < 8; index += 1) {
+    lookup.release();
+    await settle();
+  }
+  await releaseEach(lookup);
+  await finished;
+  const lookupSteps = Array.from({ length: 8 }, (_, index) => ({
+    stage: 'lookup',
+    done: index + 1,
+    total: 9,
+  }));
+  expect(progress).toEqual([
+    { stage: 'collect', done: 1, total: 1 },
+    ...lookupSteps,
+    { stage: 'judge', done: 1, total: 6, lookup: { done: 8, total: 9 } },
+    { stage: 'judge', done: 2, total: 6, lookup: { done: 8, total: 9 } },
+    { stage: 'judge', done: 3, total: 6, lookup: { done: 8, total: 9 } },
+    { stage: 'judge', done: 3, total: 6 },
+    { stage: 'judge', done: 4, total: 6 },
+    { stage: 'judge', done: 5, total: 6 },
+    { stage: 'judge', done: 6, total: 6 },
+    { stage: 'save', done: 1, total: 1 },
+  ]);
+});
+
+test('모델 요청과 외부 조회 요청은 동시에 두 개 이상 나가지 않는다', async () => {
+  const lookup = trackedLookup(NINE_TABLE);
+  const h = harness({ versions: { c1: oneVersion(NINE_TEXT) }, answers: NINE_ANSWERS, lookup });
+  let modelActive = 0;
+  let modelPeak = 0;
+  h.hooks.wait = async () => {
+    modelActive += 1;
+    modelPeak = Math.max(modelPeak, modelActive);
+    await settle();
+    modelActive -= 1;
+  };
+  await run(h, ['c1'], undefined, undefined, { wikipedia: true });
+  expect(modelPeak).toBe(1);
+  expect(lookup.stats.peak).toBe(1);
+  expect(lookup.calls).toHaveLength(NINE_NAMES.length);
+  expect(h.requests).toHaveLength(6);
+});
+
+test('판정 중 취소되면 cancelled로 끝나고 저장하지 않으며, 뒤의 조회 거부는 처리되지 않은 채 남지 않는다', async () => {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => {
+    unhandled.push(reason);
+  };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const controller = new AbortController();
+    const lookup = trackedLookup(NINE_TABLE, { manual: true });
+    const h = harness({ versions: { c1: oneVersion(NINE_TEXT) }, answers: NINE_ANSWERS, lookup });
+    h.hooks.onCall = (call) => {
+      if (call === 2) controller.abort();
+    };
+    const finished = run(h, ['c1'], undefined, controller.signal, { wikipedia: true }).catch(
+      (item: unknown) => item,
+    );
+    await settle();
+    for (let index = 0; index < 8; index += 1) {
+      lookup.release();
+      await settle();
+    }
+    const error = await finished;
+    expect(error).toBeInstanceOf(ReaderError);
+    expect((error as ReaderError).code).toBe('cancelled');
+    expect(h.saves).toEqual([]);
+    // 취소 뒤에 둘째 묶음 조회를 풀면 그 조회는 취소로 거부된다. 그 거부도 처리되어야 한다.
+    await releaseEach(lookup);
+    await settle();
+    expect(unhandled).toEqual([]);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
 });
 
 test('별명 후보는 위키백과·위키데이터가 없으면 위키백과 검색으로 대상을 찾고, 판정 요청에 refers 줄을 넣는다', async () => {
