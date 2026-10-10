@@ -1111,19 +1111,16 @@ async function translateOnce(h: ReturnType<typeof harness>) {
   await done;
   return h.app.getSnapshot().version!;
 }
-it('기기 판정을 켠 상태의 번역 저장본에만 판정 기록이 남는다', async () => {
+it('기기 판정을 켜도 판정할 이름이 없는 회차는 판정 기록을 남기지 않는다', async () => {
   embeddingPort.ready = true;
   try {
+    // 이 하네스에는 작품 용어집이 없어 판정할 이름이 없다(judged 0). 기록이 남는 경로는 wholeChapterDecision 테스트가 본다.
     const on = harness();
     await prepare(on);
     await on.app.enableOnDeviceEmbedding();
     expect(on.app.getSnapshot().onDeviceEmbedding).toBe(true);
     const enabled = await translateOnce(on);
-    expect(enabled.provenance.termDecision).toEqual({
-      confirmed: [],
-      rejected: [],
-      ms: expect.any(Number),
-    });
+    expect(enabled.provenance).not.toHaveProperty('termDecision');
     on.app.dispose();
 
     const off = harness();

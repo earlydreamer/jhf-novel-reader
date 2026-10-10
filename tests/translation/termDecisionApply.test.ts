@@ -22,6 +22,7 @@ const input = 'クルシアーノとマリーが来た。';
 const decision = {
   confirmed: new Set(['ルシア']),
   rejected: new Set(['マリ']),
+  judged: 2,
 };
 
 test('판정 전에는 두 후보 이름이 모두 후보 목록에 남는다', () => {

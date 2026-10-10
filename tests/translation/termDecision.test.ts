@@ -8,7 +8,7 @@ import {
 } from '../../src/translation/termDecision';
 
 const PAD = '。'.repeat(50);
-const EMPTY = { confirmed: new Set<string>(), rejected: new Set<string>() };
+const EMPTY = { confirmed: new Set<string>(), rejected: new Set<string>(), judged: 0 };
 // 'ルシア'는 'ルシアナ'의 별칭이다. 첫 자리는 확정, 'クルシアーノ'의 자리는 후보(뒤에 'ー')다.
 const input = `ルシアナが笑った。${PAD}クルシアーノが来た。`;
 const terms: GuidanceTerm[] = [
@@ -46,12 +46,56 @@ describe('decideCandidates', () => {
     expect(await decideCandidates(input, terms, fakeEmbed(0.9))).toEqual({
       confirmed: new Set(['ルシア']),
       rejected: new Set(),
+      judged: 1,
     });
     expect(await decideCandidates(input, terms, fakeEmbed(0.3))).toEqual({
       confirmed: new Set(),
       rejected: new Set(['ルシア']),
+      judged: 1,
     });
-    expect(await decideCandidates(input, terms, fakeEmbed(0.7))).toEqual(EMPTY);
+    // 보류도 점수를 낸 판정이므로 judged에 든다.
+    expect(await decideCandidates(input, terms, fakeEmbed(0.7))).toEqual({
+      confirmed: new Set(),
+      rejected: new Set(),
+      judged: 1,
+    });
+  });
+
+  it('같은 회차에 확정 자리와 후보 자리가 함께 있는 이름도 판정하고, 기준은 확정 자리 문맥이다', async () => {
+    const melody = `メロディは笑った。${PAD}メロディーを聞いた。`;
+    const melodyTerms: GuidanceTerm[] = [
+      { source: 'メロディ', target: '멜로디', aliases: [], category: '', note: '' },
+    ];
+    /** 'メロディは'가 든 문맥(기준)은 [1,0], 나머지(후보 문맥)는 기준과 코사인이 score인 벡터를 돌려준다. */
+    const melodyEmbed = (score: number) =>
+      vi.fn<EmbedTexts>(async (texts) =>
+        texts.map((text) =>
+          text.includes('メロディは') ? [1, 0] : [score, Math.sqrt(1 - score * score)],
+        ),
+      );
+    const high = melodyEmbed(0.9);
+    expect(await decideCandidates(melody, melodyTerms, high)).toEqual({
+      confirmed: new Set(['メロディ']),
+      rejected: new Set(),
+      judged: 1,
+    });
+    const sent = high.mock.calls[0]![0];
+    expect(sent.some((text) => text.includes('メロディは'))).toBe(true);
+    expect(sent.some((text) => text.includes('メロディーを'))).toBe(true);
+    expect(await decideCandidates(melody, melodyTerms, melodyEmbed(0.3))).toEqual({
+      confirmed: new Set(),
+      rejected: new Set(['メロディ']),
+      judged: 1,
+    });
+  });
+
+  it('기준 문맥이 없는 이름은 judged에 세지 않는다', async () => {
+    const withBob: GuidanceTerm[] = [
+      ...terms,
+      { source: 'ボブ', target: '밥', aliases: [], category: '', note: '' },
+    ];
+    const text = `ルシアナが笑った。${PAD}クルシアーノが来た。${PAD}ボブーが来た。`;
+    expect((await decideCandidates(text, withBob, fakeEmbed(0.9))).judged).toBe(1);
   });
 
   it('경계값 0.85는 확정, 0.6은 제외에 든다', async () => {
@@ -73,6 +117,7 @@ describe('decideCandidates', () => {
     const result = await decideCandidates(long, two, embed, { maxTexts: 3 });
     expect(embed).toHaveBeenCalledTimes(1);
     expect(embed.mock.calls[0]![0]).toHaveLength(2);
+    expect(result.judged).toBe(1);
     expect(result.confirmed).toEqual(new Set(['ルシア']));
     expect(result.rejected.has('ミラ')).toBe(false);
     expect(result.confirmed.has('ミラ')).toBe(false);

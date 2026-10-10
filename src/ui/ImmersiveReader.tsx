@@ -986,7 +986,10 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           </p>
           {displayVersion?.provenance.termDecision && (
             <p>
-              기기 판정 · 확정 {displayVersion.provenance.termDecision.confirmed.length}개 · 제외{' '}
+              기기 판정 ·{' '}
+              {displayVersion.provenance.termDecision.judged !== undefined &&
+                `${displayVersion.provenance.termDecision.judged}개 판정 · `}
+              확정 {displayVersion.provenance.termDecision.confirmed.length}개 · 제외{' '}
               {displayVersion.provenance.termDecision.rejected.length}개 ·{' '}
               {displayVersion.provenance.termDecision.ms}ms
             </p>

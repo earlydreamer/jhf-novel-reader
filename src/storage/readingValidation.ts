@@ -188,7 +188,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
   if (p.guidanceHash !== undefined)
     check(typeof p.guidanceHash === 'string' && /^[a-f0-9]{64}$/.test(p.guidanceHash));
   if (p.termDecision !== undefined) {
-    object(p.termDecision, ['confirmed', 'rejected', 'ms']);
+    object(p.termDecision, ['confirmed', 'rejected', 'judged', 'ms']);
     for (const names of [p.termDecision.confirmed, p.termDecision.rejected]) {
       check(Array.isArray(names) && names.length <= 50);
       for (const name of names) {
@@ -196,6 +196,8 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
         check(name.length <= 80);
       }
     }
+    // judged가 없는 저장본은 이전 버전이 남긴 기록이므로 그대로 읽는다.
+    if (p.termDecision.judged !== undefined) integer(p.termDecision.judged);
     integer(p.termDecision.ms);
   }
   if (p.generation !== undefined) {
