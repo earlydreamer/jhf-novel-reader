@@ -18,6 +18,8 @@ export type ReadingSettings = {
   autoTranslate?: boolean;
   autoRetryFailed?: boolean;
   autoGlossary?: boolean;
+  /** 리더 용어 강조. 끌 때만 false로 저장한다. */
+  termHighlight?: boolean;
   lookupWikipedia?: boolean;
   lookupNamuwiki?: boolean;
   /** 기기 안 용어 판정 모델을 쓸지. 켜졌을 때만 저장한다. */
@@ -34,6 +36,7 @@ function readingSettings(value: unknown): ReadingSettings {
     'autoTranslate',
     'autoRetryFailed',
     'autoGlossary',
+    'termHighlight',
     'lookupWikipedia',
     'lookupNamuwiki',
     'onDeviceEmbedding',
@@ -44,6 +47,7 @@ function readingSettings(value: unknown): ReadingSettings {
   check(value.autoTranslate === undefined || typeof value.autoTranslate === 'boolean');
   check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
   check(value.autoGlossary === undefined || typeof value.autoGlossary === 'boolean');
+  check(value.termHighlight === undefined || typeof value.termHighlight === 'boolean');
   check(value.lookupWikipedia === undefined || typeof value.lookupWikipedia === 'boolean');
   check(value.lookupNamuwiki === undefined || typeof value.lookupNamuwiki === 'boolean');
   check(value.onDeviceEmbedding === undefined || typeof value.onDeviceEmbedding === 'boolean');

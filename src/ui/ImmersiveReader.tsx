@@ -54,6 +54,7 @@ export interface ImmersiveReaderProps {
   fontSize: number;
   readingBackground: ReadingBackground;
   lineHeight: LineHeight;
+  termHighlight: boolean;
   showOriginal: boolean;
   sourceChange: SourceChangeStatus;
   busy: boolean;
@@ -65,6 +66,7 @@ export interface ImmersiveReaderProps {
   onFontSize(value: number): void;
   onReadingBackground(value: ReadingBackground): void;
   onLineHeight(value: LineHeight): void;
+  onTermHighlight(value: boolean): void;
   onPreviewPosition(index: number, offset: number): void;
   onPosition(blockId: string, offset: number): void;
   onAdjacent(direction: -1 | 1): void;
@@ -973,6 +975,18 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
               </Button>
             ))}
           </fieldset>
+          <label className="nr-reader-switch">
+            <span>
+              용어 강조
+              <small>용어집에 있는 이름을 본문에 표시해요.</small>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={props.termHighlight}
+              onChange={(event) => props.onTermHighlight(event.target.checked)}
+            />
+          </label>
         </div>
       </BottomSheet>
       <BottomSheet open={qualityOpen} title="번역 확인 결과" onClose={() => setQualityOpen(false)}>

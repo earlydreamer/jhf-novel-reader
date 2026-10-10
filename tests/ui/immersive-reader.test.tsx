@@ -83,6 +83,8 @@ function props(overrides: Partial<ImmersiveReaderProps> = {}): ImmersiveReaderPr
     onFontSize: vi.fn(),
     onReadingBackground: vi.fn(),
     onLineHeight: vi.fn(),
+    termHighlight: true,
+    onTermHighlight: vi.fn(),
     onPreviewPosition: vi.fn(),
     onPosition: vi.fn(),
     onAdjacent: vi.fn(),
@@ -479,6 +481,29 @@ test('legacy saved quality without a quality record stays explicitly unrecorded 
   expect(sheet).toHaveTextContent('한자만 남은 일본어');
   expect(sheet).not.toHaveTextContent('확정 표기 미발견 0개');
   expect(sheet).not.toHaveTextContent('이 확인 규칙에서 발견한 항목이 없어요.');
+});
+
+test('보기 설정의 용어 강조 스위치는 저장값을 보여 주고 누르면 반대 값을 넘긴다', () => {
+  const onTermHighlight = vi.fn();
+  const { unmount } = render(
+    <ImmersiveReader {...props({ termHighlight: true, onTermHighlight })} />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '보기 설정' }));
+  const toggle = screen.getByRole('switch', { name: /용어 강조/ });
+  expect(toggle).toBeChecked();
+  fireEvent.click(toggle);
+  expect(onTermHighlight).toHaveBeenCalledWith(false);
+  unmount();
+
+  render(<ImmersiveReader {...props({ termHighlight: false, onTermHighlight })} />);
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '보기 설정' }));
+  const off = screen.getByRole('switch', { name: /용어 강조/ });
+  expect(off).not.toBeChecked();
+  fireEvent.click(off);
+  expect(onTermHighlight).toHaveBeenLastCalledWith(true);
 });
 
 test('settings preserve legacy font values while changing the selected reading presentation', () => {

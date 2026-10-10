@@ -155,6 +155,7 @@ function RouteScreen({
           fontSize={state.fontSize}
           readingBackground={state.readingBackground}
           lineHeight={state.lineHeight}
+          termHighlight={state.termHighlight}
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy}
@@ -175,6 +176,7 @@ function RouteScreen({
           onFontSize={controller.changeFontSize}
           onReadingBackground={controller.changeReadingBackground}
           onLineHeight={controller.changeLineHeight}
+          onTermHighlight={controller.changeTermHighlight}
           onPreviewPosition={controller.previewPosition}
           onPosition={(block, offset) => void controller.savePosition(block, offset)}
           onAdjacent={controller.adjacentChapter}
@@ -239,6 +241,7 @@ function RouteScreen({
           fontSize={state.fontSize}
           readingBackground={state.readingBackground}
           lineHeight={state.lineHeight}
+          termHighlight={state.termHighlight}
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy || state.translationActive}
@@ -255,6 +258,7 @@ function RouteScreen({
           onFontSize={controller.changeFontSize}
           onReadingBackground={controller.changeReadingBackground}
           onLineHeight={controller.changeLineHeight}
+          onTermHighlight={controller.changeTermHighlight}
           onPreviewPosition={controller.previewPosition}
           onPosition={(block, offset) => void controller.savePosition(block, offset)}
           onAdjacent={controller.adjacentChapter}
