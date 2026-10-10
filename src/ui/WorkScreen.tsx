@@ -308,7 +308,8 @@ export function WorkScreen({
                 <ListItem
                   headline={
                     <>
-                      <span>{chapter.ordinal}화</span>　
+                      <span>{chapter.ordinal}화</span>
+                      {'　'}
                       {withoutOrdinalPrefix(chapterTitle, chapter.ordinal)}
                     </>
                   }
