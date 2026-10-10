@@ -1,6 +1,21 @@
 // @vitest-environment jsdom
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { createRenewalApplication } from '../../src/app/compose';
+
+// 기기 판정 모델은 네이티브 전용이라, 이 파일에서만 사용 가능 여부를 가짜로 바꾼다.
+const embeddingPort = vi.hoisted(() => ({ ready: false }));
+vi.mock('../../src/platform/embedding', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/platform/embedding')>();
+  return {
+    ...actual,
+    capacitorEmbedding: {
+      ...actual.noEmbedding,
+      available: () => embeddingPort.ready,
+      status: async () => ({ installed: true, bytes: 1, loaded: false, downloading: false }),
+      embed: async (texts: readonly string[]) => texts.map(() => [1, 0]),
+    },
+  };
+});
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 import { createLibraryStore } from '../../src/storage/library';
 import { createLastChapterRepository } from '../../src/app/lastChapter';
@@ -1088,4 +1103,35 @@ it('retranslate chapter from a saved reader adds a new version and keeps the pre
     expect.arrayContaining([expect.objectContaining({ versionId: previous })]),
   );
   h.app.dispose();
+});
+async function translateOnce(h: ReturnType<typeof harness>) {
+  const done = h.app.translate();
+  await dispatched(h);
+  h.settle();
+  await done;
+  return h.app.getSnapshot().version!;
+}
+it('기기 판정을 켠 상태의 번역 저장본에만 판정 기록이 남는다', async () => {
+  embeddingPort.ready = true;
+  try {
+    const on = harness();
+    await prepare(on);
+    await on.app.enableOnDeviceEmbedding();
+    expect(on.app.getSnapshot().onDeviceEmbedding).toBe(true);
+    const enabled = await translateOnce(on);
+    expect(enabled.provenance.termDecision).toEqual({
+      confirmed: [],
+      rejected: [],
+      ms: expect.any(Number),
+    });
+    on.app.dispose();
+
+    const off = harness();
+    await prepare(off);
+    const disabled = await translateOnce(off);
+    expect(disabled.provenance).not.toHaveProperty('termDecision');
+    off.app.dispose();
+  } finally {
+    embeddingPort.ready = false;
+  }
 });

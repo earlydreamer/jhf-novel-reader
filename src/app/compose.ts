@@ -44,11 +44,12 @@ import { openSourceBrowser } from '../platform/browse';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import { ReaderError } from '../contracts';
-import { createGuidanceRepository } from '../translation/guidance';
+import { createGuidanceRepository, type WorkGuidance } from '../translation/guidance';
 import { createAutoGlossary } from '../translation/autoGlossary';
 import { createTitleRepository, createTitleTranslation } from '../translation/titles';
 import { createRangeJudge, createTermScan } from '../translation/termScanRun';
 import { loadKanjidic } from '../translation/kanjidic';
+import { decideCandidates } from '../translation/termDecision';
 export function createRenewalApplication(
   adapters: ApplicationAdapters & {
     browse?: (startUrl?: string) => Promise<{ selectedUrl: string } | null>;
@@ -69,11 +70,23 @@ export function createRenewalApplication(
         throw new ReaderError('model_missing');
     }
   };
+  // 기기 용어 판정 문(#241). 설정 토글이 켜지고 모델이 설치됐을 때만 컨트롤러가 켠다. 미리 번역도 이 흐름을 쓴다.
+  const termDecisionGate = { enabled: false };
   const flow = createWholeChapterFlow({
     source,
     store: library,
     guidance,
     createProvider,
+    ...(capacitorEmbedding.available()
+      ? {
+          decideCandidates: async (input: string, workGuidance: WorkGuidance | null) =>
+            termDecisionGate.enabled
+              ? decideCandidates(input, workGuidance?.terms ?? [], (texts) =>
+                  capacitorEmbedding.embed(texts),
+                )
+              : null,
+        }
+      : {}),
     ...(guidance ? { autoGlossary: createAutoGlossary(createProvider, guidance) } : {}),
     attempts: createAttemptRepository(adapters.files),
     clock: adapters.clock ?? { now: () => performance.now() },
@@ -109,6 +122,9 @@ export function createRenewalApplication(
     clock: adapters.clock,
     lifecycle: adapters.lifecycle,
     embedding: capacitorEmbedding,
+    onTermDecisionChange: (enabled: boolean) => {
+      termDecisionGate.enabled = enabled;
+    },
     settings: createReadingSettingsRepository(adapters.preferences),
     browse: adapters.browse,
     normalizeInput(input) {

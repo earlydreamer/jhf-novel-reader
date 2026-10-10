@@ -984,6 +984,13 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
               ? `확정 표기 미발견 ${missingTerms.length}개`
               : '용어 확인 기록 없음'}
           </p>
+          {displayVersion?.provenance.termDecision && (
+            <p>
+              기기 판정 · 확정 {displayVersion.provenance.termDecision.confirmed.length}개 · 제외{' '}
+              {displayVersion.provenance.termDecision.rejected.length}개 ·{' '}
+              {displayVersion.provenance.termDecision.ms}ms
+            </p>
+          )}
           <p>
             가나 잔존과 확정 표기의 전체 부재만 확인해요. 한자만 남은 일본어, 일부 등장분의 다른
             표기, 의미·말투는 원문과 직접 비교해 주세요. 번역 본문은 자동으로 고치거나 다시 요청하지

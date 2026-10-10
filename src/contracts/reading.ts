@@ -102,6 +102,12 @@ export type CompletedTranslation = {
     generation?: SegmentedGeneration;
     guidanceHash?: string;
     repair?: { baseVersionId: string; paragraphIndexes: readonly number[] };
+    /** 번역 전 기기 용어 판정 결과(#241). 판정이 돌았을 때만 있고, 이름은 정렬돼 있다. */
+    termDecision?: {
+      readonly confirmed: readonly string[];
+      readonly rejected: readonly string[];
+      readonly ms: number;
+    };
   };
 };
 export type ReadingPosition = {
