@@ -195,6 +195,7 @@ test('3회 모두 같은 목표면 high', () => {
   expect(votes.get('公爵')).toMatchObject({
     target: '공작',
     votes: 3,
+    kindVotes: 3,
     total: 3,
     confidence: 'high',
   });
@@ -208,6 +209,7 @@ test('3회 중 2회가 같으면 medium', () => {
   expect(votes.get('公爵')).toMatchObject({
     target: '공작',
     votes: 2,
+    kindVotes: 3,
     total: 3,
     confidence: 'medium',
   });
@@ -248,6 +250,7 @@ test('동률이면 run 순서상 먼저 나온 목표와 종류를 고른다', (
     batch,
   );
   expect(kindTie.get('公爵')?.kind).toBe('work');
+  expect(kindTie.get('公爵')?.kindVotes).toBe(1);
 });
 
 test('근거는 최다 목표를 처음 낸 run의 reason이다', () => {

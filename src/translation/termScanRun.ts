@@ -49,7 +49,7 @@ export type TermScanResult = {
   applied: TermScanChange[]; // 저장한 변경(new 추가, recheck 표기 변경)
   confirmed: number; // recheck인데 표기가 같아 근거만 붙인 수
   suggestions: TermScanChange[]; // 사람 항목과 다른 제안(저장 안 함)
-  removable?: TermScanRemoval[]; // 일반어로 판정된 기계 항목(빼기 제안, 없으면 필드 없음)
+  removable?: TermScanRemoval[]; // 3회 모두 일반어로 판정된 자동 용어집 항목(빼기 제안, 없으면 필드 없음)
   partial: boolean; // 일부 묶음이 실패함
   lookupFailed?: ('wikipedia' | 'namuwiki')[]; // 조회 오류로 이번 실행에서 더 묻지 않은 출처(실패가 없으면 필드 없음)
   counts?: {
@@ -422,8 +422,14 @@ export function createTermScan(deps: {
       }
       if (answer.kind === 'common') {
         counts.common += 1;
+        // 빼기 제안은 자동 용어집 항목(model·auto)이고 3회 모두 일반어일 때만(#258).
+        // 정밀스캔 항목(scan)은 이전 판정과 어긋난 것이라 넣지 않는다.
         const existing = candidate.existing;
-        if (existing && existing.origin !== undefined)
+        if (
+          existing &&
+          (existing.origin === 'model' || existing.origin === 'auto') &&
+          answer.kindVotes === answer.total
+        )
           removable.push({
             source: candidate.source,
             target: existing.target,

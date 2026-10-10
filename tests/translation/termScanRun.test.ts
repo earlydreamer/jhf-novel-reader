@@ -1270,24 +1270,43 @@ test('이름 구성이 어긋난 표기는 적용하지 않고 제안으로 돌�
   ]);
 });
 
-test('일반어로 판정된 기계 항목은 빼기 목록에 넣고, 사람 항목은 넣지 않는다', async () => {
+test('일반어 판정 시험: 빼기 목록에는 3회 모두 일반어인 자동 용어집 항목만 넣는다', async () => {
   const h = harness({
     versions: {
       c1: oneVersion(
-        'ファンタジーが笑う。ファンタジーは去った。ポータルが笑う。ポータルは去った。',
+        'ファンタジーが笑う。ファンタジーは去った。ポータルが笑う。ポータルは去った。ヨーロッパが笑う。ヨーロッパは去った。',
       ),
     },
-    terms: [term('ファンタジー', '판타지', { origin: 'model' }), term('ポータル', '포털')],
+    terms: [
+      term('ファンタジー', '판타지', { origin: 'model' }),
+      term('ポータル', '포털'),
+      term('ヨーロッパ', '유럽', { origin: 'scan', evidence: [{ kind: 'model', note: '근거' }] }),
+    ],
     answers: {
       ファンタジー: { kind: 'common', target: '판타지', reason: '일반 명사예요.' },
       ポータル: { kind: 'common', target: '포털', reason: '일반 명사예요.' },
+      ヨーロッパ: { kind: 'common', target: '유럽' },
     },
   });
   const result = await run(h);
   expect(result.removable).toEqual([
     { source: 'ファンタジー', target: '판타지', reason: '일반 명사예요.' },
   ]);
-  expect(result.counts?.common).toBe(2);
+  expect(result.counts?.common).toBe(3);
+});
+
+test('일반어 판정 시험: 한 run이라도 일반어가 아니면 빼기 목록에 넣지 않는다', async () => {
+  const h = harness({
+    versions: { c1: oneVersion('ファンタジーが笑う。ファンタジーは去った。') },
+    terms: [term('ファンタジー', '판타지', { origin: 'model' })],
+    answers: {
+      ファンタジー: { kind: 'common', target: '판타지', reason: '일반 명사예요.' },
+    },
+  });
+  h.hooks.fail = (call) => call === 2;
+  const result = await run(h);
+  expect(result.removable).toBeUndefined();
+  expect(result.counts?.common).toBe(1);
 });
 
 test('제안 적용: 새 이름 제안은 사람 항목으로 끝에 추가하고, 같은 이름의 기계 항목은 사람 항목으로 바꾼다', () => {
