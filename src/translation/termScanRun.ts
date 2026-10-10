@@ -513,6 +513,8 @@ export type RangeJudgeResult = {
   common: string[];
   partial: boolean;
   lookupFailed?: ('wikipedia' | 'namuwiki')[];
+  /** 넘겨받은 이름 중 판정하지 못한 수. 상한(200)을 넘었거나 원문에서 찾지 못한 이름이다. */
+  skipped: number;
   counts: { candidates: number; common: number; unchanged: number; unanswered: number };
 };
 
@@ -550,6 +552,7 @@ export function createRangeJudge(deps: {
         suggestions: [],
         common: [],
         partial: false,
+        skipped: names.length,
         counts: { candidates: 0, common: 0, unchanged: 0, unanswered: 0 },
       };
 
@@ -592,6 +595,7 @@ export function createRangeJudge(deps: {
       common,
       partial,
       ...(lookupFailed.length ? { lookupFailed } : {}),
+      skipped: names.length - candidates.length,
       counts,
     };
   };

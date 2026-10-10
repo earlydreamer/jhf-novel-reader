@@ -53,6 +53,7 @@ const doneResult: RangeJudgeResult = {
   suggestions: [change],
   common: [],
   partial: false,
+  skipped: 0,
   counts: { candidates: 1, common: 0, unchanged: 0, unanswered: 0 },
 };
 

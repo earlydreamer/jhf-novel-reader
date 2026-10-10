@@ -153,6 +153,7 @@ test('완료된 결과는 제안을 후보 칸에 채우고 낮은 신뢰도와 
           ],
           common: ['サーバー'],
           partial: false,
+          skipped: 0,
           counts: { candidates: 3, common: 1, unchanged: 0, unanswered: 0 },
         }),
       })}
@@ -180,6 +181,7 @@ test('사용자가 고친 칸과 직접 바꾼 체크는 다시 채워도 그대
     ],
     common: [],
     partial: false,
+    skipped: 0,
     counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
   });
   const props = panelProps({ batchFill: first });
@@ -196,6 +198,7 @@ test('사용자가 고친 칸과 직접 바꾼 체크는 다시 채워도 그대
     ],
     common: [],
     partial: false,
+    skipped: 0,
     counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
   });
   rerender(<BatchPanel {...props} batchFill={second} />);
@@ -217,6 +220,7 @@ test('판정 결과의 확인 문구는 답 없는 이름, 일부 실패, 조회
           suggestions: [],
           common: [],
           partial: true,
+          skipped: 0,
           lookupFailed: ['wikipedia'],
           counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 2 },
         }),
@@ -265,6 +269,7 @@ test('실패와 중단은 각각 안내와 다시 시도 버튼을 보이고, �
             suggestions: [change({ source: 'アルベルト', after: '알베르트' })],
             common: [],
             partial: false,
+            skipped: 0,
             counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
           },
           'other-record',
@@ -284,6 +289,7 @@ test('다시 채우기에서 일반어로 바뀐 후보는 자동으로 채운 �
     ],
     common: [],
     partial: false,
+    skipped: 0,
     counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
   });
   const props = panelProps({ batchFill: first });
@@ -295,6 +301,7 @@ test('다시 채우기에서 일반어로 바뀐 후보는 자동으로 채운 �
     suggestions: [change({ source: 'ミカエル', after: '미카엘' })],
     common: ['アルベルト'],
     partial: false,
+    skipped: 0,
     counts: { candidates: 3, common: 1, unchanged: 0, unanswered: 0 },
   });
   rerender(<BatchPanel {...props} batchFill={second} />);
@@ -314,6 +321,7 @@ test('일반어로 바뀐 후보라도 사용자가 고친 표기와 직접 바�
     ],
     common: [],
     partial: false,
+    skipped: 0,
     counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
   });
   const props = panelProps({ batchFill: first });
@@ -328,6 +336,7 @@ test('일반어로 바뀐 후보라도 사용자가 고친 표기와 직접 바�
     suggestions: [],
     common: ['アルベルト', 'ミカエル'],
     partial: false,
+    skipped: 0,
     counts: { candidates: 3, common: 2, unchanged: 0, unanswered: 0 },
   });
   rerender(<BatchPanel {...props} batchFill={second} />);
@@ -336,4 +345,36 @@ test('일반어로 바뀐 후보라도 사용자가 고친 표기와 직접 바�
   expect(screen.getByLabelText('アルベルト 사용')).not.toBeChecked();
   expect(screen.getByLabelText('ミカエル 한국어 표기')).toHaveValue('');
   expect(screen.getByLabelText('ミカエル 사용')).toBeChecked();
+});
+
+test('이름 상한으로 판정하지 못한 후보가 있으면 완료 구역에 안내하고, 없으면 안내하지 않는다', () => {
+  const capped = doneFill({
+    suggestions: [change({ source: 'アルベルト', after: '알베르트' })],
+    common: [],
+    partial: false,
+    skipped: 5,
+    counts: { candidates: 200, common: 0, unchanged: 0, unanswered: 0 },
+  });
+  const { unmount } = render(<BatchPanel {...panelProps({ batchFill: capped })} />);
+  expect(
+    screen.getByText(
+      '이번에 판정하지 못한 후보가 5개 있어요. 한 번에 등장 횟수가 많은 200개까지 판정해요. 나머지는 직접 확인해 주세요.',
+    ),
+  ).toHaveAttribute('role', 'status');
+  unmount();
+
+  render(
+    <BatchPanel
+      {...panelProps({
+        batchFill: doneFill({
+          suggestions: [change({ source: 'アルベルト', after: '알베르트' })],
+          common: [],
+          partial: false,
+          skipped: 0,
+          counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
+        }),
+      })}
+    />,
+  );
+  expect(screen.queryByText(/판정하지 못한 후보가/)).not.toBeInTheDocument();
 });
