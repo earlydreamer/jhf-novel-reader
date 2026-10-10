@@ -14,6 +14,7 @@ import {
 import { ReaderError } from '../../src/contracts';
 import type { ConnectionConfig, ModelChoice } from '../../src/contracts/reading';
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
+import type { BackupPlatform, BackupResult } from '../../src/platform/backup';
 import type { ShellPlatform } from '../../src/platform/shell';
 import type { ReadingSettings } from '../../src/storage/settings';
 import {
@@ -1153,5 +1154,212 @@ describe('정밀스캔 외부 조회 설정 (#203)', () => {
     expect(screen.getByText('나무위키 조회를 켤까요?')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '켜기' }));
     expect(next.onLookupNamuwiki).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('백업 설정 섹션(#269)', () => {
+  const EXPORT_ROW =
+    '백업 파일 만들기 서재·저장한 번역·용어집·읽기 위치·설정을 파일 하나로 저장해요.';
+  const RESTORE_ROW = '백업에서 복원하기 다른 기기나 이전 앱에서 만든 백업 파일을 불러와요.';
+
+  function renderBackup(
+    options: {
+      readonly available?: boolean;
+      readonly locked?: boolean;
+      readonly onExport?: () => Promise<BackupResult>;
+      readonly onRestore?: () => Promise<BackupResult>;
+      readonly withBackup?: boolean;
+    } = {},
+  ) {
+    const onExport = vi.fn(
+      options.onExport ?? (async (): Promise<BackupResult> => ({ kind: 'cancelled' })),
+    );
+    const onRestore = vi.fn(
+      options.onRestore ?? (async (): Promise<BackupResult> => ({ kind: 'cancelled' })),
+    );
+    const onReload = vi.fn();
+    render(
+      <SettingsScreen
+        state={createRenewalController().getSnapshot()}
+        onChange={() => {}}
+        onCheck={async () => ({ kind: 'superseded' as const })}
+        onSelect={() => {}}
+        onReload={onReload}
+        backup={
+          options.withBackup === false
+            ? undefined
+            : {
+                available: options.available ?? true,
+                locked: options.locked ?? false,
+                onExport,
+                onRestore,
+              }
+        }
+      />,
+    );
+    return { onExport, onRestore, onReload };
+  }
+
+  it('쓸 수 있을 때만 백업 제목·두 항목·API 키 안내를 정보 앞에 보여 줘요', () => {
+    renderBackup();
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings.indexOf('백업')).toBeGreaterThan(-1);
+    expect(headings.indexOf('백업')).toBeLessThan(headings.indexOf('정보'));
+    expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeEnabled();
+    expect(screen.getByRole('button', { name: RESTORE_ROW })).toBeEnabled();
+    expect(
+      screen.getByText(
+        'API 키와 기기 판정 모델은 백업에 넣지 않아요. 복원한 뒤 다시 입력하거나 내려받아 주세요.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText('번역이나 스캔이 끝난 뒤에 백업할 수 있어요.')).toBeNull();
+    cleanup();
+
+    renderBackup({ available: false });
+    expect(screen.queryByRole('heading', { name: '백업' })).toBeNull();
+    cleanup();
+
+    renderBackup({ withBackup: false });
+    expect(screen.queryByRole('heading', { name: '백업' })).toBeNull();
+    expect(screen.queryByRole('button', { name: EXPORT_ROW })).toBeNull();
+  });
+
+  it('백업 파일 만들기는 저장하면 담은 파일 수를 알려 주고 취소하면 조용해요', async () => {
+    const saved = renderBackup({ onExport: async () => ({ kind: 'saved', files: 12 }) });
+    fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
+    expect(saved.onExport).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('백업 파일을 저장했어요. 파일 12개를 담았어요.')).toBeVisible();
+    expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeEnabled();
+    cleanup();
+
+    const cancelled = renderBackup({ onExport: async () => ({ kind: 'cancelled' }) });
+    fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
+    await waitFor(() => expect(cancelled.onExport).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeEnabled());
+    expect(screen.queryByText(/백업 파일을 저장|만들지 못했어요/)).toBeNull();
+  });
+
+  it('만들기에 실패하면 저장 공간을 확인하라고 알려요', async () => {
+    renderBackup({ onExport: async () => ({ kind: 'failed' }) });
+    fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
+    expect(
+      await screen.findByText('백업 파일을 만들지 못했어요. 저장 공간을 확인해 주세요.'),
+    ).toBeVisible();
+  });
+
+  it('진행하는 동안에는 두 항목이 막혀요', async () => {
+    let finish: (value: BackupResult) => void = () => {};
+    const { onExport } = renderBackup({
+      onExport: () => new Promise<BackupResult>((resolve) => (finish = resolve)),
+    });
+    fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
+    expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeDisabled();
+    expect(screen.getByRole('button', { name: RESTORE_ROW })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
+    expect(onExport).toHaveBeenCalledTimes(1);
+    finish({ kind: 'saved', files: 1 });
+    await waitFor(() => expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeEnabled());
+  });
+
+  it('복원은 확인 창에서 파일 고르기를 눌러야 시작하고 취소하면 아무 일도 없어요', async () => {
+    const { onRestore } = renderBackup({ onRestore: async () => ({ kind: 'invalid' }) });
+    fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
+    expect(screen.getByText('백업으로 바꿀까요?')).toBeVisible();
+    expect(
+      screen.getByText(
+        '지금 기기의 서재·번역·용어집·설정이 백업 파일 내용으로 바뀌어요. 지금 데이터는 지워져요.',
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    expect(onRestore).not.toHaveBeenCalled();
+    expect(screen.queryByText('백업으로 바꿀까요?')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
+    fireEvent.click(screen.getByRole('button', { name: '파일 고르기' }));
+    expect(onRestore).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('백업으로 바꿀까요?')).toBeNull();
+    expect(
+      await screen.findByText('이 앱의 백업 파일이 아니에요. 파일을 다시 골라 주세요.'),
+    ).toBeVisible();
+  });
+
+  it('복원에 실패하면 지금 데이터가 그대로라고 알리고 앱을 다시 불러오지 않아요', async () => {
+    vi.useFakeTimers();
+    try {
+      const { onReload } = renderBackup({ onRestore: async () => ({ kind: 'failed' }) });
+      fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '파일 고르기' }));
+      });
+      expect(screen.getByText('복원하지 못했어요. 지금 데이터는 그대로예요.')).toBeVisible();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(onReload).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('잠겨 있으면 두 항목을 눌러도 아무 일도 없고 잠금 문구를 보여 줘요', () => {
+    const { onExport, onRestore } = renderBackup({ locked: true });
+    expect(screen.getByText('번역이나 스캔이 끝난 뒤에 백업할 수 있어요.')).toBeVisible();
+    expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeDisabled();
+    expect(screen.getByRole('button', { name: RESTORE_ROW })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
+    fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
+    expect(screen.queryByText('백업으로 바꿀까요?')).toBeNull();
+    expect(onExport).not.toHaveBeenCalled();
+    expect(onRestore).not.toHaveBeenCalled();
+  });
+
+  it('복원하면 안내를 보여 주고 1초 뒤 앱을 다시 불러오며 그동안 항목을 막아요', async () => {
+    vi.useFakeTimers();
+    try {
+      const { onReload } = renderBackup({
+        onRestore: async () => ({ kind: 'restored', files: 3 }),
+      });
+      fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '파일 고르기' }));
+      });
+      expect(screen.getByText('복원했어요. 앱을 다시 불러올게요.')).toBeVisible();
+      expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeDisabled();
+      expect(screen.getByRole('button', { name: RESTORE_ROW })).toBeDisabled();
+      expect(onReload).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(999);
+      });
+      expect(onReload).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(onReload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('앱 화면은 주입한 백업 기능을 설정에 연결해요', async () => {
+    const backup: BackupPlatform = {
+      available: () => true,
+      exportBackup: vi.fn(async (): Promise<BackupResult> => ({ kind: 'saved', files: 4 })),
+      restoreBackup: vi.fn(async (): Promise<BackupResult> => ({ kind: 'cancelled' })),
+    };
+    const controller = createRenewalController({
+      settings: {
+        readReadingSettings: vi.fn(async () => savedSettings()),
+        saveReadingSettings: vi.fn(async () => {}),
+      },
+    });
+    render(<Application controller={controller} platform={platform()} backup={backup} />);
+    act(() => controller.navigate({ kind: 'settings' }));
+    await screen.findByRole('heading', { level: 1, name: '설정' });
+    fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
+    expect(await screen.findByText('백업 파일을 저장했어요. 파일 4개를 담았어요.')).toBeVisible();
+    expect(backup.exportBackup).toHaveBeenCalledTimes(1);
   });
 });

@@ -14,6 +14,7 @@ import { Dialog } from '../ui/components/Modal';
 import { SnackbarProvider, useSnackbar } from '../ui/components/Snackbar';
 import { runTopBackHandler } from '../ui/shell/backStack';
 import { useResolvedTheme } from '../ui/theme/theme';
+import { capacitorBackup, type BackupPlatform } from '../platform/backup';
 import { capacitorShell, type ShellPlatform } from '../platform/shell';
 import type { WorkRemovalResult } from '../contracts/reading';
 import type { RenewalController, RenewalSnapshot } from './renewalController';
@@ -23,6 +24,7 @@ import './application.css';
 function RouteScreen({
   controller,
   state,
+  backup,
   urlDialogOpen,
   onCloseUrlDialog,
   onRequestRemove,
@@ -31,6 +33,7 @@ function RouteScreen({
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
+  backup: BackupPlatform;
   urlDialogOpen: boolean;
   onCloseUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
@@ -329,6 +332,19 @@ function RouteScreen({
           onCancelEmbeddingDownload={controller.cancelEmbeddingDownload}
           onRemoveEmbeddingModel={controller.removeEmbeddingModel}
           onTheme={controller.changeTheme}
+          backup={{
+            available: backup.available(),
+            // 쓰는 중인 데이터를 묶거나 바꾸지 않도록 쓰기가 진행 중이면 막는다.
+            locked:
+              state.busy ||
+              state.translationActive ||
+              !!state.pendingSaveChapter ||
+              !!state.batch?.active ||
+              state.batchFill?.phase === 'running' ||
+              state.termScan?.phase === 'running',
+            onExport: backup.exportBackup,
+            onRestore: backup.restoreBackup,
+          }}
         />
       );
   }
@@ -422,9 +438,11 @@ function ShellAppBar({
 export function Application({
   controller,
   platform = capacitorShell,
+  backup = capacitorBackup,
 }: {
   controller: RenewalController;
   platform?: ShellPlatform;
+  backup?: BackupPlatform;
 }): JSX.Element {
   const state = useSyncExternalStore(
     controller.subscribe,
@@ -554,6 +572,7 @@ export function Application({
           <RouteScreen
             controller={controller}
             state={state}
+            backup={backup}
             urlDialogOpen={urlDialogOpen}
             onCloseUrlDialog={() => setUrlDialogOpen(false)}
             onRequestRemove={requestRemove}

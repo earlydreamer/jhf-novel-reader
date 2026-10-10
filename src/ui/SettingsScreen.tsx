@@ -10,6 +10,7 @@ import type {
   RenewalSnapshot,
 } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
+import type { BackupResult } from '../platform/backup';
 import { GEMINI_BASE_URL } from '../providers/gemini';
 import { readableModelName } from '../providers/modelName';
 import type { ThemePreference } from '../storage/settings';
@@ -39,6 +40,15 @@ export interface SettingsScreenProps {
   onCancelEmbeddingDownload?(): void;
   onRemoveEmbeddingModel?(): void;
   onTheme?(theme: ThemePreference): void;
+  /** 백업 파일 만들기·복원(#269). 안드로이드 앱에서만 넘긴다. locked면 번역·스캔이 끝나기를 기다린다. */
+  backup?: {
+    available: boolean;
+    locked: boolean;
+    onExport(): Promise<BackupResult>;
+    onRestore(): Promise<BackupResult>;
+  };
+  /** 복원이 끝난 뒤 앱을 다시 불러오는 동작. 시험에서 바꿔 끼운다. */
+  onReload?(): void;
 }
 
 type LookupSourceKey = 'wikipedia' | 'namuwiki';
@@ -178,6 +188,28 @@ function RadioList({
   );
 }
 
+type BackupAction = 'export' | 'restore';
+
+/** 백업 결과를 화면 문구로 바꾼다. 취소는 문구가 없다. */
+function backupMessage(result: BackupResult, action: BackupAction): string | null {
+  switch (result.kind) {
+    case 'saved':
+      return `백업 파일을 저장했어요. 파일 ${result.files}개를 담았어요.`;
+    case 'restored':
+      return '복원했어요. 앱을 다시 불러올게요.';
+    case 'cancelled':
+      return null;
+    case 'invalid':
+      return '이 앱의 백업 파일이 아니에요. 파일을 다시 골라 주세요.';
+    case 'failed':
+      return action === 'export'
+        ? '백업 파일을 만들지 못했어요. 저장 공간을 확인해 주세요.'
+        : '복원하지 못했어요. 지금 데이터는 그대로예요.';
+  }
+}
+
+const RELOAD_DELAY_MS = 1000;
+
 function timingLabel(state: RenewalSnapshot): string {
   const timings = state.translationTimings;
   if (!timings) return '아직 기록이 없어요';
@@ -214,6 +246,8 @@ export function SettingsScreen({
   onCancelEmbeddingDownload,
   onRemoveEmbeddingModel,
   onTheme,
+  backup,
+  onReload,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
   const showSnackbar = useSnackbar();
@@ -234,6 +268,10 @@ export function SettingsScreen({
   const [themeOpen, setThemeOpen] = useState(false);
   const [lookupConfirm, setLookupConfirm] = useState<LookupSourceKey | null>(null);
   const [embeddingConfirm, setEmbeddingConfirm] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  // 백업은 한 번에 하나만 한다. 복원이 끝나면 앱을 다시 불러올 때까지 계속 막아 둔다.
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupNotice, setBackupNotice] = useState<string | null>(null);
   const [embeddingRemoveConfirm, setEmbeddingRemoveConfirm] = useState(false);
   const embeddingModel = state.embeddingModel;
   const embeddingProgress = embeddingModel?.progress;
@@ -255,6 +293,28 @@ export function SettingsScreen({
   function confirmRemoveEmbedding(): void {
     setEmbeddingRemoveConfirm(false);
     onRemoveEmbeddingModel?.();
+  }
+  async function runBackup(action: BackupAction): Promise<void> {
+    if (!backup || backup.locked || backupBusy) return;
+    setBackupBusy(true);
+    setBackupNotice(null);
+    let result: BackupResult;
+    try {
+      result = await (action === 'export' ? backup.onExport() : backup.onRestore());
+    } catch {
+      result = { kind: 'failed' };
+    }
+    setBackupNotice(backupMessage(result, action));
+    if (result.kind === 'restored') {
+      // 데이터가 통째로 바뀌었으므로 화면 상태를 버리고 다시 불러온다. 이 화면이 닫혀도 예약은 그대로 둔다.
+      setTimeout(onReload ?? (() => window.location.reload()), RELOAD_DELAY_MS);
+      return;
+    }
+    setBackupBusy(false);
+  }
+  function confirmRestore(): void {
+    setRestoreOpen(false);
+    void runBackup('restore');
   }
   const lookupAvailable =
     state.termScanAvailable &&
@@ -663,6 +723,29 @@ export function SettingsScreen({
         </section>
       )}
 
+      {backup?.available && (
+        <section aria-labelledby="settings-backup">
+          <h2 id="settings-backup">백업</h2>
+          <ListItem
+            headline="백업 파일 만들기"
+            supporting="서재·저장한 번역·용어집·읽기 위치·설정을 파일 하나로 저장해요."
+            disabled={backup.locked || backupBusy}
+            onClick={() => void runBackup('export')}
+          />
+          <ListItem
+            headline="백업에서 복원하기"
+            supporting="다른 기기나 이전 앱에서 만든 백업 파일을 불러와요."
+            disabled={backup.locked || backupBusy}
+            onClick={() => setRestoreOpen(true)}
+          />
+          <p>
+            API 키와 기기 판정 모델은 백업에 넣지 않아요. 복원한 뒤 다시 입력하거나 내려받아 주세요.
+          </p>
+          {backup.locked && <p role="status">번역이나 스캔이 끝난 뒤에 백업할 수 있어요.</p>}
+          {backupNotice && <p role="status">{backupNotice}</p>}
+        </section>
+      )}
+
       <section aria-labelledby="settings-info">
         <h2 id="settings-info">정보</h2>
         <ListItem
@@ -884,6 +967,26 @@ export function SettingsScreen({
         }
       >
         <p>다시 쓰려면 다시 내려받아야 해요.</p>
+      </Dialog>
+
+      <Dialog
+        open={restoreOpen}
+        title="백업으로 바꿀까요?"
+        onClose={() => setRestoreOpen(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setRestoreOpen(false)}>
+              취소
+            </Button>
+            <Button variant="filled" onClick={confirmRestore}>
+              파일 고르기
+            </Button>
+          </>
+        }
+      >
+        <p>
+          지금 기기의 서재·번역·용어집·설정이 백업 파일 내용으로 바뀌어요. 지금 데이터는 지워져요.
+        </p>
       </Dialog>
 
       <Dialog
