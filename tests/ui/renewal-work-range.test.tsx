@@ -592,7 +592,7 @@ it('preserves same-owner batch and review drafts across close, then resets for a
   dialog = screen.getByRole('dialog', { name: '미리 번역하기' });
   dialogUI = within(dialog);
   expect((dialogUI.getByLabelText('시작 회차') as HTMLInputElement).value).toBe('1');
-  expect((dialogUI.getByLabelText('끝 회차') as HTMLInputElement).value).toBe('');
+  expect((dialogUI.getByLabelText('끝 회차') as HTMLInputElement).value).toBe('1');
   expect(
     (dialogUI.getByLabelText('이미 번역한 회차도 다시 번역') as HTMLInputElement).checked,
   ).toBe(false);
@@ -603,7 +603,7 @@ it('preserves same-owner batch and review drafts across close, then resets for a
   dialog = screen.getByRole('dialog', { name: '미리 번역하기' });
   dialogUI = within(dialog);
   expect((dialogUI.getByLabelText('시작 회차') as HTMLInputElement).value).toBe('1');
-  expect((dialogUI.getByLabelText('끝 회차') as HTMLInputElement).value).toBe('');
+  expect((dialogUI.getByLabelText('끝 회차') as HTMLInputElement).value).toBe('1');
   expect(
     (dialogUI.getByLabelText('이미 번역한 회차도 다시 번역') as HTMLInputElement).checked,
   ).toBe(false);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import type { ChapterRef, ChapterRemovalResult, WorkPage } from '../contracts/reading';
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
+import { withoutOrdinalPrefix } from './chapterTitle';
 import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
 import { TermScanPanel, type TermScanPanelProps } from './TermScanPanel';
 import { TitleHeading, type TitleControls } from './TitleHeading';
@@ -307,14 +308,15 @@ export function WorkScreen({
                 <ListItem
                   headline={
                     <>
-                      <span>{chapter.ordinal}화</span>　{chapterTitle}
+                      <span>{chapter.ordinal}화</span>　
+                      {withoutOrdinalPrefix(chapterTitle, chapter.ordinal)}
                     </>
                   }
                   supporting={supporting || undefined}
                   lang={translated ? undefined : 'ja'}
                   current={actualRecent}
                   disabled={busy}
-                  mainLabel={`${chapter.ordinal}화 ${chapterTitle}`}
+                  mainLabel={`${chapter.ordinal}화 ${withoutOrdinalPrefix(chapterTitle, chapter.ordinal)}`}
                   supportingId={
                     supporting
                       ? `chapter-${encodeURIComponent(chapter.chapterId)}-state`
@@ -514,6 +516,7 @@ export function WorkScreen({
           key={`${work.workId}:${batchRecord?.id ?? 'none'}`}
           workId={work.workId}
           batch={visibleBatch}
+          lastOrdinal={work.chapters.at(-1)?.ordinal}
           batchAvailable={batchAvailable}
           globalBlocked={batchGlobalBlocked}
           onPrepareBatch={onPrepareBatch}

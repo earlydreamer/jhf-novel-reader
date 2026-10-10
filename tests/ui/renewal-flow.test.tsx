@@ -683,7 +683,7 @@ describe('renewal first reading screens', () => {
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeEnabled(),
     );
@@ -699,7 +699,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     revealReaderBars();
@@ -720,7 +720,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connection'));
     expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
     expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
@@ -752,7 +752,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await screen.findByText('저장된 연결의 서버와 모델 목록을 확인하고 있어요.');
     expect(screen.getByRole('button', { name: '연결 다시 확인' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
@@ -776,7 +776,7 @@ describe('renewal first reading screens', () => {
     await controller.initialize();
     render(<Application controller={controller} />);
     await controller.openWork(page.canonicalUrl);
-    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('model_missing'));
     expect(controller.getSnapshot().selectedModelId).toBeNull();
     expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
@@ -786,21 +786,21 @@ describe('renewal first reading screens', () => {
   it('open_work_does_not_translate', async () => {
     const value = await setup();
     expect(value.generate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
     expect(value.generate).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
   });
   it('saved_chapter_opens_without_settings', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(value.dependencies.connect).not.toHaveBeenCalled();
     expect(value.generate).not.toHaveBeenCalled();
   });
   it('settings_returns_to_selected_chapter', async () => {
     await setup();
-    fireEvent.click(screen.getByRole('button', { name: '2화 2화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await screen.findByRole('heading', { name: '2화 제목' });
     fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
     await screen.findByRole('heading', { name: '설정' });
@@ -809,7 +809,7 @@ describe('renewal first reading screens', () => {
   });
   it('reader_has_no_settings_panel', async () => {
     await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     expect(screen.queryByLabelText('API 기본 주소')).toBeNull();
     expect(
@@ -827,7 +827,7 @@ describe('renewal first reading screens', () => {
   });
   it('uses_real_catalog_selection_and_explicit_translation_action', async () => {
     const value = await setup(false, true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
     fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
     fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.168.1.2' } });
@@ -961,12 +961,12 @@ describe('renewal reading affordances', () => {
   it('shows saved status in the work contents before choosing a chapter', async () => {
     await setup(true);
     expect(
-      screen.getByRole('button', { name: '1화 1화 제목' }).closest('.nr-list-item'),
+      screen.getByRole('button', { name: '1화 제목' }).closest('.nr-list-item'),
     ).toHaveTextContent('저장됨');
   });
   it('reader defaults to 18px and clamps font controls to 10 through 48px', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
     expect(
       (article.parentElement as HTMLElement).style.getPropertyValue('--nr-reading-font-rem'),
@@ -983,7 +983,7 @@ describe('renewal reading affordances', () => {
   });
   it('returns to the top when no translation position has been saved', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
     revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '원문 보기' }));
@@ -997,7 +997,7 @@ describe('renewal reading affordances', () => {
   it('returns to the latest translation position after scrolling the original', async () => {
     const offsetTop = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(20);
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     const article = await screen.findByRole('article', { name: '번역 본문' });
     article.scrollTop = 357;
     fireEvent.scroll(article);
@@ -1019,7 +1019,7 @@ describe('renewal reading affordances', () => {
   });
   it('next unsaved chapter enters a waiting screen without a model request', async () => {
     const value = await setup(true);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '다음 화' }));
@@ -1361,7 +1361,7 @@ describe('route restoration across works', () => {
     revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '목차' }));
     expect(
-      screen.getByRole('button', { name: '1화 1화 제목' }).closest('.nr-list-item'),
+      screen.getByRole('button', { name: '1화 제목' }).closest('.nr-list-item'),
     ).toHaveTextContent('저장됨');
     expect(controller.getSnapshot().savedChapterIds).toEqual([saved.source.chapterId]);
   });
@@ -1494,7 +1494,7 @@ describe('review P2: library-only continuation restores saved metadata', () => {
     fireEvent.click(screen.getByRole('button', { name: '목차' }));
     expect(screen.getByRole('heading', { name: page.title })).toBeVisible();
     expect(
-      screen.getByRole('button', { name: '1화 1화 제목' }).closest('.nr-list-item'),
+      screen.getByRole('button', { name: '1화 제목' }).closest('.nr-list-item'),
     ).toHaveTextContent('저장됨');
     expect(controller.getSnapshot().savedChapterIds).toEqual([saved.source.chapterId]);
     expect(value.dependencies.connect).not.toHaveBeenCalled();
@@ -1510,7 +1510,7 @@ describe('reading background follows the reader color scheme (#173)', () => {
     const bars = vi.spyOn(capacitorShell, 'setSystemBarsTheme');
     value.controller.changeTheme(theme);
     value.controller.changeReadingBackground(background);
-    fireEvent.click(screen.getByRole('button', { name: '1화 1화 제목' }));
+    fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByText('저장된 한국어 본문');
     return { ...value, bars };
   }

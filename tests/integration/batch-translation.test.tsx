@@ -592,7 +592,6 @@ test('the work editor only applies explicitly saved terms and supports multiple 
   render(<Application controller={harness.app} />);
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
-  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
   await waitFor(() => expect(screen.getByRole('button', { name: '용어 추가' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '용어 추가' }));
   fireEvent.change(screen.getByLabelText('용어 1 원문'), { target: { value: '合成' } });
@@ -616,7 +615,6 @@ test('the work glossary keeps a failed draft across Back and resets it for anoth
   render(<Application controller={harness.app} />);
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
-  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
   const sourceField = await screen.findByLabelText('이전 이야기 요약 (선택, 이름 없이 400자 이내)');
   fireEvent.change(sourceField, { target: { value: '초안은 저장 실패 뒤에도 남아야 해요.' } });
   harness.failGuidance = true;
@@ -631,7 +629,6 @@ test('the work glossary keeps a failed draft across Back and resets it for anoth
   expect(screen.queryByRole('dialog', { name: '작품 용어집' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
-  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
   expect(await screen.findByLabelText('이전 이야기 요약 (선택, 이름 없이 400자 이내)')).toHaveValue(
     '초안은 저장 실패 뒤에도 남아야 해요.',
   );
@@ -640,7 +637,6 @@ test('the work glossary keeps a failed draft across Back and resets it for anoth
   await waitFor(() => expect(harness.app.getSnapshot().work?.workId).toBe('n9999zz'));
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
-  fireEvent.click(screen.getByText('작품 용어집·캐릭터 말투'));
   expect(await screen.findByLabelText('이전 이야기 요약 (선택, 이름 없이 400자 이내)')).toHaveValue(
     '',
   );

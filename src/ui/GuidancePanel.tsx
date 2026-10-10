@@ -94,8 +94,7 @@ export function GuidancePanel({
     }
   }
   return (
-    <details className="nr-guidance-panel">
-      <summary>작품 용어집·캐릭터 말투</summary>
+    <div className="nr-guidance-panel">
       <p>
         이 작품에서 직접 저장한 항목 중 원문에 이름·별칭이 나오는 항목만 적용해요. 로컬 모델 번역에
         쓰고, 화자가 불확실한 대사는 추측하지 않도록 전달해요. 용어집이 길어 입력 예산이 부족하면
@@ -282,6 +281,6 @@ export function GuidancePanel({
       </fieldset>
       {busy && <p>용어집 처리 중…</p>}
       {message && <p role="status">{message}</p>}
-    </details>
+    </div>
   );
 }

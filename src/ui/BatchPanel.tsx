@@ -23,6 +23,8 @@ export interface BatchPanelProps {
   onRetryBatchSave?(): void;
   onSettings?(): void;
   globalBlocked?: boolean;
+  /** 작품의 마지막 회차 번호. 기록이 없을 때 끝 회차 칸의 기본값이다. */
+  lastOrdinal?: number;
 }
 
 type BatchFill = NonNullable<RenewalSnapshot['batchFill']>;
@@ -129,9 +131,12 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const fillResult = fill?.phase === 'done' ? fill.result : undefined;
   // 로컬 서버는 다시 요청해도 비용이 없다. 문구와 버튼은 연결 종류에 맞춘다.
   const local = record?.selection.connection.provider === 'openai-compatible';
+  // 범위 칸의 기본값: 기록이 있으면 그 범위, 없으면 1화부터 작품의 마지막 회차까지.
+  const rangeKey = record?.id ?? 'none';
+  const firstDefault = record?.chapters[0]?.ordinal ?? 1;
+  const lastDefault = record?.chapters.at(-1)?.ordinal ?? props.lastOrdinal;
   return (
     <section className="nr-batch-panel" aria-label="일괄 번역">
-      <h2>미리 번역하기</h2>
       <p>범위나 전체 회차를 확인한 뒤 시작해 주세요. 완료한 회차는 저장본으로 읽을 수 있어요.</p>
       {!props.batchAvailable && !active && (
         <p>연결 설정에서 서버와 모델을 확인하면 번역 대상을 준비할 수 있어요.</p>
@@ -153,11 +158,27 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           <div className="nr-batch-range">
             <label>
               시작 회차
-              <input ref={first} type="number" min={1} step={1} required defaultValue={1} />
+              <input
+                key={`first:${rangeKey}`}
+                ref={first}
+                type="number"
+                min={1}
+                step={1}
+                required
+                defaultValue={firstDefault}
+              />
             </label>
             <label>
               끝 회차
-              <input ref={last} type="number" min={1} step={1} required />
+              <input
+                key={`last:${rangeKey}`}
+                ref={last}
+                type="number"
+                min={1}
+                step={1}
+                required
+                defaultValue={lastDefault}
+              />
             </label>
           </div>
           <label className="nr-batch-retranslate">

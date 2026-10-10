@@ -53,6 +53,10 @@
 .nr-notice--error .nr-button--text {
   color: var(--on-error-container);
 }
+/* 텍스트 버튼의 좌우 여백(12px)만큼 당겨 본문 글자와 왼쪽 선을 맞춘다. */
+.nr-notice > .nr-button--text {
+  margin-inline-start: -12px;
+}
 .nr-work-screen > :where(:not(.nr-modal)) + :where(:not(.nr-modal)) {
   margin-block-start: 16px;
 }
@@ -329,6 +333,12 @@
   font: var(--type-body-small);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* 설정 섹션 안에서 목록 항목(안쪽 16px)이 아닌 내용도 같은 왼쪽 선에서 시작한다(#270).
+   버튼·진행 막대 같은 컴포넌트의 자체 padding을 건드리지 않도록 margin으로 맞춘다. */
+.nr-settings > section > :not(.nr-list-item, .nr-switch-row) {
+  margin-inline: 16px;
 }
 
 /* 설정 끝 브랜드 영역(#143) */
