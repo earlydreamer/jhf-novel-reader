@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
-  appId: 'app.narou.reader',
+  appId: 'dev.earlydreamer.jhfreader',
   appName: 'JHF Novel Reader',
   webDir: 'dist',
   // Default debug bridge logging exposes plugin arguments (auth/body/secrets).

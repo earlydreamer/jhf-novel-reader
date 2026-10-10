@@ -44,11 +44,11 @@ def signingValue = { String env, String key -> System.getenv(env) ?: keystorePro
 def releaseStoreFile = signingValue('JHF_KEYSTORE_FILE', 'storeFile')
 
 android {
-    namespace = "app.narou.reader"
+    namespace = "dev.earlydreamer.jhfreader"
     sourceSets.main.assets.srcDir(provenanceAssets)
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.narou.reader"
+        applicationId "dev.earlydreamer.jhfreader"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode

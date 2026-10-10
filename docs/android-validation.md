@@ -1,6 +1,6 @@
 # Android debug packaging and validation
 
-Renewal acceptance is tracked by [#25](https://github.com/earlydreamer/narou-reader/issues/25) and [#28](https://github.com/earlydreamer/narou-reader/issues/28); the earlier #8 was superseded. Current partial physical-device evidence is recorded in the [Windows MAINPC LM Studio G2 follow-up](renewal/mainpc-lmstudio-g2-2026-10-06.md) and [Fold7 native error gates](renewal/native-errors-g2-2026-10-07.md). The former distinguishes real cancellation/process death from injected storage/network faults; the latter records actual native HTTP error responses, certificate rejection, Keystore/log canaries and 16 executed instrumentation tests on the `a21554f` APK. The later [connection failure fix and before/after Fold7 proof](renewal/connection-errors-2026-10-07.md) preserves secure-storage errors and displays native TLS catalog failures as connection errors on the `1a871ec` APK. These partial reports do not complete the whole acceptance matrix. A signed debug APK, mocked application tests and compiled instrumentation tests remain separate evidence; the historical manual matrix below is not a current result for the renewal APK.
+Renewal acceptance is tracked by [#25](https://github.com/earlydreamer/jhf-novel-reader/issues/25) and [#28](https://github.com/earlydreamer/jhf-novel-reader/issues/28); the earlier #8 was superseded. Current partial physical-device evidence is recorded in the [Windows MAINPC LM Studio G2 follow-up](renewal/mainpc-lmstudio-g2-2026-10-06.md) and [Fold7 native error gates](renewal/native-errors-g2-2026-10-07.md). The former distinguishes real cancellation/process death from injected storage/network faults; the latter records actual native HTTP error responses, certificate rejection, Keystore/log canaries and 16 executed instrumentation tests on the `a21554f` APK. The later [connection failure fix and before/after Fold7 proof](renewal/connection-errors-2026-10-07.md) preserves secure-storage errors and displays native TLS catalog failures as connection errors on the `1a871ec` APK. These partial reports do not complete the whole acceptance matrix. A signed debug APK, mocked application tests and compiled instrumentation tests remain separate evidence; the historical manual matrix below is not a current result for the renewal APK.
 
 ## Rebuild the same source
 
@@ -23,7 +23,7 @@ node tests/e2e/verify-apk.mjs
 - App: `android/app/build/outputs/apk/debug/app-debug.apk`
 - Device tests: `android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
 - Evidence: `android/build/verification/provenance.json`, SHA-256, signature, compiled manifest, package metadata, and network policy
-- ID: `app.narou.reader`; minimum Android 7 / API 24; compile/target SDK 36
+- ID: `dev.earlydreamer.jhfreader`; minimum Android 7 / API 24; compile/target SDK 36
 
 The audit verifies APK v2 signature, ID/SDK levels, disabled backups and bridge logging, all required native plugins, compiled network policy, packaged production CSP, and web-asset equality with the current build. Vite and Gradle separately stamp their build-time commit/tree/dirty state; both packaged stamps must match the current clean checkout. An older web build cannot be relabeled by a later native build. The report records exact Git commit/tree and lockfile/APK hashes. It is not an installation or runtime test. Build after checking out the desired commit; do not reuse an older APK just because its name is the same.
 
@@ -65,7 +65,7 @@ Use an already authorized device with USB debugging permission. Do not enable de
 ```sh
 adb devices
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -W -n app.narou.reader/.MainActivity
+adb shell am start -W -n dev.earlydreamer.jhfreader/.MainActivity
 (cd android && ./gradlew :app:connectedDebugAndroidTest)
 ```
 

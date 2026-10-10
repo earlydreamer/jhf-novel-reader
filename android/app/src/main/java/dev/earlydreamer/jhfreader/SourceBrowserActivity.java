@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;

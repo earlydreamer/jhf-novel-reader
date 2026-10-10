@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

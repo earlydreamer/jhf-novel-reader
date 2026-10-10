@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -41,8 +41,8 @@ import org.junit.runner.RunWith;
  */
 @RunWith(AndroidJUnit4.class)
 public final class InsetsProbeInstrumentedTest {
-    private static final String TARGET_APP_ID = "app.narou.reader.devicecheck2";
-    private static final String TEST_APP_ID = "app.narou.reader.devicecheck2.insetsprobe.test";
+    private static final String TARGET_APP_ID = "dev.earlydreamer.jhfreader.devicecheck2";
+    private static final String TEST_APP_ID = "dev.earlydreamer.jhfreader.devicecheck2.insetsprobe.test";
     private static final String RUN_ARGUMENT = "nrInsetsProbe";
     private static final String TARGET_ARGUMENT = "nrInsetsProbeTarget";
     private static final long READY_TIMEOUT_MS = 4000;

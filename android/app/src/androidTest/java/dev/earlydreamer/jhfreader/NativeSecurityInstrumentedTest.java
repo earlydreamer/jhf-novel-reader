@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 import static org.junit.Assert.*;
 
@@ -44,7 +44,7 @@ public class NativeSecurityInstrumentedTest {
 
     @Test
     public void targetAppPolicyAllowsRuntimeModelHostsButRejectsSourceCleartext() {
-        assertEquals("app.narou.reader", appContext().getPackageName());
+        assertEquals("dev.earlydreamer.jhfreader", appContext().getPackageName());
         NetworkSecurityPolicy policy = NetworkSecurityPolicy.getInstance();
         // These are policy lookups only: no DNS resolution or external request occurs.
         for (String host : Arrays.asList("127.0.0.1", "192.168.50.10", "100.64.10.20", "chosen-model.example.test")) {

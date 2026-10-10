@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 /** 원문 탐색 화면 색. 값은 src/ui/theme/tokens.css와 같고 SourceBrowserThemeTest가 대조한다. */
 final class SourceBrowserTheme {

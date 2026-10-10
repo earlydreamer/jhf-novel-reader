@@ -2,11 +2,11 @@
 
 <p align="center"><img src="docs/assets/brand-logo.png" alt="JHF Novel Reader" width="160"></p>
 
-저장소 이름 `narou-reader`는 가제이며, 정식 배포 때 저장소·패키지 이름과 함께 바꿉니다.
+저장소는 `jhf-novel-reader`, 안드로이드 패키지는 `dev.earlydreamer.jhfreader`입니다. 0.1.x(`app.narou.reader`)에서 옮기려면 옛 앱의 설정 → 백업 파일 만들기로 저장한 뒤 새 앱의 설정 → 백업에서 복원하기를 쓰세요.
 
 나로우 작품을 앱 안에서 찾고, 목차에서 고른 한 화를 통째로 번역한 다음 저장된 한국어 본문을 읽는 Android 리더입니다.
 
-2026-10-07 Linux Hy-MT2 7B의 컨텍스트 구간 번역에서도 Black Shark 2의 전체 입력 처리·저장·오프라인 재열기를 확인했습니다. 큰 중간 누락은 이번 결과에서 확인되지 않았지만 기간·행동·관용구 의미 오류가 남아 [#72](https://github.com/earlydreamer/narou-reader/issues/72)는 열려 있습니다. HTTP 성공이나 문단 수만으로 번역 충실도를 판단하지 않습니다. [#74](https://github.com/earlydreamer/narou-reader/issues/74) 구간 번역, [#75](https://github.com/earlydreamer/narou-reader/issues/75) 범위·전체 회차 번역, [#21](https://github.com/earlydreamer/narou-reader/issues/21) 용어집은 연결된 Draft PR에서 검증 중입니다.
+2026-10-07 Linux Hy-MT2 7B의 컨텍스트 구간 번역에서도 Black Shark 2의 전체 입력 처리·저장·오프라인 재열기를 확인했습니다. 큰 중간 누락은 이번 결과에서 확인되지 않았지만 기간·행동·관용구 의미 오류가 남아 [#72](https://github.com/earlydreamer/jhf-novel-reader/issues/72)는 열려 있습니다. HTTP 성공이나 문단 수만으로 번역 충실도를 판단하지 않습니다. [#74](https://github.com/earlydreamer/jhf-novel-reader/issues/74) 구간 번역, [#75](https://github.com/earlydreamer/jhf-novel-reader/issues/75) 범위·전체 회차 번역, [#21](https://github.com/earlydreamer/jhf-novel-reader/issues/21) 용어집은 연결된 Draft PR에서 검증 중입니다.
 
 ## 첫 사용 흐름
 

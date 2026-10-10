@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 import android.animation.ObjectAnimator;
 import android.content.res.Configuration;
