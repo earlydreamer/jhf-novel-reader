@@ -275,3 +275,65 @@ test('실패와 중단은 각각 안내와 다시 시도 버튼을 보이고, �
   expect(screen.queryByText(/표기 1개를 채웠어요/)).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: FILL_BUTTON })).toBeVisible();
 });
+
+test('다시 채우기에서 일반어로 바뀐 후보는 자동으로 채운 표기가 비고 체크가 풀린다', () => {
+  const first = doneFill({
+    suggestions: [
+      change({ source: 'アルベルト', after: '알베르트' }),
+      change({ source: 'ミカエル', after: '미카엘' }),
+    ],
+    common: [],
+    partial: false,
+    counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
+  });
+  const props = panelProps({ batchFill: first });
+  const { rerender } = render(<BatchPanel {...props} />);
+  expect(screen.getByLabelText('アルベルト 사용')).toBeChecked();
+  expect(screen.getByLabelText('アルベルト 한국어 표기')).toHaveValue('알베르트');
+
+  const second = doneFill({
+    suggestions: [change({ source: 'ミカエル', after: '미카엘' })],
+    common: ['アルベルト'],
+    partial: false,
+    counts: { candidates: 3, common: 1, unchanged: 0, unanswered: 0 },
+  });
+  rerender(<BatchPanel {...props} batchFill={second} />);
+
+  expect(screen.getByLabelText('アルベルト 한국어 표기')).toHaveValue('');
+  expect(screen.getByLabelText('アルベルト 사용')).not.toBeChecked();
+  expect(screen.getByText('일반어로 판정했어요')).toBeVisible();
+  expect(screen.getByLabelText('ミカエル 한국어 표기')).toHaveValue('미카엘');
+  expect(screen.getByLabelText('ミカエル 사용')).toBeChecked();
+});
+
+test('일반어로 바뀐 후보라도 사용자가 고친 표기와 직접 바꾼 체크는 그대로다', () => {
+  const first = doneFill({
+    suggestions: [
+      change({ source: 'アルベルト', after: '알베르트' }),
+      change({ source: 'ミカエル', after: '미카엘', confidence: 'low' }),
+    ],
+    common: [],
+    partial: false,
+    counts: { candidates: 3, common: 0, unchanged: 0, unanswered: 0 },
+  });
+  const props = panelProps({ batchFill: first });
+  const { rerender } = render(<BatchPanel {...props} />);
+  fireEvent.change(screen.getByLabelText('アルベルト 한국어 표기'), {
+    target: { value: '사용자표기' },
+  });
+  expect(screen.getByLabelText('ミカエル 사용')).not.toBeChecked();
+  fireEvent.click(screen.getByLabelText('ミカエル 사용'));
+
+  const second = doneFill({
+    suggestions: [],
+    common: ['アルベルト', 'ミカエル'],
+    partial: false,
+    counts: { candidates: 3, common: 2, unchanged: 0, unanswered: 0 },
+  });
+  rerender(<BatchPanel {...props} batchFill={second} />);
+
+  expect(screen.getByLabelText('アルベルト 한국어 표기')).toHaveValue('사용자표기');
+  expect(screen.getByLabelText('アルベルト 사용')).not.toBeChecked();
+  expect(screen.getByLabelText('ミカエル 한국어 표기')).toHaveValue('');
+  expect(screen.getByLabelText('ミカエル 사용')).toBeChecked();
+});

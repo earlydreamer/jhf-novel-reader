@@ -24,6 +24,8 @@ export function CandidateReview({
   // 사용자가 직접 고친 표기와 직접 바꾼 체크. 다시 채우기에서도 그대로 둔다.
   const [edited, setEdited] = useState(new Set<string>());
   const [toggled, setToggled] = useState(new Set<string>());
+  // 정밀스캔이 자동으로 넣은 표기. 다음 결과에서 일반어로 바뀌면 이 값과 같을 때만 지운다.
+  const [autoFilled, setAutoFilled] = useState(new Map<string, string>());
   const [applied, setApplied] = useState<readonly TermScanChange[] | undefined>(undefined);
   const [page, setPage] = useState(0);
   // 렌더 중 이전 참조와 비교해 새 제안이 들어왔을 때만 한 번 적용한다(effect 안 setState를 쓰지 않는다).
@@ -32,13 +34,35 @@ export function CandidateReview({
     if (suggestions) {
       const nextTargets = new Map(targets);
       const nextChosen = new Map(chosen);
+      const nextAuto = new Map(autoFilled);
+      const suggested = new Set<string>();
       for (const item of suggestions) {
-        if (!edited.has(item.source)) nextTargets.set(item.source, item.after);
+        suggested.add(item.source);
+        if (!edited.has(item.source)) {
+          nextTargets.set(item.source, item.after);
+          nextAuto.set(item.source, item.after);
+        }
         // 낮은 신뢰도는 사람이 확인하도록 체크하지 않는다.
         if (!toggled.has(item.source)) nextChosen.set(item.source, item.confidence !== 'low');
       }
+      // 제안이 빠진 후보(일반어이거나 답 없음)는 자동으로 넣은 표기를 지우고 체크를 푼다.
+      // 사용자가 고친 표기와 직접 바꾼 체크는 그대로 둔다.
+      for (const candidate of candidates) {
+        const { source } = candidate;
+        if (suggested.has(source)) continue;
+        if (
+          !edited.has(source) &&
+          nextAuto.has(source) &&
+          nextTargets.get(source) === nextAuto.get(source)
+        ) {
+          nextTargets.delete(source);
+          nextAuto.delete(source);
+        }
+        if (!toggled.has(source)) nextChosen.set(source, false);
+      }
       setTargets(nextTargets);
       setChosen(nextChosen);
+      setAutoFilled(nextAuto);
     }
   }
   const suggestionBySource = new Map((suggestions ?? []).map((item) => [item.source, item]));
