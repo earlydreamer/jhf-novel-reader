@@ -42,6 +42,16 @@ test('uses the injection matcher: aliases, longest names, manual preset override
       .missingTerms,
   ).toEqual([]);
 });
+test('후보로만 잡힌 이름은 표기 누락 검사에서 빠진다', () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [{ source: 'リスト', target: '크리스토퍼', aliases: [], category: '', note: '' }],
+  };
+  expect(
+    checkTranslationQuality('n1234ab', 'クリストファーが来た。', [{ text: '웃었다.' }], value)
+      .missingTerms,
+  ).toEqual([]);
+});
 test('looks for fixed spelling across the whole output and never mutates source or blocks', () => {
   const blocks = Object.freeze([
     Object.freeze({ text: '알베르트가 웃었다.' }),

@@ -19,7 +19,10 @@ export function checkTranslationQuality(
     .map((block) => block.text)
     .join('\n\n')
     .normalize('NFKC');
-  const terms = appliedGuidance(guidance, workId, sourceInput, preset)?.terms ?? [];
+  // 확정 이름이 있는 항목만 검사한다. 후보로만 등장한 이름은 용어로 쓰였다고 볼 수 없다.
+  const terms = (appliedGuidance(guidance, workId, sourceInput, preset)?.terms ?? []).filter(
+    ({ names }) => names.length > 0,
+  );
   return {
     ruleVersion: 'deterministic-v1',
     japaneseBlocks: japaneseBlockIndexes(blocks),
