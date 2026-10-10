@@ -5,6 +5,7 @@ import {
   guidanceContext,
   isMachineTerm,
   isUnsafeTermName,
+  streamingGuidanceContext,
   validateGuidance,
   type GuidanceTerm,
   type WorkGuidance,
@@ -233,6 +234,80 @@ test('짧은 히라가나 원문은 긴 이름 안에서 적용되지 않고 긴
   ]);
   expect(guidanceContext(value, 'n1234ab', 'ちょっと、ルシアナ')).not.toContain('ち translates');
   expect(guidanceContext(value, 'n1234ab', 'ちょっと心配ですね')).toBe('');
+});
+test('확정 이름과 후보 이름을 나눈다', () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [
+      { source: 'リスト', target: '크리스토퍼', aliases: [], category: '', note: '' },
+      { source: 'ルシアナ', target: '루시아나', aliases: [], category: '', note: '' },
+    ],
+    voices: [],
+  };
+  const applied = appliedGuidance(value, 'n1234ab', 'クリストファーとルシアナ', [])!;
+  expect(applied.terms.map((t) => [t.term.source, t.names, t.candidateNames])).toEqual([
+    ['リスト', [], ['リスト']],
+    ['ルシアナ', ['ルシアナ'], []],
+  ]);
+});
+test('참고 문구: 후보에는 이름으로 쓰였을 때만 조건이 붙는다', () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [
+      { source: 'リスト', target: '크리스토퍼', aliases: [], category: '', note: '' },
+      { source: 'ルシアナ', target: '루시아나', aliases: [], category: '', note: '' },
+    ],
+    voices: [],
+  };
+  const text = guidanceContext(value, 'n1234ab', 'クリストファーとルシアナ', []);
+  expect(text).toContain('ルシアナ translates to 루시아나');
+  expect(text).toContain(
+    'リスト translates to 크리스토퍼 (only where リスト is used as this name)',
+  );
+});
+test('적용 해시는 확정·후보를 합친 이름으로 계산해 예전과 같다', async () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [
+      { source: 'リスト', target: '크리스토퍼', aliases: [], category: '', note: '' },
+      { source: 'ルシアナ', target: '루시아나', aliases: [], category: '', note: '' },
+    ],
+    voices: [],
+  };
+  expect(await appliedGuidanceHash(value, 'n1234ab', 'クリストファーとルシアナ', [])).toBe(
+    await digest([
+      'n1234ab',
+      [
+        { term: value.terms[0], names: ['リスト'] },
+        { term: value.terms[1], names: ['ルシアナ'] },
+      ],
+      [],
+    ]),
+  );
+});
+test('전각 영숫자가 든 입력도 원문 그대로 비교해 예전 해시와 같다', async () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [{ source: 'Sランク', target: 'S급', aliases: [], category: '', note: '' }],
+    voices: [],
+  };
+  expect(await appliedGuidanceHash(value, 'n1234ab', 'Ｓランクだけ')).toBeUndefined();
+  expect(await appliedGuidanceHash(value, 'n1234ab', 'Ｓランクの冒険者とSランク。')).toBe(
+    await digest(['n1234ab', [{ term: value.terms[0], names: ['Sランク'] }], []]),
+  );
+});
+test('후보 문구도 확정 문구처럼 메모를 붙인다', () => {
+  const value: WorkGuidance = {
+    ...guidance,
+    terms: [{ source: 'リスト', target: '크리스토퍼', aliases: [], category: '', note: '기사' }],
+    voices: [],
+  };
+  expect(guidanceContext(value, 'n1234ab', 'クリストファーが来た。')).toContain(
+    'リスト translates to 크리스토퍼 (기사) (only where リスト is used as this name)',
+  );
+  expect(streamingGuidanceContext(value, 'n1234ab', 'クリストファーが来た。', [])).toContain(
+    'リスト->크리스토퍼 #기사 (only if used as a name here)',
+  );
 });
 test('짧은 히라가나 별칭만 빠지고 같은 항목의 긴 원문은 남는다', () => {
   const value: WorkGuidance = {

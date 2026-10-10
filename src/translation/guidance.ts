@@ -2,6 +2,9 @@ import { ReaderError } from '../contracts';
 import { digest, Journal, serial, type PrivateFiles } from '../storage/journal';
 import { check, object } from '../storage/validation';
 import { identifier } from '../storage/readingValidation';
+import { findTermMatches } from './termMatch';
+
+export { isUnsafeTermName } from './termMatch';
 
 export type GuidanceEvidence = {
   kind: 'ruby' | 'kanjidic' | 'wikipedia' | 'wikidata' | 'namuwiki' | 'model';
@@ -182,25 +185,25 @@ export function streamingGuidanceContext(
   return (
     'Translation notes (reference data):\n' +
     applied.terms
-      .flatMap(({ term, names }) =>
-        names.map(
-          (name) =>
-            `${name}->${term.target}${term.category || term.note ? ' #' + [term.category, term.note].filter(Boolean).join('/') : ''}`,
-        ),
-      )
+      .flatMap(({ term, names, candidateNames }) => {
+        const tags =
+          term.category || term.note
+            ? ' #' + [term.category, term.note].filter(Boolean).join('/')
+            : '';
+        return [
+          ...names.map((name) => `${name}->${term.target}${tags}`),
+          ...candidateNames.map(
+            (name) => `${name}->${term.target}${tags} (only if used as a name here)`,
+          ),
+        ];
+      })
       .join('\n') +
     '\n' +
     applied.voices.map((v) => `${v.name}: ${v.instruction}`).join('\n') +
     '\n'
   );
 }
-const shortHiragana = /^[\p{Script=Hiragana}ー]{1,2}$/u;
-/** 다른 단어 안에도 흔히 들어 있어 이름으로 찾으면 안 되는 원문: 한 글자, 또는 두 글자 이하 히라가나(장음 포함)만. */
-export function isUnsafeTermName(name: string): boolean {
-  const compact = name.normalize('NFKC').replace(/\s/g, '');
-  return [...compact].length <= 1 || shortHiragana.test(compact);
-}
-/** 긴 이름부터 매칭하고 그 구간을 가려서, 긴 이름 안에 포함된 짧은 이름이 따로 매칭되지 않게 한다. */
+/** 긴 이름부터 매칭하고 그 구간을 가려서, 긴 이름 안에 포함된 짧은 이름이 따로 매칭되지 않게 한다. (말투 이름 전용) */
 function matchedNames(input: string, names: string[]): Set<string> {
   let masked = input;
   const matched = new Set<string>();
@@ -212,7 +215,8 @@ function matchedNames(input: string, names: string[]): Set<string> {
   return matched;
 }
 type AppliedGuidance = {
-  terms: { term: GuidanceTerm; names: string[] }[];
+  /** names: 확정 이름, candidateNames: 글자 종류 경계 밖에서만 등장한 후보 이름(참고 목록에만 쓴다). */
+  terms: { term: GuidanceTerm; names: string[]; candidateNames: string[] }[];
   voices: GuidanceVoice[];
 };
 /** 입력에 실제로 등장한 용어(등장한 이름 포함)와 말투만 고른다. 주입 형식과 적용 해시가 같은 매칭을 쓴다. */
@@ -234,23 +238,30 @@ export function appliedGuidance(
   ];
   const voiceList = value?.voices ?? [];
   // 용어와 말투는 따로 가린다. 같은 인물의 용어 별칭(긴 이름)이 말투 이름(짧은 이름)을 가리면 말투 지시가 빠진다.
-  // 한 글자·짧은 히라가나 이름은 일반 단어 안에서 잘못 잡히므로 용어 이름 후보에서 뺀다.
-  const termNames = matchedNames(
+  // 용어 이름은 글자 종류 경계로 확정·후보를 가르고, 한 글자·짧은 히라가나 이름은 찾지 않는다(findTermMatches).
+  const matches = findTermMatches(
     input,
-    candidates
-      .flatMap((term) => [term.source, ...term.aliases])
-      .filter((name) => !isUnsafeTermName(name)),
+    candidates.flatMap((term) => [term.source, ...term.aliases]),
   );
+  const confirmedNames = new Set(matches.filter((m) => m.confirmed).map((m) => m.name));
+  const candidateOnlyPool = new Set(matches.filter((m) => !m.confirmed).map((m) => m.name));
   const voiceNames = matchedNames(
     input,
     voiceList.flatMap((voice) => [voice.name, ...voice.aliases]),
   );
   const terms = candidates
-    .map((term) => ({
-      term,
-      names: [term.source, ...term.aliases].filter((name) => termNames.has(name)),
-    }))
-    .filter((entry) => entry.names.length);
+    .map((term) => {
+      const names = [term.source, ...term.aliases];
+      return {
+        term,
+        names: names.filter((name) => confirmedNames.has(name)),
+        // 확정된 적이 없고 후보로만 등장한 이름만 후보로 둔다.
+        candidateNames: names.filter(
+          (name) => !confirmedNames.has(name) && candidateOnlyPool.has(name),
+        ),
+      };
+    })
+    .filter((entry) => entry.names.length || entry.candidateNames.length);
   const voices = voiceList.filter((voice) =>
     [voice.name, ...voice.aliases].some((name) => voiceNames.has(name)),
   );
@@ -264,11 +275,15 @@ export function guidanceContext(
 ): string {
   const applied = appliedGuidance(value, workId, input, preset);
   if (!applied) return '';
-  const terms = applied.terms.flatMap(({ term, names }) =>
-    names.map(
+  const terms = applied.terms.flatMap(({ term, names, candidateNames }) => [
+    ...names.map(
       (name) => `${name} translates to ${term.target}${term.note ? ` (${term.note})` : ''}`,
     ),
-  );
+    ...candidateNames.map(
+      (name) =>
+        `${name} translates to ${term.target}${term.note ? ` (${term.note})` : ''} (only where ${name} is used as this name)`,
+    ),
+  ]);
   const voices = applied.voices.map((voice) => `${voice.name}: ${voice.instruction}`);
   return (
     (terms.length ? 'Reference the following translations:\n' + terms.join('\n') + '\n' : '') +
@@ -292,7 +307,14 @@ export async function appliedGuidanceHash(
 ): Promise<string | undefined> {
   const applied = appliedGuidance(value, workId, chapterInput, preset);
   const summary = value?.plotSummary?.trim();
+  // 예전 형식({ term, names })과 같게, 확정·후보 이름을 원래 순서대로 합쳐 해시한다.
+  const hashed = (applied?.terms ?? []).map(({ term, names, candidateNames }) => ({
+    term,
+    names: [term.source, ...term.aliases].filter(
+      (name) => names.includes(name) || candidateNames.includes(name),
+    ),
+  }));
   return applied || summary
-    ? digest([workId, applied?.terms ?? [], applied?.voices ?? [], ...(summary ? [summary] : [])])
+    ? digest([workId, hashed, applied?.voices ?? [], ...(summary ? [summary] : [])])
     : undefined;
 }
