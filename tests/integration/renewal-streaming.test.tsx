@@ -621,10 +621,13 @@ test('automatic start does not repeat an unfinished chapter request when reselec
   const chapter = h.app.getSnapshot().work!.chapters[0]!;
   await h.app.selectChapter(chapter);
   await vi.waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('unknown'));
+  // 첫 전송과 자동 재전송 1회(#254). 다시 고른 뒤에는 더 보내지 않아야 한다.
+  const sent = h.requests.filter((r) => r.method === 'POST').length;
+  expect(sent).toBe(2);
   h.app.showContents();
   await h.app.selectChapter(chapter);
   expect(h.app.getSnapshot().translation.phase).toBe('unknown');
-  expect(h.requests.filter((r) => r.method === 'POST')).toHaveLength(1);
+  expect(h.requests.filter((r) => r.method === 'POST')).toHaveLength(sent);
   h.app.dispose();
 });
 test('explicit retry after an unknown paragraph repair retains the requested paragraph scope', async () => {

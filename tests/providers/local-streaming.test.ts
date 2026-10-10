@@ -301,23 +301,80 @@ test('automatic retry off accepts a paragraph with a missing rendering after one
   expect(value.text).toBe('르시아나는 웃었다.');
   expect(value.failedParagraphs).toBeUndefined();
 });
-test('never retries an unknown transport outcome or an authentication response', async () => {
-  for (const error of [
-    new ReaderError('timeout_unknown', 'unknown'),
-    new ReaderError('auth', 'received', 401),
-  ]) {
-    const f = fixture();
-    f.transport.streamPost = vi.fn(async () => {
-      throw error;
-    });
-    await expect(
-      createProviderSession(selection, f.transport, secrets).translateChapter(
-        request,
-        new AbortController().signal,
-      ),
-    ).rejects.toMatchObject({ code: error.code });
-    expect(f.transport.streamPost).toHaveBeenCalledTimes(1);
-  }
+test('resends a stalled local request once, never an authentication response', async () => {
+  const auth = fixture();
+  auth.transport.streamPost = vi.fn(async () => {
+    throw new ReaderError('auth', 'received', 401);
+  });
+  await expect(
+    createProviderSession(selection, auth.transport, secrets).translateChapter(
+      request,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'auth' });
+  expect(auth.transport.streamPost).toHaveBeenCalledTimes(1);
+
+  const stalled = fixture();
+  stalled.transport.streamPost = vi.fn(async () => {
+    throw new ReaderError('timeout_unknown', 'unknown');
+  });
+  await expect(
+    createProviderSession(selection, stalled.transport, secrets).translateChapter(
+      request,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'timeout_unknown' });
+  expect(stalled.transport.streamPost).toHaveBeenCalledTimes(2);
+
+  const off = fixture();
+  off.transport.streamPost = vi.fn(async () => {
+    throw new ReaderError('timeout_unknown', 'unknown');
+  });
+  await expect(
+    createProviderSession(
+      { ...selection, autoRetryFailed: false },
+      off.transport,
+      secrets,
+    ).translateChapter(request, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'timeout_unknown' });
+  expect(off.transport.streamPost).toHaveBeenCalledTimes(1);
+});
+test('continues after one stalled local request', async () => {
+  const f = fixture();
+  const original = f.transport.streamPost!;
+  let stalled = false;
+  f.transport.streamPost = vi.fn((input, signal, onData) => {
+    if (!stalled) {
+      stalled = true;
+      throw new ReaderError('timeout_unknown', 'unknown');
+    }
+    return original(input, signal, onData);
+  });
+  let total = 0;
+  const value = await createProviderSession(selection, f.transport, secrets).translateChapter(
+    { ...request, onProgress: (_done, all) => (total = all) },
+    new AbortController().signal,
+  );
+  expect(value.failedParagraphs).toBeUndefined();
+  expect(total).toBeGreaterThan(0);
+  expect(f.transport.streamPost).toHaveBeenCalledTimes(total + 1);
+  const [first, second] = vi.mocked(f.transport.streamPost).mock.calls;
+  expect(second![0].body).toEqual(first![0].body);
+});
+test('does not resend when the request was cancelled during the stall', async () => {
+  const controller = new AbortController();
+  const f = fixture();
+  f.transport.streamPost = vi.fn(async () => {
+    controller.abort();
+    throw new ReaderError('timeout_unknown', 'unknown');
+  });
+  await expect(
+    createProviderSession(selection, f.transport, secrets).translateChapter(
+      request,
+      controller.signal,
+    ),
+  ).rejects.toBeInstanceOf(ReaderError);
+  expect(f.transport.streamPost).toHaveBeenCalledTimes(1);
 });
 test('drops previous history before reducing new content and rejects an indivisible huge paragraph before POST', async () => {
   const f = fixture(
