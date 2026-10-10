@@ -74,6 +74,109 @@ test('SSE handles arbitrary network/JSON/Unicode boundaries and requires termina
   incomplete.push(delta('부분'));
   expect(() => incomplete.complete()).toThrow();
 });
+test.each([8192, 97, Infinity])(
+  'SSE accepts the same long stream in %s-character chunks',
+  (chunkSize) => {
+    let updates = 0;
+    let latest = '';
+    const parser = createOpenAIStream((text) => {
+      updates++;
+      latest = text;
+    });
+    const data = delta('가').repeat(12821) + ending;
+    expect(data).toHaveLength(1_000_119);
+    for (let i = 0; i < data.length; i += chunkSize) parser.push(data.slice(i, i + chunkSize));
+    expect(parser.complete()).toEqual({ text: '가'.repeat(12821), finishReason: 'complete' });
+    expect(updates).toBe(12821);
+    expect(latest).toBe('가'.repeat(12821));
+  },
+);
+test.each(['\n\n', '\r\n\r\n'])(
+  'SSE accepts a limit-sized frame across every split in separator %j',
+  (separator) => {
+    const data = ':' + 'x'.repeat(1_000_000 - separator.length - 1) + separator;
+    for (let split = 0; split <= separator.length; split++) {
+      const parser = createOpenAIStream(() => {});
+      const offset = data.length - split;
+      parser.push(data.slice(0, offset));
+      parser.push(data.slice(offset) + delta('정상') + ending);
+      expect(parser.complete()).toEqual({ text: '정상', finishReason: 'complete' });
+    }
+  },
+);
+test.each(['\n\n', '\r\n\r\n', ''])(
+  'SSE rejects an oversized single frame with separator %j',
+  (separator) => {
+    const data = ':' + 'x'.repeat(1_000_000 - separator.length) + separator;
+    for (const chunkSize of [8192, Infinity]) {
+      const parser = createOpenAIStream(() => {});
+      expect(() => {
+        for (let i = 0; i < data.length; i += chunkSize) parser.push(data.slice(i, i + chunkSize));
+      }).toThrow(ReaderError);
+    }
+  },
+);
+test('SSE keeps the unfinished frame limit after consuming complete frames', () => {
+  const parser = createOpenAIStream(() => {});
+  expect(() => parser.push(delta('정상') + ':' + 'x'.repeat(1_000_000))).toThrow(ReaderError);
+});
+test('SSE keeps the cumulative text limit across individually valid frames', () => {
+  let latest = '';
+  const parser = createOpenAIStream((text) => (latest = text));
+  for (let i = 0; i < 5; i++) parser.push(delta('가'.repeat(800_000)));
+  expect(latest).toHaveLength(4_000_000);
+  expect(() => parser.push(delta('나'))).toThrow(ReaderError);
+  expect(latest).toHaveLength(4_000_000);
+});
+test('final response revalidation accepts a long SSE stream already delivered in small chunks', async () => {
+  const body = '가'.repeat(12821);
+  const data =
+    delta('<main><p id="A">') + delta('가').repeat(12821) + delta('</p></main>') + ending;
+  let calls = 0;
+  const transport: ModelTransport = {
+    get: vi.fn(),
+    post: vi.fn(),
+    streamPost: async (input, _signal, onData) => {
+      calls++;
+      for (let i = 0; i < data.length; i += 8192) onData(data.slice(i, i + 8192));
+      return { status: 200, url: input.url, headers: {}, data };
+    },
+  };
+  const result = await createProviderSession(selection, transport, secrets).translateChapter(
+    { ...request, source: { ...chapter, paragraphs: chapter.paragraphs.slice(0, 1) } },
+    new AbortController().signal,
+  );
+  expect(result.text).toBe(body);
+  expect(result.finishReason).toBe('complete');
+  expect(result.failedParagraphs).toBeUndefined();
+  expect(result.generation).toMatchObject({ contextTokens: 8192, segments: 1, continuations: 0 });
+  expect(calls).toBe(1);
+});
+test.each([
+  delta('정상') + ending.replace('data: [DONE]\n\n', ''),
+  delta('정상') + 'data: [DONE]\n\n',
+  delta('정상') + ending + delta('늦은 내용'),
+  delta('정상') + ending.replace('data: [DONE]', delta('늦은 내용') + 'data: [DONE]'),
+  delta('정상') + ending.replace('"stop"', '"unknown"'),
+])('SSE still rejects invalid completion ordering: %s', (data) => {
+  const parser = createOpenAIStream(() => {});
+  expect(() => {
+    parser.push(data);
+    parser.complete();
+  }).toThrow(ReaderError);
+});
+test.each([
+  ['stop', 'complete'],
+  ['length', 'length'],
+  ['content_filter', 'blocked'],
+])(
+  'SSE preserves the %s finish reason and an unterminated final DONE frame',
+  (reason, expected) => {
+    const parser = createOpenAIStream(() => {});
+    parser.push(delta('정상') + ending.replace('"stop"', JSON.stringify(reason)).trimEnd());
+    expect(parser.complete()).toEqual({ text: '정상', finishReason: expected });
+  },
+);
 test.each([
   'data: {bad}\n\n',
   'data: {"error":{"message":"private"}}\n\n',
