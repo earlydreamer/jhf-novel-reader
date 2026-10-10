@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type JSX,
@@ -16,6 +17,11 @@ type Message = { id: number; text: string; action?: SnackbarAction };
 type Show = (text: string, action?: SnackbarAction) => void;
 const SnackbarContext = createContext<Show>(() => {});
 const SnackbarOffsetContext = createContext<(px: number) => void>(() => {});
+
+/** popover API가 있을 때만 영역에 popover 속성을 단다. 없으면 일반 div로 남아 기존과 같이 보인다. */
+function regionPopover(): 'manual' | undefined {
+  return typeof HTMLElement.prototype.showPopover === 'function' ? 'manual' : undefined;
+}
 
 export function SnackbarProvider({
   children,
@@ -34,6 +40,8 @@ export function SnackbarProvider({
     setQueue((current) => [...current, { id, text, ...(action ? { action } : {}) }]);
   }, []);
   const current = queue[0];
+  const regionRef = useRef<HTMLDivElement>(null);
+  const regionOpen = useRef(false);
   useEffect(() => {
     if (!current) return;
     const timer = setTimeout(
@@ -42,12 +50,26 @@ export function SnackbarProvider({
     );
     return () => clearTimeout(timer);
   }, [current]);
+  // 모달 <dialog>는 top layer에 그려져 일반 층의 스낵바를 가린다. 영역을 popover로 다시 열면 top layer 맨 위로 올라간다.
+  useLayoutEffect(() => {
+    const el = regionRef.current;
+    if (!el || typeof el.showPopover !== 'function') return;
+    try {
+      if (regionOpen.current) el.hidePopover();
+      el.showPopover();
+      regionOpen.current = true;
+    } catch {
+      regionOpen.current = false;
+    }
+  }, [current]);
   return (
     <SnackbarContext.Provider value={show}>
       <SnackbarOffsetContext.Provider value={setScreenOffset}>
         {children}
         {/* 역할 없는 live 영역: 화면의 role="status" 질의와 겹치지 않는다. */}
         <div
+          ref={regionRef}
+          popover={regionPopover()}
           className="nr-snackbar-region"
           aria-live="polite"
           aria-atomic="true"

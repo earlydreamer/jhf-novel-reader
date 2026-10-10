@@ -166,6 +166,51 @@ describe('Snackbar', () => {
     vi.useRealTimers();
   });
 
+  it('re-opens the region as a manual popover on each new message so it stays above open modals', () => {
+    vi.useFakeTimers();
+    const calls: string[] = [];
+    let show: ReturnType<typeof useSnackbar> = () => {};
+    function Probe() {
+      show = useSnackbar();
+      return null;
+    }
+    Object.defineProperties(HTMLElement.prototype, {
+      showPopover: {
+        configurable: true,
+        value: () => {
+          calls.push('show');
+        },
+      },
+      hidePopover: {
+        configurable: true,
+        value: () => {
+          calls.push('hide');
+        },
+      },
+    });
+    try {
+      render(
+        <SnackbarProvider>
+          <Probe />
+        </SnackbarProvider>,
+      );
+      expect(document.querySelector('.nr-snackbar-region')).toHaveAttribute('popover', 'manual');
+      expect(calls).toEqual(['show']);
+      calls.length = 0;
+      act(() => show('첫 메시지'));
+      expect(calls).toEqual(['hide', 'show']);
+      calls.length = 0;
+      act(() => show('둘째 메시지'));
+      expect(calls).toEqual([]);
+      act(() => vi.advanceTimersByTime(4000));
+      expect(calls).toEqual(['hide', 'show']);
+    } finally {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).showPopover;
+      delete (HTMLElement.prototype as Partial<HTMLElement>).hidePopover;
+      vi.useRealTimers();
+    }
+  });
+
   it('lets a screen raise the offset above the provider offset and restores it on unmount', () => {
     const region = () => document.querySelector<HTMLElement>('.nr-snackbar-region')!;
     const offsetValue = () => region().style.getPropertyValue('--nr-snackbar-offset');
