@@ -29,7 +29,7 @@ export function auditProvenance(web, native, current) {
 }
 
 export function auditAssets(config, plugins, html) {
-  assert.equal(config.appId, 'app.narou.reader');
+  assert.equal(config.appId, 'dev.earlydreamer.jhfreader');
   assert.equal(config.loggingBehavior, 'none');
   assert.equal(config.plugins.CapacitorHttp.enabled, false);
   assert.equal(config.server.androidScheme, 'https');
@@ -89,8 +89,8 @@ export function auditNativeBrowse(manifest, dexDump, mainDisassembly) {
     'SourceBrowserPolicy',
     'SourceBrowserLoader',
   ])
-    assert(dexDump.includes(`Lapp/narou/reader/${name};`), `Missing compiled ${name}`);
-  const match = /Class descriptor\s*:\s*'Lapp\/narou\/reader\/SourceBrowserActivity;'/.exec(
+    assert(dexDump.includes(`Ldev/earlydreamer/jhfreader/${name};`), `Missing compiled ${name}`);
+  const match = /Class descriptor\s*:\s*'Ldev\/earlydreamer\/jhfreader\/SourceBrowserActivity;'/.exec(
     dexDump,
   );
   assert(match, 'Missing browser class definition');
@@ -108,7 +108,7 @@ export function auditNativeBrowse(manifest, dexDump, mainDisassembly) {
   );
   assert.match(
     mainDisassembly,
-    /const-class (v[0-9]+), Lapp\/narou\/reader\/SourceBrowserPlugin;[^]*?invoke-virtual \{v[0-9]+, \1\}, Lapp\/narou\/reader\/MainActivity;\.registerPlugin:[^]*?invoke-super[^\n]*Lcom\/getcapacitor\/BridgeActivity;\.onCreate:/,
+    /const-class (v[0-9]+), Ldev\/earlydreamer\/jhfreader\/SourceBrowserPlugin;[^]*?invoke-virtual \{v[0-9]+, \1\}, Ldev\/earlydreamer\/jhfreader\/MainActivity;\.registerPlugin:[^]*?invoke-super[^\n]*Lcom\/getcapacitor\/BridgeActivity;\.onCreate:/,
     'Source browser plugin must be registered before the app bridge starts',
   );
 }
@@ -184,7 +184,7 @@ export function main() {
   }
   const aapt = (...args) => run(path.join(buildTools, 'aapt'), args);
   const badging = aapt('dump', 'badging', apk);
-  assert.match(badging, /package: name='app\.narou\.reader'/);
+  assert.match(badging, /package: name='dev\.earlydreamer\.jhfreader'/);
   assert.match(badging, /sdkVersion:'24'/);
   assert.match(badging, /targetSdkVersion:'36'/);
   const manifest = aapt('dump', 'xmltree', apk, 'AndroidManifest.xml');
@@ -199,11 +199,11 @@ export function main() {
       const dumpPath = `${target}.txt`;
       runToFile(path.join(buildTools, 'dexdump'), [target], dumpPath);
       const dump = readFileSync(dumpPath, 'utf8');
-      if (/Class descriptor\s*:\s*'Lapp\/narou\/reader\/MainActivity;'/.test(dump)) {
+      if (/Class descriptor\s*:\s*'Ldev\/earlydreamer\/jhfreader\/MainActivity;'/.test(dump)) {
         const disassemblyPath = `${target}.disassembly.txt`;
         runToFile(path.join(buildTools, 'dexdump'), ['-d', target], disassemblyPath);
         const disassembly = readFileSync(disassemblyPath, 'utf8');
-        const match = /Class descriptor\s*:\s*'Lapp\/narou\/reader\/MainActivity;'/.exec(
+        const match = /Class descriptor\s*:\s*'Ldev\/earlydreamer\/jhfreader\/MainActivity;'/.exec(
           disassembly,
         );
         const after = disassembly.slice(match.index + match[0].length);
@@ -211,18 +211,18 @@ export function main() {
       }
       return dump
         .split(/(?=Class descriptor)/)
-        .filter((part) => /^Class descriptor\s*:\s*'Lapp\/narou\/reader\//.test(part))
+        .filter((part) => /^Class descriptor\s*:\s*'Ldev\/earlydreamer\/jhfreader\//.test(part))
         .join('\n');
     })
     .join('\n');
   auditNativeBrowse(manifest, dexDump, mainDisassembly);
   assert(
-    dexDump.includes('Lapp/narou/reader/ModelStreamPlugin;'),
+    dexDump.includes('Ldev/earlydreamer/jhfreader/ModelStreamPlugin;'),
     'Missing compiled model SSE plugin',
   );
   assert.match(
     mainDisassembly,
-    /const-class (v[0-9]+), Lapp\/narou\/reader\/ModelStreamPlugin;[^]*?invoke-virtual \{v[0-9]+, \1\}, Lapp\/narou\/reader\/MainActivity;\.registerPlugin:/,
+    /const-class (v[0-9]+), Ldev\/earlydreamer\/jhfreader\/ModelStreamPlugin;[^]*?invoke-virtual \{v[0-9]+, \1\}, Ldev\/earlydreamer\/jhfreader\/MainActivity;\.registerPlugin:/,
     'Model SSE plugin must be registered in app bridge',
   );
   assert.match(manifest, /android:allowBackup[^\n]*\(type 0x12\)0x0/);
@@ -253,9 +253,9 @@ export function main() {
     node: process.version,
     nativePluginClasses: [
       ...plugins.map((plugin) => plugin.classpath),
-      'app.narou.reader.SourceBrowserPlugin',
+      'dev.earlydreamer.jhfreader.SourceBrowserPlugin',
     ],
-    isolatedBrowserActivity: 'app.narou.reader.SourceBrowserActivity',
+    isolatedBrowserActivity: 'dev.earlydreamer.jhfreader.SourceBrowserActivity',
     deviceExecution: 'NOT RUN by this audit; see docs/android-validation.md',
   };
   const output = 'android/build/verification';

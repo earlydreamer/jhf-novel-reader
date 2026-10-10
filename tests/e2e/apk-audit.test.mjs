@@ -15,7 +15,7 @@ it('uses the same SDK signer JAR on Windows and the native signer on Linux', () 
   });
 });
 const config = () => ({
-  appId: 'app.narou.reader',
+  appId: 'dev.earlydreamer.jhfreader',
   loggingBehavior: 'none',
   plugins: { CapacitorHttp: { enabled: false } },
   server: { androidScheme: 'https' },
@@ -60,11 +60,11 @@ it('rejects missing policy or an inline script', () => {
 it('requires a private browser activity and compiled browser classes', async () => {
   const { auditNativeBrowse } = await import('./verify-apk.mjs');
   const manifest =
-    'E: activity\n  A: android:name="app.narou.reader.SourceBrowserActivity"\n  A: android:exported(0x01010010)=(type 0x12)0x0\nE: provider\n';
+    'E: activity\n  A: android:name="dev.earlydreamer.jhfreader.SourceBrowserActivity"\n  A: android:exported(0x01010010)=(type 0x12)0x0\nE: provider\n';
   const dex =
-    "Class descriptor : 'Lapp/narou/reader/SourceBrowserActivity;'\nSuperclass : 'Landroidx/appcompat/app/AppCompatActivity;'\nClass descriptor : 'Lapp/narou/reader/SourceBrowserPlugin;'\nClass descriptor : 'Lapp/narou/reader/SourceBrowserPolicy;'\nClass descriptor : 'Lapp/narou/reader/SourceBrowserLoader;'";
+    "Class descriptor : 'Ldev/earlydreamer/jhfreader/SourceBrowserActivity;'\nSuperclass : 'Landroidx/appcompat/app/AppCompatActivity;'\nClass descriptor : 'Ldev/earlydreamer/jhfreader/SourceBrowserPlugin;'\nClass descriptor : 'Ldev/earlydreamer/jhfreader/SourceBrowserPolicy;'\nClass descriptor : 'Ldev/earlydreamer/jhfreader/SourceBrowserLoader;'";
   const registration =
-    'const-class v0, Lapp/narou/reader/SourceBrowserPlugin;\ninvoke-virtual {v1, v0}, Lapp/narou/reader/MainActivity;.registerPlugin:()V\ninvoke-super {v1, v2}, Lcom/getcapacitor/BridgeActivity;.onCreate:()V';
+    'const-class v0, Ldev/earlydreamer/jhfreader/SourceBrowserPlugin;\ninvoke-virtual {v1, v0}, Ldev/earlydreamer/jhfreader/MainActivity;.registerPlugin:()V\ninvoke-super {v1, v2}, Lcom/getcapacitor/BridgeActivity;.onCreate:()V';
   expect(() => auditNativeBrowse(manifest, dex, registration)).not.toThrow();
   expect(() => auditNativeBrowse(manifest, dex, '')).toThrow();
   expect(() =>
@@ -77,7 +77,7 @@ it('requires a private browser activity and compiled browser classes', async () 
   expect(() =>
     auditNativeBrowse(
       manifest,
-      dex.replace('Lapp/narou/reader/SourceBrowserPlugin;', 'missing'),
+      dex.replace('Ldev/earlydreamer/jhfreader/SourceBrowserPlugin;', 'missing'),
       registration,
     ),
   ).toThrow();

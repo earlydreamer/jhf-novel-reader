@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 import static org.junit.Assert.*;
 
@@ -99,7 +99,7 @@ public class SourceBrowserInstrumentedTest {
         String workUrl = "https://ncode.syosetu.com/n1234ab/2/";
         String[] unsupported = {
             "file:///etc/passwd",
-            "content://app.narou.reader/private",
+            "content://dev.earlydreamer.jhfreader/private",
             "javascript:document.title='forged'",
             "intent://open",
             "https://ncode.syosetu.com.evil.test/n1234ab/"
@@ -396,11 +396,11 @@ public class SourceBrowserInstrumentedTest {
         do {
             AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
                 .getUiAutomation().getRootInActiveWindow();
-            if (root != null && "app.narou.reader".contentEquals(root.getPackageName())
+            if (root != null && "dev.earlydreamer.jhfreader".contentEquals(root.getPackageName())
                 && !root.findAccessibilityNodeInfosByText("외부 브라우저에서 열까요?").isEmpty()
                 && !root.findAccessibilityNodeInfosByText(destination).isEmpty()) {
                 for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText("닫기")) {
-                    if ("app.narou.reader".contentEquals(node.getPackageName())
+                    if ("dev.earlydreamer.jhfreader".contentEquals(node.getPackageName())
                         && "닫기".contentEquals(node.getText()) && node.isEnabled() && node.isClickable()) {
                         assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK));
                         InstrumentationRegistry.getInstrumentation().waitForIdleSync();

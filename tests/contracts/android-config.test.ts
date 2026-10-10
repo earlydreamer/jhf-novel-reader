@@ -17,8 +17,8 @@ it('keeps the generated native smoke test aligned with the application ID', () =
     'android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java',
     'utf8',
   );
-  expect(config).toContain("appId: 'app.narou.reader'");
-  expect(instrumented).toContain('assertEquals("app.narou.reader", appContext.getPackageName())');
+  expect(config).toContain("appId: 'dev.earlydreamer.jhfreader'");
+  expect(instrumented).toContain('assertEquals("dev.earlydreamer.jhfreader", appContext.getPackageName())');
 });
 it('disables native bridge argument logging even in debug builds', () => {
   const config = readFileSync('capacitor.config.ts', 'utf8');

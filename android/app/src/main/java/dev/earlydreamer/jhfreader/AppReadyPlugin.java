@@ -1,4 +1,4 @@
-package app.narou.reader;
+package dev.earlydreamer.jhfreader;
 
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
