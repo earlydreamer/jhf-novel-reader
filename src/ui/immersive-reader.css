@@ -359,6 +359,11 @@
   font: var(--type-body-large);
 }
 
+/* 공용 스위치 행의 좌우 여백은 시트 본문 여백과 겹치므로 리더 시트 안에서는 뺀다. */
+.nr-reader-sheet-body .nr-switch-row {
+  padding-inline: 0;
+}
+
 .nr-reader-sheet-body fieldset {
   display: flex;
   flex-wrap: wrap;
