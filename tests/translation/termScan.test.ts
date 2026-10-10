@@ -153,6 +153,49 @@ test('이름 목록을 주면 목록 밖 후보는 빼고, 규칙에 안 잡힌 
   ]);
 });
 
+test('짧은 이름(한 글자·짧은 히라가나)은 용어집 항목이어도 정밀스캔 후보가 되지 않는다', () => {
+  const result = collectScanCandidates(
+    [chapter('c1', ['ちょっと待って。希望がある。ちがう。希望。'])],
+    [term('ち', { origin: 'model' }), term('希')],
+  );
+  expect(result).toEqual([]);
+});
+
+test('짧은 루비 이름은 규칙 후보에서 빼고 긴 루비 이름은 그대로 둔다', () => {
+  const result = collectScanCandidates(
+    [
+      {
+        chapterId: 'c1',
+        paragraphs: [
+          {
+            text: 'ち。魔が来た。北嶋は笑った。',
+            ruby: [
+              { start: 0, end: 1, reading: 'ち' },
+              { start: 2, end: 3, reading: 'ま' },
+              { start: 7, end: 9, reading: 'きたじま' },
+            ],
+          },
+        ],
+      },
+    ],
+    [],
+  );
+  expect(result).toEqual([
+    expect.objectContaining({ source: '北嶋', role: 'new', ruby: 'きたじま' }),
+  ]);
+});
+
+test('이름 목록에 짧은 이름이 있으면 후보로 올리지 않는다', () => {
+  const result = collectScanCandidates(
+    [chapter('c1', ['ちょっと。ミナが来た。ち。'])],
+    [],
+    null,
+    60,
+    ['ち', 'ミナ'],
+  );
+  expect(result.map((item) => [item.source, item.role, item.count])).toEqual([['ミナ', 'new', 1]]);
+});
+
 test('이름 목록을 주면 limit 인자를 무시하고 목록 길이(최대 200)를 상한으로 쓴다', () => {
   const syllable = (index: number) => String.fromCharCode(0x30a1 + index);
   const names = Array.from(
