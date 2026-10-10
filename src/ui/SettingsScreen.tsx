@@ -16,6 +16,7 @@ import type { ThemePreference } from '../storage/settings';
 import { Button } from './components/Button';
 import { Chip } from './components/Chip';
 import { Dialog } from './components/Modal';
+import { LinearProgress } from './components/LinearProgress';
 import { ListItem } from './components/ListItem';
 import { Switch } from './components/Switch';
 import { useSnackbar } from './components/Snackbar';
@@ -33,10 +34,19 @@ export interface SettingsScreenProps {
   onAutoGlossary?(enabled: boolean): void;
   onLookupWikipedia?(enabled: boolean): void;
   onLookupNamuwiki?(enabled: boolean): void;
+  onEnableEmbedding?(): void;
+  onDisableEmbedding?(): void;
+  onCancelEmbeddingDownload?(): void;
+  onRemoveEmbeddingModel?(): void;
   onTheme?(theme: ThemePreference): void;
 }
 
 type LookupSourceKey = 'wikipedia' | 'namuwiki';
+
+/** 바이트를 MB 정수로 바꾼다. 화면은 십진 단위(1MB = 1,000,000바이트)로 통일한다. */
+function megabytes(bytes: number): number {
+  return Math.round(bytes / 1_000_000);
+}
 
 /** 외부 조회를 켜기 전 확인 문구. 보내는 곳과 보내지 않는 것을 그대로 밝힌다. */
 const LOOKUP_CONFIRMS: Record<LookupSourceKey, { title: string; body: string }> = {
@@ -199,6 +209,10 @@ export function SettingsScreen({
   onAutoGlossary,
   onLookupWikipedia,
   onLookupNamuwiki,
+  onEnableEmbedding,
+  onDisableEmbedding,
+  onCancelEmbeddingDownload,
+  onRemoveEmbeddingModel,
   onTheme,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
@@ -219,6 +233,29 @@ export function SettingsScreen({
   const [modeOpen, setModeOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [lookupConfirm, setLookupConfirm] = useState<LookupSourceKey | null>(null);
+  const [embeddingConfirm, setEmbeddingConfirm] = useState(false);
+  const [embeddingRemoveConfirm, setEmbeddingRemoveConfirm] = useState(false);
+  const embeddingModel = state.embeddingModel;
+  const embeddingProgress = embeddingModel?.progress;
+  function changeEmbedding(checked: boolean): void {
+    // 받는 중에는 토글을 바꾸지 않는다. 중단 버튼으로만 멈춘다.
+    if (embeddingModel?.downloading) return;
+    if (!checked) {
+      onDisableEmbedding?.();
+      return;
+    }
+    // 설치돼 있으면 확인 없이 켜고, 아니면 내려받기 전에 크기와 출처를 먼저 알린다.
+    if (embeddingModel?.installed) onEnableEmbedding?.();
+    else setEmbeddingConfirm(true);
+  }
+  function confirmEmbedding(): void {
+    setEmbeddingConfirm(false);
+    onEnableEmbedding?.();
+  }
+  function confirmRemoveEmbedding(): void {
+    setEmbeddingRemoveConfirm(false);
+    onRemoveEmbeddingModel?.();
+  }
   const lookupAvailable =
     state.termScanAvailable &&
     state.connection.provider === 'openai-compatible' &&
@@ -567,6 +604,53 @@ export function SettingsScreen({
         </section>
       )}
 
+      {state.embeddingAvailable && (
+        <section aria-labelledby="settings-embedding">
+          <h2 id="settings-embedding">용어 판정</h2>
+          <Switch
+            label="기기에서 용어 판정 모델 쓰기"
+            description="애매한 이름이 그 용어인지 문맥으로 가려요. 판정 모델은 기기 안에서만 돌아가요."
+            checked={state.onDeviceEmbedding}
+            onChange={changeEmbedding}
+          />
+          {embeddingModel?.downloading && (
+            <>
+              <LinearProgress
+                label="판정 모델 내려받기"
+                value={
+                  embeddingProgress && embeddingProgress.total > 0
+                    ? embeddingProgress.received / embeddingProgress.total
+                    : undefined
+                }
+              />
+              <p>
+                {embeddingProgress
+                  ? `내려받는 중 · ${megabytes(embeddingProgress.received)}/${megabytes(embeddingProgress.total)}MB`
+                  : '내려받는 중'}
+              </p>
+              <Button variant="text" onClick={() => onCancelEmbeddingDownload?.()}>
+                중단
+              </Button>
+            </>
+          )}
+          {embeddingModel?.error && <p role="alert">{embeddingModel.error}</p>}
+          {embeddingModel?.installed && (
+            <div className="nr-list-item nr-list-item--two-line">
+              <div className="nr-list-item__main">
+                <span className="nr-list-item__text">
+                  <span className="nr-list-item__headline">
+                    설치된 판정 모델 · {megabytes(embeddingModel.bytes)}MB
+                  </span>
+                </span>
+              </div>
+              <Button variant="text" onClick={() => setEmbeddingRemoveConfirm(true)}>
+                모델 지우기
+              </Button>
+            </div>
+          )}
+        </section>
+      )}
+
       {onTheme && (
         <section aria-labelledby="settings-display">
           <h2 id="settings-display">화면</h2>
@@ -761,6 +845,45 @@ export function SettingsScreen({
         }
       >
         <p>{lookupConfirm ? LOOKUP_CONFIRMS[lookupConfirm].body : ''}</p>
+      </Dialog>
+
+      <Dialog
+        open={embeddingConfirm}
+        title="판정 모델을 내려받을까요?"
+        onClose={() => setEmbeddingConfirm(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setEmbeddingConfirm(false)}>
+              취소
+            </Button>
+            <Button variant="text" onClick={confirmEmbedding}>
+              내려받기
+            </Button>
+          </>
+        }
+      >
+        <p>
+          EmbeddingGemma 2(약 165MB)를 Hugging Face에서 내려받아 이 기기에 저장해요. Wi-Fi에서 받는
+          걸 권장해요. 원문과 번역은 기기 밖으로 보내지 않아요.
+        </p>
+      </Dialog>
+
+      <Dialog
+        open={embeddingRemoveConfirm}
+        title="판정 모델을 지울까요?"
+        onClose={() => setEmbeddingRemoveConfirm(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setEmbeddingRemoveConfirm(false)}>
+              취소
+            </Button>
+            <Button variant="text" onClick={confirmRemoveEmbedding}>
+              지우기
+            </Button>
+          </>
+        }
+      >
+        <p>다시 쓰려면 다시 내려받아야 해요.</p>
       </Dialog>
 
       <Dialog

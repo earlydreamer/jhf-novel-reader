@@ -300,6 +300,10 @@ function RouteScreen({
           onAutoGlossary={controller.changeAutoGlossary}
           onLookupWikipedia={controller.changeLookupWikipedia}
           onLookupNamuwiki={controller.changeLookupNamuwiki}
+          onEnableEmbedding={controller.enableOnDeviceEmbedding}
+          onDisableEmbedding={controller.disableOnDeviceEmbedding}
+          onCancelEmbeddingDownload={controller.cancelEmbeddingDownload}
+          onRemoveEmbeddingModel={controller.removeEmbeddingModel}
           onTheme={controller.changeTheme}
         />
       );
