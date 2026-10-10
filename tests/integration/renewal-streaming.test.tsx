@@ -716,3 +716,25 @@ test('storage-only retry keeps the live article and never invokes the model agai
   expect(h.requests.filter((r) => r.method === 'POST')).toHaveLength(1);
   h.app.dispose();
 });
+test('retranslate right after a live translation finish restarts from the translation route (#286)', async () => {
+  const h = harness();
+  await prepareStreaming(h);
+  const chapter = h.app.getSnapshot().work!.chapters[0]!;
+  await h.app.selectChapter(chapter);
+  const first = h.app.translate();
+  await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('translating'));
+  h.release();
+  await first;
+  expect(h.app.getSnapshot().route.kind).toBe('translation');
+  expect(h.app.getSnapshot().version).not.toBeNull();
+
+  h.holdNextStream();
+  const before = h.streamCallCount();
+  const retranslation = h.app.retranslateChapter();
+  await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('translating'));
+  expect(h.streamCallCount()).toBeGreaterThan(before);
+  h.release();
+  await retranslation;
+  expect(h.app.getSnapshot().translation.phase).toBe('ready');
+  h.app.dispose();
+});
