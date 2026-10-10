@@ -46,6 +46,18 @@
   border-radius: var(--shape-md);
   background: var(--surface-container-low);
 }
+.nr-notice--closable {
+  position: relative;
+}
+/* 닫기 버튼(40px)이 글자와 겹치지 않게 오른쪽 여백을 둔다. */
+.nr-notice--closable > p {
+  padding-inline-end: 40px;
+}
+.nr-notice__close {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+}
 .nr-notice--error {
   background: var(--error-container);
   color: var(--on-error-container);

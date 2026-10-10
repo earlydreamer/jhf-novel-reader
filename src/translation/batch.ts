@@ -45,6 +45,8 @@ export type BatchRecord = {
   completed: number;
   skipped: number;
   phase: BatchPhase;
+  /** 서재 안내를 사용자가 닫았는지. 닫으면 그 기록에 대해 다시 띄우지 않는다. */
+  dismissed?: boolean;
   currentVersionIds?: readonly string[];
   guidance?: WorkGuidance;
   scan?: RangeScan;
@@ -81,6 +83,7 @@ export interface BatchTranslation {
   confirmCandidates(choices: readonly CandidateChoice[]): Promise<void>;
   cancel(): void;
   clearWork(workId: string): boolean;
+  dismissNotice(): void;
   retrySave(): Promise<void>;
   getSnapshot(): BatchState;
   readonly active: boolean;
@@ -114,6 +117,7 @@ export async function validateBatch(value: unknown): Promise<BatchRecord | null>
     'completed',
     'skipped',
     'phase',
+    'dismissed',
     'currentVersionIds',
     'guidance',
     'scan',
@@ -173,6 +177,7 @@ export async function validateBatch(value: unknown): Promise<BatchRecord | null>
     ),
   );
   if (value.phase === 'complete') check(value.cursor === value.chapters.length);
+  check(value.dismissed === undefined || typeof value.dismissed === 'boolean');
   if (value.currentVersionIds !== undefined) {
     check(
       Array.isArray(value.currentVersionIds) &&
@@ -796,6 +801,11 @@ export function createBatchTranslation(dependencies: {
     if (removed) void clearSavedScans(removed);
     return true;
   }
+  function dismissNotice(): void {
+    const record = state.record;
+    if (!record || disposed || record.dismissed) return;
+    void persist({ ...record, dismissed: true });
+  }
   const unsubscribe = dependencies.flow.subscribe((chapterState) => {
     if (state.active && !state.preparing) publish({ chapterProgress: chapterState.progress });
   });
@@ -808,6 +818,7 @@ export function createBatchTranslation(dependencies: {
     run,
     cancel,
     clearWork,
+    dismissNotice,
     retrySave,
     getSnapshot: (): BatchState => state,
     get active(): boolean {

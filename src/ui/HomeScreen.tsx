@@ -7,6 +7,7 @@ import { Dialog } from './components/Modal';
 import { Menu } from './components/Menu';
 import { ListItem } from './components/ListItem';
 import { ExtendedFab } from './components/ExtendedFab';
+import { IconButton } from './components/IconButton';
 import brandLogo from './assets/brand-logo.png';
 import './home.css';
 
@@ -21,6 +22,7 @@ export interface HomeScreenProps {
   onContinue(versionId: string): void;
   onOpenPendingSave(): void;
   onOpenBatch(): void;
+  onDismissBatchNotice(): void;
   legacyWarnings: readonly LegacyMigrationWarning[];
 }
 
@@ -60,25 +62,34 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
           </Button>
         </aside>
       )}
-      {state.batch?.record && state.batch.record.phase !== 'complete' && (
-        <aside className="nr-notice" aria-label="일괄 번역 상태">
-          <p>
-            <span
-              lang={titleLang(
-                state.recentTitles,
-                state.batch.record.work.workId,
-                state.batch.record.work.title,
-              )}
-            >
-              {state.recentTitles[state.batch.record.work.workId] ?? state.batch.record.work.title}
-            </span>
-            의 일괄 번역을 이어서 확인할 수 있어요.
-          </p>
-          <Button variant="text" onClick={props.onOpenBatch}>
-            일괄 번역 보기
-          </Button>
-        </aside>
-      )}
+      {state.batch?.record &&
+        !['complete', 'paused', 'prepared'].includes(state.batch.record.phase) &&
+        !state.batch.record.dismissed && (
+          <aside className="nr-notice nr-notice--closable" aria-label="일괄 번역 상태">
+            <IconButton
+              icon="close"
+              label="일괄 번역 안내 닫기"
+              className="nr-notice__close"
+              onClick={props.onDismissBatchNotice}
+            />
+            <p>
+              <span
+                lang={titleLang(
+                  state.recentTitles,
+                  state.batch.record.work.workId,
+                  state.batch.record.work.title,
+                )}
+              >
+                {state.recentTitles[state.batch.record.work.workId] ??
+                  state.batch.record.work.title}
+              </span>
+              의 일괄 번역을 이어서 확인할 수 있어요.
+            </p>
+            <Button variant="text" onClick={props.onOpenBatch}>
+              일괄 번역 보기
+            </Button>
+          </aside>
+        )}
       {props.legacyWarnings.length > 0 && (
         <details className="nr-notice" aria-label="이전 읽기 데이터 확인">
           <summary>이전 데이터 일부를 찾지 못했어요</summary>

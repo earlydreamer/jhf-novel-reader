@@ -82,6 +82,7 @@ function RouteScreen({
           onContinue={(id) => void controller.continueReading(id)}
           onOpenPendingSave={controller.openPendingSave}
           onOpenBatch={controller.openBatch}
+          onDismissBatchNotice={controller.dismissBatchNotice}
           legacyWarnings={state.legacyWarnings}
         />
       );

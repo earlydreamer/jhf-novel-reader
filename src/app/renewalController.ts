@@ -387,6 +387,7 @@ export interface RenewalController {
   cancelBatch(): void;
   retryBatchSave(): Promise<void>;
   openBatch(): void;
+  dismissBatchNotice(): void;
   readGuidance(workId: string): Promise<WorkGuidance | null>;
   saveGuidance(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
   startTermScan(workId: string): Promise<void>;
@@ -2862,6 +2863,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     });
     navigate({ kind: 'work', workId: record.work.workId });
   }
+  function dismissBatchNotice(): void {
+    if (disposed) return;
+    dependencies.batch?.dismissNotice();
+  }
   const unsubscribeBatch = dependencies.batch?.subscribe((batch) => {
     const record = batch.record;
     if (record) {
@@ -3130,6 +3135,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     cancelBatch: () => dependencies.batch?.cancel(),
     retryBatchSave,
     openBatch,
+    dismissBatchNotice,
     startTermScan,
     cancelTermScan,
     revertTermScanChange,
