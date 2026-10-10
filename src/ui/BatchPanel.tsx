@@ -127,6 +127,8 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   // 채우기 결과는 이 기록의 것만 쓴다.
   const fill = record && props.batchFill?.recordId === record.id ? props.batchFill : null;
   const fillResult = fill?.phase === 'done' ? fill.result : undefined;
+  // 로컬 서버는 재요청에 비용이 없다. 문구와 버튼은 연결 종류에 맞춘다.
+  const local = record?.selection.connection.provider === 'openai-compatible';
   return (
     <section className="nr-batch-panel" aria-label="일괄 번역">
       <h2>미리 번역하기</h2>
@@ -189,7 +191,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           <p>
             {record.retranslate
               ? '기존 완성본은 그대로 두고 새 번역을 추가해요.'
-              : `이미 저장한 ${record.alreadySaved}화는 기본적으로 건너뛰어요.`}
+              : `같은 모델·용어집으로 이미 저장한 ${record.alreadySaved}화는 건너뛰어요.`}
           </p>
           <p role="status">
             처리 {record.cursor}/{record.chapters.length}화 · 새로 저장 {record.completed}화 ·
@@ -254,20 +256,25 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
               >
                 남은 회차 번역 재개
               </button>
+              <p>재개하지 않으려면 위에서 범위를 새로 확인해 주세요.</p>
             </>
           )}
           {record.phase === 'unknown' && (
             <>
               <p>
-                이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수
-                있어요.
+                {local
+                  ? '서버에서 응답을 받지 못했어요. 한 번 다시 보냈지만 결과를 확인하지 못했어요. 재개하면 이 회차를 다시 요청해요.'
+                  : '이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.'}
               </p>
               <button
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.(true)}
               >
-                중복 처리 가능성을 확인하고 일괄 번역 재개
+                {local ? '일괄 번역 재개' : '중복 처리 가능성을 확인하고 일괄 번역 재개'}
               </button>
+              <p>
+                재개하지 않으려면 위에서 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.
+              </p>
             </>
           )}
           {record.phase === 'saving' && (

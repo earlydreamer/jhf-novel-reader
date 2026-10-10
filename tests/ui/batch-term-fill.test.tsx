@@ -378,3 +378,71 @@ test('이름 상한으로 판정하지 못한 후보가 있으면 완료 구역�
   );
   expect(screen.queryByText(/판정하지 못한 후보가/)).not.toBeInTheDocument();
 });
+
+function recordWith(overrides: Partial<BatchRecord>): BatchRecord {
+  return { ...reviewRecord(), ...overrides };
+}
+
+function renderRecord(record: BatchRecord, props: Partial<BatchPanelProps> = {}) {
+  return panelProps({
+    batch: { record, active: false, preparing: false, error: null },
+    onRunBatch: vi.fn(),
+    ...props,
+  });
+}
+
+test('확인 필요 상태는 로컬 서버면 재요청 비용 없는 문구와 재개 버튼을 보인다', () => {
+  const props = renderRecord(recordWith({ phase: 'unknown', scan: undefined }));
+  render(<BatchPanel {...props} />);
+  expect(
+    screen.getByText(
+      '서버에서 응답을 받지 못했어요. 한 번 다시 보냈지만 결과를 확인하지 못했어요. 재개하면 이 회차를 다시 요청해요.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(/비용이 생길 수/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '일괄 번역 재개' }));
+  expect(props.onRunBatch).toHaveBeenCalledWith(true);
+  expect(
+    screen.getByText(
+      '재개하지 않으려면 위에서 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.',
+    ),
+  ).toBeVisible();
+});
+
+test('확인 필요 상태는 Gemini 연결이면 중복·비용 문구와 기존 버튼 문구를 보인다', () => {
+  const props = renderRecord(
+    recordWith({
+      phase: 'unknown',
+      scan: undefined,
+      selection: {
+        connection: {
+          provider: 'gemini',
+          baseUrl: 'https://generativelanguage.googleapis.com',
+          revision: 1,
+        },
+        modelId: 'gemini-2.5-flash',
+      },
+    }),
+  );
+  render(<BatchPanel {...props} />);
+  expect(
+    screen.getByText(
+      '이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.',
+    ),
+  ).toBeVisible();
+  fireEvent.click(
+    screen.getByRole('button', { name: '중복 처리 가능성을 확인하고 일괄 번역 재개' }),
+  );
+  expect(props.onRunBatch).toHaveBeenCalledWith(true);
+});
+
+test('중단 상태는 범위를 새로 확인하라는 안내를 재개 버튼 다음에 보인다', () => {
+  render(<BatchPanel {...renderRecord(recordWith({ phase: 'paused', scan: undefined }))} />);
+  expect(screen.getByText('일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.')).toBeVisible();
+  expect(screen.getByText('재개하지 않으려면 위에서 범위를 새로 확인해 주세요.')).toBeVisible();
+});
+
+test('이미 저장한 회차 안내는 같은 모델·용어집 조건을 밝힌다', () => {
+  render(<BatchPanel {...renderRecord(recordWith({ alreadySaved: 2 }))} />);
+  expect(screen.getByText('같은 모델·용어집으로 이미 저장한 2화는 건너뛰어요.')).toBeVisible();
+});
