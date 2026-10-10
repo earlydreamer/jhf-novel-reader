@@ -2,6 +2,7 @@
   "name": "jhf-novel-reader",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": "^22.18.0 || >=24.11.0"
