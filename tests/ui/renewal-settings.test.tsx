@@ -71,6 +71,7 @@ function platform() {
     moveToBackground: vi.fn(),
     setSystemBarsTheme: vi.fn(),
     setKeepAwake: vi.fn(),
+    markReady: vi.fn(),
     pressBack: () => back?.(),
   };
   return value;

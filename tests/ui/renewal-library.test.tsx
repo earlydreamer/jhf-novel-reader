@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { Application } from '../../src/app/Application';
 import { createRenewalController, type RenewalDependencies } from '../../src/app/renewalController';
 import { ReaderError } from '../../src/contracts';
+import { noopShell } from '../../src/platform/shell';
 import type {
   ChapterRemovalResult,
   CompletedTranslation,
@@ -117,6 +118,43 @@ function savedVersion(page: WorkPage): CompletedTranslation {
   };
 }
 
+it('첫 서재 목록을 읽기 전에는 빈 서재를 그리지 않고, 읽은 뒤에만 안내한다(#268)', async () => {
+  const { library } = libraryHarness();
+  let release = () => {};
+  library.listWorkIds.mockImplementationOnce(
+    () => new Promise<string[]>((resolve) => (release = () => resolve([]))),
+  );
+  const controller = createRenewalController({ library });
+  const platform = { ...noopShell, markReady: vi.fn() };
+  render(<Application controller={controller} platform={platform} />);
+  expect(controller.getSnapshot().libraryLoaded).toBe(false);
+  expect(screen.queryByRole('heading', { name: '읽고 싶은 작품을 찾아보세요' })).toBeNull();
+  expect(platform.markReady).not.toHaveBeenCalled();
+
+  await waitFor(() => expect(library.listWorkIds).toHaveBeenCalled());
+  await act(async () => release());
+  await screen.findByRole('heading', { name: '읽고 싶은 작품을 찾아보세요' });
+  expect(controller.getSnapshot().libraryLoaded).toBe(true);
+  await waitFor(() => expect(platform.markReady).toHaveBeenCalledTimes(1));
+  controller.dispose();
+});
+
+it('서재 목록 읽기가 실패해도 libraryLoaded는 true가 된다(#268)', async () => {
+  const { library } = libraryHarness();
+  library.listWorkIds.mockRejectedValueOnce(new Error('storage failed'));
+  const controller = createRenewalController({ library });
+  expect(controller.getSnapshot().libraryLoaded).toBe(false);
+  render(<Application controller={controller} />);
+  await waitFor(() => expect(controller.getSnapshot().libraryLoaded).toBe(true));
+  controller.dispose();
+});
+
+it('서재 저장소가 없으면 libraryLoaded가 처음부터 true다(#268)', () => {
+  const controller = createRenewalController({});
+  expect(controller.getSnapshot().libraryLoaded).toBe(true);
+  controller.dispose();
+});
+
 it('재시작 뒤 저장 번역이 없는 작품도 서재에 보이고 source 없이 캐시 목차를 연다', async () => {
   const cached = work('n1234aa', '오프라인 작품');
   const { library } = libraryHarness([cached]);
@@ -174,10 +212,12 @@ it('새 작품을 URL로 열고 서재로 돌아오면 즉시 목록에 등록�
   });
   render(<Application controller={controller} />);
   await screen.findByRole('heading', { name: '읽고 싶은 작품을 찾아보세요' });
-  expect(screen.getByRole('img', { name: 'JHF Novel Reader' })).toHaveAttribute(
+  // 로고는 장식이라 접근성 트리에서 숨긴다.
+  expect(document.querySelector('.nr-library__brand')).toHaveAttribute(
     'src',
     expect.stringMatching(/\S/),
   );
+  expect(screen.getByText('아래 ‘작품 찾기’나 위의 링크 버튼으로 시작할 수 있어요.')).toBeVisible();
   await controller.openWork(added.canonicalUrl);
   await screen.findByRole('heading', { name: added.title });
   controller.back();

@@ -15,11 +15,90 @@
 .nr-library__empty h1 {
   margin-block-end: 4px;
 }
+.nr-library__brand-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: min(220px, 56vw);
+  aspect-ratio: 1;
+  margin: 0 auto 8px;
+}
+/* 로고 뒤 은은한 빛. 테마 색에서 섞어 라이트·다크 모두 과하지 않게. */
+.nr-library__brand-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--primary) 22%, transparent) 0%,
+    transparent 70%
+  );
+}
 .nr-library__brand {
+  position: relative;
   display: block;
-  inline-size: min(160px, 40vw);
+  inline-size: 72%;
   block-size: auto;
-  margin: 0 auto 16px;
+  animation: nr-library-float 6s ease-in-out infinite;
+}
+.nr-library__sparkle {
+  position: absolute;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.5;
+  animation: nr-library-twinkle 3.2s ease-in-out infinite;
+}
+.nr-library__sparkle--a {
+  inset-block-start: 14%;
+  inset-inline-start: 12%;
+}
+.nr-library__sparkle--b {
+  inset-block-start: 22%;
+  inset-inline-end: 10%;
+  inline-size: 5px;
+  block-size: 5px;
+  animation-delay: 1.1s;
+}
+.nr-library__sparkle--c {
+  inset-block-end: 18%;
+  inset-inline-start: 18%;
+  inline-size: 6px;
+  block-size: 6px;
+  animation-delay: 2.2s;
+}
+.nr-library__hint {
+  margin-block-start: 4px;
+  color: var(--on-surface-variant);
+  font: var(--type-body-small);
+}
+@keyframes nr-library-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes nr-library-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nr-library__brand,
+  .nr-library__sparkle {
+    animation: none;
+  }
 }
 .nr-visually-hidden {
   position: absolute;

@@ -16,16 +16,25 @@ interface ScreenAwakePlugin {
 const ScreenAwake = registerPlugin<ScreenAwakePlugin>('ScreenAwake', {
   web: () => ({ setKeepAwake: async () => {} }),
 });
+interface AppReadyPlugin {
+  ready(): Promise<void>;
+}
+
+const AppReady = registerPlugin<AppReadyPlugin>('AppReady', {
+  web: () => ({ ready: async () => {} }),
+});
 let systemBarsThemeQueue: Promise<void> = Promise.resolve();
 let systemBarsThemeOperation = 0;
 // 네이티브에 마지막으로 보낸 값. 같은 값이 반복되면 플러그인을 다시 부르지 않는다.
 let keepAwake = false;
+let readySent = false;
 
 export interface ShellPlatform {
   onBackButton(listener: () => void): () => void;
   moveToBackground(): void;
   setSystemBarsTheme(theme: ResolvedTheme): void;
   setKeepAwake(enabled: boolean): void;
+  markReady(): void;
 }
 
 export const noopShell: ShellPlatform = {
@@ -33,6 +42,7 @@ export const noopShell: ShellPlatform = {
   moveToBackground: () => {},
   setSystemBarsTheme: () => {},
   setKeepAwake: () => {},
+  markReady: () => {},
 };
 
 export const capacitorShell: ShellPlatform = {
@@ -69,5 +79,11 @@ export const capacitorShell: ShellPlatform = {
     keepAwake = enabled;
     // 화면 켜짐 유지는 부가 기능이라 실패해도 긴 작업 자체를 막지 않는다.
     void ScreenAwake.setKeepAwake({ enabled }).catch(() => {});
+  },
+  markReady() {
+    if (readySent) return;
+    readySent = true;
+    // 스플래시는 네이티브 제한 시간으로도 내려가므로 실패해도 무시한다.
+    void AppReady.ready().catch(() => {});
   },
 };

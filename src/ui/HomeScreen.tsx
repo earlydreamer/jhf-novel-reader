@@ -112,17 +112,21 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
       )}
 
       {state.libraryWorks.length === 0 ? (
-        <div className="nr-library__empty">
-          <img
-            className="nr-library__brand"
-            src={brandLogo}
-            alt="JHF Novel Reader"
-            width={160}
-            height={160}
-          />
-          <h1>읽고 싶은 작품을 찾아보세요</h1>
-          <p>나로우에서 작품을 고르면 서재에 담겨요.</p>
-        </div>
+        state.libraryLoaded ? (
+          <div className="nr-library__empty">
+            <div className="nr-library__brand-wrap" aria-hidden="true">
+              <span className="nr-library__sparkle nr-library__sparkle--a" />
+              <span className="nr-library__sparkle nr-library__sparkle--b" />
+              <span className="nr-library__sparkle nr-library__sparkle--c" />
+              <img className="nr-library__brand" src={brandLogo} alt="" width={160} height={160} />
+            </div>
+            <h1>읽고 싶은 작품을 찾아보세요</h1>
+            <p>나로우에서 작품을 고르면 서재에 담겨요.</p>
+            <p className="nr-library__hint">
+              아래 ‘작품 찾기’나 위의 링크 버튼으로 시작할 수 있어요.
+            </p>
+          </div>
+        ) : null
       ) : (
         <section aria-label="작품 목록">
           <h1 className="nr-visually-hidden">서재</h1>

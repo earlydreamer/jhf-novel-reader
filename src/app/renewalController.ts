@@ -207,6 +207,8 @@ export interface RenewalSnapshot {
     savedChapterIds: readonly string[];
     recent: RenewalSnapshot['recent'][number] | null;
   }[];
+  /** 첫 서재 목록을 읽었는지(성공·실패 모두). 그 전에는 빈 서재를 그리지 않는다. */
+  readonly libraryLoaded: boolean;
   readonly connection: ConnectionConfig;
   readonly models: readonly ModelChoice[];
   readonly selectedModelId: string | null;
@@ -446,6 +448,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     translationTimings: null,
     recent: [],
     libraryWorks: [],
+    libraryLoaded: !dependencies.library,
     connection: DEFAULT_CONNECTION,
     models: [],
     selectedModelId: null,
@@ -1334,7 +1337,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       [workIds, recent] = await Promise.all([library.listWorkIds(), library.listRecent()]);
     } catch {
       if (!disposed && operation === libraryRefreshOperation)
-        publish({ error: '서재 목록을 불러오지 못했어요. 다시 열어 주세요.' });
+        publish({
+          error: '서재 목록을 불러오지 못했어요. 다시 열어 주세요.',
+          ...(snapshot.libraryLoaded ? {} : { libraryLoaded: true }),
+        });
       return;
     }
     if (disposed || operation !== libraryRefreshOperation) return;
@@ -1388,7 +1394,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         (registrationRank.get(left.work.workId) ?? -1)
       );
     });
-    publish({ recent, libraryWorks });
+    publish({
+      recent,
+      libraryWorks,
+      ...(snapshot.libraryLoaded ? {} : { libraryLoaded: true }),
+    });
     if (hadWorkReadFailure) {
       publish({ error: '일부 작품 정보를 불러오지 못했어요.' });
     }
