@@ -217,7 +217,7 @@ export function createModelTransport(
                 responseType: 'text',
                 disableRedirects: true,
                 connectTimeout: 15000,
-                readTimeout: 600000,
+                readTimeout: 120000,
               },
               signal,
               false,

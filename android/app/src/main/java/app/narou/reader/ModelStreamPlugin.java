@@ -56,7 +56,8 @@ public final class ModelStreamPlugin extends Plugin {
             socket.setInstanceFollowRedirects(false);
             socket.setRequestMethod("POST");
             socket.setConnectTimeout(15000);
-            socket.setReadTimeout(600000);
+            // 첫 바이트·다음 줄을 120초 넘게 못 받으면 멈춘 요청으로 본다(#254).
+            socket.setReadTimeout(120000);
             socket.setUseCaches(false);
             socket.setRequestProperty("Accept", "text/event-stream");
             socket.setRequestProperty("Content-Type", "application/json");

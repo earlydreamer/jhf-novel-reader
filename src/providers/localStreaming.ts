@@ -98,7 +98,8 @@ export async function translateLocalStream(
   const done = new Map<string, string>(),
     failures: number[] = [];
   let previous: Message[] = [],
-    retries = 0;
+    retries = 0,
+    resends = 0;
   const paragraphIds = new Map(units.map((unit) => [unit.paragraph, unit.id]));
   const assemble = (partial: ReadonlyMap<string, string>) =>
     request.source.paragraphs
@@ -158,42 +159,58 @@ export async function translateLocalStream(
         );
         return { value, missing };
       };
-      const parser = createOpenAIStream((text) => {
-        if (!request.onPreview) return;
-        const values = new Map(done);
-        for (const [id, text] of accepted) values.set(id, text);
-        const closed = [...text.matchAll(/<p id="([A-Za-z]{1,3})">([\s\S]*?)<\/p>/g)];
-        let offset = 0;
-        for (const m of closed) {
-          if (m[1] !== pending[offset]?.id) break;
-          const checked = validateLine(pending[offset]!, m[2]!);
-          if (checked) values.set(m[1]!, checked.value);
-          offset++;
-        }
-        const next = pending[offset];
-        if (next) {
-          const open = text.match(new RegExp('<p id="' + next.id + '">([^]*?)$'));
-          if (open && !open[1]!.includes('</p>')) {
-            const value = clean(open[1]!);
-            if (value) values.set(next.id, value);
+      const makeParser = () =>
+        createOpenAIStream((text) => {
+          if (!request.onPreview) return;
+          const values = new Map(done);
+          for (const [id, text] of accepted) values.set(id, text);
+          const closed = [...text.matchAll(/<p id="([A-Za-z]{1,3})">([\s\S]*?)<\/p>/g)];
+          let offset = 0;
+          for (const m of closed) {
+            if (m[1] !== pending[offset]?.id) break;
+            const checked = validateLine(pending[offset]!, m[2]!);
+            if (checked) values.set(m[1]!, checked.value);
+            offset++;
           }
-        }
-        preview(values, true);
-      });
+          const next = pending[offset];
+          if (next) {
+            const open = text.match(new RegExp('<p id="' + next.id + '">([^]*?)$'));
+            if (open && !open[1]!.includes('</p>')) {
+              const value = clean(open[1]!);
+              if (value) values.set(next.id, value);
+            }
+          }
+          preview(values, true);
+        });
       let response;
-      try {
-        response = await transport.streamPost(
-          {
-            url,
-            body: { model, messages, stream: true, max_tokens: limits.maxOutputTokens },
-            ...(authorization ? { authorization } : {}),
-          },
-          signal,
-          (data) => parser.push(data),
-        );
-      } catch (error) {
-        if (error instanceof ReaderError) throw error;
-        throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
+      // 로컬 서버가 응답 없이 멈추면(결과 불명) 같은 요청을 한 번만 다시 보낸다(#254).
+      // 로컬 서버는 중복 요청 비용이 없다. 자동 재시도를 끈 사용자는 다시 보내지 않는다.
+      const resendLimit = selection.autoRetryFailed === false ? 0 : 1;
+      for (let send = 0; ; send++) {
+        const parser = makeParser();
+        try {
+          response = await transport.streamPost(
+            {
+              url,
+              body: { model, messages, stream: true, max_tokens: limits.maxOutputTokens },
+              ...(authorization ? { authorization } : {}),
+            },
+            signal,
+            (data) => parser.push(data),
+          );
+          break;
+        } catch (error) {
+          const unknown =
+            !signal.aborted &&
+            (!(error instanceof ReaderError) ||
+              (error.code === 'timeout_unknown' && error.outcome === 'unknown'));
+          if (unknown && send < resendLimit) {
+            resends++;
+            continue;
+          }
+          if (error instanceof ReaderError) throw error;
+          throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
+        }
       }
       if (signal.aborted) throw new ReaderError('cancelled', 'unknown');
       if (response.status === 401 || response.status === 403)
