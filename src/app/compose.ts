@@ -7,6 +7,7 @@ import {
   createSourceTransport,
 } from '../platform/http';
 import { capacitorLifecycle } from '../platform/lifecycle';
+import { capacitorEmbedding } from '../platform/embedding';
 import { createNativePreferences, createNativePrivateFiles } from '../storage/native';
 import { createNativeSecretStore } from '../storage/secrets';
 import type {
@@ -107,6 +108,7 @@ export function createRenewalApplication(
     }),
     clock: adapters.clock,
     lifecycle: adapters.lifecycle,
+    embedding: capacitorEmbedding,
     settings: createReadingSettingsRepository(adapters.preferences),
     browse: adapters.browse,
     normalizeInput(input) {

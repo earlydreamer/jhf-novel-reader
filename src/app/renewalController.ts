@@ -15,6 +15,11 @@ import {
 } from '../storage/settings';
 import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
 import { ReaderError } from '../contracts';
+import {
+  EmbeddingError,
+  type EmbeddingStatus,
+  type OnDeviceEmbedding,
+} from '../platform/embedding';
 import type {
   ChapterRef,
   ChapterRemovalResult,
@@ -123,6 +128,8 @@ export interface RenewalDependencies {
   readonly termScan?: ReturnType<typeof createTermScan>;
   /** 미리 번역 후보를 정밀스캔 판정으로 채우는 엔진. 저장하지 않고 결과만 돌려준다. */
   readonly rangeJudge?: ReturnType<typeof createRangeJudge>;
+  /** 기기 안 용어 판정 모델. 네이티브 앱에서만 available이다. */
+  readonly embedding?: OnDeviceEmbedding;
   readonly lifecycle?: AppLifecycle;
   readonly browse?: (startUrl?: string) => Promise<{ selectedUrl: string } | null>;
   readonly normalizeInput?: (url: string) => string;
@@ -159,6 +166,17 @@ export interface RenewalSnapshot {
   readonly autoGlossary: boolean;
   readonly lookupWikipedia: boolean;
   readonly lookupNamuwiki: boolean;
+  readonly embeddingAvailable: boolean;
+  /** 토글은 설치된 모델이 있을 때만 켜진 상태로 남는다. */
+  readonly onDeviceEmbedding: boolean;
+  /** 상태를 읽기 전에는 null이다. */
+  readonly embeddingModel: {
+    installed: boolean;
+    bytes: number;
+    downloading: boolean;
+    progress?: { received: number; total: number };
+    error?: string;
+  } | null;
   readonly paragraphRepair: boolean;
   readonly translationMode: 'stream' | 'legacy';
   readonly streamingAvailable: boolean;
@@ -225,6 +243,18 @@ export interface RenewalSnapshot {
     result?: RangeJudgeResult;
     error?: string;
   } | null;
+}
+const EMBEDDING_VERIFY_MESSAGE = '내려받은 판정 모델이 올바르지 않아 지웠어요. 다시 시도해 주세요.';
+const EMBEDDING_NETWORK_MESSAGE =
+  '판정 모델을 내려받지 못했어요. 연결을 확인하고 다시 시도해 주세요.';
+const EMBEDDING_REMOVE_MESSAGE = '판정 모델을 지우지 못했어요. 다시 시도해 주세요.';
+/** 사용자가 중단했거나 끈 경우는 오류가 아니므로 undefined를 돌려준다. */
+function embeddingFailure(error: unknown): string | undefined {
+  if (error instanceof EmbeddingError) {
+    if (error.code === 'cancelled') return undefined;
+    if (error.code === 'verify') return EMBEDDING_VERIFY_MESSAGE;
+  }
+  return EMBEDDING_NETWORK_MESSAGE;
 }
 const DEFAULT_CONNECTION: ConnectionConfig = {
   provider: 'openai-compatible',
@@ -307,6 +337,10 @@ export interface RenewalController {
   changeAutoGlossary(enabled: boolean): void;
   changeLookupWikipedia(enabled: boolean): void;
   changeLookupNamuwiki(enabled: boolean): void;
+  enableOnDeviceEmbedding(): Promise<void>;
+  disableOnDeviceEmbedding(): Promise<void>;
+  cancelEmbeddingDownload(): Promise<void>;
+  removeEmbeddingModel(): Promise<void>;
   retryParagraphs(indexes?: readonly number[]): Promise<void>;
   previewPosition(index: number, offset: number): void;
   changeTranslationMode(mode: 'stream' | 'legacy'): void;
@@ -383,6 +417,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     autoGlossary: true,
     lookupWikipedia: false,
     lookupNamuwiki: false,
+    embeddingAvailable: dependencies.embedding?.available() ?? false,
+    onDeviceEmbedding: false,
+    embeddingModel: null,
     paragraphRepair: false,
     translationMode: dependencies.defaultTranslationMode ?? 'legacy',
     streamingAvailable: Boolean(dependencies.streamingAvailable),
@@ -470,6 +507,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ...(snapshot.autoGlossary ? {} : { autoGlossary: false }),
       ...(snapshot.lookupWikipedia ? { lookupWikipedia: true } : {}),
       ...(snapshot.lookupNamuwiki ? { lookupNamuwiki: true } : {}),
+      ...(snapshot.onDeviceEmbedding ? { onDeviceEmbedding: true } : {}),
       selection: snapshot.selectedModelId
         ? {
             connection: { ...snapshot.connection },
@@ -1204,8 +1242,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             autoGlossary: saved.autoGlossary ?? true,
             lookupWikipedia: saved.lookupWikipedia ?? false,
             lookupNamuwiki: saved.lookupNamuwiki ?? false,
+            onDeviceEmbedding: saved.onDeviceEmbedding ?? false,
           });
         initialized = true;
+        void restoreOnDeviceEmbedding();
         runAutomaticTranslation();
       } catch {
         foreground = false;
@@ -2801,6 +2841,100 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
     publish({ batch, translationActive: batch.active || activeTranslation !== null });
   });
+  // 기기 판정 모델. 켜기·끄기·지우기가 겹치면 가장 나중 요청이 이기도록 operation 번호로 확인한다.
+  let embeddingOperation = 0;
+  function publishEmbedding(update: Partial<NonNullable<RenewalSnapshot['embeddingModel']>>): void {
+    const current = snapshot.embeddingModel ?? { installed: false, bytes: 0, downloading: false };
+    publish({ embeddingModel: { ...current, ...update } });
+  }
+  async function refreshEmbeddingModel(): Promise<EmbeddingStatus | null> {
+    const port = dependencies.embedding;
+    if (!port || disposed) return null;
+    try {
+      const status = await port.status();
+      if (!disposed)
+        publishEmbedding({
+          installed: status.installed,
+          bytes: status.bytes,
+          downloading: status.downloading,
+        });
+      return status;
+    } catch {
+      return null;
+    }
+  }
+  async function restoreOnDeviceEmbedding(): Promise<void> {
+    const status = await refreshEmbeddingModel();
+    // 상태를 읽지 못했으면 저장된 값을 그대로 두고, 미설치가 확인됐을 때만 토글을 바로잡는다.
+    if (disposed || !status || status.installed || !snapshot.onDeviceEmbedding) return;
+    publish({ onDeviceEmbedding: false });
+    persistSettings();
+  }
+  async function enableOnDeviceEmbedding(): Promise<void> {
+    const port = dependencies.embedding;
+    if (!port || !snapshot.embeddingAvailable || disposed) return;
+    const operation = ++embeddingOperation;
+    const status = await refreshEmbeddingModel();
+    if (disposed || operation !== embeddingOperation) return;
+    if (status?.installed) {
+      publish({ onDeviceEmbedding: true });
+      persistSettings();
+      return;
+    }
+    publishEmbedding({ downloading: true, progress: undefined, error: undefined });
+    try {
+      await port.download((received, total) => {
+        if (operation === embeddingOperation && !disposed)
+          publishEmbedding({ progress: { received, total } });
+      });
+    } catch (error) {
+      if (!disposed)
+        publishEmbedding({
+          downloading: false,
+          progress: undefined,
+          error: operation === embeddingOperation ? embeddingFailure(error) : undefined,
+        });
+      await refreshEmbeddingModel();
+      return;
+    }
+    if (disposed) return;
+    publishEmbedding({ downloading: false, progress: undefined, error: undefined });
+    // 받는 도중 끄거나 지웠다면 받은 파일은 두고 토글은 켜지 않는다.
+    if (operation === embeddingOperation) {
+      publish({ onDeviceEmbedding: true });
+      persistSettings();
+    }
+    await refreshEmbeddingModel();
+  }
+  async function disableOnDeviceEmbedding(): Promise<void> {
+    embeddingOperation++;
+    publish({ onDeviceEmbedding: false });
+    persistSettings();
+    const port = dependencies.embedding;
+    if (!port || disposed) return;
+    // 파일은 지우지 않는다. 받는 중이면 내려받기만 멈추고 메모리의 모델만 내린다.
+    if (snapshot.embeddingModel?.downloading) await port.cancelDownload().catch(() => {});
+    await port.unload().catch(() => {});
+  }
+  async function cancelEmbeddingDownload(): Promise<void> {
+    await dependencies.embedding?.cancelDownload().catch(() => {});
+  }
+  async function removeEmbeddingModel(): Promise<void> {
+    const port = dependencies.embedding;
+    if (!port || disposed) return;
+    embeddingOperation++;
+    try {
+      await port.remove();
+    } catch {
+      publishEmbedding({ error: EMBEDDING_REMOVE_MESSAGE });
+      await refreshEmbeddingModel();
+      return;
+    }
+    publish({ onDeviceEmbedding: false });
+    persistSettings();
+    publishEmbedding({ error: undefined });
+    await refreshEmbeddingModel();
+  }
   function dispose(): void {
     titleAbort?.abort();
     termScanAbort?.abort();
@@ -2844,6 +2978,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ lookupNamuwiki: enabled });
       persistSettings();
     },
+    enableOnDeviceEmbedding,
+    disableOnDeviceEmbedding,
+    cancelEmbeddingDownload,
+    removeEmbeddingModel,
     retryParagraphs,
     previewPosition(index, offset) {
       if (

@@ -83,6 +83,18 @@ const DIRECT = [
     ],
   },
   {
+    // 앱에 들어 있지 않다. 사용자가 설정에서 켤 때 기기에 내려받고 SHA-256으로 검증한다.
+    name: 'EmbeddingGemma 2 (Google DeepMind)',
+    version: '9be6e8b9',
+    license: 'Apache-2.0',
+    textFile: 'licenses/Apache-2.0.txt',
+    md: [
+      '- 출처: https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm , 고정 커밋 `9be6e8b90982095dc05c2bd162e4b954ee4dbac7`',
+      '- 파일: `embeddinggemma-2-text-270m.litertlm`. APK에 들어 있지 않고, 사용자가 설정에서 켜면 그 기기에 내려받는다.',
+      '- 라이선스: Apache License 2.0. 전체 원문은 아래 "라이선스 원문"에 있다.',
+    ],
+  },
+  {
     name: 'Capacitor Android 기본 구조',
     version: '8.5.2',
     license: 'MIT',

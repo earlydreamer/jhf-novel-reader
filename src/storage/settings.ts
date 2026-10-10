@@ -20,6 +20,8 @@ export type ReadingSettings = {
   autoGlossary?: boolean;
   lookupWikipedia?: boolean;
   lookupNamuwiki?: boolean;
+  /** 기기 안 용어 판정 모델을 쓸지. 켜졌을 때만 저장한다. */
+  onDeviceEmbedding?: boolean;
   theme?: ThemePreference;
   readingBackground?: ReadingBackground;
   lineHeight?: LineHeight;
@@ -34,6 +36,7 @@ function readingSettings(value: unknown): ReadingSettings {
     'autoGlossary',
     'lookupWikipedia',
     'lookupNamuwiki',
+    'onDeviceEmbedding',
     'theme',
     'readingBackground',
     'lineHeight',
@@ -43,6 +46,7 @@ function readingSettings(value: unknown): ReadingSettings {
   check(value.autoGlossary === undefined || typeof value.autoGlossary === 'boolean');
   check(value.lookupWikipedia === undefined || typeof value.lookupWikipedia === 'boolean');
   check(value.lookupNamuwiki === undefined || typeof value.lookupNamuwiki === 'boolean');
+  check(value.onDeviceEmbedding === undefined || typeof value.onDeviceEmbedding === 'boolean');
   check(value.theme === undefined || THEME_PREFERENCES.includes(value.theme as ThemePreference));
   check(
     value.readingBackground === undefined ||

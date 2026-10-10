@@ -76,6 +76,15 @@ describe('제3자 고지 생성물', () => {
     expect(notices.texts[item?.textId ?? '']).toContain('Attribution-ShareAlike 4.0 International');
   });
 
+  it('판정 모델 EmbeddingGemma 2가 직접 가져온 항목에 Apache-2.0 원문으로 있다', () => {
+    const item = section('direct').items.find((candidate) =>
+      candidate.name.startsWith('EmbeddingGemma 2'),
+    );
+    expect(item?.license).toBe('Apache-2.0');
+    expect(notices.texts[item?.textId ?? '']).toContain('Apache License');
+    expect(committedMarkdown).toContain('사용자가 설정에서 켜면 그 기기에 내려받는다');
+  });
+
   it('Android 섹션에 -bom 아티팩트가 없다', () => {
     for (const item of section('android').items) {
       expect(item.name.endsWith('-bom'), item.name).toBe(false);

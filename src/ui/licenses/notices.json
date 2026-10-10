@@ -29,6 +29,12 @@
           "textId": "Apache-2.0-58d1e17f"
         },
         {
+          "name": "EmbeddingGemma 2 (Google DeepMind)",
+          "version": "9be6e8b9",
+          "license": "Apache-2.0",
+          "textId": "Apache-2.0-58d1e17f"
+        },
+        {
           "name": "Capacitor Android 기본 구조",
           "version": "8.5.2",
           "license": "MIT",
