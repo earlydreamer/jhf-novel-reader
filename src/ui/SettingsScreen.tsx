@@ -11,7 +11,6 @@ import type {
 } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
 import type { BackupResult } from '../platform/backup';
-import { GEMINI_BASE_URL } from '../providers/gemini';
 import { readableModelName } from '../providers/modelName';
 import type { ThemePreference } from '../storage/settings';
 import { Button } from './components/Button';
@@ -127,10 +126,6 @@ function checkResultMessage(result: ConnectionCheckResult): string | null {
   return `서버에 연결했어요. 번역에 쓸 수 있는 모델이 ${result.modelCount}개 있어요.`;
 }
 
-const providerLabels = {
-  'openai-compatible': 'LM Studio / Ollama',
-  gemini: 'Google Gemini',
-} as const;
 const modeLabels = { stream: '읽으며 번역', legacy: '기존 묶음 방식' } as const;
 const themeLabels: Record<ThemePreference, string> = {
   system: '시스템 설정 따르기',
@@ -260,8 +255,6 @@ export function SettingsScreen({
   );
   const [host, setHost] = useState(() => parsePresetAddress(state.connection.baseUrl)?.host ?? '');
   const [port, setPort] = useState(() => parsePresetAddress(state.connection.baseUrl)?.port ?? '');
-  const [providerOpen, setProviderOpen] = useState(false);
-  const [geminiOpen, setGeminiOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
@@ -391,20 +384,6 @@ export function SettingsScreen({
     setAuthOpen(false);
   }
 
-  function chooseProvider(provider: string): void {
-    setProviderOpen(false);
-    if (provider === state.connection.provider) return;
-    if (provider === 'gemini') {
-      setGeminiOpen(true);
-      return;
-    }
-    // Gemini 고정 주소는 OpenAI 호환 서버에 쓸 수 없으므로 함께 비운다.
-    update({ provider: 'openai-compatible', baseUrl: '' });
-    setManualAddress(false);
-    setHost('');
-    setPort('');
-  }
-
   const checking = state.catalogStatus === 'checking';
   const modelLabel =
     state.models.find((model) => model.id === state.selectedModelId)?.displayName ??
@@ -432,120 +411,100 @@ export function SettingsScreen({
             </span>
           </div>
         </div>
-        <ListItem
-          headline="제공자"
-          supporting={providerLabels[state.connection.provider]}
-          navigates
-          onClick={() => setProviderOpen(true)}
+        <Switch
+          label="전체 주소 직접 입력"
+          description="API 형식이 다르면 켜고 주소 전체를 그대로 적어 주세요."
+          checked={manualAddress}
+          onChange={(checked) => {
+            setManualAddress(checked);
+            if (!checked) {
+              const parsed = parsePresetAddress(state.connection.baseUrl);
+              setHost(parsed?.host ?? '');
+              setPort(parsed?.port ?? '');
+              // 해석할 수 없는 주소는 지우지 않는다. 사용자가 서버 주소를 적으면 그때 바뀐다.
+            }
+          }}
         />
-        {state.connection.provider === 'openai-compatible' ? (
-          <>
-            <Switch
-              label="전체 주소 직접 입력"
-              description="API 형식이 다르면 켜고 주소 전체를 그대로 적어 주세요."
-              checked={manualAddress}
-              onChange={(checked) => {
-                setManualAddress(checked);
-                if (!checked) {
-                  const parsed = parsePresetAddress(state.connection.baseUrl);
-                  setHost(parsed?.host ?? '');
-                  setPort(parsed?.port ?? '');
-                  // 해석할 수 없는 주소는 지우지 않는다. 사용자가 서버 주소를 적으면 그때 바뀐다.
-                }
-              }}
-            />
-            {manualAddress ? (
-              <label>
-                API 기본 주소
-                <input
-                  type="url"
-                  value={state.connection.baseUrl}
-                  onChange={(event) => update({ baseUrl: event.target.value })}
-                  placeholder="http://192.168.0.10:1234/v1"
-                />
-              </label>
-            ) : (
-              <>
-                <div className="nr-address-preset">
-                  <label>
-                    서버 주소
-                    <input
-                      type="text"
-                      inputMode="url"
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      value={host}
-                      placeholder="192.168.0.10"
-                      aria-describedby={addressHelpId}
-                      onChange={(event) => {
-                        setHost(event.target.value);
-                        update({ baseUrl: composePresetAddress(event.target.value, port) });
-                      }}
-                    />
-                  </label>
-                  <label>
-                    포트
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={5}
-                      value={port}
-                      placeholder="1234"
-                      aria-describedby={addressHelpId}
-                      onChange={(event) => {
-                        const next = event.target.value.replace(/\D/g, '').slice(0, 5);
-                        setPort(next);
-                        update({ baseUrl: composePresetAddress(host, next) });
-                      }}
-                    />
-                  </label>
-                </div>
-                <div className="nr-address-ports" role="group" aria-label="자주 쓰는 포트">
-                  <Chip
-                    label="LM Studio 1234"
-                    selected={port === '1234'}
-                    onClick={() => {
-                      setPort('1234');
-                      update({ baseUrl: composePresetAddress(host, '1234') });
-                    }}
-                  />
-                  <Chip
-                    label="Ollama 11434"
-                    selected={port === '11434'}
-                    onClick={() => {
-                      setPort('11434');
-                      update({ baseUrl: composePresetAddress(host, '11434') });
-                    }}
-                  />
-                  <Chip
-                    label="llama.cpp 8080"
-                    selected={port === '8080'}
-                    onClick={() => {
-                      setPort('8080');
-                      update({ baseUrl: composePresetAddress(host, '8080') });
-                    }}
-                  />
-                </div>
-                <p id={addressHelpId}>
-                  {composePresetAddress(host, port)
-                    ? `완성 주소: ${composePresetAddress(host, port)}`
-                    : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.'}
-                </p>
-              </>
-            )}
-          </>
-        ) : (
+        {manualAddress ? (
           <label>
             API 기본 주소
             <input
               type="url"
               value={state.connection.baseUrl}
               onChange={(event) => update({ baseUrl: event.target.value })}
-              placeholder="http://100.x.x.x:1234/v1"
+              placeholder="http://192.168.0.10:1234/v1"
             />
           </label>
+        ) : (
+          <>
+            <div className="nr-address-preset">
+              <label>
+                서버 주소
+                <input
+                  type="text"
+                  inputMode="url"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={host}
+                  placeholder="192.168.0.10"
+                  aria-describedby={addressHelpId}
+                  onChange={(event) => {
+                    setHost(event.target.value);
+                    update({ baseUrl: composePresetAddress(event.target.value, port) });
+                  }}
+                />
+              </label>
+              <label>
+                포트
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={5}
+                  value={port}
+                  placeholder="1234"
+                  aria-describedby={addressHelpId}
+                  onChange={(event) => {
+                    const next = event.target.value.replace(/\D/g, '').slice(0, 5);
+                    setPort(next);
+                    update({ baseUrl: composePresetAddress(host, next) });
+                  }}
+                />
+              </label>
+            </div>
+            <div className="nr-address-ports" role="group" aria-label="자주 쓰는 포트">
+              <Chip
+                label="LM Studio 1234"
+                selected={port === '1234'}
+                onClick={() => {
+                  setPort('1234');
+                  update({ baseUrl: composePresetAddress(host, '1234') });
+                }}
+              />
+              <Chip
+                label="Ollama 11434"
+                selected={port === '11434'}
+                onClick={() => {
+                  setPort('11434');
+                  update({ baseUrl: composePresetAddress(host, '11434') });
+                }}
+              />
+              <Chip
+                label="llama.cpp 8080"
+                selected={port === '8080'}
+                onClick={() => {
+                  setPort('8080');
+                  update({ baseUrl: composePresetAddress(host, '8080') });
+                }}
+              />
+            </div>
+            <p id={addressHelpId}>
+              {composePresetAddress(host, port)
+                ? `완성 주소: ${composePresetAddress(host, port)}`
+                : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.'}
+            </p>
+          </>
         )}
         {state.connection.authRef ? (
           <ListItem
@@ -761,54 +720,6 @@ export function SettingsScreen({
         <p className="nr-settings-footer__name">JHF Novel Reader</p>
         <p className="nr-settings-footer__version">{version}</p>
       </footer>
-
-      <Dialog
-        open={providerOpen}
-        title="제공자 선택"
-        onClose={() => setProviderOpen(false)}
-        actions={
-          <Button variant="text" onClick={() => setProviderOpen(false)}>
-            닫기
-          </Button>
-        }
-      >
-        <RadioList
-          name="provider"
-          label="제공자 선택"
-          value={state.connection.provider}
-          choices={[
-            { value: 'openai-compatible', label: providerLabels['openai-compatible'] },
-            { value: 'gemini', label: providerLabels.gemini },
-          ]}
-          onSelect={chooseProvider}
-        />
-      </Dialog>
-
-      <Dialog
-        open={geminiOpen}
-        title="Gemini를 사용할까요?"
-        onClose={() => setGeminiOpen(false)}
-        actions={
-          <>
-            <Button variant="text" onClick={() => setGeminiOpen(false)}>
-              닫기
-            </Button>
-            <Button
-              variant="text"
-              onClick={() => {
-                update({ provider: 'gemini', baseUrl: GEMINI_BASE_URL });
-                setGeminiOpen(false);
-              }}
-            >
-              Gemini 사용하기
-            </Button>
-          </>
-        }
-      >
-        <p>Gemini API 사용량에 따라 비용이 발생할 수 있어요.</p>
-        <p>번역할 회차 원문을 Google로 전송해요.</p>
-        <p>다른 제공자로 자동으로 바꾸지 않아요.</p>
-      </Dialog>
 
       <Dialog
         open={authOpen}

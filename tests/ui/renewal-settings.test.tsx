@@ -176,7 +176,7 @@ describe('Android 목록형 설정', () => {
       screen
         .getByText(name, { selector: '.nr-list-item__headline' })
         .closest('.nr-list-item') as HTMLElement;
-    for (const name of ['제공자', '모델', '로컬 번역 방식', '테마', '오픈소스 라이선스']) {
+    for (const name of ['모델', '로컬 번역 방식', '테마', '오픈소스 라이선스']) {
       const row = rowOf(name);
       expect(row, name).toHaveClass('nr-list-item--navigates');
       expect(
@@ -275,9 +275,6 @@ describe('Android 목록형 설정', () => {
   it('설정 행의 접근성 이름에 현재 값을 포함해요', async () => {
     const value = await setup();
 
-    expect(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' })).toHaveAccessibleName(
-      '제공자 LM Studio / Ollama',
-    );
     expect(
       screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' }),
     ).toHaveAccessibleName('로컬 번역 방식 기존 묶음 방식');
@@ -293,48 +290,33 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('Gemini는 고지를 승인하기 전까지 설정과 요청을 그대로 둬요', async () => {
-    const value = await setup();
-    const before = structuredClone(value.controller.getSnapshot().connection);
-
-    fireEvent.click(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' }));
-    const providerGroup = screen.getByRole('radiogroup', { name: '제공자 선택' });
-    expect(providerGroup.querySelectorAll('button')).toHaveLength(0);
-    expect(providerGroup.querySelectorAll('input[type="radio"]')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('radio', { name: 'Google Gemini' }));
-    expect(screen.getByRole('dialog', { name: 'Gemini를 사용할까요?' })).toBeVisible();
-    expect(screen.getByText(/비용이 발생할 수 있어요/)).toBeVisible();
-    expect(screen.getByText(/회차 원문을 Google로 전송해요/)).toBeVisible();
-    expect(screen.getByText('다른 제공자로 자동으로 바꾸지 않아요.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
-
-    expect(value.controller.getSnapshot().connection).toEqual(before);
-    expect(value.catalog).not.toHaveBeenCalled();
-    expect(value.post).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Google Gemini' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Gemini 사용하기' }));
-    expect(value.controller.getSnapshot().connection).toEqual({
-      provider: 'gemini',
-      baseUrl: GEMINI_BASE_URL,
-      revision: before.revision + 1,
+  it('저장된 제공자가 Gemini면 로컬 기본 연결로 되돌리고 한 번 안내해요(#280)', async () => {
+    const value = await setup({
+      saved: {
+        schemaVersion: 2,
+        fontSize: 18,
+        selection: {
+          connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 4 },
+          modelId: 'generation',
+          translationMode: 'stream',
+        },
+      },
     });
-    expect(value.catalog).not.toHaveBeenCalled();
-    expect(value.post).not.toHaveBeenCalled();
-    value.controller.dispose();
-  });
 
-  it('같은 제공자를 다시 골라도 연결·선택·revision을 초기화하지 않아요', async () => {
-    const value = await setup({ saved: savedSettings('provider.existing') });
-    const before = structuredClone(value.controller.getSnapshot());
-
-    fireEvent.click(screen.getByRole('button', { name: '제공자 LM Studio / Ollama' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'LM Studio / Ollama' }));
-
-    expect(value.controller.getSnapshot().connection).toEqual(before.connection);
-    expect(value.controller.getSnapshot().selectedModelId).toBe(before.selectedModelId);
-    expect(value.catalog).not.toHaveBeenCalled();
+    expect(value.controller.getSnapshot().connection).toEqual({
+      provider: 'openai-compatible',
+      baseUrl: '',
+      revision: 0,
+    });
+    expect(value.controller.getSnapshot().selectedModelId).toBeNull();
+    await waitFor(() =>
+      expect(document.querySelector('.nr-snackbar__text')?.textContent).toBe(
+        'Google Gemini 제공자가 설정에서 빠져서 로컬 서버 연결로 되돌렸어요. 번역 서버 주소를 확인해 주세요.',
+      ),
+    );
+    await waitFor(() => expect(value.saveReadingSettings).toHaveBeenCalled());
+    expect(value.persisted().selection).toBeNull();
+    expect(screen.getByLabelText('서버 주소')).toBeVisible();
     value.controller.dispose();
   });
 
@@ -457,28 +439,6 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('제공자를 Gemini에서 LM Studio로 바꾸면 연결 변경을 한 번만 기록해요', async () => {
-    const value = await setup({
-      saved: {
-        schemaVersion: 2,
-        fontSize: 18,
-        selection: {
-          connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 4 },
-          modelId: 'generation',
-          translationMode: 'stream',
-        },
-      },
-    });
-    const before = value.controller.getSnapshot().connection.revision;
-
-    fireEvent.click(screen.getByRole('button', { name: '제공자 Google Gemini' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'LM Studio / Ollama' }));
-
-    expect(value.controller.getSnapshot().connection.provider).toBe('openai-compatible');
-    expect(value.controller.getSnapshot().connection.revision).toBe(before + 1);
-    value.controller.dispose();
-  });
-
   it('번역 방식 대화상자에서 저장본 호환성을 안내해요', async () => {
     const value = await setup();
     fireEvent.click(screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' }));
@@ -518,18 +478,18 @@ describe('Android 목록형 설정', () => {
 
   it('대화상자는 Esc와 시스템 Back으로 닫히고 연 버튼으로 포커스를 돌려줘요', async () => {
     const value = await setup();
-    const provider = screen.getByRole('button', { name: '제공자 LM Studio / Ollama' });
-    provider.focus();
-    fireEvent.click(provider);
-    const dialog = screen.getByRole('dialog', { name: '제공자 선택' });
+    const row = screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' });
+    row.focus();
+    fireEvent.click(row);
+    const dialog = screen.getByRole('dialog', { name: '로컬 번역 방식 선택' });
     fireEvent.keyDown(dialog, { key: 'Escape' });
-    expect(screen.queryByRole('dialog', { name: '제공자 선택' })).toBeNull();
-    expect(provider).toHaveFocus();
+    expect(screen.queryByRole('dialog', { name: '로컬 번역 방식 선택' })).toBeNull();
+    expect(row).toHaveFocus();
 
-    fireEvent.click(provider);
+    fireEvent.click(row);
     act(() => value.shell.pressBack());
-    expect(screen.queryByRole('dialog', { name: '제공자 선택' })).toBeNull();
-    expect(provider).toHaveFocus();
+    expect(screen.queryByRole('dialog', { name: '로컬 번역 방식 선택' })).toBeNull();
+    expect(row).toHaveFocus();
     value.controller.dispose();
   });
 });
@@ -638,48 +598,6 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     });
 
     expect(value.controller.getSnapshot().connection.baseUrl).toBe('https://other.example/v1');
-    value.controller.dispose();
-  });
-
-  it('제공자가 Gemini면 주소·포트 칸과 스위치를 보여 주지 않아요', async () => {
-    const value = await setup({
-      saved: {
-        schemaVersion: 2,
-        fontSize: 18,
-        selection: {
-          connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 4 },
-          modelId: 'generation',
-          translationMode: 'stream',
-        },
-      },
-    });
-
-    expect(screen.getByLabelText('API 기본 주소')).toHaveValue(GEMINI_BASE_URL);
-    expect(screen.queryByLabelText('서버 주소')).toBeNull();
-    expect(screen.queryByLabelText('포트')).toBeNull();
-    expect(screen.queryByRole('switch', { name: '전체 주소 직접 입력' })).toBeNull();
-    value.controller.dispose();
-  });
-
-  it('Gemini에서 LM Studio / Ollama로 바꾸면 Gemini 주소를 비우고 주소·포트 칸도 비워요', async () => {
-    const value = await setup({
-      saved: {
-        schemaVersion: 2,
-        fontSize: 18,
-        selection: {
-          connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 4 },
-          modelId: 'generation',
-          translationMode: 'stream',
-        },
-      },
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: '제공자 Google Gemini' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'LM Studio / Ollama' }));
-
-    expect(value.controller.getSnapshot().connection.baseUrl).toBe('');
-    expect(screen.getByLabelText('서버 주소')).toHaveValue('');
-    expect(screen.getByLabelText('포트')).toHaveValue('');
     value.controller.dispose();
   });
 });
@@ -1086,26 +1004,6 @@ describe('번역 전 용어집 자동 생성 스위치 (#192)', () => {
     expect(toggle).toBeChecked();
     fireEvent.click(toggle);
     expect(onAutoGlossary).toHaveBeenCalledWith(false);
-  });
-
-  it('Gemini에서는 용어집 스위치를 보여 주지 않아요', () => {
-    render(
-      <SettingsScreen
-        state={settingsState('gemini')}
-        onChange={() => {}}
-        onCheck={async () => ({ kind: 'superseded' as const })}
-        onSelect={() => {}}
-        onAutoRetryFailed={() => {}}
-        onAutoGlossary={() => {}}
-      />,
-    );
-
-    expect(
-      screen.queryByRole('switch', { name: '번역 전 용어집 자동 생성' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('switch', { name: '실패한 문단 자동으로 다시 번역' }),
-    ).toBeInTheDocument();
   });
 });
 
