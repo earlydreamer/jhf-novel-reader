@@ -1,6 +1,7 @@
 import { useMemo, useState, type JSX } from 'react';
 import type { GuidanceTerm } from '../translation/guidance';
 import { Button } from './components/Button';
+import { Chip } from './components/Chip';
 import { Dialog } from './components/Modal';
 import { sourceChips, termProblem } from './readerGlossary';
 
@@ -93,17 +94,14 @@ export function TermEditor({
       {mode === 'add' && chips.length > 0 && (
         <>
           <p>원문 문단에서 이름을 골라 넣을 수 있어요.</p>
-          <div className="nr-term-chips">
+          <div className="nr-term-chips" lang="ja">
             {chips.map((chip) => (
-              <button
+              <Chip
                 key={chip}
-                type="button"
-                lang="ja"
-                className="nr-term-chip"
+                label={chip}
+                selected={source === chip}
                 onClick={() => setSource(chip)}
-              >
-                {chip}
-              </button>
+              />
             ))}
           </div>
         </>
