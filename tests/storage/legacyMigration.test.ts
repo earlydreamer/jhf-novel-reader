@@ -294,3 +294,155 @@ it('keeps every imported chapter reachable through a partial TOC, including alre
   expect(await library.readWork('n1234ab')).toEqual(pages);
   expect(await library.listVersions(second.source.chapterId)).toHaveLength(1);
 });
+
+type InterruptedStep = 'version-index' | 'partial-version-index' | 'position' | 'position-index';
+
+class InterruptedFiles extends Files {
+  interrupt: InterruptedStep | null = null;
+  readonly writes: string[] = [];
+  private versionWritten = false;
+  private positionWritten = false;
+
+  override async write(path: string, text: string): Promise<void> {
+    this.writes.push(path);
+    const interrupted =
+      ((this.interrupt === 'version-index' || this.interrupt === 'partial-version-index') &&
+        this.versionWritten &&
+        path.startsWith('library/')) ||
+      (this.interrupt === 'position' && path.startsWith('reading/')) ||
+      (this.interrupt === 'position-index' && this.positionWritten && path.startsWith('library/'));
+    if (interrupted) {
+      if (this.interrupt === 'partial-version-index') this.data.set(path, '{');
+      this.interrupt = null;
+      throw new Error('synthetic interrupted migration write');
+    }
+    await super.write(path, text);
+    if (path.startsWith('versions/')) this.versionWritten = true;
+    if (path.startsWith('reading/')) this.positionWritten = true;
+  }
+}
+
+it.each<InterruptedStep>(['version-index', 'partial-version-index', 'position', 'position-index'])(
+  'recovers an import interrupted at %s without duplicating or rewriting legacy data',
+  async (step) => {
+    const files = new InterruptedFiles();
+    const legacy = await fixture();
+    const old = createReaderStore(files);
+    await old.commitChapter(legacy);
+    await old.savePosition({ chapterId: legacy.source.chapterId, paragraphId: 'p2', offset: 27 });
+    const legacyBytes = new Map(files.data);
+    files.interrupt = step;
+    await expect(
+      migrateLegacyData({
+        cacheKeys: [legacy.cacheKey],
+        legacy: old,
+        library: createLibraryStore(files),
+      }),
+    ).rejects.toThrow();
+
+    const restarted = createLibraryStore(files);
+    const input = {
+      cacheKeys: [legacy.cacheKey],
+      legacy: createReaderStore(files),
+      library: restarted,
+    };
+    const result = await migrateLegacyData(input);
+    const versions = await restarted.listVersions(legacy.source.chapterId);
+    expect(versions).toHaveLength(1);
+    expect(await restarted.readPosition(versions[0]!.versionId)).toMatchObject({
+      blockId: versions[0]!.blocks[1]!.id,
+      offset: 27,
+    });
+    expect(result).toMatchObject({
+      migrated: step === 'position-index' ? 0 : 1,
+      skipped: step === 'position-index' ? 1 : 0,
+      warnings: [],
+    });
+    for (const [path, text] of legacyBytes) expect(files.data.get(path)).toBe(text);
+
+    const writesAfterRecovery = files.writes.length;
+    expect(await migrateLegacyData(input)).toEqual({ migrated: 0, skipped: 1, warnings: [] });
+    expect(files.writes).toHaveLength(writesAfterRecovery);
+    expect(await restarted.listVersions(legacy.source.chapterId)).toHaveLength(1);
+  },
+);
+
+it('does not reset a newer v2 position or recent chapter when revisiting imported data', async () => {
+  const files = new InterruptedFiles();
+  const first = await fixture();
+  const second = await fixture({ canonicalUrl: 'https://ncode.syosetu.com/n1234ab/2/' });
+  const old = createReaderStore(files);
+  await old.commitChapter(first);
+  await old.commitChapter(second);
+  await old.savePosition({ chapterId: first.source.chapterId, paragraphId: 'p2', offset: 27 });
+  const library = createLibraryStore(files);
+  const input = { cacheKeys: [first.cacheKey, second.cacheKey], legacy: old, library };
+  await migrateLegacyData(input);
+  const [firstVersion] = await library.listVersions(first.source.chapterId);
+  const [secondVersion] = await library.listVersions(second.source.chapterId);
+  const currentPosition = {
+    workId: first.source.workId,
+    chapterId: first.source.chapterId,
+    versionId: firstVersion!.versionId,
+    blockId: firstVersion!.blocks[0]!.id,
+    offset: 123,
+  };
+  await library.savePosition(currentPosition);
+  await library.savePosition({
+    workId: second.source.workId,
+    chapterId: second.source.chapterId,
+    versionId: secondVersion!.versionId,
+    blockId: secondVersion!.blocks[1]!.id,
+    offset: 456,
+  });
+  const before = new Map(files.data);
+  const writesBefore = files.writes.length;
+
+  await migrateLegacyData({ ...input, library: createLibraryStore(files) });
+
+  expect(await library.readPosition(firstVersion!.versionId)).toEqual(currentPosition);
+  expect((await library.listRecent())[0]?.chapterId).toBe(second.source.chapterId);
+  expect(files.data).toEqual(before);
+  expect(files.writes).toHaveLength(writesBefore);
+});
+
+it('retains recovery of a missing imported body that is still present in the index', async () => {
+  const files = new Files();
+  const legacy = await fixture();
+  const old = createReaderStore(files);
+  await old.commitChapter(legacy);
+  const library = createLibraryStore(files);
+  const input = { cacheKeys: [legacy.cacheKey], legacy: old, library };
+  await migrateLegacyData(input);
+  const [version] = await library.listVersions(legacy.source.chapterId);
+  const indexBefore = [...files.data].filter(([path]) => path.startsWith('library/'));
+  files.data.delete(`versions/${version!.versionId}.0.json`);
+  files.data.delete(`versions/${version!.versionId}.1.json`);
+
+  await migrateLegacyData({ ...input, library: createLibraryStore(files) });
+
+  expect(await library.listVersions(legacy.source.chapterId)).toEqual([version]);
+  for (const [path, text] of indexBefore) expect(files.data.get(path)).toBe(text);
+});
+
+it('repairs a missing sibling imported version after an intact version of the same chapter', async () => {
+  const files = new Files();
+  const first = await fixture();
+  const second = await fixture({ model: 'other-local-model' });
+  const old = createReaderStore(files);
+  await old.commitChapter(first);
+  await old.commitChapter(second);
+  const library = createLibraryStore(files);
+  const input = { cacheKeys: [first.cacheKey, second.cacheKey], legacy: old, library };
+  await migrateLegacyData(input);
+  const versions = await library.listVersions(first.source.chapterId);
+  const missing = versions.find((version) => version.provenance.modelId === second.identity.model)!;
+  files.data.delete(`versions/${missing.versionId}.0.json`);
+  files.data.delete(`versions/${missing.versionId}.1.json`);
+
+  await expect(
+    migrateLegacyData({ ...input, library: createLibraryStore(files) }),
+  ).resolves.toEqual({ migrated: 1, skipped: 1, warnings: [] });
+
+  expect(await library.listVersions(first.source.chapterId)).toEqual(versions);
+});

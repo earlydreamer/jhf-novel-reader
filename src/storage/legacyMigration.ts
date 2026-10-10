@@ -138,17 +138,17 @@ export async function migrateLegacyData(
         complete: false,
       });
     }
-    if (await input.library.readVersion(prepared.version.versionId)) {
-      skipped++;
-      continue;
-    }
+    const existed = (await input.library.readVersion(prepared.version.versionId)) !== null;
+    // 본문 저장 뒤 색인 쓰기가 끊겼을 수 있다. 같은 본문을 다시 commit하면 빠진 색인만 복구한다.
     await input.library.commitVersion(prepared.version);
     const position = stored.position;
     const blockIndex = position
       ? prepared.blockIndexByParagraphId.get(position.paragraphId)
       : undefined;
     const block = blockIndex === undefined ? undefined : prepared.version.blocks[blockIndex];
-    if (position && block)
+    let restoredPosition = false;
+    // 가져오기 중 위치 저장이 끊겼으면 이어서 쓰되, 이후에 사용자가 옮긴 위치는 보존한다.
+    if (position && block && !(await input.library.readPosition(prepared.version.versionId))) {
       await input.library.savePosition({
         workId: prepared.version.source.workId,
         chapterId: prepared.version.source.chapterId,
@@ -156,7 +156,10 @@ export async function migrateLegacyData(
         blockId: block.id,
         offset: position.offset,
       });
-    migrated++;
+      restoredPosition = true;
+    }
+    if (existed && !restoredPosition) skipped++;
+    else migrated++;
   }
   return { migrated, skipped, warnings };
 }
