@@ -29,6 +29,7 @@ export type TermScanProgress = {
   stage: 'collect' | 'lookup' | 'judge' | 'save';
   done: number;
   total: number;
+  lookup?: { done: number; total: number }; // 판정 중 아직 끝나지 않은 외부 조회 진행(끝나면 없다)
 };
 export type TermScanChange = {
   source: string;
@@ -196,12 +197,33 @@ export function createTermScan(deps: {
         counts: { candidates: 0, common: 0, unchanged: 0, unanswered: 0 },
       };
 
-    // 3. 외부 조회. 통로가 있고 켠 출처가 하나라도 있을 때만 한다. 후보마다 위키백과(없으면 위키데이터)와
-    // 나무위키를 묻는다. 오류가 난 출처는 이번 실행에서 다시 묻지 않고, 취소는 그대로 던진다. 결과는 저장하지 않는다.
+    // 3. 외부 조회와 묶음별 3회 판정을 겹쳐 돌린다. 묶음은 조회보다 먼저 나눈다.
+    // 통로가 있고 켠 출처가 하나라도 있을 때만 조회한다. 후보마다 위키백과(없으면 위키데이터)와 나무위키를 묻고,
+    // 오류가 난 출처는 이번 실행에서 다시 묻지 않으며, 취소는 그대로 던진다. 결과는 저장하지 않는다.
+    // 묶음 i의 조회는 묶음 i-1 조회 뒤에 이어 돌아서 외부 요청은 한 번에 하나만 나간다.
+    const batches: ScanCandidate[][] = [];
+    for (let index = 0; index < candidates.length; index += BATCH_SIZE) {
+      batches.push(candidates.slice(index, index + BATCH_SIZE));
+    }
     const lookups = new Map<string, LookupHit[]>();
     const failed = new Set<'wikipedia' | 'namuwiki'>();
     const transport = deps.lookup;
-    if (transport && (sources?.wikipedia || sources?.namuwiki)) {
+    const lookupOn = Boolean(transport) && Boolean(sources?.wikipedia || sources?.namuwiki);
+    const lookupTotal = lookupOn ? candidates.length : 0;
+    const judgeTotal = batches.length * RUNS;
+    let lookupDone = 0;
+    let judgeStarted = false;
+    let judgeDone = 0;
+    const reportJudge = (): void => {
+      onProgress?.({
+        stage: 'judge',
+        done: judgeDone,
+        total: judgeTotal,
+        ...(lookupDone < lookupTotal ? { lookup: { done: lookupDone, total: lookupTotal } } : {}),
+      });
+    };
+    const lookupJobs: Promise<void>[] = [];
+    if (transport && lookupOn) {
       const attempt = async (
         source: 'wikipedia' | 'namuwiki',
         look: () => Promise<LookupHit | null>,
@@ -215,43 +237,50 @@ export function createTermScan(deps: {
           return null;
         }
       };
-      for (const [index, candidate] of candidates.entries()) {
-        const name = candidate.source;
-        const hits: LookupHit[] = [];
-        if (sources?.wikipedia && !failed.has('wikipedia')) {
-          const hit = await attempt('wikipedia', async () => {
-            const exact =
-              (await lookupWikipedia(transport, name, signal)) ??
-              (await lookupWikidata(transport, name, signal));
-            // 별명만 전문 검색으로 대상을 찾는다. 일반 이름을 검색 1위 문서에 엉뚱하게 붙이지 않는다.
-            if (!exact && name.includes('の'))
-              return lookupWikipediaSearch(transport, name, signal);
-            return exact;
-          });
-          if (hit) hits.push(hit);
+      const lookupBatch = async (batch: ScanCandidate[]): Promise<void> => {
+        for (const candidate of batch) {
+          cancelled(signal);
+          const name = candidate.source;
+          const hits: LookupHit[] = [];
+          if (sources?.wikipedia && !failed.has('wikipedia')) {
+            const hit = await attempt('wikipedia', async () => {
+              const exact =
+                (await lookupWikipedia(transport, name, signal)) ??
+                (await lookupWikidata(transport, name, signal));
+              // 별명만 전문 검색으로 대상을 찾는다. 일반 이름을 검색 1위 문서에 엉뚱하게 붙이지 않는다.
+              if (!exact && name.includes('の'))
+                return lookupWikipediaSearch(transport, name, signal);
+              return exact;
+            });
+            if (hit) hits.push(hit);
+          }
+          if (sources?.namuwiki && !failed.has('namuwiki')) {
+            const hit = await attempt('namuwiki', () => lookupNamuwiki(transport, name, signal));
+            if (hit) hits.push(hit);
+          }
+          if (hits.length) lookups.set(name, hits);
+          lookupDone += 1;
+          if (judgeStarted) reportJudge();
+          else onProgress?.({ stage: 'lookup', done: lookupDone, total: lookupTotal });
         }
-        if (sources?.namuwiki && !failed.has('namuwiki')) {
-          const hit = await attempt('namuwiki', () => lookupNamuwiki(transport, name, signal));
-          if (hit) hits.push(hit);
-        }
-        if (hits.length) lookups.set(name, hits);
-        onProgress?.({ stage: 'lookup', done: index + 1, total: candidates.length });
+      };
+      let previous: Promise<void> = Promise.resolve();
+      for (const batch of batches) {
+        const job = previous.then(() => lookupBatch(batch));
+        // 판정이 먼저 취소로 끝나면 이 작업을 기다리지 않으므로 거부를 미리 처리해 둔다. 판정 루프는 job을 그대로 기다린다.
+        job.catch(() => {});
+        lookupJobs.push(job);
+        previous = job;
       }
     }
-    const lookupFailed = (['wikipedia', 'namuwiki'] as const).filter((source) =>
-      failed.has(source),
-    );
 
-    // 4. 묶음별 3회 판정. 1회차는 온도 0, 나머지는 0.7이다.
-    const batches: ScanCandidate[][] = [];
-    for (let index = 0; index < candidates.length; index += BATCH_SIZE) {
-      batches.push(candidates.slice(index, index + BATCH_SIZE));
-    }
-    const judgeTotal = batches.length * RUNS;
-    let judgeDone = 0;
+    // 4. 묶음별 3회 판정. 1회차는 온도 0, 나머지는 0.7이다. 묶음의 조회가 끝나야 그 묶음을 판정하고,
+    // 모델 요청은 한 번에 하나만 나간다. 조회를 끈 경우 기다릴 작업이 없어 바로 판정한다.
     let partial = false;
     const voted = new Map<string, VotedAnswer>();
-    for (const batch of batches) {
+    for (const [index, batch] of batches.entries()) {
+      await lookupJobs[index];
+      judgeStarted = true;
       const request = judgeRequest(batch, lookups);
       const runs: Map<string, JudgeAnswer>[] = [];
       for (const temperature of TEMPERATURES) {
@@ -276,10 +305,14 @@ export function createTermScan(deps: {
         cancelled(signal);
         runs.push(run);
         judgeDone += 1;
-        onProgress?.({ stage: 'judge', done: judgeDone, total: judgeTotal });
+        reportJudge();
       }
       for (const [source, answer] of voteJudgements(runs, batch)) voted.set(source, answer);
     }
+    // 조회 오류는 모든 조회가 끝난 뒤에 센다.
+    const lookupFailed = (['wikipedia', 'namuwiki'] as const).filter((source) =>
+      failed.has(source),
+    );
 
     // 5. 변경 만들기. 저장 직전 재확인이 필요한 계획(planned)과 바로 제안(suggestions)으로 나눈다.
     const planned: { change: TermScanChange; confirmed: boolean }[] = [];

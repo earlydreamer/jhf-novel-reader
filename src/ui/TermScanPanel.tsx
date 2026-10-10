@@ -38,7 +38,9 @@ function progressText(progress: TermScanProgress | undefined): string | null {
   if (progress.stage === 'collect')
     return `저장된 회차를 읽고 있어요 · ${progress.done}/${progress.total}`;
   if (progress.stage === 'judge')
-    return `용어를 판정하고 있어요 · ${progress.done}/${progress.total}`;
+    return progress.lookup
+      ? `용어를 판정하고 있어요 · ${progress.done}/${progress.total} · 외부 사전 ${progress.lookup.done}/${progress.lookup.total}`
+      : `용어를 판정하고 있어요 · ${progress.done}/${progress.total}`;
   if (progress.stage === 'lookup')
     return `외부 사전에서 찾아보고 있어요 · ${progress.done}/${progress.total}`;
   if (progress.stage === 'save') return '용어집에 반영하고 있어요';

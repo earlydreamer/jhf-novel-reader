@@ -95,6 +95,10 @@ test('다른 작품의 스캔 상태는 이 작품의 시작 전 화면으로 �
 test.each([
   [{ stage: 'collect' as const, done: 2, total: 5 }, '저장된 회차를 읽고 있어요 · 2/5'],
   [{ stage: 'judge' as const, done: 4, total: 9 }, '용어를 판정하고 있어요 · 4/9'],
+  [
+    { stage: 'judge' as const, done: 4, total: 9, lookup: { done: 6, total: 9 } },
+    '용어를 판정하고 있어요 · 4/9 · 외부 사전 6/9',
+  ],
   [{ stage: 'save' as const, done: 0, total: 0 }, '용어집에 반영하고 있어요'],
 ])('진행 단계 %j는 문구와 진행 막대를 보이고 중단을 요청한다', (progress, text) => {
   const props = renderPanel({
