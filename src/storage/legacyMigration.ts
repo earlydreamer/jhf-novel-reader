@@ -22,6 +22,7 @@ export type LegacyMigrationInput = {
   readonly legacy: ReaderStore;
   readonly library: LibraryStore;
   readonly skipWorkIds?: readonly string[];
+  readonly skipChapterIds?: readonly string[];
 };
 
 type PreparedMigration = {
@@ -119,7 +120,10 @@ export async function migrateLegacyData(
       warnings.push({ cacheKey, reason: 'unfinished' });
       continue;
     }
-    if (input.skipWorkIds?.includes(stored.chapter.source.workId)) {
+    if (
+      input.skipWorkIds?.includes(stored.chapter.source.workId) ||
+      input.skipChapterIds?.includes(stored.chapter.source.chapterId)
+    ) {
       skipped++;
       continue;
     }

@@ -446,3 +446,47 @@ it('repairs a missing sibling imported version after an intact version of the sa
 
   expect(await library.listVersions(first.source.chapterId)).toEqual(versions);
 });
+
+it.each([false, true])(
+  'startup retries pending chapter cleanup once and skips its v1 import even if cleanup completes (%s)',
+  async (failAgain) => {
+    const files = new Files();
+    const completed = await fixture();
+    const legacy = createReaderStore(files);
+    await legacy.commitChapter(completed);
+    const preferences = {
+      get: async () => ({
+        value: JSON.stringify({ schemaVersion: 1, cacheKey: completed.cacheKey }),
+      }),
+      set: async () => {},
+      remove: async () => {},
+    };
+    let failing = true,
+      removes = 0;
+    const adapter: PrivateFiles = {
+      read: files.read.bind(files),
+      write: files.write.bind(files),
+      remove: async (path) => {
+        removes++;
+        if (failing) throw new Error('interrupted');
+        files.data.delete(path);
+      },
+    };
+    const library = createLibraryStore(adapter);
+    await migrateLegacyData({ cacheKeys: [completed.cacheKey], legacy, library });
+    const value = (await library.listVersions(completed.source.chapterId))[0]!;
+    await library.removeChapterVersions!(completed.source.chapterId);
+    removes = 0;
+    failing = failAgain;
+    const restarted = createLibraryStore(adapter);
+    expect(await createV1Migration(adapter, preferences, restarted)()).toEqual({
+      migrated: 0,
+      skipped: 1,
+      warnings: [],
+    });
+    expect(removes).toBe(1);
+    expect(await restarted.listVersions(completed.source.chapterId)).toEqual([]);
+    expect(files.data.has(`versions/${value.versionId}.0.json`)).toBe(failAgain);
+    expect(await legacy.read(completed.cacheKey)).not.toBeNull();
+  },
+);

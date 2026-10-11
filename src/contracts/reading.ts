@@ -170,6 +170,9 @@ export interface LibraryStore {
   commitVersion(value: CompletedTranslation): Promise<void>;
   savePosition(value: ReadingPosition): Promise<void>;
   readPosition(versionId: string): Promise<ReadingPosition | null>;
+  readChapterRemovalInventory?(): Promise<readonly ChapterRemovalInventory[]>;
+  /** 이미 기록된 정리 대상만 재시도한다. 이후 저장한 새 버전은 포함하지 않는다. */
+  retryChapterRemoval?(chapterId: string): Promise<ChapterRemovalResult>;
   readRemovalInventory?(): Promise<readonly WorkRemovalInventory[]>;
   isWorkRemovalPending?(workId: string): Promise<boolean>;
   removeWork?(workId: string, runtime?: { activeBatchWorkId?: string }): Promise<WorkRemovalResult>;
@@ -177,6 +180,13 @@ export interface LibraryStore {
     chapterId: string,
     runtime?: { activeBatchWorkId?: string },
   ): Promise<ChapterRemovalResult>;
+}
+export interface ChapterRemovalInventory {
+  workId: string;
+  chapterId: string;
+  versionIds: string[];
+  paths: string[];
+  createdAt: string;
 }
 export interface WorkRemovalInventory {
   workId: string;

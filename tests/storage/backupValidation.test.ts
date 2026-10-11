@@ -246,3 +246,73 @@ describe('read-only backup preflight', () => {
     await expect(f.validate()).rejects.toThrow();
   });
 });
+
+it('accepts pending chapter cleanup with absent bodies and preserves its inventory for restart', async () => {
+  const f = await fixture();
+  const inventory = {
+    workId: source.workId,
+    chapterId: source.chapterId,
+    versionIds: [version.versionId],
+    paths: [`versions/${version.versionId}.0.json`, `reading/${version.versionId}.1.json`],
+    createdAt: version.createdAt,
+  };
+  await put(f.memory, 'library/index.1.json', {
+    versions: [],
+    workIds: [],
+    recent: [],
+    chapterRemovalInventory: [inventory],
+  });
+  f.memory.delete('versions/version-1.0.json');
+  const before = [...f.memory];
+  await expect(f.validate()).resolves.toBeUndefined();
+  expect([...f.memory]).toEqual(before);
+  expect(await f.library.readChapterRemovalInventory!()).toEqual([inventory]);
+});
+
+it.each([
+  { paths: ['settings/private.0.json'] },
+  { paths: ['versions/../version-1.0.json'] },
+  { paths: ['versions/other-version.0.json'] },
+  { paths: ['versions/version-1.2.json'] },
+  { versionIds: ['version-1', 'version-1'] },
+  { paths: ['versions/version-1.0.json', 'versions/version-1.0.json'] },
+  { workId: 'n9999zz' },
+])('rejects unsafe chapter cleanup inventory %j', async (override) => {
+  const f = await fixture();
+  const inventory = {
+    workId: source.workId,
+    chapterId: source.chapterId,
+    versionIds: [version.versionId],
+    paths: ['versions/version-1.0.json'],
+    createdAt: version.createdAt,
+    ...override,
+  };
+  f.memory.clear();
+  await put(f.memory, 'library/index.0.json', {
+    versions: [],
+    workIds: [],
+    recent: [],
+    chapterRemovalInventory: [inventory],
+  });
+  await expect(f.validate()).rejects.toThrow();
+});
+
+it.each([source.chapterId, 'n9999zz/1'])(
+  'rejects a live version reused in pending inventory for %s',
+  async (chapterId) => {
+    const f = await fixture();
+    const current = JSON.parse(f.memory.get('library/index.0.json')!).payload;
+    const inventory = {
+      workId: chapterId.split('/')[0],
+      chapterId,
+      versionIds: [version.versionId],
+      paths: [`versions/${version.versionId}.0.json`],
+      createdAt: version.createdAt,
+    };
+    await put(f.memory, 'library/index.0.json', {
+      ...current,
+      chapterRemovalInventory: [inventory],
+    });
+    await expect(f.validate()).rejects.toThrow();
+  },
+);

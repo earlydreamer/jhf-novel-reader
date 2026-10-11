@@ -1,5 +1,6 @@
 import type {
   ChapterRemovalResult,
+  ChapterRemovalInventory,
   CompletedTranslation,
   LibraryStore,
   WorkPage,
@@ -28,9 +29,10 @@ type Index = {
   workIds: string[];
   recent: { versionId: string; chapterId: string; workId: string; updatedAt: string }[];
   removalInventory?: WorkRemovalInventory[];
+  chapterRemovalInventory?: ChapterRemovalInventory[];
 };
 async function index(value: unknown): Promise<Index> {
-  object(value, ['versions', 'workIds', 'recent', 'removalInventory']);
+  object(value, ['versions', 'workIds', 'recent', 'removalInventory', 'chapterRemovalInventory']);
   check(
     Array.isArray(value.versions) && Array.isArray(value.workIds) && Array.isArray(value.recent),
   );
@@ -92,6 +94,32 @@ async function index(value: unknown): Promise<Index> {
   }
   check(new Set(removalInventory.map((entry) => entry.workId)).size === removalInventory.length);
   if (value.removalInventory === undefined) value.removalInventory = [];
+  const chapterRemovalInventory = value.chapterRemovalInventory ?? [];
+  check(Array.isArray(chapterRemovalInventory));
+  const pendingChapters = new Set<string>(),
+    pendingVersions = new Set<string>();
+  for (const entry of chapterRemovalInventory) {
+    object(entry, ['workId', 'chapterId', 'versionIds', 'paths', 'createdAt']);
+    identifier(entry.workId);
+    chapterIdentity(entry.chapterId);
+    check(entry.chapterId.startsWith(`${entry.workId}/`) && !pendingChapters.has(entry.chapterId));
+    pendingChapters.add(entry.chapterId);
+    check(Array.isArray(entry.versionIds) && Array.isArray(entry.paths));
+    for (const id of entry.versionIds) {
+      identifier(id);
+      check(!pendingVersions.has(id) && !ids.has(id));
+      pendingVersions.add(id);
+    }
+    for (const path of entry.paths) {
+      text(path);
+      const match = /^(versions|reading)\/([A-Za-z0-9.-]+)\.[01]\.json$/.exec(path);
+      check(match !== null && entry.versionIds.includes(match[2]));
+    }
+    check(new Set(entry.paths).size === entry.paths.length);
+    text(entry.createdAt);
+    check(Number.isFinite(Date.parse(entry.createdAt)));
+  }
+  if (value.chapterRemovalInventory === undefined) value.chapterRemovalInventory = [];
   return value as unknown as Index;
 }
 export async function validateWorkPages(value: unknown): Promise<WorkPage[]> {
@@ -122,6 +150,69 @@ async function writeBoth<T>(
 ): Promise<void> {
   await journal.save(name, value, validate);
   await journal.save(name, value, validate);
+}
+
+/** Pending rows in either valid slot remain authoritative until both slots retire them. */
+function mergeChapterRemovals(indexes: readonly Index[]): ChapterRemovalInventory[] {
+  const merged = new Map<string, ChapterRemovalInventory>();
+  for (const item of indexes.flatMap((value) => value.chapterRemovalInventory ?? [])) {
+    const previous = merged.get(item.chapterId);
+    merged.set(
+      item.chapterId,
+      previous
+        ? {
+            ...previous,
+            versionIds: unique([...previous.versionIds, ...item.versionIds]),
+            paths: unique([...previous.paths, ...item.paths]),
+          }
+        : item,
+    );
+  }
+  return [...merged.values()];
+}
+
+/** Validate only the exact deletion target, never a healthy sibling's fallback payload. */
+async function removeOwnedVersionPath(
+  files: PrivateFiles,
+  path: string,
+  owner: { workId: string; chapterId?: string },
+): Promise<boolean> {
+  const match = /^(versions|reading)\/([A-Za-z0-9.-]+)\.([01])\.json$/.exec(path);
+  if (!match) return false;
+  try {
+    const raw = await files.read(path);
+    if (raw === null) return true;
+    const exact = new Journal({
+      read: async (candidate) => (candidate === path ? raw : null),
+      write: async () => {
+        throw new Error('read-only cleanup validation');
+      },
+    });
+    const name = `${match[1]}/${match[2]}`;
+    let owned: boolean;
+    if (match[1] === 'versions') {
+      const value = (await exact.load(name, completedTranslation))?.value;
+      owned = Boolean(
+        value &&
+        value.versionId === match[2] &&
+        value.source.workId === owner.workId &&
+        (!owner.chapterId || value.source.chapterId === owner.chapterId),
+      );
+    } else {
+      const value = (await exact.load(name, readingPosition))?.value;
+      owned = Boolean(
+        value &&
+        value.versionId === match[2] &&
+        value.workId === owner.workId &&
+        (!owner.chapterId || value.chapterId === owner.chapterId),
+      );
+    }
+    if (!owned || !files.remove) return false;
+    await files.remove(path);
+    return (await files.read(path)) === null;
+  } catch {
+    return false;
+  }
 }
 
 async function removeWorkData(
@@ -159,6 +250,8 @@ async function removeWorkData(
     );
   }
   const prior = mergedPending.get(workId);
+  const chapterRemovals = mergeChapterRemovals(indexSlots.entries.map((entry) => entry.value));
+  const absorbed = chapterRemovals.filter((entry) => entry.workId === workId);
   const attemptSlots = await journal.readSlots('attempts/index', validateAttempts);
   const latestAttempts = attemptSlots.entries[0];
   if (attemptSlots.found && !latestAttempts)
@@ -353,7 +446,7 @@ async function removeWorkData(
   const inventory: WorkRemovalInventory = {
     workId,
     cacheKeys: unique(cacheKeys),
-    paths: unique([...(prior?.paths ?? []), ...paths]),
+    paths: unique([...(prior?.paths ?? []), ...absorbed.flatMap((entry) => entry.paths), ...paths]),
     createdAt: prior?.createdAt ?? new Date().toISOString(),
     ...(pointerCacheKey ? { pointerCacheKey } : {}),
     ...(issues.length ? { issues: unique(issues) } : {}),
@@ -364,6 +457,7 @@ async function removeWorkData(
     workIds: current.workIds.filter((id) => id !== workId),
     versions: current.versions.filter((entry) => entry.workId !== workId),
     recent: current.recent.filter((entry) => entry.workId !== workId),
+    chapterRemovalInventory: chapterRemovals.filter((entry) => entry.workId !== workId),
     removalInventory: [...mergedPending.values()]
       .filter((entry) => entry.workId !== workId)
       .concat(inventory),
@@ -413,6 +507,10 @@ async function removeWorkData(
   const remaining: string[] = [],
     remove = files.remove;
   for (const path of inventory.paths) {
+    if (/^(versions|reading)\//.test(path)) {
+      if (!(await removeOwnedVersionPath(files, path, { workId }))) remaining.push(path);
+      continue;
+    }
     if (!remove) {
       remaining.push(path);
       continue;
@@ -485,6 +583,7 @@ async function removeChapterVersionData(
   journal: Journal,
   chapterId: string,
   activeBatchWorkId?: string,
+  retryOnly = false,
 ): Promise<ChapterRemovalResult> {
   chapterIdentity(chapterId);
   const kept = (extra: Partial<ChapterRemovalResult> = {}): ChapterRemovalResult => ({
@@ -494,116 +593,116 @@ async function removeChapterVersionData(
     versionIds: [],
     ...extra,
   });
-  const unknown = (): ChapterRemovalResult => ({
-    ...kept(),
-    removed: null,
-    remainingInventory: ['library/index'],
-  });
-  const indexSlots = await journal.readSlots('library/index', index);
-  if (indexSlots.found && !indexSlots.entries.length) return unknown();
-  const current = indexSlots.entries[0]?.value ?? {
-    versions: [],
-    workIds: [],
-    recent: [],
-    removalInventory: [],
-  };
-  const targets = current.versions.filter((entry) => entry.chapterId === chapterId);
-  if (!targets.length)
+  const unknown = (): ChapterRemovalResult =>
+    kept({ removed: null, remainingInventory: ['library/index'] });
+  const slots = await journal.readSlots('library/index', index);
+  if (slots.found && !slots.entries.length) return unknown();
+  const current: Index = slots.entries[0]?.value ?? { versions: [], workIds: [], recent: [] };
+  const pending = mergeChapterRemovals(slots.entries.map((entry) => entry.value));
+  const prior = pending.find((entry) => entry.chapterId === chapterId);
+  const targets = retryOnly
+    ? []
+    : current.versions.filter((entry) => entry.chapterId === chapterId);
+  if (!prior && !targets.length)
     return { removed: true, cleanupComplete: true, remainingInventory: [], versionIds: [] };
-  const workId = targets[0]!.workId;
-  // 작품 제거 정리가 남아 있으면 그 정리가 먼저다.
+  const workId = chapterId.split('/')[0]!;
+  // 작품 제거가 inventory를 넘겨받으면 그 정리가 먼저다.
   if (
-    indexSlots.entries.some((entry) =>
-      (entry.value.removalInventory ?? []).some((item) => item.workId === workId),
+    slots.entries.some((entry) =>
+      entry.value.removalInventory?.some((item) => item.workId === workId),
     )
   )
     return kept();
-  // 결과 불명 attempt는 막지 않는다. 저장본과 위치만 지우고 attempt 기록은 그대로 둔다.
-  const batchSlots = await journal.readSlots('batches/current', validateBatch);
-  if (batchSlots.found && !batchSlots.entries[0])
+  const batches = await journal.readSlots('batches/current', validateBatch);
+  if (batches.found && !batches.entries.length)
     return kept({ remainingInventory: ['batches/current'] });
-  // 저장된 batch 기록은 막지 않고, 실행 중인 런타임 owner만 막는다.
   if (activeBatchWorkId === workId) return kept({ blockedBy: 'batch' });
-
-  const versionIds = targets.map((entry) => entry.versionId);
-  const paths: string[] = [],
-    preserved: string[] = [];
-  try {
-    for (const versionId of versionIds) {
-      const versionSlots = await journal.readSlots(`versions/${versionId}`, completedTranslation);
-      for (const entry of versionSlots.entries)
-        (entry.value.source.chapterId === chapterId && entry.value.versionId === versionId
-          ? paths
-          : preserved
-        ).push(slotPath(`versions/${versionId}`, entry.slot));
-      for (const slot of versionSlots.invalidSlots)
-        preserved.push(slotPath(`versions/${versionId}`, slot));
-      const readingSlots = await journal.readSlots(`reading/${versionId}`, readingPosition);
-      for (const entry of readingSlots.entries)
-        (entry.value.chapterId === chapterId && entry.value.versionId === versionId
-          ? paths
-          : preserved
-        ).push(slotPath(`reading/${versionId}`, entry.slot));
-      for (const slot of readingSlots.invalidSlots)
-        preserved.push(slotPath(`reading/${versionId}`, slot));
-    }
-  } catch {
-    return kept({ remainingInventory: ['versions'] });
-  }
-
+  const versionIds = unique([
+    ...(prior?.versionIds ?? []),
+    ...targets.map((entry) => entry.versionId),
+  ]);
+  // 복구 슬롯끼리 충돌해도 다른 회차의 살아 있는 ID를 삭제 의도로 해석하지 않는다.
+  if (
+    current.versions.some(
+      (entry) =>
+        versionIds.includes(entry.versionId) &&
+        (entry.workId !== workId || entry.chapterId !== chapterId),
+    )
+  )
+    return kept({ remainingInventory: ['library/index'] });
+  const inventory: ChapterRemovalInventory = {
+    workId,
+    chapterId,
+    versionIds,
+    // 처음 삭제할 때만 대상을 늘린다. 재시도는 이후 생성된 UUID 저장본을 건드리지 않는다.
+    paths: unique([
+      ...(prior?.paths ?? []),
+      ...targets.flatMap((entry) =>
+        ['versions', 'reading'].flatMap((directory) =>
+          [0, 1].map((slot) => slotPath(`${directory}/${entry.versionId}`, slot)),
+        ),
+      ),
+    ]),
+    createdAt: prior?.createdAt ?? new Date().toISOString(),
+  };
   const dropped = new Set(versionIds);
   const next: Index = {
     ...current,
     versions: current.versions.filter((entry) => !dropped.has(entry.versionId)),
     recent: current.recent.filter((entry) => !dropped.has(entry.versionId)),
+    chapterRemovalInventory: pending
+      .filter((entry) => entry.chapterId !== chapterId)
+      .concat(inventory),
   };
+  let removed = Boolean(prior);
   try {
     await journal.save('library/index', next, index);
+    removed = true;
   } catch {
     try {
       const latest = (await journal.readSlots('library/index', index)).entries[0]?.value;
       if (!latest) return unknown();
-      const gone = !latest.versions.some((entry) => dropped.has(entry.versionId));
-      return {
-        removed: gone,
-        cleanupComplete: false,
-        remainingInventory: ['library/index'],
-        versionIds: gone ? versionIds : [],
-      };
+      removed =
+        !latest.versions.some((entry) => dropped.has(entry.versionId)) &&
+        Boolean(latest.chapterRemovalInventory?.some((entry) => entry.chapterId === chapterId));
     } catch {
       return unknown();
     }
+    return kept({
+      removed,
+      remainingInventory: ['library/index'],
+      versionIds: removed ? versionIds : [],
+    });
   }
   try {
-    // 두 슬롯 모두 새 색인이 검증되기 전에는 파일을 지우지 않는다.
-    // 최신 슬롯이 나중에 손상돼 이전 슬롯으로 돌아가도 지운 파일을 가리키지 않게 한다.
+    // 두 슬롯이 삭제 의도와 대상을 검증해 저장한 뒤에만 실제 파일을 지운다.
     await journal.save('library/index', next, index);
   } catch {
+    return kept({ removed, remainingInventory: ['library/index'], versionIds });
+  }
+  const remaining: string[] = [];
+  for (const path of inventory.paths)
+    if (!(await removeOwnedVersionPath(files, path, inventory))) remaining.push(path);
+  const settled: Index = {
+    ...next,
+    chapterRemovalInventory: pending
+      .filter((entry) => entry.chapterId !== chapterId)
+      .concat(remaining.length ? [{ ...inventory, paths: remaining }] : []),
+  };
+  try {
+    await writeBoth(journal, 'library/index', settled, index);
+  } catch {
     return {
-      removed: true,
+      removed,
       cleanupComplete: false,
-      remainingInventory: ['library/index'],
+      remainingInventory: unique([...remaining, 'library/index.chapterRemovalInventory']),
       versionIds,
     };
   }
-  const remaining: string[] = [...preserved],
-    remove = files.remove;
-  for (const path of paths) {
-    if (!remove) {
-      remaining.push(path);
-      continue;
-    }
-    try {
-      await remove.call(files, path);
-      if ((await files.read(path)) !== null) remaining.push(path);
-    } catch {
-      remaining.push(path);
-    }
-  }
   return {
-    removed: true,
+    removed,
     cleanupComplete: remaining.length === 0,
-    remainingInventory: unique(remaining),
+    remainingInventory: remaining,
     versionIds,
   };
 }
@@ -619,13 +718,24 @@ export function createLibraryStore(
       recent: [],
       removalInventory: [],
     };
-  const indexForWrite = async () =>
-    (await journal.loadForWrite('library/index', index))?.value ?? {
-      versions: [],
-      workIds: [],
-      recent: [],
-      removalInventory: [],
+  const indexForWrite = async (): Promise<Index> => {
+    const slots = await journal.readSlots('library/index', index);
+    const current = slots.entries[0]?.value ??
+      (await journal.loadForWrite('library/index', index))?.value ?? {
+        versions: [],
+        workIds: [],
+        recent: [],
+      };
+    return {
+      ...current,
+      chapterRemovalInventory: mergeChapterRemovals(slots.entries.map((entry) => entry.value)),
     };
+  };
+  const readChapterRemovalInventory = async (): Promise<ChapterRemovalInventory[]> => {
+    const slots = await journal.readSlots('library/index', index);
+    if (slots.found && !slots.entries.length) throw new StorageError('corrupt');
+    return mergeChapterRemovals(slots.entries.map((entry) => entry.value));
+  };
   const readVersion = async (versionId: string) => {
     identifier(versionId);
     return (await journal.load(`versions/${versionId}`, completedTranslation))?.value ?? null;
@@ -655,6 +765,9 @@ export function createLibraryStore(
     return [...merged.values()];
   };
   return {
+    readChapterRemovalInventory: () => serial(files, readChapterRemovalInventory),
+    retryChapterRemoval: (chapterId) =>
+      serial(files, () => removeChapterVersionData(files, journal, chapterId, undefined, true)),
     readRemovalInventory: () => serial(files, readRemovalInventory),
     isWorkRemovalPending: (workId) =>
       serial(files, async () =>
@@ -726,6 +839,11 @@ export function createLibraryStore(
         check(
           !(await readRemovalInventory()).some((entry) => entry.workId === value.source.workId),
         );
+        check(
+          !(await readChapterRemovalInventory()).some((entry) =>
+            entry.versionIds.includes(value.versionId),
+          ),
+        );
         const old =
           (await journal.loadForWrite(`versions/${value.versionId}`, completedTranslation))
             ?.value ?? null;
@@ -763,6 +881,11 @@ export function createLibraryStore(
       return serial(files, async () => {
         await readingPosition(value);
         check(!(await readRemovalInventory()).some((entry) => entry.workId === value.workId));
+        check(
+          !(await readChapterRemovalInventory()).some((entry) =>
+            entry.versionIds.includes(value.versionId),
+          ),
+        );
         const version = await readVersion(value.versionId);
         check(
           version !== null &&
@@ -772,7 +895,7 @@ export function createLibraryStore(
         const block = version.blocks.find((b) => b.id === value.blockId);
         check(block !== undefined);
         await journal.save(`reading/${value.versionId}`, value, readingPosition);
-        const current = await readIndex();
+        const current = await indexForWrite();
         current.recent = [
           ...current.recent.filter((v) => v.workId !== value.workId),
           {
