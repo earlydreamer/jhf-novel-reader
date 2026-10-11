@@ -166,11 +166,11 @@ final class BackupArchive {
         }
 
         /** 교체를 시작한 뒤 실패하면 설정·파일 결과가 불확실할 수 있다. 세션을 재사용하지 않는다. */
-        synchronized int commit(String candidate, SettingsStore store) throws IOException {
+        synchronized int commit(String candidate, String previousSettings, SettingsStore store) throws IOException {
             requirePrepared(candidate);
             state = State.COMMITTING;
             try {
-                commitPrepared(filesDir, root, settings, store);
+                new BackupRestoreTransaction(filesDir, store).commit(previousSettings, settings);
                 state = State.FINISHED;
                 return files;
             } catch (IOException | RuntimeException failure) {
@@ -345,7 +345,7 @@ final class BackupArchive {
     static PreparedRestore prepare(File filesDir, InputStream source, Validator validator, Limits limits)
         throws IOException, InvalidBackupException {
         File root = new File(filesDir, RESTORE_DIR);
-        if (root.exists() || new File(filesDir, OLD_DIR).exists()) throw new IOException("restore already pending");
+        if (root.exists() || new File(filesDir, OLD_DIR).exists() || BackupRestoreTransaction.pending(filesDir)) throw new IOException("restore already pending");
         try {
             return new PreparedRestore(filesDir, extract(source, root, validator, limits), limits);
         } catch (IOException | InvalidBackupException | RuntimeException failure) {
@@ -353,57 +353,6 @@ final class BackupArchive {
             if (root.exists()) failure.addSuppressed(new IOException("cannot remove restore staging"));
             throw failure;
         }
-    }
-
-    // ---- 교체 ----
-
-    /** 검증한 임시 트리만 교체한다. 실패 시 정리로 원래 트리를 잃지 않도록 남겨 둔다. */
-    private static void commitPrepared(File filesDir, File restoreRoot, String value, SettingsStore settings)
-        throws IOException {
-        File live = new File(filesDir, DATA_DIR);
-        File old = new File(filesDir, OLD_DIR);
-        File staged = new File(restoreRoot, DATA_DIR);
-        if (old.exists()) throw new IOException("previous restore still pending");
-        if (!staged.isDirectory() || !staged.getAbsoluteFile().equals(staged.getCanonicalFile())) {
-            throw new IOException("restore staging changed");
-        }
-        boolean hadLive = live.exists();
-        if (hadLive && !live.renameTo(old)) throw new IOException("cannot move current data");
-        if (!staged.renameTo(live)) {
-            boolean rolledBack = !hadLive || old.renameTo(live);
-            throw new IOException(rolledBack ? "cannot place restored data" : "cannot place restored data; rollback failed; old data retained");
-        }
-        boolean saved;
-        RuntimeException saveFailure = null;
-        try {
-            saved = settings.commit(value);
-        } catch (RuntimeException failure) {
-            saved = false;
-            saveFailure = failure;
-        }
-        if (!saved) {
-            // commit(false)도 설정 메모리를 바꿀 수 있다. 파일을 되돌려도 전체 복원 결과는 불확실하다.
-            boolean movedBack = live.renameTo(staged);
-            boolean rolledBack = movedBack && (!hadLive || old.renameTo(live));
-            throw new IOException(rolledBack ? "cannot save settings; file tree rolled back; settings outcome uncertain"
-                : "cannot save settings; rollback failed; old data retained", saveFailure);
-        }
-        deleteRecursively(old);
-        deleteRecursively(restoreRoot);
-        if (old.exists() || restoreRoot.exists()) throw new IOException("restore committed; cleanup incomplete");
-    }
-
-    /** 교체 도중 끊겨 데이터 폴더가 없고 .old만 남았으면 되돌린다. 이름 바꾸기 한 번이라 빠르다. */
-    static void recoverInterruptedSwap(File filesDir) {
-        File live = new File(filesDir, DATA_DIR);
-        File old = new File(filesDir, OLD_DIR);
-        if (old.exists() && !live.exists()) old.renameTo(live);
-    }
-
-    /** 임시 폴더와, 데이터 폴더가 있을 때의 .old를 지운다. */
-    static void deleteLeftovers(File filesDir) {
-        deleteRecursively(new File(filesDir, RESTORE_DIR));
-        if (new File(filesDir, DATA_DIR).exists()) deleteRecursively(new File(filesDir, OLD_DIR));
     }
 
     static void deleteRecursively(File target) {

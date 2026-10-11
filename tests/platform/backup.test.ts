@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBackupPlatform, type BackupPlugin } from '../../src/platform/backup';
+import {
+  createBackupPlatform,
+  recoverBackupBeforeStartup,
+  type BackupPlugin,
+} from '../../src/platform/backup';
 import { createNativeStorageGate } from '../../src/storage/native';
 import { digest } from '../../src/storage/journal';
 
@@ -17,6 +21,7 @@ function setup() {
   const live = new Map([['library/index.0.json', 'healthy original']]);
   const gate = createNativeStorageGate();
   const plugin = {
+    recoverRestore: vi.fn(async () => ({ ready: true as const })),
     export: vi.fn(async () => ({ saved: true, files: 12 })),
     prepareRestore: vi.fn(async () => ({
       prepared: true as const,
@@ -58,6 +63,18 @@ beforeEach(() => {
 });
 
 describe('capacitor backup preflight', () => {
+  it('requires explicit startup recovery readiness on Android and skips other platforms', async () => {
+    const plugin = { recoverRestore: vi.fn(async () => ({ ready: true as const })) };
+    await expect(recoverBackupBeforeStartup(plugin)).resolves.toBeUndefined();
+    expect(plugin.recoverRestore).toHaveBeenCalledOnce();
+    plugin.recoverRestore.mockRejectedValueOnce(new Error('restore_recovery_required'));
+    await expect(recoverBackupBeforeStartup(plugin)).rejects.toThrow();
+    plugin.recoverRestore.mockResolvedValueOnce({ ready: false } as never);
+    await expect(recoverBackupBeforeStartup(plugin)).rejects.toThrow();
+    native.isNative = false;
+    await expect(recoverBackupBeforeStartup(plugin)).resolves.toBeUndefined();
+    expect(plugin.recoverRestore).toHaveBeenCalledTimes(3);
+  });
   it('is available only on native Android', () => {
     const f = setup();
     expect(f.backup.available()).toBe(true);

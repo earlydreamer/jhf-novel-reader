@@ -5,6 +5,7 @@ import { nativeStorageGate, type NativeStorageGate } from '../storage/native';
 import { check } from '../storage/validation';
 
 export interface BackupPlugin {
+  recoverRestore(): Promise<{ ready: true }>;
   export(): Promise<{ saved: boolean; files?: number; bytes?: number }>;
   prepareRestore(): Promise<
     | { prepared: false }
@@ -24,6 +25,15 @@ export interface BackupPlugin {
   abortRestore(options: { token: string }): Promise<unknown>;
 }
 const Native = registerPlugin<BackupPlugin>('Backup');
+
+/** No controller or storage reads may start until the native undo transaction is resolved. */
+export async function recoverBackupBeforeStartup(
+  plugin: Pick<BackupPlugin, 'recoverRestore'> = Native,
+): Promise<void> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+  const result = await plugin.recoverRestore();
+  if (result.ready !== true) throw new StorageError('io');
+}
 
 export type BackupResult =
   | { kind: 'saved'; files: number }
