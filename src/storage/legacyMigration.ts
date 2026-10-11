@@ -142,24 +142,34 @@ export async function migrateLegacyData(
         complete: false,
       });
     }
-    const existed = (await input.library.readVersion(prepared.version.versionId)) !== null;
-    // 본문 저장 뒤 색인 쓰기가 끊겼을 수 있다. 같은 본문을 다시 commit하면 빠진 색인만 복구한다.
-    await input.library.commitVersion(prepared.version);
     const position = stored.position;
     const blockIndex = position
       ? prepared.blockIndexByParagraphId.get(position.paragraphId)
       : undefined;
     const block = blockIndex === undefined ? undefined : prepared.version.blocks[blockIndex];
+    const importedPosition =
+      position && block
+        ? {
+            workId: prepared.version.source.workId,
+            chapterId: prepared.version.source.chapterId,
+            versionId: prepared.version.versionId,
+            blockId: block.id,
+            offset: position.offset,
+          }
+        : undefined;
+    if (input.library.importLegacyVersion) {
+      // 의도적인 삭제와 겹친 가져오기는 오류가 아니라 건너뛰기로 끝낸다.
+      if (await input.library.importLegacyVersion(prepared.version, importedPosition)) migrated++;
+      else skipped++;
+      continue;
+    }
+    const existed = (await input.library.readVersion(prepared.version.versionId)) !== null;
+    // 본문 저장 뒤 색인 쓰기가 끊겼을 수 있다. 같은 본문을 다시 commit하면 빠진 색인만 복구한다.
+    await input.library.commitVersion(prepared.version);
     let restoredPosition = false;
     // 가져오기 중 위치 저장이 끊겼으면 이어서 쓰되, 이후에 사용자가 옮긴 위치는 보존한다.
-    if (position && block && !(await input.library.readPosition(prepared.version.versionId))) {
-      await input.library.savePosition({
-        workId: prepared.version.source.workId,
-        chapterId: prepared.version.source.chapterId,
-        versionId: prepared.version.versionId,
-        blockId: block.id,
-        offset: position.offset,
-      });
+    if (importedPosition && !(await input.library.readPosition(prepared.version.versionId))) {
+      await input.library.savePosition(importedPosition);
       restoredPosition = true;
     }
     if (existed && !restoredPosition) skipped++;

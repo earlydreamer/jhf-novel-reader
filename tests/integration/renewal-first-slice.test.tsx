@@ -1294,4 +1294,9 @@ it('startup finishes failed chapter cleanup after its saved-chapter action disap
   expect(await h.store.listVersions(chapter.chapterId)).toEqual([]);
   expect(h.posts()).toEqual([]);
   restarted.dispose();
+  const later = createRenewalApplication(h.adapters);
+  await later.initialize();
+  expect(await h.store.listVersions(chapter.chapterId)).toEqual([]);
+  expect(h.posts()).toEqual([]);
+  later.dispose();
 });

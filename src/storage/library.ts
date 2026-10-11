@@ -2,6 +2,7 @@ import type {
   ChapterRemovalResult,
   ChapterRemovalInventory,
   CompletedTranslation,
+  ReadingPosition,
   LibraryStore,
   WorkPage,
   WorkRemovalInventory,
@@ -30,9 +31,17 @@ type Index = {
   recent: { versionId: string; chapterId: string; workId: string; updatedAt: string }[];
   removalInventory?: WorkRemovalInventory[];
   chapterRemovalInventory?: ChapterRemovalInventory[];
+  legacyRemovedChapterIds?: string[];
 };
 async function index(value: unknown): Promise<Index> {
-  object(value, ['versions', 'workIds', 'recent', 'removalInventory', 'chapterRemovalInventory']);
+  object(value, [
+    'versions',
+    'workIds',
+    'recent',
+    'removalInventory',
+    'chapterRemovalInventory',
+    'legacyRemovedChapterIds',
+  ]);
   check(
     Array.isArray(value.versions) && Array.isArray(value.workIds) && Array.isArray(value.recent),
   );
@@ -120,6 +129,11 @@ async function index(value: unknown): Promise<Index> {
     check(Number.isFinite(Date.parse(entry.createdAt)));
   }
   if (value.chapterRemovalInventory === undefined) value.chapterRemovalInventory = [];
+  const legacyRemovedChapterIds = value.legacyRemovedChapterIds ?? [];
+  check(Array.isArray(legacyRemovedChapterIds));
+  legacyRemovedChapterIds.forEach(chapterIdentity);
+  check(new Set(legacyRemovedChapterIds).size === legacyRemovedChapterIds.length);
+  if (value.legacyRemovedChapterIds === undefined) value.legacyRemovedChapterIds = [];
   return value as unknown as Index;
 }
 export async function validateWorkPages(value: unknown): Promise<WorkPage[]> {
@@ -150,6 +164,11 @@ async function writeBoth<T>(
 ): Promise<void> {
   await journal.save(name, value, validate);
   await journal.save(name, value, validate);
+}
+
+/** 삭제 표식은 정리 목록이 퇴역해도 유지하며 이전 유효 슬롯에만 남아 있어도 보존한다. */
+function mergeLegacyRemovedChapterIds(indexes: readonly Index[]): string[] {
+  return unique(indexes.flatMap((value) => value.legacyRemovedChapterIds ?? []));
 }
 
 /** Pending rows in either valid slot remain authoritative until both slots retire them. */
@@ -452,12 +471,24 @@ async function removeWorkData(
     ...(issues.length ? { issues: unique(issues) } : {}),
   };
 
+  const removedChapterIds = [...chapterIds].filter((chapterId) => {
+    try {
+      chapterIdentity(chapterId);
+      return chapterId.startsWith(`${workId}/`);
+    } catch {
+      return false;
+    }
+  });
   const removedIndex: Index = {
     ...current,
     workIds: current.workIds.filter((id) => id !== workId),
     versions: current.versions.filter((entry) => entry.workId !== workId),
     recent: current.recent.filter((entry) => entry.workId !== workId),
     chapterRemovalInventory: chapterRemovals.filter((entry) => entry.workId !== workId),
+    legacyRemovedChapterIds: unique([
+      ...mergeLegacyRemovedChapterIds(indexSlots.entries.map((entry) => entry.value)),
+      ...removedChapterIds,
+    ]),
     removalInventory: [...mergedPending.values()]
       .filter((entry) => entry.workId !== workId)
       .concat(inventory),
@@ -650,6 +681,10 @@ async function removeChapterVersionData(
     ...current,
     versions: current.versions.filter((entry) => !dropped.has(entry.versionId)),
     recent: current.recent.filter((entry) => !dropped.has(entry.versionId)),
+    legacyRemovedChapterIds: unique([
+      ...mergeLegacyRemovedChapterIds(slots.entries.map((entry) => entry.value)),
+      chapterId,
+    ]),
     chapterRemovalInventory: pending
       .filter((entry) => entry.chapterId !== chapterId)
       .concat(inventory),
@@ -729,6 +764,9 @@ export function createLibraryStore(
     return {
       ...current,
       chapterRemovalInventory: mergeChapterRemovals(slots.entries.map((entry) => entry.value)),
+      legacyRemovedChapterIds: mergeLegacyRemovedChapterIds(
+        slots.entries.map((entry) => entry.value),
+      ),
     };
   };
   const readChapterRemovalInventory = async (): Promise<ChapterRemovalInventory[]> => {
@@ -764,7 +802,80 @@ export function createLibraryStore(
     }
     return [...merged.values()];
   };
+  const readLegacyRemovedChapterIds = async () => {
+    const slots = await journal.readSlots('library/index', index);
+    if (slots.found && !slots.entries.length) throw new StorageError('corrupt');
+    return mergeLegacyRemovedChapterIds(slots.entries.map((entry) => entry.value));
+  };
+  const commitVersion = async (value: CompletedTranslation) => {
+    await completedTranslation(value);
+    check(!(await readRemovalInventory()).some((entry) => entry.workId === value.source.workId));
+    check(
+      !(await readChapterRemovalInventory()).some((entry) =>
+        entry.versionIds.includes(value.versionId),
+      ),
+    );
+    const old =
+      (await journal.loadForWrite(`versions/${value.versionId}`, completedTranslation))?.value ??
+      null;
+    if (old) check(JSON.stringify(old) === JSON.stringify(value));
+    else await journal.save(`versions/${value.versionId}`, value, completedTranslation);
+    const current = await indexForWrite();
+    const existing = current.versions.find((v) => v.versionId === value.versionId);
+    if (existing) {
+      check(
+        existing.chapterId === value.source.chapterId && existing.workId === value.source.workId,
+      );
+      return;
+    }
+    current.versions.push({
+      versionId: value.versionId,
+      chapterId: value.source.chapterId,
+      workId: value.source.workId,
+      updatedAt: value.createdAt,
+    });
+    current.recent = [
+      ...current.recent.filter((v) => v.workId !== value.source.workId),
+      {
+        versionId: value.versionId,
+        chapterId: value.source.chapterId,
+        workId: value.source.workId,
+        updatedAt: value.createdAt,
+      },
+    ];
+    await journal.save('library/index', current, index);
+  };
+  const savePosition = async (value: ReadingPosition) => {
+    await readingPosition(value);
+    check(!(await readRemovalInventory()).some((entry) => entry.workId === value.workId));
+    check(
+      !(await readChapterRemovalInventory()).some((entry) =>
+        entry.versionIds.includes(value.versionId),
+      ),
+    );
+    const version = await readVersion(value.versionId);
+    check(
+      version !== null &&
+        version.source.workId === value.workId &&
+        version.source.chapterId === value.chapterId,
+    );
+    const block = version.blocks.find((b) => b.id === value.blockId);
+    check(block !== undefined);
+    await journal.save(`reading/${value.versionId}`, value, readingPosition);
+    const current = await indexForWrite();
+    current.recent = [
+      ...current.recent.filter((v) => v.workId !== value.workId),
+      {
+        workId: value.workId,
+        chapterId: value.chapterId,
+        versionId: value.versionId,
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    await journal.save('library/index', current, index);
+  };
   return {
+    readLegacyRemovedChapterIds: () => serial(files, readLegacyRemovedChapterIds),
     readChapterRemovalInventory: () => serial(files, readChapterRemovalInventory),
     retryChapterRemoval: (chapterId) =>
       serial(files, () => removeChapterVersionData(files, journal, chapterId, undefined, true)),
@@ -834,78 +945,35 @@ export function createLibraryStore(
       }),
     commitVersion: (input) => {
       const value = snapshot(input);
-      return serial(files, async () => {
-        await completedTranslation(value);
-        check(
-          !(await readRemovalInventory()).some((entry) => entry.workId === value.source.workId),
-        );
-        check(
-          !(await readChapterRemovalInventory()).some((entry) =>
-            entry.versionIds.includes(value.versionId),
-          ),
-        );
-        const old =
-          (await journal.loadForWrite(`versions/${value.versionId}`, completedTranslation))
-            ?.value ?? null;
-        if (old) check(JSON.stringify(old) === JSON.stringify(value));
-        else await journal.save(`versions/${value.versionId}`, value, completedTranslation);
-        const current = await indexForWrite();
-        const existing = current.versions.find((v) => v.versionId === value.versionId);
-        if (existing) {
-          check(
-            existing.chapterId === value.source.chapterId &&
-              existing.workId === value.source.workId,
-          );
-          return;
-        }
-        current.versions.push({
-          versionId: value.versionId,
-          chapterId: value.source.chapterId,
-          workId: value.source.workId,
-          updatedAt: value.createdAt,
-        });
-        current.recent = [
-          ...current.recent.filter((v) => v.workId !== value.source.workId),
-          {
-            versionId: value.versionId,
-            chapterId: value.source.chapterId,
-            workId: value.source.workId,
-            updatedAt: value.createdAt,
-          },
-        ];
-        await journal.save('library/index', current, index);
-      });
+      return serial(files, () => commitVersion(value));
     },
     savePosition: (input) => {
       const value = snapshot(input);
+      return serial(files, () => savePosition(value));
+    },
+    importLegacyVersion: (input, inputPosition) => {
+      const value = snapshot(input);
+      const position = inputPosition ? snapshot(inputPosition) : undefined;
       return serial(files, async () => {
-        await readingPosition(value);
-        check(!(await readRemovalInventory()).some((entry) => entry.workId === value.workId));
-        check(
-          !(await readChapterRemovalInventory()).some((entry) =>
-            entry.versionIds.includes(value.versionId),
-          ),
-        );
-        const version = await readVersion(value.versionId);
-        check(
-          version !== null &&
-            version.source.workId === value.workId &&
-            version.source.chapterId === value.chapterId,
-        );
-        const block = version.blocks.find((b) => b.id === value.blockId);
-        check(block !== undefined);
-        await journal.save(`reading/${value.versionId}`, value, readingPosition);
-        const current = await indexForWrite();
-        current.recent = [
-          ...current.recent.filter((v) => v.workId !== value.workId),
-          {
-            workId: value.workId,
-            chapterId: value.chapterId,
-            versionId: value.versionId,
-            updatedAt: new Date().toISOString(),
-          },
-        ];
-        await journal.save('library/index', current, index);
+        await completedTranslation(value);
+        if (position) {
+          await readingPosition(position);
+          check(
+            position.versionId === value.versionId &&
+              position.workId === value.source.workId &&
+              position.chapterId === value.source.chapterId,
+          );
+        }
+        // 시작 시 읽은 삭제 표식이 오래돼도 이 큐 안에서는 삭제와 가져오기가 끼어들지 않는다.
+        if ((await readLegacyRemovedChapterIds()).includes(value.source.chapterId)) return false;
+        const existed = (await readVersion(value.versionId)) !== null;
+        await commitVersion(value);
+        let restoredPosition = false;
+        if (position && !(await journal.load(`reading/${value.versionId}`, readingPosition))) {
+          await savePosition(position);
+          restoredPosition = true;
+        }
+        return !existed || restoredPosition;
       });
     },
     readPosition: (versionId) =>
