@@ -32,6 +32,11 @@ JDK의 `keytool`로 저장소 **밖**에 만든다. 비밀번호는 실행할 �
 
 ## 3. 릴리스 빌드
 
+Node는 `.nvmrc`의 버전(현재 24.21.0)을 사용한다. CI도 같은 파일을 읽는다.
+`npm ci`는 Git으로 고정된 Capacitor SystemBars 패치를 적용한다. 이미 적용된
+패치는 유지하고, 패키지 버전이나 패치 대상이 다르면 설치를 실패시킨다.
+CLI의 `xcode`에 사용하는 `uuid`는 CommonJS 호환 보안 수정 버전 11.1.1로 고정한다.
+
 병합 커밋을 깨끗한 작업 폴더(detached worktree)에 꺼내 빌드한다.
 
 ```bash
