@@ -114,7 +114,7 @@ JHF Novel Reader는 **내 컴퓨터의 로컬 모델**로 번역해서 이런 �
 
 앱 코드는 [MIT 라이선스](LICENSE)예요. 소설 원문과 번역의 권리는 각 작품의 저작권자에게 있어요. 포함된 오픈소스는 앱의 **설정 → 오픈소스 라이선스**와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에서 볼 수 있어요. 나로우 페이지 해석에는 [LNReader](https://github.com/LNReader/lnreader-plugins)의 Syosetu 플러그인 구조를 참고했어요(MIT).
 
-[release-shield]: https://img.shields.io/badge/release-v1.0.0-5B5BD6?style=flat-square
+[release-shield]: https://img.shields.io/badge/release-v1.0.1-5B5BD6?style=flat-square
 [release-url]: https://github.com/earlydreamer/jhf-novel-reader/releases
 [android-shield]: https://img.shields.io/badge/Android-7.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white
 [license-shield]: https://img.shields.io/badge/license-MIT-blue?style=flat-square
