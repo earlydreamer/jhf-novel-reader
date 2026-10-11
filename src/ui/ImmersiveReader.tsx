@@ -674,7 +674,10 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           </>
         ) : (
           <>
-            <p>요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요.</p>
+            <p>
+              요청이 이미 처리됐을 수 있어 자동으로 다시 보내지 않아요. 다시 번역하면 중복으로
+              처리되거나 비용이 생길 수 있어요.
+            </p>
             <Button
               variant="outlined"
               disabled={active || !props.connected || !props.selectedModelId}

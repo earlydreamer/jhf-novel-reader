@@ -710,9 +710,9 @@ test('automatic start does not repeat an unfinished chapter request when reselec
   const chapter = h.app.getSnapshot().work!.chapters[0]!;
   await h.app.selectChapter(chapter);
   await vi.waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('unknown'));
-  // 첫 전송과 자동 재전송 1회(#254). 다시 고른 뒤에는 더 보내지 않아야 한다.
+  // 결과 불명 요청은 처음에도, 회차를 다시 골라도 자동으로 재전송하지 않는다(#300).
   const sent = h.requests.filter((r) => r.method === 'POST').length;
-  expect(sent).toBe(2);
+  expect(sent).toBe(1);
   h.app.showContents();
   await h.app.selectChapter(chapter);
   expect(h.app.getSnapshot().translation.phase).toBe('unknown');

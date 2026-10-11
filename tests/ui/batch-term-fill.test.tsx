@@ -391,23 +391,37 @@ function renderRecord(record: BatchRecord, props: Partial<BatchPanelProps> = {})
   });
 }
 
-test('확인 필요 상태는 로컬 서버면 재요청 비용 없는 문구와 재개 버튼을 보인다', () => {
-  const props = renderRecord(recordWith({ phase: 'unknown', scan: undefined }));
-  render(<BatchPanel {...props} />);
-  expect(
-    screen.getByText(
-      '이전 요청 결과를 확인하지 못했어요. 로컬 서버라 다시 요청해도 비용은 들지 않아요. 재개하면 이 회차를 다시 요청해요.',
-    ),
-  ).toBeVisible();
-  expect(screen.queryByText(/비용이 생길 수/)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '일괄 번역 재개' }));
-  expect(props.onRunBatch).toHaveBeenCalledWith(true);
-  expect(
-    screen.getByText(
-      '재개하지 않으려면 위에서 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.',
-    ),
-  ).toBeVisible();
-});
+test.each([
+  'https://synthetic-compatible.example.test/v1',
+  'http://localhost:1234',
+  'http://192.168.0.123:8080',
+])(
+  '확인 필요 상태는 호환 API 주소 %s에서도 중복 처리·비용을 알리고 명시적으로 재개한다',
+  (baseUrl) => {
+    const record = recordWith({ phase: 'unknown', scan: undefined });
+    const props = renderRecord({
+      ...record,
+      selection: { ...record.selection, connection: { ...record.selection.connection, baseUrl } },
+    });
+    render(<BatchPanel {...props} />);
+    expect(
+      screen.getByText(
+        '이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/비용은 들지 않아요/)).not.toBeInTheDocument();
+    expect(props.onRunBatch).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: '중복 처리 가능성을 확인하고 일괄 번역 재개' }),
+    );
+    expect(props.onRunBatch).toHaveBeenCalledWith(true);
+    expect(
+      screen.getByText(
+        '재개하지 않으려면 위에서 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.',
+      ),
+    ).toBeVisible();
+  },
+);
 
 test('확인 필요 상태는 Gemini 연결이면 중복·비용 문구와 기존 버튼 문구를 보인다', () => {
   const props = renderRecord(
