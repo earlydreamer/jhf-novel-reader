@@ -1,5 +1,7 @@
 package dev.earlydreamer.jhfreader;
 
+import android.system.ErrnoException;
+import android.system.Os;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -8,6 +10,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -161,9 +165,26 @@ final class BackupRestoreTransaction {
             file.getFD().sync();
         }
         checkpoint.after(record.phase + "-synced");
-        // Android의 같은 파일시스템 rename은 기존 상태 파일을 원자적으로 교체한다.
-        if (!file(TEMP).renameTo(file(STATE))) throw new IOException("cannot persist restore state");
+        // Android는 POSIX rename으로, 호스트 JVM은 NIO atomic move로 기존 기록을 교체한다.
+        replaceState(file(TEMP), file(STATE));
         checkpoint.after(record.phase + "-recorded");
+    }
+
+    private static void replaceState(File source, File destination) throws IOException {
+        if (System.getProperty("java.vm.name", "").contains("Dalvik")) {
+            try {
+                Os.rename(source.getAbsolutePath(), destination.getAbsolutePath());
+            } catch (ErrnoException failure) {
+                throw new IOException("cannot persist restore state", failure);
+            }
+            return;
+        }
+        try {
+            Files.move(source.toPath(), destination.toPath(),
+                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException failure) {
+            throw new IOException("cannot persist restore state", failure);
+        }
     }
 
     private Record read() throws IOException {
