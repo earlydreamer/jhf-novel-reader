@@ -811,6 +811,7 @@ test('행동이 필요한 안내는 떠 있는 카드에 두고 닫으면 같은
 
   const float = screen.getByRole('region', { name: '번역 안내' });
   const article = screen.getByRole('article', { name: '번역 미리보기' });
+  expect(float).toHaveTextContent('다시 번역하면 중복으로 처리되거나 비용이 생길 수 있어요.');
   expect(float).toContainElement(screen.getByRole('button', { name: '확인하고 다시 번역하기' }));
   expect(article).not.toContainElement(float);
 

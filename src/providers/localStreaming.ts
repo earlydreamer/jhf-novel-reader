@@ -182,40 +182,28 @@ export async function translateLocalStream(
           preview(values, true);
         });
       let response;
-      // 로컬 서버가 응답 없이 멈추면(결과 불명) 같은 요청을 한 번만 다시 보낸다(#254).
-      // 로컬 서버는 중복 요청 비용이 없다. 자동 재시도를 끈 사용자는 다시 보내지 않는다.
-      const resendLimit = selection.autoRetryFailed === false ? 0 : 1;
-      for (let send = 0; ; send++) {
-        const parser = makeParser();
-        try {
-          response = await transport.streamPost(
-            {
-              url,
-              // thinking 모델이 추론 토큰만 소진하고 번역 결과를 비우는 것을 막는다.
-              body: {
-                model,
-                messages,
-                stream: true,
-                max_tokens: limits.maxOutputTokens,
-                reasoning_effort: 'none',
-              },
-              ...(authorization ? { authorization } : {}),
+      // 결과 불명 요청은 이미 처리·과금됐을 수 있다. 검증 재시도와 달리 자동 재전송하지 않는다.
+      const parser = makeParser();
+      try {
+        response = await transport.streamPost(
+          {
+            url,
+            // thinking 모델이 추론 토큰만 소진하고 번역 결과를 비우는 것을 막는다.
+            body: {
+              model,
+              messages,
+              stream: true,
+              max_tokens: limits.maxOutputTokens,
+              reasoning_effort: 'none',
             },
-            signal,
-            (data) => parser.push(data),
-          );
-          break;
-        } catch (error) {
-          const unknown =
-            !signal.aborted &&
-            (!(error instanceof ReaderError) ||
-              (error.code === 'timeout_unknown' && error.outcome === 'unknown'));
-          if (unknown && send < resendLimit) {
-            continue;
-          }
-          if (error instanceof ReaderError) throw error;
-          throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
-        }
+            ...(authorization ? { authorization } : {}),
+          },
+          signal,
+          (data) => parser.push(data),
+        );
+      } catch (error) {
+        if (error instanceof ReaderError) throw error;
+        throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
       }
       if (signal.aborted) throw new ReaderError('cancelled', 'unknown');
       if (response.status === 401 || response.status === 403)

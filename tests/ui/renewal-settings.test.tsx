@@ -233,12 +233,12 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('실패한 문단 자동 재번역 설명은 로컬 서버 재전송을 함께 알려요(#270)', async () => {
+  it('자동 재번역은 검증 재시도의 비용과 결과 불명 요청의 중단을 알려요(#300)', async () => {
     const value = await setup();
 
     expect(
       screen.getByText(
-        '읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 로컬 서버가 응답 없이 멈춘 요청도 한 번 다시 보내요.',
+        '읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요.',
       ),
     ).toBeVisible();
     value.controller.dispose();

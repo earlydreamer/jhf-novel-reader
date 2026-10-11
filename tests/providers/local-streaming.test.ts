@@ -404,7 +404,7 @@ test('automatic retry off accepts a paragraph with a missing rendering after one
   expect(value.text).toBe('르시아나는 웃었다.');
   expect(value.failedParagraphs).toBeUndefined();
 });
-test('resends a stalled local request once, never an authentication response', async () => {
+test('never resends an authentication response', async () => {
   const auth = fixture();
   auth.transport.streamPost = vi.fn(async () => {
     throw new ReaderError('auth', 'received', 401);
@@ -416,33 +416,86 @@ test('resends a stalled local request once, never an authentication response', a
     ),
   ).rejects.toMatchObject({ code: 'auth' });
   expect(auth.transport.streamPost).toHaveBeenCalledTimes(1);
-
-  const stalled = fixture();
-  stalled.transport.streamPost = vi.fn(async () => {
+});
+test.each(
+  [
+    'https://synthetic-compatible.example.test/v1',
+    'http://localhost:1234',
+    'http://192.168.0.123:8080',
+  ].flatMap((baseUrl) =>
+    [undefined, true, false].map((autoRetryFailed) => ({ baseUrl, autoRetryFailed })),
+  ),
+)(
+  'never automatically resends an unknown outcome at $baseUrl with retry $autoRetryFailed',
+  async ({ baseUrl, autoRetryFailed }) => {
+    const f = fixture();
+    f.transport.streamPost = vi.fn(async () => {
+      throw new ReaderError('timeout_unknown', 'unknown');
+    });
+    const provider = createProviderSession(
+      {
+        ...selection,
+        connection: { ...selection.connection, baseUrl, authRef: 'synthetic-key-ref' },
+        ...(autoRetryFailed === undefined ? {} : { autoRetryFailed }),
+      },
+      f.transport,
+      { ...secrets, get: async () => 'synthetic-key' },
+    );
+    await expect(
+      provider.translateChapter(request, new AbortController().signal),
+    ).rejects.toMatchObject({
+      code: 'timeout_unknown',
+      outcome: 'unknown',
+    });
+    expect(f.transport.streamPost).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(f.transport.streamPost).mock.calls[0]![0]).toMatchObject({
+      url: `${baseUrl.replace(/\/v1$/, '')}/v1/chat/completions`,
+      authorization: 'Bearer synthetic-key',
+    });
+  },
+);
+test('propagates an unclassified transport failure without silently resending', async () => {
+  const f = fixture();
+  f.transport.streamPost = vi.fn(async () => {
+    throw new Error('synthetic connection lost');
+  });
+  await expect(
+    f.provider.translateChapter(request, new AbortController().signal),
+  ).rejects.toMatchObject({
+    code: 'timeout_unknown',
+    outcome: 'unknown',
+  });
+  expect(f.transport.streamPost).toHaveBeenCalledTimes(1);
+});
+test('does not replay a request after receiving a preview then losing the result', async () => {
+  const f = fixture();
+  const onPreview = vi.fn();
+  f.transport.streamPost = vi.fn(async (_input, _signal, onData) => {
+    onData(delta('<main><p id="A">도착한 미리보기'));
     throw new ReaderError('timeout_unknown', 'unknown');
   });
   await expect(
-    createProviderSession(selection, stalled.transport, secrets).translateChapter(
-      request,
+    f.provider.translateChapter({ ...request, onPreview }, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'timeout_unknown', outcome: 'unknown' });
+  expect(onPreview).toHaveBeenCalledWith('도착한 미리보기');
+  expect(f.transport.streamPost).toHaveBeenCalledTimes(1);
+});
+test('validation retry still runs once but its unknown outcome is not replayed', async () => {
+  const f = fixture(() => '<main><p id="A">まだ</p></main>');
+  const original = f.transport.streamPost!;
+  f.transport.streamPost = vi.fn((input, signal, onData) => {
+    if (f.calls.length) throw new ReaderError('timeout_unknown', 'unknown');
+    return original(input, signal, onData);
+  });
+  await expect(
+    f.provider.translateChapter(
+      { ...request, source: { ...chapter, paragraphs: chapter.paragraphs.slice(0, 1) } },
       new AbortController().signal,
     ),
-  ).rejects.toMatchObject({ code: 'timeout_unknown' });
-  expect(stalled.transport.streamPost).toHaveBeenCalledTimes(2);
-
-  const off = fixture();
-  off.transport.streamPost = vi.fn(async () => {
-    throw new ReaderError('timeout_unknown', 'unknown');
-  });
-  await expect(
-    createProviderSession(
-      { ...selection, autoRetryFailed: false },
-      off.transport,
-      secrets,
-    ).translateChapter(request, new AbortController().signal),
-  ).rejects.toMatchObject({ code: 'timeout_unknown' });
-  expect(off.transport.streamPost).toHaveBeenCalledTimes(1);
+  ).rejects.toMatchObject({ code: 'timeout_unknown', outcome: 'unknown' });
+  expect(f.transport.streamPost).toHaveBeenCalledTimes(2);
 });
-test('continues after one stalled local request', async () => {
+test('a new explicit translation can proceed after an unknown outcome', async () => {
   const f = fixture();
   const original = f.transport.streamPost!;
   let stalled = false;
@@ -453,8 +506,16 @@ test('continues after one stalled local request', async () => {
     }
     return original(input, signal, onData);
   });
+  const provider = createProviderSession(selection, f.transport, secrets);
+  await expect(
+    provider.translateChapter(request, new AbortController().signal),
+  ).rejects.toMatchObject({
+    code: 'timeout_unknown',
+    outcome: 'unknown',
+  });
+  expect(f.transport.streamPost).toHaveBeenCalledTimes(1);
   let total = 0;
-  const value = await createProviderSession(selection, f.transport, secrets).translateChapter(
+  const value = await provider.translateChapter(
     { ...request, onProgress: (_done, all) => (total = all) },
     new AbortController().signal,
   );

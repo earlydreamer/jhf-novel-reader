@@ -129,8 +129,6 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   // 채우기 결과는 이 기록의 것만 쓴다.
   const fill = record && props.batchFill?.recordId === record.id ? props.batchFill : null;
   const fillResult = fill?.phase === 'done' ? fill.result : undefined;
-  // 로컬 서버는 다시 요청해도 비용이 없다. 문구와 버튼은 연결 종류에 맞춘다.
-  const local = record?.selection.connection.provider === 'openai-compatible';
   // 범위 칸의 기본값: 기록이 있으면 그 범위, 없으면 1화부터 작품의 마지막 회차까지.
   const rangeKey = record?.id ?? 'none';
   const firstDefault = record?.chapters[0]?.ordinal ?? 1;
@@ -283,15 +281,14 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           {record.phase === 'unknown' && (
             <>
               <p>
-                {local
-                  ? '이전 요청 결과를 확인하지 못했어요. 로컬 서버라 다시 요청해도 비용은 들지 않아요. 재개하면 이 회차를 다시 요청해요.'
-                  : '이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.'}
+                이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수
+                있어요.
               </p>
               <button
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.(true)}
               >
-                {local ? '일괄 번역 재개' : '중복 처리 가능성을 확인하고 일괄 번역 재개'}
+                중복 처리 가능성을 확인하고 일괄 번역 재개
               </button>
               <p>
                 재개하지 않으려면 위에서 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.

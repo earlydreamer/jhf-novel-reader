@@ -233,7 +233,7 @@ test('a title missing its locked rendering is requested once more with the requi
   expect(h.requests).toHaveLength(2);
   expect(JSON.stringify(h.requests[1]!.body.messages)).toContain('アリス → 앨리스');
 });
-test('unknown title transport outcomes are resent once, then propagated', async () => {
+test('unknown title transport outcomes propagate without automatic replay', async () => {
   const h = harness();
   h.streamPost.mockRejectedValue(new ReaderError('timeout_unknown', 'unknown'));
   const translate = createTitleTranslation(
@@ -257,5 +257,5 @@ test('unknown title transport outcomes are resent once, then propagated', async 
       new AbortController().signal,
     ),
   ).rejects.toMatchObject({ code: 'timeout_unknown' });
-  expect(h.streamPost).toHaveBeenCalledTimes(2);
+  expect(h.streamPost).toHaveBeenCalledTimes(1);
 });

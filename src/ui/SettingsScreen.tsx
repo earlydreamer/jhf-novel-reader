@@ -594,7 +594,7 @@ export function SettingsScreen({
         {onAutoRetryFailed && (
           <Switch
             label="실패한 문단 자동으로 다시 번역"
-            description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 로컬 서버가 응답 없이 멈춘 요청도 한 번 다시 보내요."
+            description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요."
             checked={state.autoRetryFailed}
             onChange={onAutoRetryFailed}
           />
