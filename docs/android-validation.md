@@ -4,7 +4,7 @@ Renewal acceptance is tracked by [#25](https://github.com/earlydreamer/jhf-novel
 
 ## Rebuild the same source
 
-Prerequisites: Node 24 (minimum 22.12), Java 21, Android SDK platform 36, build-tools 35.0.0, and the checked-in Gradle 8.14.3 wrapper. Use the installed SDK's accepted licenses; do not automatically accept new agreements, disable certificate checking, add trust anchors, or change firewall/VPN settings to make a build pass.
+Prerequisites: Node 24.21.0 (`.nvmrc`; package engines allow `^22.22.2 || ^24.15.0 || >=26.0.0`), Java 21, Android SDK platform 36, build-tools 35.0.0, and the checked-in Gradle 8.14.3 wrapper. Use the installed SDK's accepted licenses; do not automatically accept new agreements, disable certificate checking, add trust anchors, or change firewall/VPN settings to make a build pass.
 
 From a clean, committed checkout:
 
@@ -48,6 +48,10 @@ Capacitor 8.5.2 injects its trusted inline native bootstrap immediately after li
 Reference: [Android network security](https://developer.android.com/privacy-and-security/security-config), [local-network permissions](https://developer.android.com/privacy-and-security/local-network-permission), [Capacitor configuration](https://capacitorjs.com/docs/config), [CSP meta semantics](https://www.w3.org/TR/CSP/#meta-element). Target 36 currently uses `INTERNET` for LAN; reconsider local-network permissions before raising target SDK. INTERNET is not a runtime consent dialog. Do not invent a denied-permission test for a permission the app does not request.
 
 ## Automated evidence versus device evidence
+
+### Restore-state replacement across host and device filesystems
+
+`BackupRestoreTransaction` replaces its synced temporary state marker atomically. Android production code uses `Os.rename`, whose same-filesystem POSIX rename replaces the existing marker. Host JVM tests inject `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)`; the replacement of an existing marker is verified on Windows Java 21/NTFS. Java specifies that `ATOMIC_MOVE` may ignore other options and leaves replacement of an existing target implementation-dependent, so this host test is evidence for the tested provider, not a guarantee for every host filesystem. If the host cannot perform the requested atomic move, the operation fails; it never deletes the existing marker as a fallback. These host tests use temporary directories and synthetic content. The Linux Android workflow runs the full `:app:testDebugUnitTest` suite, including POSIX permission-failure cleanup cases. On Windows, the complete JVM suite executes 51 tests: 46 pass, while five existing cleanup-failure tests fail because `File.setWritable(false)` does not prevent deletion on Windows as it does on POSIX (`BackupArchiveTest.failedAbortBlocksCommitAndNewPreparationUntilCleanupSucceeds`, `failedPrepareCleanupPreventsAReplacementSession`, `placementFailureRestoresOriginalTreeWithoutDeletingTheStage`, `BackupRestoreTransactionTest.failureDeletingTheFinalMarkerNeverRollsBackCommittedData`, and `terminalCleanupFailureKeepsItsDecisionAcrossRepeatedRecovery`). Do not count those as Windows passes. The Android `Os.rename` path still requires a physical-device backup/restore round trip. Do not use the app's production-data instrumentation target for this suite.
 
 | Layer | What it establishes | What it does not establish |
 | --- | --- | --- |

@@ -38,6 +38,9 @@ jobs:
       - run: npm test -- --run
       - run: npm run build
       - run: npx cap sync android
+      - name: Run Android app host JVM suite
+        working-directory: android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Compile app and device-test APKs
         working-directory: android
         run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
