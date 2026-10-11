@@ -1300,3 +1300,54 @@ it('startup finishes failed chapter cleanup after its saved-chapter action disap
   expect(h.posts()).toEqual([]);
   later.dispose();
 });
+
+it('keeps rotated credentials throughout the session and reclaims them only at a later startup', async () => {
+  const h = harness();
+  await prepare(h);
+  await h.app.checkConnection('synthetic-old');
+  const oldRef = h.app.getSnapshot().connection.authRef!;
+  await h.app.checkConnection('synthetic-new');
+  const newRef = h.app.getSnapshot().connection.authRef!;
+  await vi.waitFor(async () =>
+    expect(
+      (await h.adapters.preferences.get({ key: 'narou-reader.reading-settings.v2' })).value,
+    ).toContain(newRef),
+  );
+  expect(await h.adapters.secrets.get(oldRef)).toBe('synthetic-old');
+  h.app.dispose();
+  expect(await h.adapters.secrets.get(oldRef)).toBe('synthetic-old');
+  const { cleanupUnreferencedCredentials } = await import('../../src/storage/credentialCleanup');
+  await cleanupUnreferencedCredentials(h.adapters.files, h.adapters.preferences, {
+    ...h.adapters.secrets,
+    keys: async () => [oldRef, newRef],
+  });
+  expect(await h.adapters.secrets.get(oldRef)).toBeNull();
+  expect(await h.adapters.secrets.get(newRef)).toBe('synthetic-new');
+});
+
+it('preserves the durable credential after a successful catalog rotation whose settings save fails', async () => {
+  const h = harness();
+  await prepare(h);
+  await h.app.checkConnection('synthetic-old');
+  const oldRef = h.app.getSnapshot().connection.authRef!;
+  await vi.waitFor(async () =>
+    expect(
+      (await h.adapters.preferences.get({ key: 'narou-reader.reading-settings.v2' })).value,
+    ).toContain(oldRef),
+  );
+  h.adapters.preferences.set = async () => {
+    throw Error('synthetic write failure');
+  };
+  await h.app.checkConnection('synthetic-new');
+  const newRef = h.app.getSnapshot().connection.authRef!;
+  await vi.waitFor(() => expect(h.app.getSnapshot().error).toContain('설정을 저장하지 못했어요'));
+  expect(await h.adapters.secrets.get(oldRef)).toBe('synthetic-old');
+  h.app.dispose();
+  const { cleanupUnreferencedCredentials } = await import('../../src/storage/credentialCleanup');
+  await cleanupUnreferencedCredentials(h.adapters.files, h.adapters.preferences, {
+    ...h.adapters.secrets,
+    keys: async () => [oldRef, newRef],
+  });
+  expect(await h.adapters.secrets.get(oldRef)).toBe('synthetic-old');
+  expect(await h.adapters.secrets.get(newRef)).toBeNull();
+});

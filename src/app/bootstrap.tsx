@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { Application } from './Application';
 import { createNativeRenewalApplication } from './compose';
+import { cleanupNativeCredentialsBeforeStartup } from '../storage/credentialCleanup';
 import { recoverBackupBeforeStartup } from '../platform/backup';
 // The trusted application composes native-only source, model and private storage adapters.
 const container = typeof document === 'undefined' ? null : document.getElementById('root');
@@ -13,6 +14,7 @@ if (container) {
     rootContainer.textContent = '저장 데이터를 확인하고 있어요.';
     try {
       await recoverBackupBeforeStartup();
+      await cleanupNativeCredentialsBeforeStartup();
     } catch {
       recovering = false;
       const message = document.createElement('p');
