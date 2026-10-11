@@ -1,58 +1,58 @@
-# Private storage (#4)
+# 앱 전용 저장소
 
-## Composition API
+현재 앱은 `src/storage/library.ts`의 서재 저장소와 `createReadingSettingsRepository`를 사용합니다. 작품·회차의 번역 버전, 원문 스냅샷, 읽기 위치를 관리하며 구형 데이터는 `migration.ts`·`legacyMigration.ts`에서 다룹니다. 초기 이슈 #4의 `ReaderStore`·체크포인트 계약은 v1 자료의 해석과 이전을 위한 기록입니다.
 
-Production composition in issue #6 can import:
+## 저장 영역과 설정
 
-- `createNativeReaderStore()` and `createNativeSettingsRepository()` from `src/storage/native`.
-- `createNativeSecretStore()` / `createProviderSecrets(nativeStore)` from `src/storage/secrets`.
-- `createReaderStore(files)` / `createSettingsRepository(preferences)` for injected fixture backends.
+본문 파일은 네이티브 Capacitor Filesystem의 `Directory.LibraryNoCloud`에 UTF-8로 저장합니다. Android에서는 앱 내부 파일, iOS 구현에서는 클라우드에 동기화하지 않는 Library 영역입니다. 브라우저 Filesystem이나 공개·외부 저장소 권한을 대체 수단으로 사용하지 않습니다.
 
-Reader methods implement the unmodified shared `ReaderStore` contract. Settings provide `read()` and `save({config, preferences})`; an absent configuration returns `config: null`, font size 18 and prefetch OFF. The app should show setup when config is null. Fonts accept integral 10–48 px; budgets must be positive safe integers with output smaller than context. Preferences do not include the credential or its value, only an optional opaque `authRef`.
+작은 설정은 Preferences에, 비밀값은 OS 보안 저장소에 분리합니다. 현재 읽기 설정은 `schemaVersion: 2`이며 저장된 설정이 없으면 모델 선택은 `null`, 글자 크기는 18입니다. 글자 크기는 정수 10–48 px를 허용합니다. 현재 설정을 초기 `prefetchEnabled` 기반 설정과 혼용하지 않습니다.
 
-`createProviderSecrets` offers `get(ref)`, `save(ref, secret, persist = false)` and `remove(ref)`. Persistence is an explicit opt-in. Session mode first removes the old durable value for the same reference, then retains the new value only in memory. This deletion can fail; the caller must display the error and must not claim the prior credential was removed. Removal is scoped to one reference, so switching/removing one provider cannot erase another provider's secret. No plugin-wide clear is used. The higher-level coordinator is intended for the native app. `createSessionSecretStore()` is a separate deliberately ephemeral implementation for explicit session-only use; it is never substituted after native errors.
+일괄 작업 기록은 `batches/current` 두 슬롯 저널을 사용합니다. 복구와 재개 규칙은 [일괄 번역](renewal/batch-translation.md)에 있습니다. 백업에는 API 키 자체를 넣지 않으며 복원 후 인증값을 다시 입력해야 합니다. 앱 시작은 중단된 네이티브 백업 복구 뒤에 진행합니다.
 
-Keep one composed store/coordinator for the application. All reader repositories sharing a file adapter serialize reads and writes through a shared queue; production factories use one adapter. Credential operations likewise serialize plugin setup with the operation. Multiple operating-system processes or distinct custom adapters writing the same paths are not supported. Stale jobs and settings revisions must still be rejected by #6 before persistence. Storage does not claim to cancel or arbitrate translation jobs.
+## 두 슬롯 저널
 
-## Body files and durability protocol
+각 레코드는 `name.0.json`과 `name.1.json` 두 슬롯을 사용합니다. 봉투에는 `format: 1`, 양의 세대 번호, 본문, `[format, generation, payload]`의 SHA-256 체크섬을 저장합니다.
 
-The Capacitor Filesystem adapter is native-only. It uses `Directory.LibraryNoCloud`, which maps to app-internal files on Android and the non-cloud Library on iOS, with UTF-8 data. It never requests public/external storage permission and never uses the browser Filesystem implementation. Production paths are constrained below `narou-reader/chapters/` and `narou-reader/positions/`. Position filenames hash the chapter identity; cache filenames use the shared fingerprint key.
+1. 입력을 복사하고 실행 시점의 형식·식별자·필수 내용을 검증합니다.
+2. 두 슬롯의 형식·체크섬·본문을 읽어 가장 높은 유효 세대를 고릅니다.
+3. 최신 유효 슬롯은 유지하고 반대 슬롯에 다음 세대를 기록합니다.
+4. 기록한 바이트를 다시 읽어 일치하는지 확인한 뒤 저장을 완료합니다.
 
-Each record uses two journal slots, `name.0.json` and `name.1.json`. Each envelope has `format: 1`, a positive generation, a payload and a SHA-256 checksum of `[format, generation, payload]`.
+파일 이름 변경의 원자성을 가정하지 않습니다. 비활성 슬롯의 부분 기록은 이전 유효 슬롯을 남깁니다. 프로세스 종료 직전에 새 세대가 완전히 기록됐다면 재시작 때 그 세대를 복구할 수 있습니다. 쓰기 결과가 실패로 돌아오면 저장 성공을 단정하지 않으며, 번역 결과가 남아 있는 흐름에서는 모델 호출 없이 저장을 재시도합니다.
 
-1. Snapshot the input and validate its entire runtime shape, identity and required content.
-2. Read both slots and validate their envelope, checksum and payload. Select the highest valid generation.
-3. Write the next generation into the other slot, preserving the newest valid slot unchanged.
-4. Read the written bytes back and verify equality before resolving the commit promise.
+체크섬은 우발적 손상을 감지하며 앱 전용 파일을 조작할 권한이 있는 공격자를 막는 장치는 아닙니다. 네이티브 API는 명시적 fsync 장벽을 제공하지 않습니다. 전원 손실·제조사 저장 장치·실제 강제 종료의 내구성은 기기 검증이 필요합니다.
 
-No rename-overwrite guarantee is assumed. A process interruption or partial write to the inactive slot leaves the previous slot available; a restart selects the highest fully valid record. If the write fully reached storage just before the process died, restart may recover that fully validated generation. If a write fails after bytes are accepted, the caller still sees a failure and may safely retry storage using the already completed translation, without calling the model again.
+공유 파일 어댑터의 작업은 직렬화합니다. 별도 OS 프로세스나 서로 다른 사용자 정의 어댑터가 같은 경로에 동시에 쓰는 경우는 지원 범위가 아닙니다. 오래된 작업의 저장 방지는 컨트롤러도 함께 담당합니다.
 
-`commitChapter` is the durable-ready boundary. Checkpoints and completed chapters are separate payload alternatives, and a checkpoint cannot downgrade an already completed record for the same key. Committing the complete chapter replaces checkpoint state in one journal generation. Prior checkpoints may still physically exist in the recovery slot. There is no network dependency for loading source, translation or position.
+## 검증과 오류
 
-The checksum detects accidental corruption, not malicious tampering by an actor who already controls app-private files. Native file writes do not expose an explicit fsync barrier. Power-loss durability, Android OEM storage behavior and real kill/restart behavior require device validation; mocked tests do not establish those properties.
+알 수 없는 필드·지원하지 않는 스키마·잘못된 식별자·본문 구조를 검사합니다. 지원하지 않는 미래 형식은 이전 유효 슬롯이 있어도 임의로 덮어쓰지 않습니다. 손상된 최신 슬롯은 유효한 이전 슬롯으로 복구할 수 있지만, 두 슬롯이 모두 손상됐으면 캐시 누락으로 숨기지 않고 `corrupt`로 처리합니다.
 
-## Validation, schemas and recovery
+명시적인 ENOSPC/EDQUOT는 `disk_full`, 그 밖의 저장 오류는 `io`로 분류합니다. 플러그인이 저장 공간 부족의 원인 코드를 드러내지 않으면 `io`로 남을 수 있습니다. 문서화된 파일 없음 코드만 누락으로 취급하며 권한 오류를 누락으로 바꾸지 않습니다. 원시 경로·오류 메시지·본문·키는 로그나 공개 오류에 남기지 않습니다.
 
-- Inputs and restored payloads reject unknown fields, missing/duplicate translation IDs and empty nonblank-source translations, inconsistent chapter/token identity and invalid ruby ranges. Completed IDs must match the complete source paragraph order exactly. Blank source paragraphs are retained; their corresponding translated paragraphs must preserve the exact original whitespace. Nonblank or split segments still require nonblank translations.
-- A checkpoint contains only `validated: true` chunks with unique chunk and output IDs. Split-segment IDs are permitted because splitting/reassembly belongs to #6; the orchestrator must establish semantic completeness before creating a validated chunk.
-- The shared cache key is recomputed from canonical URL, source hash, provider, endpoint, model, prompt version and direction. Source identity must agree with the embedded chapter. Source bytes are not independently rehashed with a second parser algorithm. Secrets never participate in this fingerprint.
-- URLs in stored configuration/identity reject unsupported schemes, userinfo, query and fragments, preventing credentials from being embedded in endpoint URLs. Source URL fields additionally require HTTPS.
-- Envelope, chapter/checkpoint and settings schema 1 are the first persisted versions. There is no released schema 0 to migrate. Future envelope/payload/settings versions fail with `unsupported_schema` and are not overwritten, even when an older valid slot exists. Schema versions are identified before applying the v1 field allowlist, so future versions with new fields remain protected. A later schema migration must explicitly validate the old version, transform to the new payload and commit through this journal; there is no best-effort downgrade or speculative migration.
-- A corrupt latest slot falls back to a valid older slot. Two corrupt slots throw `corrupt`, not a cache miss. An explicit new validated save can rebuild a fully corrupt body/position record; reads never silently reset it. Unknown schemas and I/O failures remain protected from overwrite.
-- Settings corruption throws instead of silently turning prefetch on or replacing the user's configuration. An absent record alone returns defaults. This first version has no destructive settings-reset UI/API.
-- Explicit ENOSPC/EDQUOT errors map to `disk_full`; other plugin errors map to `io`. Capacitor's wrapped Android ENOSPC error is classified without retaining its path or message. A native implementation that does not expose the underlying storage-full code remains `io`.
-- Only the plugin's documented file-not-found code becomes a missing record. Permission errors never become cache misses. Raw native messages, paths, body text and secrets are neither retained in exceptions nor logged.
+읽기 위치는 본문과 별도로 저장합니다. 픽셀 오프셋은 검증하고 실제 표시 높이에 맞게 조정합니다. 오래된 위치나 사라진 문단을 현재 화면에 그대로 적용하지 않습니다. 화면·위치 복원 규칙은 [통합 흐름](integration.md)을 확인합니다.
 
-Read positions are stored independently by chapter ID, with the paragraph ordinal observed by a read/commit. Existing IDs preserve validated integer pixel offsets; the UI clamps them to rendered height rather than character count. A removed ID moves to the nearest valid saved ordinal with offset zero; unknown positions fall back to the first paragraph. Call `read` before saving a position after app restart so the repository can remember the paragraph's ordinal. Different cached translations of one chapter share that chapter's last position.
+## 인증값 보관
 
-## Native secret guarantees and limits
+`createNativeSecretStore`는 Android/iOS 네이티브에서만 보안 저장 플러그인을 호출합니다. 웹 구현은 평문 localStorage이므로 웹·알 수 없는 플랫폼은 호출 전에 거부합니다. 설정이나 네이티브 오류가 나도 Preferences·파일·localStorage로 우회하지 않습니다.
 
-Only Android/iOS native platforms may call `@aparajita/capacitor-secure-storage`. Web and unknown platforms reject before any plugin call because the plugin's web implementation is plaintext localStorage. Every operation awaits fixed prefix `narou-reader.credentials.`, synchronization OFF and `KeychainAccess.whenUnlockedThisDeviceOnly` setup. Raw `getItem`/`setItem` preserve the credential string without JSON conversion. Backend/setup errors are surfaced as sanitized storage errors; there is no Preferences, file or localStorage fallback.
+고정 접두사 `narou-reader.credentials.`, 동기화 끄기, `KeychainAccess.whenUnlockedThisDeviceOnly` 설정을 마친 뒤 작업합니다. `getItem`/`setItem`으로 문자열을 그대로 보관합니다. Android에서는 Keystore/AES-GCM 구현을 사용합니다. JavaScript 메모리의 인증값은 가비지 컬렉션까지 남을 수 있으며 완전한 메모리 소거를 보장하지 않습니다.
 
-Android uses the selected plugin's Keystore/AES-GCM implementation. Existing foundation backup exclusions remain unchanged. This PR does not prove hardware-backed keys, Keystore availability, uninstall behavior, actual backup/restore exclusions, iOS Keychain behavior or iOS support of the complete app. Credentials can remain in process memory until garbage collection; JavaScript cannot guarantee zeroization. No genuine keys or provider calls are used in tests.
+현재 앱은 연결·인증값 교체 때 이전 키를 즉시 삭제하지 않습니다. 진행 중이거나 중단된 작업의 참조와 두 복구 슬롯을 보존하고 새 실행 환경의 시작 시점에만 안전하게 정리합니다. 상세 규칙은 [인증값 보존과 회수](renewal/credential-retention.md)에 있습니다.
 
-## Verification
+초기 `createProviderSecrets`에는 명시적인 영구 저장 선택과 세션 전용 모드가 있었습니다. 이는 과거 API 계약이며 현재 연결 화면 전체의 동작으로 설명하지 않습니다. 삭제는 참조 하나로 한정하고 플러그인 전체 삭제를 사용하지 않았습니다. 삭제 실패를 성공으로 표시하거나 네이티브 오류 뒤에 세션 저장소를 몰래 대입하지 않았습니다.
 
-Targeted tests cover journal write/disk-full/partial-write failure, corruption, fingerprint changes, checkpoint recovery, offline position repair, schema protection, allowlisted settings, default-OFF prefetch, unsupported-native failure, credential setup ordering, scoped deletion and lack of fallback/log leakage. Fixtures and injected in-memory adapters only.
+## v1 호환 기록
 
-Run `npm ci`, `npm run typecheck`, `npm test -- --run`, and `npm run build`. This environment required `npm ci --cache /tmp/narou-storage-npm-cache` because its default home cache path was unavailable. Native adapter tests check option contracts, not actual Android/iOS storage. APK/device testing is explicitly deferred to #8.
+초기 `ReaderStore`는 완성 회차와 체크포인트를 별도 본문 형식으로 저장했습니다. `commitChapter`가 영구 저장 완료 경계였으며 같은 키의 완성본을 체크포인트로 낮추지 않았습니다. 복구 슬롯에 이전 체크포인트 바이트가 남을 수 있었습니다.
+
+완성본의 문단 ID는 원문 순서 전체와 일치해야 했습니다. 빈 원문 문단의 공백은 그대로 보존하고 일반 문단 번역은 비어 있으면 안 됐습니다. 체크포인트에는 `validated: true` 청크와 중복 없는 출력 ID만 허용했습니다. 분할·재조합의 의미적 완전성은 당시 조정 계층의 책임이었습니다.
+
+v1 캐시 키에는 정규 원문 URL·원문 해시·제공자·주소·모델·프롬프트 버전·언어 방향이 들어갔으며 키 자체는 제외했습니다. 초기 버전에는 출시된 schema 0이 없었습니다. 현재 v1 이전 경로가 있으므로 과거 문서의 “마이그레이션 없음”을 현재 저장소 정책으로 사용하지 않습니다.
+
+## 검증 범위
+
+합성 테스트는 저널 쓰기·부분 기록·공간 부족·손상, 형식 보호, 위치 복구, 인증 초기화 순서·참조별 삭제와 평문 대체 방지를 검사합니다. 메모리 어댑터 통과는 실제 Android/iOS 저장 동작을 입증하지 않습니다.
+
+기본 명령은 `npm ci`, `npm run typecheck`, `npm test -- --run`, `npm run build`입니다. 실제 Keystore, 백업·기기 이전, 하드웨어 기반 키, 삭제·재설치, 전원 손실 검증은 [Android 검증](android-validation.md)의 증거를 확인합니다.

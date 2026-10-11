@@ -1,0 +1,1943 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>JHF Novel Reader · 디자인 시스템</title>
+    <style id="source-styles">
+      /* 디자인 토큰 정본. 근거는 DESIGN.md 2절이고, 색을 바꾸면 tests/ui/theme-contrast.test.ts가 판정한다. */
+      :root {
+        color-scheme: light;
+        --surface: #fafafd;
+        --surface-container-lowest: #ffffff;
+        --surface-container-low: #f4f4fa;
+        --surface-container: #eeeef6;
+        --surface-container-high: #e8e8f2;
+        --surface-container-highest: #e2e2ee;
+        --on-surface: #1a1a28;
+        --on-surface-variant: #45465c;
+        --outline: #6e6f86;
+        --outline-variant: #c9c9da;
+        --primary: #3f4199;
+        --primary-fill: #6667ab;
+        --on-primary: #ffffff;
+        --primary-container: #e3e3fa;
+        --on-primary-container: #2c2d78;
+        --secondary-container: #e6e6f2;
+        --on-secondary-container: #2e2f45;
+        --error: #901c16;
+        --on-error: #ffffff;
+        --error-container: #fce4e2;
+        --on-error-container: #7a1712;
+        --success: #1f6b45;
+        --warning: #7a5a12;
+        --inverse-surface: #2c2c3a;
+        --inverse-on-surface: #f2f2fa;
+        --inverse-primary: #d2d3ff;
+        --scrim: rgb(0 0 0 / 0.32);
+        --shadow-color: rgb(26 26 40 / 0.16);
+        --reading-surface: var(--surface);
+        --reading-on-surface: var(--on-surface);
+        --reading-on-surface-variant: var(--on-surface-variant);
+
+        --font-sans:
+          "Pretendard Variable", Pretendard, system-ui, -apple-system,
+          "Noto Sans KR", sans-serif;
+        --type-headline-small: 600 1.5rem/2rem var(--font-sans);
+        --type-title-large: 600 1.375rem/1.75rem var(--font-sans);
+        --type-title-medium: 600 1rem/1.5rem var(--font-sans);
+        --type-body-large: 400 1rem/1.5rem var(--font-sans);
+        --type-body-medium: 400 0.875rem/1.25rem var(--font-sans);
+        --type-body-small: 400 0.75rem/1rem var(--font-sans);
+        --type-label-large: 600 0.875rem/1.25rem var(--font-sans);
+        --type-label-medium: 500 0.75rem/1rem var(--font-sans);
+
+        --shape-xs: 4px;
+        --shape-sm: 8px;
+        --shape-md: 12px;
+        --shape-lg: 16px;
+        --shape-xl: 28px;
+        --shape-full: 999px;
+
+        --touch-target: 48px;
+        --button-m: 56px;
+        --button-s: 40px;
+        --icon-button: 40px;
+        --app-bar: 64px;
+        --list-one-line: 56px;
+        --list-two-line: 72px;
+        --fab: 56px;
+        --toolbar: 64px;
+        --content-max: 840px;
+        --reading-max: 40em;
+
+        --elevation-2:
+          0 1px 2px var(--shadow-color), 0 2px 6px 2px var(--shadow-color);
+        --elevation-3:
+          0 1px 3px var(--shadow-color), 0 4px 8px 3px var(--shadow-color);
+        --state-hover: 0.08;
+        --state-focus: 0.1;
+        --state-pressed: 0.1;
+        --state-dragged: 0.16;
+
+        --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+        --ease-spring: linear(
+          0,
+          0.2 6%,
+          0.6 16%,
+          0.92 28%,
+          1.04 40%,
+          1.02 55%,
+          1
+        );
+        --duration-short: 150ms;
+        --duration-enter: 300ms;
+        --duration-exit: 200ms;
+
+        /* Capacitor SystemBars(insetsHandling: 'css')가 --safe-area-inset-*를 넣는다. 없으면 env()로 대체한다. */
+        --inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+        --inset-right: var(
+          --safe-area-inset-right,
+          env(safe-area-inset-right, 0px)
+        );
+        --inset-bottom: var(
+          --safe-area-inset-bottom,
+          env(safe-area-inset-bottom, 0px)
+        );
+        --inset-left: var(
+          --safe-area-inset-left,
+          env(safe-area-inset-left, 0px)
+        );
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --surface: #13131b;
+        --surface-container-lowest: #0e0e15;
+        --surface-container-low: #1a1a24;
+        --surface-container: #1f1f2a;
+        --surface-container-high: #262633;
+        --surface-container-highest: #30303f;
+        --on-surface: #eeeef6;
+        --on-surface-variant: #c9c9dc;
+        --outline: #a3a4bf;
+        --outline-variant: #464659;
+        --primary: #d2d3ff;
+        --primary-fill: #d2d3ff;
+        --on-primary: #1a1b55;
+        --primary-container: #3b3c8f;
+        --on-primary-container: #e6e5ff;
+        --secondary-container: #383850;
+        --on-secondary-container: #e6e5fa;
+        --error: #ffc4bc;
+        --on-error: #4a0002;
+        --error-container: #8c0009;
+        --on-error-container: #ffe1dd;
+        --success: #8be0b0;
+        --warning: #efcb7c;
+        --inverse-surface: #e4e4ee;
+        --inverse-on-surface: #1a1a28;
+        --inverse-primary: #36388f;
+        --scrim: rgb(0 0 0 / 0.5);
+        --shadow-color: rgb(0 0 0 / 0.4);
+      }
+      /* 독서 배경은 리더 범위의 색 체계다(#173). 상단바·안내 카드가 본문과 이어지도록 바탕 토큰도 함께 바꾼다.
+   세피아는 라이트, 검정은 다크 체계와 짝이고 문서 테마·시스템 바는 Application이 맞춘다. */
+      [data-reading-background="sepia"] {
+        --reading-surface: #f4ebd7;
+        --reading-on-surface: #2b2116;
+        --reading-on-surface-variant: #514234;
+        --surface: #f4ebd7;
+        --surface-container-low: #eee3cb;
+        --surface-container: #e9ddc3;
+        --surface-container-high: #e3d6ba;
+        --surface-container-highest: #ddcfb1;
+        --on-surface: #2b2116;
+        --on-surface-variant: #514234;
+      }
+      [data-reading-background="black"] {
+        --reading-surface: #000000;
+        --reading-on-surface: #e4e4ee;
+        --reading-on-surface-variant: #bcbccd;
+        --surface: #000000;
+        --surface-container-low: #0e0e12;
+        --surface-container: #141419;
+        --surface-container-high: #1c1c23;
+        --surface-container-highest: #25252e;
+        --on-surface: #e4e4ee;
+        --on-surface-variant: #bcbccd;
+      }
+
+      /* 공통 컴포넌트 스타일. 토큰만 참조한다(DESIGN.md 2·4절). */
+      .nr-icon {
+        display: inline-block;
+        flex: none;
+        inline-size: var(--nr-icon-size, 24px);
+        block-size: var(--nr-icon-size, 24px);
+        background-color: currentColor;
+        -webkit-mask: var(--nr-icon) center / contain no-repeat;
+        mask: var(--nr-icon) center / contain no-repeat;
+      }
+
+      /* 상태 레이어: 호버 8%, 포커스·눌림 10% */
+      .nr-button,
+      .nr-icon-button,
+      .nr-chip,
+      .nr-card--interactive,
+      .nr-list-item__main,
+      .nr-menu__item,
+      .nr-fab,
+      .nr-snackbar__action {
+        position: relative;
+        isolation: isolate;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .nr-button::before,
+      .nr-icon-button::before,
+      .nr-chip::before,
+      .nr-card--interactive::before,
+      .nr-list-item__main::before,
+      .nr-menu__item::before,
+      .nr-fab::before,
+      .nr-snackbar__action::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        border-radius: inherit;
+        background: currentColor;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--duration-short) var(--ease-standard);
+      }
+      :is(
+          .nr-button,
+          .nr-icon-button,
+          .nr-chip,
+          .nr-card--interactive,
+          .nr-list-item__main,
+          .nr-menu__item,
+          .nr-fab,
+          .nr-snackbar__action
+        ):hover::before {
+        opacity: var(--state-hover);
+      }
+      :is(
+          .nr-button,
+          .nr-icon-button,
+          .nr-chip,
+          .nr-card--interactive,
+          .nr-list-item__main,
+          .nr-menu__item,
+          .nr-fab,
+          .nr-snackbar__action
+        ):focus-visible::before {
+        opacity: var(--state-focus);
+      }
+      :is(
+          .nr-button,
+          .nr-icon-button,
+          .nr-chip,
+          .nr-card--interactive,
+          .nr-list-item__main,
+          .nr-menu__item,
+          .nr-fab,
+          .nr-snackbar__action
+        ):active::before {
+        opacity: var(--state-pressed);
+      }
+
+      /* Button */
+      .nr-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-inline-size: var(--touch-target);
+        border: 0;
+        border-radius: var(--shape-full);
+        font: var(--type-label-large);
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .nr-button--s {
+        block-size: var(--button-s);
+        padding: 0 24px;
+      }
+      .nr-button--s::after {
+        /* 시각 40px, 터치 영역 48px */
+        content: "";
+        position: absolute;
+        inset: -4px 0;
+      }
+      .nr-button--m {
+        block-size: var(--button-m);
+        padding: 0 28px;
+        font: var(--type-title-medium);
+      }
+      .nr-button--filled {
+        background: var(--primary-fill);
+        color: var(--on-primary);
+      }
+      .nr-button--tonal {
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+      }
+      .nr-button--outlined {
+        background: transparent;
+        color: var(--primary);
+        box-shadow: inset 0 0 0 1px var(--outline);
+      }
+      .nr-button--text {
+        background: transparent;
+        color: var(--primary);
+        padding: 0 12px;
+      }
+      .nr-button--danger.nr-button--filled {
+        background: var(--error);
+        color: var(--on-error);
+      }
+      .nr-button--danger:not(.nr-button--filled) {
+        color: var(--error);
+      }
+      .nr-button:disabled {
+        cursor: default;
+        background: color-mix(in srgb, var(--on-surface) 12%, transparent);
+        color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+        box-shadow: none;
+      }
+      .nr-button--text:disabled,
+      .nr-button--outlined:disabled {
+        background: transparent;
+      }
+      .nr-button:disabled::before {
+        display: none;
+      }
+
+      /* IconButton: 시각 40px, 터치 영역 48px */
+      .nr-icon-button {
+        display: inline-grid;
+        place-items: center;
+        inline-size: var(--icon-button);
+        block-size: var(--icon-button);
+        margin: 4px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--shape-full);
+        background: transparent;
+        color: var(--on-surface-variant);
+        cursor: pointer;
+      }
+      .nr-icon-button::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+      }
+      .nr-icon-button--tonal {
+        background: var(--secondary-container);
+        color: var(--on-secondary-container);
+      }
+      .nr-icon-button[aria-pressed="true"] {
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+      }
+      .nr-icon-button:disabled {
+        cursor: default;
+        color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+      }
+
+      /* Chip */
+      .nr-chip {
+        display: inline-flex;
+        align-items: center;
+        block-size: 32px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: var(--shape-sm);
+        background: transparent;
+        box-shadow: inset 0 0 0 1px var(--outline);
+        color: var(--on-surface-variant);
+        font: var(--type-label-large);
+        cursor: pointer;
+      }
+      .nr-chip::after {
+        content: "";
+        position: absolute;
+        inset: -8px 0;
+      }
+      .nr-chip--selected {
+        background: var(--secondary-container);
+        box-shadow: none;
+        color: var(--on-secondary-container);
+      }
+
+      /* Card */
+      .nr-card {
+        display: block;
+        box-sizing: border-box;
+        inline-size: 100%;
+        margin: 0;
+        padding: 16px;
+        border: 0;
+        border-radius: var(--shape-md);
+        font: var(--type-body-large);
+        text-align: start;
+      }
+      .nr-card--filled {
+        background: var(--surface-container-low);
+        color: var(--on-surface);
+      }
+      .nr-card--tonal {
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+      }
+      .nr-card--error {
+        background: var(--error-container);
+        color: var(--on-error-container);
+      }
+      .nr-card--interactive {
+        cursor: pointer;
+      }
+
+      /* ListItem */
+      .nr-list-item {
+        display: flex;
+        align-items: center;
+        min-block-size: var(--list-one-line);
+      }
+      .nr-list-item--two-line {
+        min-block-size: var(--list-two-line);
+      }
+      .nr-list-item--current {
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+      }
+      .nr-list-item__main {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        gap: 16px;
+        align-self: stretch;
+        min-inline-size: 0;
+        padding: 8px 16px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: var(--type-body-large);
+        text-align: start;
+        cursor: pointer;
+      }
+      label.nr-list-item__main {
+        margin: 0;
+      }
+      .nr-list-item__radio {
+        flex: none;
+        margin-inline-start: auto;
+      }
+      .nr-list-item__leading {
+        flex: none;
+        min-inline-size: 2ch;
+        color: var(--on-surface-variant);
+        font: var(--type-label-large);
+        font-variant-numeric: tabular-nums;
+      }
+      .nr-list-item--current .nr-list-item__leading {
+        color: inherit;
+      }
+      .nr-list-item__text {
+        display: flex;
+        flex-direction: column;
+        min-inline-size: 0;
+      }
+      .nr-list-item__headline {
+        overflow-wrap: anywhere;
+      }
+      .nr-list-item__supporting {
+        color: var(--on-surface-variant);
+        font: var(--type-body-medium);
+      }
+      /* 대화상자·다른 화면으로 이어지는 행(#140): 현재 값을 강조색으로(One UI 설정 관례), 끝에 › 아이콘(M3 이동 행 관례). */
+      .nr-list-item--navigates .nr-list-item__supporting {
+        color: var(--primary);
+      }
+      .nr-list-item__chevron {
+        display: flex;
+        flex: none;
+        margin-inline-start: auto;
+        color: var(--on-surface-variant);
+      }
+      .nr-list-item--current .nr-list-item__supporting {
+        color: inherit;
+      }
+      .nr-list-item__trailing {
+        display: flex;
+        flex: none;
+        padding-inline-end: 4px;
+      }
+      .nr-list-item__main:disabled,
+      label.nr-list-item__main:has(> input:disabled) {
+        cursor: default;
+        color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+      }
+      .nr-list-item__main:disabled .nr-list-item__supporting,
+      label.nr-list-item__main:has(> input:disabled) .nr-list-item__supporting {
+        color: inherit;
+      }
+      .nr-list-item__main:disabled .nr-list-item__chevron {
+        color: inherit;
+      }
+      .nr-list-item__main:disabled::before,
+      label.nr-list-item__main:has(> input:disabled)::before {
+        display: none;
+      }
+
+      /* Dialog · BottomSheet */
+      .nr-modal {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--on-surface);
+        max-inline-size: none;
+        max-block-size: none;
+        overflow: visible;
+      }
+      .nr-modal::backdrop {
+        background: var(--scrim);
+      }
+      .nr-modal__title {
+        margin: 0 0 16px;
+        font: var(--type-headline-small);
+        text-wrap: balance;
+      }
+      .nr-modal__title:focus {
+        outline: none;
+      }
+      .nr-dialog {
+        position: fixed;
+        inset: 0;
+        margin: auto;
+        inline-size: min(560px, calc(100vw - 48px));
+        block-size: fit-content;
+      }
+      .nr-dialog .nr-modal__surface {
+        box-sizing: border-box;
+        max-block-size: calc(
+          100dvh - 48px - var(--inset-top) - var(--inset-bottom)
+        );
+        overflow: auto;
+        padding: 24px;
+        border-radius: var(--shape-xl);
+        background: var(--surface-container-high);
+      }
+      .nr-dialog__body {
+        color: var(--on-surface-variant);
+        font: var(--type-body-medium);
+      }
+      .nr-dialog__actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 24px;
+      }
+      .nr-dialog--fullscreen {
+        inset: 0;
+        margin: 0;
+        inline-size: 100vw;
+        block-size: 100dvh;
+      }
+      .nr-dialog--fullscreen .nr-modal__surface {
+        display: flex;
+        flex-direction: column;
+        block-size: 100%;
+        max-block-size: none;
+        padding: 0;
+        border-radius: 0;
+        background: var(--surface);
+      }
+      .nr-dialog__header {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-block-size: calc(var(--app-bar) + var(--inset-top));
+        padding: var(--inset-top) max(4px, var(--inset-right)) 0
+          max(4px, var(--inset-left));
+        box-sizing: border-box;
+      }
+      .nr-dialog__header .nr-modal__title {
+        flex: 1;
+        margin: 0;
+        font: var(--type-title-large);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .nr-dialog--fullscreen .nr-dialog__body {
+        flex: 1;
+        overflow: auto;
+        padding: 0 max(24px, var(--inset-right))
+          calc(24px + var(--inset-bottom)) max(24px, var(--inset-left));
+        color: var(--on-surface);
+        font: var(--type-body-large);
+      }
+      .nr-sheet {
+        position: fixed;
+        inset: auto 0 0 0;
+        margin: 0 auto;
+        inline-size: min(640px, 100vw);
+      }
+      .nr-sheet .nr-modal__surface {
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        max-block-size: 90dvh;
+        overflow: auto;
+        padding: 0 0 calc(16px + var(--inset-bottom));
+        border-radius: var(--shape-xl) var(--shape-xl) 0 0;
+        background: var(--surface-container-low);
+      }
+      .nr-sheet__handle {
+        order: -1;
+        display: block;
+        inline-size: 32px;
+        block-size: 4px;
+        margin: 16px auto 8px;
+        border-radius: var(--shape-full);
+        background: var(--outline);
+      }
+      .nr-sheet .nr-modal__title {
+        margin: 8px 24px;
+        font: var(--type-title-medium);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .nr-dialog[open] .nr-modal__surface {
+          animation: nr-dialog-in var(--duration-enter) var(--ease-standard);
+        }
+        .nr-sheet[open] .nr-modal__surface {
+          animation: nr-sheet-in var(--duration-enter) var(--ease-spring);
+        }
+      }
+      @keyframes nr-dialog-in {
+        from {
+          opacity: 0;
+          transform: scale(0.96);
+        }
+      }
+      @keyframes nr-sheet-in {
+        from {
+          transform: translateY(100%);
+        }
+      }
+
+      /* Menu */
+      .nr-menu-anchor {
+        position: relative;
+        display: inline-flex;
+      }
+      .nr-menu {
+        position: absolute;
+        z-index: 30;
+        inset-block-start: 100%;
+        inset-inline-end: 4px;
+        min-inline-size: 12rem;
+        max-inline-size: min(17.5rem, calc(100vw - 16px));
+        padding: 8px 0;
+        border-radius: var(--shape-sm);
+        background: var(--surface-container);
+        color: var(--on-surface);
+        box-shadow: var(--elevation-2);
+      }
+      .nr-menu--up {
+        inset-block-start: auto;
+        inset-block-end: 100%;
+      }
+      .nr-menu__item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-sizing: border-box;
+        inline-size: 100%;
+        min-block-size: var(--touch-target);
+        padding: 0 16px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: var(--type-body-large);
+        text-align: start;
+        cursor: pointer;
+      }
+      .nr-menu__item .nr-icon {
+        color: var(--on-surface-variant);
+      }
+      .nr-menu__item--danger,
+      .nr-menu__item--danger .nr-icon {
+        color: var(--error);
+      }
+
+      /* TopAppBar */
+      .nr-top-app-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-sizing: border-box;
+        min-block-size: calc(var(--app-bar) + var(--inset-top));
+        padding: var(--inset-top) max(4px, var(--inset-right)) 0
+          max(4px, var(--inset-left));
+        background: var(--surface);
+        color: var(--on-surface);
+      }
+      .nr-top-app-bar[data-scrolled="true"] {
+        background: var(--surface-container);
+      }
+      .nr-top-app-bar__title {
+        flex: 1;
+        min-inline-size: 0;
+        margin: 0 0 0 12px;
+        font: var(--type-title-large);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .nr-top-app-bar__navigation + .nr-top-app-bar__title {
+        margin-inline-start: 0;
+      }
+      .nr-top-app-bar__navigation,
+      .nr-top-app-bar__actions {
+        display: flex;
+        align-items: center;
+      }
+
+      /* ExtendedFab */
+      .nr-fab {
+        position: fixed;
+        z-index: 20;
+        inset-inline-end: max(16px, calc(16px + var(--inset-right)));
+        inset-block-end: calc(16px + var(--inset-bottom));
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        block-size: var(--fab);
+        min-inline-size: var(--fab);
+        padding: 0 20px 0 16px;
+        border: 0;
+        border-radius: var(--shape-lg);
+        background: var(--primary-fill);
+        color: var(--on-primary);
+        font: var(--type-label-large);
+        box-shadow: var(--elevation-3);
+        cursor: pointer;
+      }
+      .nr-fab--collapsed {
+        justify-content: center;
+        inline-size: var(--fab);
+        padding: 0;
+      }
+
+      /* FloatingToolbar */
+      .nr-toolbar {
+        position: fixed;
+        z-index: 20;
+        inset-inline: 0;
+        inset-block-end: calc(16px + var(--inset-bottom));
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+        inline-size: fit-content;
+        margin: 0 auto;
+        padding: 8px;
+        border-radius: var(--shape-full);
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+        box-shadow: var(--elevation-3);
+        visibility: visible;
+        transition:
+          transform var(--duration-enter) var(--ease-standard),
+          opacity var(--duration-enter) var(--ease-standard),
+          visibility 0s linear 0s;
+      }
+      .nr-toolbar .nr-icon-button {
+        color: inherit;
+      }
+      /* inert를 지원하지 않는 WebView에서도 숨은 뒤에는 포커스가 가지 않도록 visibility를 함께 쓴다. */
+      .nr-toolbar--hidden {
+        opacity: 0;
+        transform: translateY(calc(100% + 16px + var(--inset-bottom)));
+        pointer-events: none;
+        visibility: hidden;
+        transition:
+          transform var(--duration-enter) var(--ease-standard),
+          opacity var(--duration-enter) var(--ease-standard),
+          visibility 0s linear var(--duration-enter);
+      }
+
+      /* Switch */
+      .nr-switch-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-block-size: var(--list-one-line);
+        padding: 8px 16px;
+        cursor: pointer;
+      }
+      .nr-switch-row__text {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-inline-size: 0;
+      }
+      .nr-switch-row__label {
+        font: var(--type-body-large);
+      }
+      .nr-switch-row__description {
+        color: var(--on-surface-variant);
+        font: var(--type-body-medium);
+      }
+      .nr-switch {
+        appearance: none;
+        position: relative;
+        flex: none;
+        inline-size: 52px;
+        block-size: 32px;
+        margin: 8px 0;
+        border-radius: var(--shape-full);
+        background: var(--surface-container-highest);
+        box-shadow: inset 0 0 0 2px var(--outline);
+        cursor: pointer;
+      }
+      .nr-switch::before {
+        content: "";
+        position: absolute;
+        inset-block-start: 8px;
+        inset-inline-start: 8px;
+        inline-size: 16px;
+        block-size: 16px;
+        border-radius: 50%;
+        background: var(--outline);
+        transition: transform var(--duration-short) var(--ease-standard);
+      }
+      .nr-switch:checked {
+        background: var(--primary-fill);
+        box-shadow: none;
+      }
+      .nr-switch:checked::before {
+        background: var(--on-primary);
+        transform: translateX(20px) scale(1.5);
+      }
+
+      /* LinearProgress */
+      .nr-progress {
+        position: relative;
+        overflow: hidden;
+        block-size: 4px;
+        border-radius: var(--shape-full);
+        background: var(--primary-container);
+      }
+      .nr-progress__bar {
+        position: absolute;
+        inset-block: 0;
+        inset-inline-start: 0;
+        inline-size: 100%;
+        border-radius: inherit;
+        background: var(--primary-fill);
+        transform: scaleX(var(--nr-progress, 0));
+        transform-origin: left center;
+        transition: transform var(--duration-short) var(--ease-standard);
+      }
+      .nr-progress--indeterminate .nr-progress__bar {
+        inline-size: 40%;
+        transform: none;
+        animation: nr-progress 1.6s var(--ease-standard) infinite;
+      }
+      @keyframes nr-progress {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(250%);
+        }
+      }
+
+      /* StatusPill */
+      .nr-status-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-block-size: 48px;
+        padding: 4px 8px 4px 16px;
+        border-radius: var(--shape-full);
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+        font: var(--type-label-large);
+        box-shadow: var(--elevation-2);
+      }
+      .nr-status-pill__text {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        gap: 8px;
+      }
+      .nr-status-pill__action {
+        min-block-size: var(--touch-target);
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--shape-full);
+        background: transparent;
+        color: inherit;
+        font: var(--type-label-large);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      /* Snackbar */
+      .nr-snackbar-region {
+        position: fixed;
+        z-index: 40;
+        inset-inline: 0;
+        inset-block-start: auto;
+        inset-block-end: calc(
+          16px + var(--inset-bottom) + var(--nr-snackbar-offset, 0px)
+        );
+        display: flex;
+        justify-content: center;
+        width: auto;
+        height: auto;
+        margin: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        overflow: visible;
+        padding: 0 16px;
+        pointer-events: none;
+      }
+      .nr-snackbar-region:not(:popover-open) {
+        display: flex;
+      }
+      .nr-snackbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-inline-size: min(560px, 100%);
+        min-block-size: 48px;
+        padding: 4px 8px 4px 16px;
+        border-radius: var(--shape-xs);
+        background: var(--inverse-surface);
+        color: var(--inverse-on-surface);
+        font: var(--type-body-medium);
+        box-shadow: var(--elevation-3);
+        pointer-events: auto;
+      }
+      .nr-snackbar__text {
+        flex: 1;
+      }
+      .nr-snackbar__action {
+        min-block-size: var(--touch-target);
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--shape-full);
+        background: transparent;
+        color: var(--inverse-primary);
+        font: var(--type-label-large);
+        cursor: pointer;
+      }
+    </style>
+    <style>
+      html {
+        background: var(--surface);
+        color: var(--on-surface);
+        font: var(--type-body-large);
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        /* 한국어는 어절 단위로 줄바꿈하고, 한 줄을 넘는 긴 덩어리(URL·띄어쓰기 없는 원문)는 넘치지 않게 끊는다(#167). */
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+      /* 일본어는 띄어쓰기가 없으므로 기본 줄바꿈(금칙 처리)으로 되돌린다. */
+      :lang(ja) {
+        word-break: normal;
+      }
+      body {
+        margin: 0;
+        min-block-size: 100dvh;
+        background: var(--surface);
+      }
+      :focus-visible {
+        outline: 3px solid var(--primary);
+        outline-offset: 2px;
+      }
+      [lang="ja"] {
+        font-family: system-ui, "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0ms !important;
+          animation-duration: 0ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      /* 문서 탐색과 샘플 배치를 위한 스타일입니다. 제품 토큰을 변경하지 않습니다. */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font: var(--type-body-large);
+      }
+      a {
+        color: var(--primary);
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button {
+        touch-action: manipulation;
+      }
+      p {
+        margin: 8px 0 16px;
+      }
+      code {
+        font:
+          0.8rem/1.5 ui-monospace,
+          monospace;
+        overflow-wrap: anywhere;
+      }
+      h1 {
+        font: var(--type-headline-small);
+        margin: 12px 0;
+      }
+      h2 {
+        font: var(--type-title-large);
+        margin: 0 0 12px;
+      }
+      h3 {
+        font: var(--type-title-medium);
+        margin: 24px 0 12px;
+      }
+      .shell {
+        max-width: 1160px;
+        margin: auto;
+        padding: 32px 24px 80px;
+      }
+      .masthead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--outline-variant);
+      }
+      .brand {
+        font: var(--type-label-large);
+        letter-spacing: 0.12em;
+      }
+      .meta,
+      .caption {
+        font: var(--type-body-medium);
+        color: var(--on-surface-variant);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 40px;
+        margin-top: 32px;
+      }
+      nav {
+        position: sticky;
+        top: 20px;
+        align-self: start;
+        display: grid;
+        gap: 4px;
+      }
+      nav a {
+        padding: 12px;
+        border-radius: var(--shape-sm);
+        text-decoration: none;
+      }
+      nav a:hover {
+        background: var(--surface-container);
+      }
+      main {
+        min-width: 0;
+      }
+      section {
+        scroll-margin-top: 24px;
+        margin-bottom: 48px;
+      }
+      .intro {
+        padding: 24px;
+        border-radius: var(--shape-lg);
+        background: var(--primary-container);
+        color: var(--on-primary-container);
+        margin-bottom: 32px;
+      }
+      .intro p:last-child {
+        margin-bottom: 0;
+      }
+      .eyebrow {
+        font: var(--type-label-medium);
+        letter-spacing: 0.08em;
+        color: var(--primary);
+        margin-bottom: 8px;
+      }
+      .samples {
+        padding: 24px;
+        border: 1px solid var(--outline-variant);
+        border-radius: var(--shape-lg);
+        background: var(--surface-container-lowest);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+      }
+      .stack {
+        display: grid;
+        gap: 16px;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .swatch {
+        border: 1px solid var(--outline-variant);
+        border-radius: var(--shape-md);
+        overflow: hidden;
+      }
+      .swatch-color {
+        height: 64px;
+      }
+      .swatch-info {
+        padding: 12px;
+      }
+      .swatch-info strong,
+      .swatch-info code {
+        display: block;
+      }
+      .token-value {
+        font: var(--type-body-small);
+        color: var(--on-surface-variant);
+      }
+      .type-row {
+        padding: 16px 0;
+        border-bottom: 1px solid var(--outline-variant);
+      }
+      .type-row code {
+        display: block;
+        color: var(--on-surface-variant);
+        margin-top: 8px;
+      }
+      .control {
+        display: grid;
+        gap: 8px;
+        color: var(--on-surface-variant);
+        font: var(--type-body-medium);
+      }
+      select,
+      .field {
+        min-height: 48px;
+        min-width: 0;
+        max-width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--outline);
+        border-radius: var(--shape-xs);
+        background: var(--surface-container-highest);
+        color: var(--on-surface);
+      }
+      .field {
+        width: 100%;
+        border: 0;
+        border-bottom: 1px solid var(--outline);
+        border-radius: var(--shape-xs) var(--shape-xs) 0 0;
+      }
+      .field[aria-invalid="true"] {
+        border-color: var(--error);
+        border-bottom-width: 2px;
+      }
+      .error {
+        color: var(--error);
+      }
+      .tag {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: var(--shape-full);
+        background: var(--secondary-container);
+        color: var(--on-secondary-container);
+        font: var(--type-label-medium);
+      }
+      .annotation {
+        border-left: 3px solid var(--outline-variant);
+        padding-left: 12px;
+        margin-top: 16px;
+        font: var(--type-body-medium);
+        color: var(--on-surface-variant);
+      }
+      .demo-log {
+        min-height: 48px;
+        margin: 16px 0 0;
+        font: var(--type-body-medium);
+        color: var(--on-surface-variant);
+      }
+      .reading {
+        padding: 24px;
+        max-width: 40em;
+        background: var(--reading-surface);
+        color: var(--reading-on-surface);
+        border-radius: var(--shape-md);
+        line-height: 1.8;
+      }
+      .mapping {
+        display: grid;
+        gap: 16px;
+      }
+      .mapping article {
+        border-bottom: 1px solid var(--outline-variant);
+        padding-bottom: 16px;
+      }
+      .mapping h3 {
+        margin: 0 0 8px;
+      }
+      .skip {
+        position: absolute;
+        top: -100px;
+        left: 16px;
+        background: var(--surface);
+        padding: 12px;
+        z-index: 10;
+      }
+      .skip:focus {
+        top: 12px;
+      }
+      .sizes {
+        display: flex;
+        align-items: end;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .size {
+        background: var(--primary-container);
+        width: 64px;
+        padding: 12px;
+        text-align: center;
+        color: var(--on-primary-container);
+      }
+      .demo-progress {
+        margin: 16px 0;
+      }
+      .demo-status {
+        min-height: 48px;
+      }
+      .nr-card p:last-child {
+        margin-bottom: 0;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      footer {
+        border-top: 1px solid var(--outline-variant);
+        padding-top: 24px;
+        font: var(--type-body-small);
+        color: var(--on-surface-variant);
+      }
+      @media (max-width: 760px) {
+        .shell {
+          padding: 20px 16px 56px;
+        }
+        .layout {
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+        nav {
+          position: static;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0;
+        }
+        nav a {
+          padding: 12px;
+        }
+        .samples {
+          padding: 16px;
+        }
+        .swatches {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .two {
+          grid-template-columns: 1fr;
+        }
+        .row {
+          gap: 12px;
+        }
+        .nr-button {
+          max-width: 100%;
+          white-space: normal;
+          height: auto;
+          min-height: 40px;
+          padding-top: 8px;
+          padding-bottom: 8px;
+        }
+        .nr-button--m {
+          min-height: 56px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#content">본문으로 이동</a>
+    <div class="shell">
+      <header class="masthead">
+        <div>
+          <div class="brand">JHF NOVEL READER</div>
+          <h1>디자인 시스템</h1>
+          <div class="meta">구현 기준 2b6d26f · 로컬 인터랙티브 참조 문서</div>
+        </div>
+        <label class="control"
+          >문서 테마<select id="theme">
+            <option value="light">라이트</option>
+            <option value="dark">다크</option>
+          </select></label
+        >
+      </header>
+      <div class="layout">
+        <nav aria-label="문서 목차">
+          <a href="#principles">사용 안내</a><a href="#colors">색과 표면</a
+          ><a href="#type">글자와 크기</a><a href="#buttons">버튼과 선택</a
+          ><a href="#fields">입력과 설정</a><a href="#feedback">진행과 오류</a
+          ><a href="#overlays">확인창</a><a href="#reading">독서 배경</a
+          ><a href="#sources">구현 대응표</a>
+        </nav>
+        <main id="content" tabindex="-1">
+          <section id="principles">
+            <div class="intro">
+              <span class="tag">데모 전용</span>
+              <h2 style="margin-top: 16px">직접 눌러 확인합니다.</h2>
+              <p>
+                앱에서 사용하는 색·글자·컴포넌트 스타일을 확인하는 문서입니다.
+                샘플은 네트워크 요청, 실제 번역, 파일 저장·삭제·내려받기를
+                실행하지 않습니다.
+              </p>
+            </div>
+            <p>
+              문서 설명은 합니다체로 작성합니다. 앱의 실제 문구는 해요체 원문과
+              짧은 버튼 라벨을 유지합니다.
+              <a href="ux-writing.md">UX 라이팅 기준</a>에서 행동과 문구의
+              의미를 확인합니다.
+            </p>
+            <p class="caption">
+              현재 구현은 소스에서 가져온 CSS와 문구로 표시합니다. 데모 조작부와
+              개선 제안은 별도로 표시합니다. HTML은 React 컴포넌트 자체를
+              실행하지 않으며 Android 실기 검증을 대체하지 않습니다.
+            </p>
+          </section>
+          <section id="colors">
+            <div class="eyebrow">01 · 기초</div>
+            <h2>색과 표면</h2>
+            <p>
+              라이트·다크를 바꾸면 같은 의미의 토큰이 다른 값으로 표시됩니다.
+              본문·행동·오류는 역할별 토큰을 사용합니다.
+            </p>
+            <div class="swatches" id="swatches"></div>
+            <p class="annotation">
+              현재 구현 · <code>src/ui/theme/tokens.css</code>를 그대로
+              포함합니다. <code>--primary</code>는 텍스트·행동 색이며
+              <code>--primary-fill</code>은 채운 버튼의 바탕 색입니다.
+            </p>
+          </section>
+          <section id="type">
+            <div class="eyebrow">02 · 글자와 크기</div>
+            <h2>글자와 크기</h2>
+            <div class="samples">
+              <div id="types"></div>
+              <h3>모서리</h3>
+              <div class="sizes" id="radii"></div>
+              <h3>배치 기준</h3>
+              <p>
+                화면 본문 최대 폭은 840px이며 독서 본문은 40em입니다. 공통 터치
+                영역은 48px입니다. S 버튼은 시각 높이 40px와 확장된 터치 영역을
+                사용하며 M 버튼은 56px입니다.
+              </p>
+              <p class="caption">
+                화면·컴포넌트에서는 4·8·12·16·24·32px 등의 여백을 사용합니다.
+                별도의 spacing 토큰이 이미 구현되어 있다는 뜻은 아닙니다. 이
+                문서 탐색 레이아웃은 제품 화면과 구분합니다.
+              </p>
+            </div>
+            <p class="annotation">
+              실제 앱은 번들 Pretendard Variable을 로드합니다. 독립 HTML은 외부
+              폰트를 요청하지 않고 설치된 Pretendard 또는 시스템 글꼴로
+              표시하므로 글자 폭은 다를 수 있습니다. 폰트 파일·라이선스를
+              재배포하지 않습니다.
+            </p>
+          </section>
+          <section id="buttons">
+            <div class="eyebrow">03 · 행동</div>
+            <h2>버튼과 선택</h2>
+            <div class="samples stack">
+              <div class="row">
+                <button
+                  class="nr-button nr-button--filled nr-button--m"
+                  data-demo="주요 행동"
+                >
+                  이 화 번역하기</button
+                ><button
+                  class="nr-button nr-button--tonal nr-button--s"
+                  data-demo="보조 행동"
+                >
+                  다시 시도</button
+                ><button
+                  class="nr-button nr-button--outlined nr-button--s"
+                  data-demo="외곽선 행동"
+                >
+                  닫기</button
+                ><button
+                  class="nr-button nr-button--text nr-button--s"
+                  data-demo="텍스트 행동"
+                >
+                  취소
+                </button>
+              </div>
+              <div class="row">
+                <button
+                  class="nr-button nr-button--filled nr-button--danger nr-button--s"
+                  data-demo="위험 행동"
+                >
+                  삭제하기</button
+                ><button
+                  class="nr-button nr-button--filled nr-button--s"
+                  disabled
+                >
+                  번역 시작
+                </button>
+              </div>
+              <p class="caption">
+                현재 구현 · filled / tonal / outlined / text, danger, disabled를
+                확인합니다. Tab으로 초점을 옮기고 Enter 또는 Space로 실행합니다.
+                위 버튼은 상태 알림만 표시합니다.
+              </p>
+              <div class="row" aria-label="데모 보기 선택">
+                <button
+                  class="nr-chip nr-chip--selected"
+                  aria-pressed="true"
+                  data-chip
+                >
+                  번역</button
+                ><button class="nr-chip" aria-pressed="false" data-chip>
+                  원문
+                </button>
+              </div>
+              <p id="button-log" class="demo-log" role="status">
+                샘플 행동을 기다립니다.
+              </p>
+            </div>
+            <p class="annotation">
+              현재 구현 · <code>Button.tsx</code> / <code>Chip.tsx</code> /
+              <code>components.css</code>입니다. Hover는 8%, focus·pressed는 10%
+              상태 레이어를 사용합니다. 초점 윤곽은 3px입니다.
+            </p>
+          </section>
+          <section id="fields">
+            <div class="eyebrow">04 · 입력</div>
+            <h2>입력과 설정</h2>
+            <div class="samples stack">
+              <label class="control" for="demo-input"
+                >회차 제목 번역문<input
+                  class="field"
+                  id="demo-input"
+                  value="샘플 회차"
+                  aria-describedby="input-hint input-error"
+              /></label>
+              <p class="caption" id="input-hint">
+                샘플 제목을 입력합니다. 실제 회차 제목은 변경하지 않습니다.
+              </p>
+              <p id="input-error" class="error" role="alert" hidden>
+                샘플 값을 입력합니다.
+              </p>
+              <div class="row">
+                <button
+                  class="nr-button nr-button--tonal nr-button--s"
+                  id="validate"
+                >
+                  입력 확인</button
+                ><button
+                  class="nr-button nr-button--text nr-button--s"
+                  id="reset-input"
+                >
+                  초기화
+                </button>
+              </div>
+              <label class="nr-switch-row"
+                ><span class="nr-switch-row__text"
+                  ><span class="nr-switch-row__label" id="switch-label"
+                    >저장본이 없으면 자동으로 번역 시작</span
+                  ><span
+                    class="nr-switch-row__description"
+                    id="switch-description"
+                    >회차를 열면 선택한 모델로 번역해요. 끄면 ‘이 화 번역하기’를
+                    눌러 시작해요.</span
+                  ></span
+                ><input
+                  id="auto-switch"
+                  class="nr-switch"
+                  type="checkbox"
+                  role="switch"
+                  aria-labelledby="switch-label"
+                  aria-describedby="switch-description"
+                  checked
+              /></label>
+              <p id="input-status" role="status" class="caption">
+                문서 안에서만 설정 상태를 변경합니다.
+              </p>
+            </div>
+            <p class="annotation">
+              현재 구현 · 입력 표면은 <code>application.css</code>의 기본 입력
+              스타일이며 스위치는 <code>Switch.tsx</code>입니다. 입력 확인·오류
+              연결은 <strong>문서 데모·개선 제안</strong>입니다. 앱에 공통
+              TextField 검증 컴포넌트가 구현되어 있다는 뜻은 아닙니다.
+            </p>
+          </section>
+          <section id="feedback">
+            <div class="eyebrow">05 · 상태 안내</div>
+            <h2>진행과 오류</h2>
+            <p>
+              아래 선택기는 문서 전용 상태 조작부입니다. 실제 작업을 시작하지
+              않습니다.
+            </p>
+            <div class="samples stack">
+              <label class="control"
+                >데모 상태<select id="state">
+                  <option value="idle">시작 전</option>
+                  <option value="preparing">준비 중 · 진행률 미정</option>
+                  <option value="running">진행 중 · 2/10화</option>
+                  <option value="error">연결 오류</option>
+                  <option value="storage">저장 실패</option>
+                  <option value="cancelled">중단</option>
+                  <option value="complete">완료</option>
+                </select></label
+              >
+              <div id="state-card" class="nr-card nr-card--filled">
+                <p id="state-text" class="demo-status" role="status"></p>
+                <div
+                  id="progress"
+                  role="progressbar"
+                  aria-label="데모 일괄 번역 진행률"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  class="nr-progress demo-progress"
+                  hidden
+                >
+                  <span class="nr-progress__bar"></span>
+                </div>
+                <button
+                  id="state-action"
+                  class="nr-button nr-button--text nr-button--s"
+                  hidden
+                ></button>
+              </div>
+              <p id="action-log" role="status" class="caption">
+                준비·진행·오류·저장 실패·중단·완료 상태를 선택합니다.
+              </p>
+            </div>
+            <p class="annotation">
+              현재 구현 · <code>LinearProgress.tsx</code>의 결정형·비결정형
+              표현과 <code>Card.tsx</code>의 표면을 사용합니다. 화면 문구는
+              <code>BatchPanel.tsx</code>, <code>WorkScreen.tsx</code>,
+              <code>ImmersiveReader.tsx</code>를 따릅니다. 데모 상태 간 이동은
+              제품 상태 머신을 재현하지 않습니다.
+            </p>
+          </section>
+          <section id="overlays">
+            <div class="eyebrow">06 · 확인</div>
+            <h2>확인창</h2>
+            <div class="samples">
+              <div class="row">
+                <button
+                  id="open-dialog"
+                  class="nr-button nr-button--tonal nr-button--s"
+                >
+                  내려받기 확인창 열기</button
+                ><button
+                  id="open-delete"
+                  class="nr-button nr-button--outlined nr-button--danger nr-button--s"
+                >
+                  삭제 확인창 열기
+                </button>
+              </div>
+              <p id="dialog-log" class="demo-log" role="status">
+                확인창에서도 실제 내려받기나 삭제는 실행하지 않습니다.
+              </p>
+            </div>
+            <p class="annotation">
+              현재 구현 · <code>Modal.tsx</code>와 같은 네이티브
+              <code>dialog</code> 및 표면 스타일을 사용합니다. Esc·취소·확인
+              후에는 여는 버튼으로 초점을 돌려줍니다. 이 HTML은 Android 뒤로
+              가기 스택이나 제품의 포인터 제스처 처리를 복제하지 않습니다.
+            </p>
+          </section>
+          <section id="reading">
+            <div class="eyebrow">07 · 독서</div>
+            <h2>독서 배경</h2>
+            <div class="samples stack">
+              <label class="control"
+                >데모 독서 배경<select id="reading-theme">
+                  <option value="default">문서 테마</option>
+                  <option value="sepia">세피아 · 라이트</option>
+                  <option value="black">검정 · 다크</option>
+                </select></label
+              >
+              <article id="reading-sample" class="reading">
+                <h3 style="margin-top: 0">1화 · 합성 본문</h3>
+                <p>
+                  이 문장은 글자와 배경을 확인하기 위한 합성 예문입니다. 실제
+                  소설 내용이나 사용자 데이터는 포함하지 않습니다.
+                </p>
+                <p>
+                  본문 폭, 행간, 긴 단어의 줄바꿈을 확인합니다. 외부 모델
+                  요청이나 번역을 실행하지 않습니다.
+                </p>
+              </article>
+            </div>
+            <p class="annotation">
+              현재 구현 · <code>tokens.css</code>의 독서 색 범위를 사용합니다.
+              앱에서는 세피아와 라이트, 검정과 다크를 함께 적용합니다. 이
+              문서에서는 주변 UI를 유지하고 샘플 영역의 독서 색만 표시합니다.
+            </p>
+          </section>
+          <section id="sources">
+            <div class="eyebrow">08 · 구현 기준</div>
+            <h2>구현 대응표</h2>
+            <div class="mapping">
+              <article>
+                <h3>토큰·글자·크기</h3>
+                <p>
+                  <code>src/ui/theme/tokens.css</code>와 <code>base.css</code>를
+                  기준으로 합니다. 색과 컴포넌트 CSS는 2b6d26f의 스냅샷을 HTML에
+                  포함합니다. 정본 변경 시 이 문서도 동기화합니다.
+                </p>
+              </article>
+              <article>
+                <h3>공통 행동·표면</h3>
+                <p>
+                  <code
+                    >src/ui/components/{Button,Chip,Card,Switch,LinearProgress,Modal}.tsx</code
+                  >와 <code>components.css</code>를 기준으로 합니다. standalone
+                  HTML은 같은 클래스와 의미를 사용한 데모 마크업입니다.
+                </p>
+              </article>
+              <article>
+                <h3>문구와 흐름</h3>
+                <p>
+                  <code
+                    >src/ui/{SettingsScreen,WorkScreen,BatchPanel,ImmersiveReader}.tsx</code
+                  >를 기준으로 합니다. 원문·완성본·저장 실패·중복 요청의 차이는
+                  <a href="ux-writing.md">UX 라이팅 문서</a>에서 설명합니다.
+                </p>
+              </article>
+              <article>
+                <h3>샘플에서 다루지 않는 범위</h3>
+                <p>
+                  전체 화면 라우팅, 실제 API, 스낵바 큐, Android 시스템 바,
+                  네이티브 뒤로 가기, 실제 파일 작업은 실행하지 않습니다. 앱의
+                  모든 컴포넌트·상태를 빠짐없이 복제한 카탈로그가 아닙니다.
+                </p>
+              </article>
+              <article>
+                <h3>검토 기준</h3>
+                <p>
+                  390px·1280px 화면, 라이트·다크, 반복 조작, 입력 오류 복구,
+                  Esc·초점 복귀, 감소된 동작 설정을 확인합니다. 제품 토큰의 대비
+                  검증은 <code>tests/ui/theme-contrast.test.ts</code>에서
+                  수행합니다.
+                </p>
+              </article>
+            </div>
+          </section>
+          <footer>
+            JHF Novel Reader · 구현 참조 문서입니다. 외부 스크립트·CDN·분석
+            도구를 사용하지 않습니다. <a href="../DESIGN.md">디자인 기준</a>과
+            <a href="../THIRD_PARTY_NOTICES.md">제3자 고지</a>를 함께
+            확인합니다.
+          </footer>
+        </main>
+      </div>
+    </div>
+    <dialog
+      id="demo-dialog"
+      class="nr-modal nr-dialog"
+      aria-labelledby="dialog-title"
+    >
+      <div class="nr-modal__surface">
+        <h2 id="dialog-title" class="nr-modal__title" tabindex="-1"></h2>
+        <div class="nr-dialog__body">
+          <p id="dialog-body"></p>
+          <p class="caption">데모 전용입니다. 실제 작업은 실행하지 않습니다.</p>
+        </div>
+        <div class="nr-dialog__actions">
+          <button
+            id="dialog-cancel"
+            class="nr-button nr-button--text nr-button--s"
+          >
+            취소</button
+          ><button
+            id="dialog-confirm"
+            class="nr-button nr-button--text nr-button--s"
+          ></button>
+        </div>
+      </div>
+    </dialog>
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const colors = [
+        ["surface", "기본 표면"],
+        ["surface-container-low", "낮은 표면"],
+        ["surface-container-highest", "높은 표면"],
+        ["primary", "주요 행동"],
+        ["primary-fill", "채운 행동"],
+        ["primary-container", "주요 컨테이너"],
+        ["on-surface", "본문"],
+        ["on-surface-variant", "보조 본문"],
+        ["outline", "외곽선"],
+        ["error", "오류"],
+        ["success", "성공"],
+        ["warning", "주의"],
+      ];
+      for (const [token, label] of colors) {
+        const item = document.createElement("div");
+        item.className = "swatch";
+        item.innerHTML = `<div class="swatch-color" style="background:var(--${token})"></div><div class="swatch-info"><strong>${label}</strong><code>--${token}</code><span class="token-value" data-token="${token}"></span></div>`;
+        $("swatches").append(item);
+      }
+      function updateTokens() {
+        const style = getComputedStyle(document.documentElement);
+        document
+          .querySelectorAll("[data-token]")
+          .forEach(
+            (el) =>
+              (el.textContent = style
+                .getPropertyValue("--" + el.dataset.token)
+                .trim()),
+          );
+      }
+      $("theme").addEventListener("change", (e) => {
+        document.documentElement.dataset.theme = e.target.value;
+        updateTokens();
+      });
+      updateTokens();
+      for (const [name, label] of [
+        ["headline-small", "독서의 흐름을 이어갑니다."],
+        ["title-large", "작품과 회차를 확인합니다."],
+        ["title-medium", "읽기 설정"],
+        ["body-large", "문장은 편하게 읽을 수 있도록 표시합니다."],
+        ["body-medium", "필요한 안내를 짧게 전달합니다."],
+        ["body-small", "보조 정보를 표시합니다."],
+        ["label-large", "번역 시작"],
+        ["label-medium", "저장본"],
+      ]) {
+        const row = document.createElement("div");
+        row.className = "type-row";
+        const sample = document.createElement("span");
+        sample.style.font = `var(--type-${name})`;
+        sample.textContent = label;
+        const code = document.createElement("code");
+        code.textContent =
+          "--type-" +
+          name +
+          " · " +
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--type-" + name)
+            .trim();
+        row.append(sample, code);
+        $("types").append(row);
+      }
+      for (const [name, value] of [
+        ["xs", 4],
+        ["sm", 8],
+        ["md", 12],
+        ["lg", 16],
+        ["xl", 28],
+        ["full", 999],
+      ]) {
+        const item = document.createElement("div");
+        item.className = "size";
+        item.style.borderRadius = `var(--shape-${name})`;
+        item.textContent = `${name} ${value}`;
+        $("radii").append(item);
+      }
+      document.querySelectorAll("[data-demo]").forEach((b) =>
+        b.addEventListener("click", () => {
+          $("button-log").textContent =
+            `${b.dataset.demo} 샘플을 눌렀습니다. 실제 작업은 실행하지 않습니다.`;
+        }),
+      );
+      document.querySelectorAll("[data-chip]").forEach((b) =>
+        b.addEventListener("click", () => {
+          document.querySelectorAll("[data-chip]").forEach((c) => {
+            const selected = c === b;
+            c.classList.toggle("nr-chip--selected", selected);
+            c.setAttribute("aria-pressed", String(selected));
+          });
+          $("button-log").textContent =
+            b.textContent + " 보기 샘플을 선택했습니다.";
+        }),
+      );
+      function validate() {
+        const invalid = !$("demo-input").value.trim();
+        $("demo-input").setAttribute("aria-invalid", String(invalid));
+        $("input-error").hidden = !invalid;
+        $("input-status").textContent = invalid
+          ? "입력 오류 샘플을 표시합니다."
+          : "입력 확인 샘플입니다. 실제 저장은 실행하지 않습니다.";
+        if (invalid) $("demo-input").focus();
+      }
+      $("validate").addEventListener("click", validate);
+      $("demo-input").addEventListener("input", () => {
+        if (
+          $("demo-input").getAttribute("aria-invalid") === "true" &&
+          $("demo-input").value.trim()
+        ) {
+          $("demo-input").setAttribute("aria-invalid", "false");
+          $("input-error").hidden = true;
+        }
+      });
+      $("reset-input").addEventListener("click", () => {
+        $("demo-input").value = "샘플 회차";
+        $("demo-input").removeAttribute("aria-invalid");
+        $("input-error").hidden = true;
+        $("input-status").textContent = "샘플 입력을 초기화했습니다.";
+      });
+      $("auto-switch").addEventListener("change", (e) => {
+        $("input-status").textContent =
+          `데모 설정을 ${e.target.checked ? "켰습니다" : "껐습니다"}. 앱 설정에는 반영하지 않습니다.`;
+      });
+      const states = {
+        idle: [
+          "범위나 전체 회차를 확인한 뒤 시작해 주세요. 완료한 회차는 저장본으로 읽을 수 있어요.",
+          null,
+          null,
+        ],
+        preparing: [
+          "전체 목차와 번역할 회차를 확인하고 있어요.",
+          null,
+          "unknown",
+        ],
+        running: ["미리 번역하는 중 · 2/10화", "일괄 번역 중단", 20],
+        error: [
+          "서버에 연결하지 못했어요. 주소와 서버 상태를 확인해 주세요.",
+          "다시 시도",
+          null,
+        ],
+        storage: [
+          "완료한 번역을 저장하지 못했어요. 새로 요청하기 전에 저장을 마쳐야 해요.",
+          "모델 요청 없이 일괄 결과 저장 다시 시도",
+          null,
+        ],
+        cancelled: [
+          "일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.",
+          "남은 회차 번역 재개",
+          null,
+        ],
+        complete: [
+          "일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.",
+          null,
+          100,
+        ],
+      };
+      function showState() {
+        const key = $("state").value;
+        const [text, action, value] = states[key];
+        $("state-text").textContent = text;
+        $("state-text").setAttribute(
+          "role",
+          ["error", "storage"].includes(key) ? "alert" : "status",
+        );
+        $("state-card").className =
+          "nr-card " +
+          (["error", "storage"].includes(key)
+            ? "nr-card--error"
+            : "nr-card--filled");
+        $("state-action").hidden = !action;
+        $("state-action").textContent = action || "";
+        const progress = $("progress");
+        progress.hidden = value === null;
+        progress.classList.toggle(
+          "nr-progress--indeterminate",
+          value === "unknown",
+        );
+        if (typeof value === "number") {
+          progress.setAttribute("aria-valuenow", String(value));
+          progress.style.setProperty("--nr-progress", value / 100);
+        } else progress.removeAttribute("aria-valuenow");
+      }
+      $("state").addEventListener("change", showState);
+      showState();
+      $("state-action").addEventListener("click", () => {
+        const old = $("state").value;
+        if (old === "running") $("state").value = "cancelled";
+        else if (old === "storage") $("state").value = "complete";
+        else $("state").value = "preparing";
+        showState();
+        $("action-log").textContent =
+          "상태 샘플만 변경했습니다. 모델 요청·저장·작업 중단은 실행하지 않습니다.";
+      });
+      let opener = null,
+        kind = "download";
+      function openDialog(type, button) {
+        kind = type;
+        opener = button;
+        const deletion = type === "delete";
+        $("dialog-title").textContent = deletion
+          ? "1화 저장본을 삭제할까요?"
+          : "판정 모델을 내려받을까요?";
+        $("dialog-body").textContent = deletion
+          ? "이 화의 번역 저장본과 읽던 위치가 이 기기에서 삭제돼요. 삭제한 내용은 되돌릴 수 없어요."
+          : "EmbeddingGemma 2(약 165MB)를 Hugging Face에서 내려받아 이 기기에 저장해요. Wi-Fi에서 받는 걸 권장해요. 원문과 번역은 기기 밖으로 보내지 않아요.";
+        $("dialog-confirm").textContent = deletion ? "삭제하기" : "내려받기";
+        $("dialog-cancel").textContent = deletion ? "닫기" : "취소";
+        $("dialog-confirm").className =
+          "nr-button nr-button--s " +
+          (deletion
+            ? "nr-button--filled nr-button--danger"
+            : "nr-button--text");
+        $("demo-dialog").showModal();
+        $("dialog-title").focus();
+      }
+      $("open-dialog").addEventListener("click", (e) =>
+        openDialog("download", e.currentTarget),
+      );
+      $("open-delete").addEventListener("click", (e) =>
+        openDialog("delete", e.currentTarget),
+      );
+      function closeDialog(confirmed) {
+        $("demo-dialog").close();
+        $("dialog-log").textContent = confirmed
+          ? `${kind === "delete" ? "삭제" : "내려받기"} 확인 샘플을 눌렀습니다. 실제 작업은 실행하지 않습니다.`
+          : "확인창을 닫았습니다. 실제 작업은 실행하지 않습니다.";
+        opener?.focus();
+      }
+      $("dialog-cancel").addEventListener("click", () => closeDialog(false));
+      $("dialog-confirm").addEventListener("click", () => closeDialog(true));
+      $("demo-dialog").addEventListener("cancel", (e) => {
+        e.preventDefault();
+        closeDialog(false);
+      });
+      $("reading-theme").addEventListener("change", (e) => {
+        if (e.target.value === "default")
+          $("reading-sample").removeAttribute("data-reading-background");
+        else $("reading-sample").dataset.readingBackground = e.target.value;
+      });
+    </script>
+  </body>
+</html>

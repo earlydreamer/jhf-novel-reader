@@ -1,23 +1,33 @@
-# Source adapter (issue #2)
+# 원문 조회와 파싱
 
-`src/source/index.ts` exports `NarouSourceAdapter`, `normalizeSourceUrl`, `parseChapter`, and `parseWork`. Supply the existing credential-free `SourceTransport`; the production transport must disable redirects before dispatch as required in `docs/architecture.md`. The adapter independently rejects non-200 responses, mismatched final URLs, absent/non-HTML content types, and non-string bodies. Cancellation is checked before requests and after native settlement and hashing. It performs no retries.
+현재 원문 경로는 `src/source/work.ts`의 `createRenewalSource`, `normalizeSourceInput`, `normalizeWorkPageUrl`, `parseWorkPage`와 `src/source/parse.ts`의 파서입니다. 초기 이슈 #2의 `src/source/index.ts`·`NarouSourceAdapter`는 현재 진입점이 아닙니다.
 
-## URLs and bounded resolution
+## 지원 주소와 목차
 
-Only HTTPS `ncode.syosetu.com/nNNNNx[x]/` work/short-story URLs and `/nNNNNx[x]/<positive-safe-integer>/` chapter URLs are supported. Host/work-code casing and a missing trailing slash are normalized; fragments are removed. Query parameters, credentials, non-default ports, dot segments, escaped paths, whitespace/control characters, other schemes, and other hosts (including adult hosts) are rejected. Work information pages such as `/novelview/infotop/` are not supported: use the work's canonical URL. No login, age check, CAPTCHA or block bypass exists.
+HTTPS `ncode.syosetu.com/nNNNNx[x]/` 작품·단편 주소와 `/nNNNNx[x]/<positive-safe-integer>/` 회차 주소를 지원합니다. 호스트·작품 코드의 대소문자와 끝 슬래시를 정규화하고 fragment를 제거합니다. 인증 정보, 비기본 포트, 점 경로, 이스케이프 경로, 공백·제어 문자, 다른 프로토콜·호스트와 성인용 호스트는 거부합니다. 작품 정보 페이지 `/novelview/infotop/` 대신 작품의 정규 주소를 사용합니다.
 
-A work-root short story is parsed directly. Otherwise, a valid first-page TOC resolves to its first listed safe same-work chapter with one additional GET. No TOC pagination, parallel requests, full-work collection, or prefetch is performed. `parseWork` exposes that page's title and valid deduplicated chapter entries for callers needing metadata; it never fetches links. Prev/next links are plain strings, restricted to the same work and correct episode direction. Unsafe links are discarded. HTML `<base>` is ignored.
+작품 목차에는 양의 안전한 정수인 `?p=` 페이지만 허용합니다. 회차 주소로 들어오면 회차 선택을 유지하면서 작품 주소에서 메타데이터를 가져옵니다. 다음 목차 링크는 같은 작품의 더 큰 페이지 번호만 허용합니다. 단편도 작품 메타데이터 조회만으로 본문 번역을 시작하지 않습니다.
 
-## Extraction and identity
+범위·전체 회차 번역은 목차 페이지를 연결해 대상을 확인합니다. 순환·중복·누락·다른 작품 링크는 거부합니다. 초기 구현의 “목차 첫 페이지만 조회하며 페이지 이동은 없음”이라는 제한은 현재 일괄 번역에 적용되지 않습니다. [일괄 번역](renewal/batch-translation.md)을 확인합니다.
 
-A detached HTML template is used because its content stays inert, including remote image/frame resources. Parsed nodes are never inserted into the live document. Active/resource nodes are removed, and only text plus ruby UTF-16 offsets are returned. UI consumers must render strings as text, never HTML. Paragraph order, empty paragraph spacing, internal `<br>` line breaks and Japanese fullwidth indentation are retained; ASCII edge formatting whitespace is removed. Ruby readings are separated from base text, including sequential base/reading pairs. Complex grouped base/reading lists, nested ruby and `rtc` annotations are rejected as `source_parse` rather than silently dropping readings. Preface and afterword sections are excluded, matching the pinned upstream selector.
+## 전송과 본문 추출
 
-Missing title/body, multiple candidate body containers, empty content, mixed non-paragraph text that would be omitted, nesting deeper than 256 levels, over 100,000 nodes, and over-2,000,000-character input fail as `source_parse`. Known access-page titles/forms/challenges fail as `source_access`. Detection is deliberately conservative and cannot recognize every future interstitial; unsupported layouts fail instead of returning an empty successful chapter.
+인증값이 없는 `SourceTransport`를 사용하고 전송 전에 리디렉션을 차단합니다. 상태가 200이 아니거나 최종 URL이 다르면 실패합니다. HTML 콘텐츠 유형과 문자열 본문을 확인하고 요청 전·네이티브 응답 뒤에 취소 여부를 검사합니다. 로그인·성인 인증·CAPTCHA·접근 차단 우회는 제공하지 않습니다.
 
-`parseChapter(html, url): Promise<Chapter>` is network-free and deterministic. This intentionally refines issue #2's synchronous sketch to async so it can reuse the foundation's SHA-256 `createParagraphId` and browser Web Crypto without duplicating cryptography. `SourceAdapter.getChapter` is unchanged. IDs include chapter identity, ordinal, normalized text and ruby; repeated paragraphs at different positions differ. Source hash is SHA-256 over canonical URL and ordered normalized text/ruby (not executable markup, tracking attributes or title). Hashing requires Web Crypto, available in the native secure localhost context.
+분리된 HTML template 안에서 파싱하여 이미지·프레임 같은 외부 자원이 활성 문서에 삽입되지 않게 합니다. 반환한 문자열은 화면에서 텍스트로 표시하며 HTML로 실행하지 않습니다. 문단 순서, 빈 문단, `<br>` 줄바꿈, 일본어 전각 들여쓰기는 보존하고 가장자리의 ASCII 서식 공백은 제거합니다.
 
-## Attribution and verification limits
+루비 읽기는 본문과 분리하고 UTF-16 범위로 표시합니다. 연속된 본문·읽기 쌍을 지원하지만 복잡한 그룹, 중첩 루비, `rtc`는 읽기를 조용히 버리는 대신 `source_parse`로 거부합니다. 전서·후서는 지정한 선택자 범위에서 제외합니다.
 
-See `THIRD_PARTY_NOTICES.md` for the exact upstream revision, adapted selectors and MIT license. Tests contain only newly written synthetic content and mocked transport responses. No copyrighted novel was fetched, no real Syosetu request was made, and no public distribution or novel-access rights are established. Live-source usage remains gated on separately verifying permitted access and content rights. Android/WebView resource-inertness, native transport behavior and real-device functionality require issue #8 validation.
+제목·본문 누락, 복수 본문 후보, 빈 내용, 누락될 비문단 텍스트, 깊이 256 초과, 노드 100,000개 초과, 입력 2,000,000자 초과를 거부합니다. 알려진 접근 제한 제목·양식·도전 화면은 `source_access`로 처리합니다. 모든 미래 차단 화면을 알아볼 수 있다고 보장하지 않습니다.
 
-Common checks: `npm ci`, `npm run typecheck`, `npm test -- --run`, `npm run build`. In restricted dot VM environments, use a writable npm cache (`npm ci --cache /tmp/narou-source-npm`); this does not modify dependency pins.
+## 식별자와 스냅샷
+
+`parseChapter(html, url)`은 네트워크 없이 동작하는 비동기 파서입니다. 문단 ID는 회차 식별자·순서·정규화한 본문·루비를 포함하므로 같은 문장도 위치가 다르면 구분됩니다. 원문 해시는 정규 URL과 순서가 있는 본문·루비를 대상으로 하며 제목·추적 속성·실행 가능한 마크업은 포함하지 않습니다. SHA-256에는 Web Crypto를 사용합니다.
+
+현재 조회 결과는 파싱한 회차와 함께 `captureKind`, 조회 시각 `fetchedAt`, 원문 `rawHtml`을 가진 `SourceSnapshot`입니다. 원문을 보관한다는 사실이 화면에 HTML로 삽입하거나 실행한다는 뜻은 아닙니다.
+
+## 출처와 검증 한계
+
+선택자의 상위 프로젝트 리비전과 MIT 고지는 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)에 있습니다. 초기 파서 테스트는 새로 작성한 합성 자료와 모의 전송을 사용했습니다. 해당 테스트가 실제 소설의 이용 권한이나 공개 배포 권한을 부여하지 않습니다. 실제 이용에는 접근 허용 범위와 콘텐츠 권리를 따로 확인합니다.
+
+WebView 자원 비활성화, 네이티브 전송, 실제 기기 동작은 [Android 검증](android-validation.md)의 버전별 증거로 판단합니다. 기본 검사는 `npm ci`, `npm run typecheck`, `npm test -- --run`, `npm run build`입니다.

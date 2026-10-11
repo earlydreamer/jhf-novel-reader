@@ -1,37 +1,35 @@
-# Local OpenAI-compatible provider
+# 로컬 OpenAI 호환 제공자
 
-`createOpenAICompatibleProvider(config, transport, secrets)` implements `TranslationProvider` in `src/providers/openai-compatible`. Inject the existing native `ModelTransport` and OS-backed `SecretStore`; no fetch/browser fallback, SDK, companion server or cloud adapter is constructed here. App composition belongs to issue #6.
+현재 앱은 `src/providers/plainText.ts`의 `createProviderSession`과 모델 목록 조회 기능을 사용합니다. `src/providers/localStreaming.ts`는 스트리밍 번역을 담당합니다. 이슈 #3의 `createOpenAICompatibleProvider`·문단 JSON 계약은 초기 구현 기록이며 현재 실행 진입점이 아닙니다.
 
-## Configuration and endpoint identity
+## 연결과 인증
 
-- `provider` must be `openai-compatible`; `model` must be nonblank. The trimmed model is sent to the server. Use this same effective model in cache identity.
-- `normalizeOpenAICompatibleBaseUrl` accepts HTTP/HTTPS server roots or explicit `/v1` API bases (including reverse-proxy prefixes ending `/v1`). Root, trailing slash and `/v1/` variants normalize to the same `/v1` base. Callers must use this exported result as `CacheIdentity.normalizedEndpoint`. The request appends `/chat/completions` exactly once. Full operation URLs, other paths, query parameters, fragments and URL credentials are rejected.
-- `authRef` is optional. Without it, no secret lookup or Authorization header occurs. With it, read the secret immediately before dispatch and send it only as `Bearer` authorization. Missing/unreadable/blank/invalid-header credentials fail before POST. Do not put raw keys in `ProviderConfig`, URLs, cache identity, logs or source requests.
-- `contextBudget` is the user-verified total context-token budget; `outputBudget` is the output-token reservation and becomes `max_tokens`. Both must be positive safe integers and output must be smaller than context. No model defaults or claimed context capacities are invented.
-- This provider guards input using UTF-8 bytes of the serialized messages plus 256 framing units, then adds the output reservation. This is deliberately conservative for common byte-based tokenizers but is **not a tokenizer or a guarantee for an arbitrary model/chat template**. Issue #6 must budget chunks, preserve context/output separation and allow conservative limits; the selected server is authoritative. Ollama's actual loaded context must be configured independently by the user; sending `max_tokens` does not enlarge it.
+`normalizeOpenAICompatibleBaseUrl`로 HTTP/HTTPS 서버 루트 또는 `/v1` API 기본 주소를 정규화합니다. 역방향 프록시의 `/v1` 접두 경로도 지원합니다. 루트·끝 슬래시 차이를 정리하고 `/chat/completions`를 한 번만 붙입니다. 작업 전체 URL, 지원하지 않는 경로, 쿼리, fragment, URL 안의 인증 정보는 거부합니다.
 
-## Request and result
+모델은 사용자의 연결에서 조회한 목록을 바탕으로 선택합니다. 휴대전화에서 `localhost`는 휴대전화 자체를 가리킵니다. 기존 PC 서버의 접근 가능한 주소를 입력해야 합니다. 앱이 방화벽·서버 설정을 바꾸거나 서버를 인터넷에 공개하지는 않습니다.
 
-Each invocation performs at most one nonstreaming POST to the selected endpoint, with `stream:false`, `model`, `max_tokens` and two messages. No tools or response-format extension are required. The system instruction requests Korean translation and JSON `{ "paragraphs": [{ "id": "...", "text": "..." }] }`. Context, source paragraphs, requested IDs, direction and prompt version are JSON data in the user message. Embedded novel instructions/URLs never trigger tool calls, external requests or credential access.
+`authRef`가 없으면 인증값을 조회하거나 Authorization 헤더를 만들지 않습니다. 참조가 있으면 요청 직전에 보안 저장소에서 읽고 Bearer 헤더에 넣습니다. 키 자체는 설정·URL·저장본 식별자·원문 요청·로그에 넣지 않습니다. 교체된 인증 참조의 보존·회수는 [인증값 보존](renewal/credential-retention.md)에 따릅니다.
 
-Only `stop` plus one valid response choice, valid JSON, exact ordered requested IDs and nonblank text produces `complete`. `length` maps to `length`; `content_filter` maps to `blocked`; unrecognized finishes/tool finishes map to `unknown`. All noncomplete finishes return an empty paragraph array, so truncated JSON cannot obscure the finish status or become a valid partial translation. Markdown fences are intentionally not guessed or repaired. Whole-chapter validation and durable commit still belong to orchestration/storage.
+HTTP에서는 인증 헤더와 원문도 암호화되지 않습니다. 신뢰할 수 있는 네트워크나 HTTPS 연결을 사용합니다. 로컬 서버를 골랐다는 사실만으로 서버가 선택한 모델까지 로컬에서 실행한다고 보장할 수 없으므로 서버의 모델 설정을 확인합니다.
 
-## Errors and recovery
+## 현재 요청 방식
 
-`ReaderError` carries fixed codes/outcomes/status only; provider code never logs raw exceptions, responses, source text or keys.
+로컬 제공자는 선택한 번역 방식에 따라 일반 텍스트, 줄 ID 기반 묶음 번역, 스트리밍을 처리합니다. 묶음 번역은 입력·출력 예산에 맞게 나누고 필요한 경우 제한된 이어 보내기를 수행합니다. 스트리밍은 문단 ID와 순서를 검증하며 도착한 결과부터 표시합니다. 현재 회차 흐름을 “항상 POST 한 번”으로 설명하지 않습니다.
 
-- HTTP 401/403: `auth`, `received`, status retained.
-- HTTP 429: `connection`, `received`, status 429 distinguishes rate limiting without extending the shared error union. Other non-2xx statuses use `connection` and their status. There is no automatic delay/retry.
-- Known native `connection/not_sent` errors stay known. Transport timeout/unclassified connection interruption becomes `timeout_unknown/unknown`, because the server may already have processed the request.
-- Malformed successful response: `invalid_output/received`; invalid chunk or exceeded estimated budget: `invalid_output/not_sent`.
-- Pre-dispatch abort sends nothing. An abort after POST waits for transport settlement, then rejects `cancelled/unknown`; the orchestration single-request slot must remain held until that promise settles.
+컨텍스트 추정치는 실제 모델 토크나이저·채팅 템플릿의 보장이 아닙니다. 서버가 실제로 불러온 컨텍스트 용량을 늘리는 기능도 아닙니다.
 
-Expose `getLocalConnectionGuidance()` with connection failures: localhost on the phone means the phone itself. Check the PC's LAN address and whether the existing Ollama/LM Studio server is running. No firewall/server configuration changes or public internet exposure are needed by this adapter. Android LAN cleartext policy and actual device reachability remain issue #8, not proven by synthetic tests.
+`stop`은 완료, `length`는 길이 제한, `content_filter`는 차단으로 해석하며 알 수 없는 종료 이유를 완료로 간주하지 않습니다. 원문에 포함된 지시·URL을 실행하거나, 모델 응답으로 외부 도구를 호출하지 않습니다. 일부 결과를 표시하더라도 저장 전 상태와 완성본을 구분합니다.
 
-For unknown outcomes, show the user that explicit retry may duplicate server work/cost before starting another request. Never silently switch to Gemini or another endpoint. Choosing a local server does not itself prove a selected model runs locally; users should verify their existing server/model configuration rather than select a server-side cloud model accidentally.
+## 오류와 재시도
 
-## References and verification
+401/403은 인증 오류로 처리합니다. 다른 HTTP 오류는 허용한 상태·오류 코드로 분류하며 원시 응답·키·원문을 오류 메시지에 노출하지 않습니다. 알려진 입력·출력 한도 오류와 통신 결과 불명을 구분합니다.
 
-Protocol references checked during implementation: [Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) and [LM Studio Chat Completions](https://lmstudio.ai/docs/developer/openai-compat/chat-completions). Both expose `/v1/chat/completions`; the implementation uses only their common nonstreaming message interface.
+요청을 보내기 전 취소하면 전송하지 않습니다. 이미 보낸 요청은 취소해도 서버 처리 여부를 단정할 수 없습니다. 결과 불명 상태를 자동 재전송하거나 다른 제공자로 우회하지 않습니다. 스트리밍의 실패 문단 검증 후 제한적인 재시도는 별도 설정과 계약에 따르며, 통신 결과 불명·인증 오류의 자동 재시도와는 다릅니다.
 
-Independent synthetic Ollama and LM Studio envelopes cover success, optional auth, request data boundaries, normalization, budget rejection, malformed JSON/IDs, finish reasons, HTTP errors, cancellation and one-POST unknown outcomes. No real model/server, source-site, paid API, Android device, firewall or credential change is exercised.
+## 초기 문단 JSON 계약 기록
+
+초기 제공자는 비스트리밍 요청 한 번에 `stream:false`, `model`, `max_tokens`와 두 메시지를 보냈습니다. 출력은 `{ "paragraphs": [{ "id": "...", "text": "..." }] }`였으며, 정확한 ID 순서·비어 있지 않은 번역·완료 종료 이유를 요구했습니다. JSON 보정이나 코드 펜스 추측은 하지 않았습니다. 직렬화한 메시지의 UTF-8 바이트 수에 256의 포맷 여유와 출력 예약량을 더하는 보수적인 추정치를 사용했습니다.
+
+당시 합성 테스트는 Ollama·LM Studio 응답 형식, 선택적 인증, 주소 정규화, 예산 초과, 잘못된 JSON·ID, 종료 이유, HTTP 오류, 취소를 검증했습니다. 실제 서버·기기·원문 사이트·유료 API를 호출한 증거는 아니었습니다.
+
+[Ollama OpenAI 호환 문서](https://docs.ollama.com/api/openai-compatibility), [LM Studio Chat Completions 문서](https://lmstudio.ai/docs/developer/openai-compat/chat-completions), [Android 검증](android-validation.md)을 참고합니다.
