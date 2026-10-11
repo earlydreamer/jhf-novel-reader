@@ -1951,11 +1951,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     catalogAbort = new AbortController();
     const previousModelId = snapshot.selectedModelId;
     session = null;
+    // 확인 중에는 catalogStatus로 실행을 막고, 다른 설정 저장에 쓰는 기존 모델 선택은 유지한다.
     publish({
       catalogStatus: 'checking',
       catalogProblem: null,
       error: null,
-      selectedModelId: null,
       connection: { ...snapshot.connection, revision: snapshot.connection.revision + 1 },
     });
     try {
