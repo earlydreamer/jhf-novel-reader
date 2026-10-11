@@ -15,7 +15,11 @@ export type SecureBackend = Pick<
   | 'getItem'
   | 'setItem'
   | 'removeItem'
->;
+> &
+  Partial<Pick<SecureStoragePlugin, 'keys'>>;
+export interface EnumerableSecretStore extends SecretStore {
+  keys(): Promise<string[]>;
+}
 export function secretRef(ref: unknown): asserts ref is string {
   check(typeof ref === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(ref));
 }
@@ -24,7 +28,7 @@ const queues = new WeakMap<SecureBackend, Promise<unknown>>();
 export function createNativeSecretStore(
   backend: SecureBackend = SecureStorage,
   platform: () => string = () => (Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web'),
-): SecretStore {
+): EnumerableSecretStore {
   function operation<T>(ref: string, action: () => Promise<T>): Promise<T> {
     const task = (queues.get(backend) ?? Promise.resolve()).then(async () => {
       secretRef(ref);
@@ -46,6 +50,14 @@ export function createNativeSecretStore(
     return task;
   }
   return {
+    keys: () =>
+      operation('inventory', async () => {
+        if (!backend.keys) throw new StorageError('secure');
+        const refs = await backend.keys(false);
+        check(Array.isArray(refs));
+        refs.forEach(secretRef);
+        return refs;
+      }),
     get: (ref) => operation(ref, () => backend.getItem(ref)),
     set: async (ref, secret) => {
       text(secret);

@@ -135,3 +135,31 @@ describe('credentials', () => {
     expect(b.calls).toEqual([]);
   });
 });
+
+it('enumerates references only inside the fixed non-sync namespace without reading values', async () => {
+  const b = backend();
+  const api = {
+    ...b.api,
+    keys: vi.fn(async (sync?: boolean) => {
+      b.calls.push(['keys', sync]);
+      return ['provider.synthetic'];
+    }),
+  };
+  const store = createNativeSecretStore(api, () => 'android');
+  expect(await store.keys()).toEqual(['provider.synthetic']);
+  expect(b.calls).toEqual([
+    ['prefix', 'narou-reader.credentials.'],
+    ['sync', false],
+    ['access', KeychainAccess.whenUnlockedThisDeviceOnly],
+    ['keys', false],
+  ]);
+});
+it('rejects enumeration on web before calling the secure backend', async () => {
+  const b = backend();
+  const api = { ...b.api, keys: vi.fn(async () => []) };
+  await expect(createNativeSecretStore(api, () => 'web').keys()).rejects.toMatchObject({
+    reason: 'unsupported_platform',
+  });
+  expect(b.calls).toEqual([]);
+  expect(api.keys).not.toHaveBeenCalled();
+});
