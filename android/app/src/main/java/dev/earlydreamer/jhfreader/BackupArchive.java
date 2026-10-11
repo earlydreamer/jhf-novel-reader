@@ -212,7 +212,6 @@ final class BackupArchive {
     static int write(File dataRoot, String settings, ManifestFactory manifest, File zip, Limits limits)
         throws IOException {
         List<Item> items = new ArrayList<>();
-        long total = 0;
         for (String folder : FOLDERS) {
             File[] children = new File(dataRoot, folder).listFiles();
             if (children == null) continue;
@@ -220,8 +219,6 @@ final class BackupArchive {
                 if (!child.isFile() || !isFileName(child.getName())) continue;
                 long length = child.length();
                 if (length > limits.entryBytes) throw new IOException("file too large");
-                total += length;
-                if (total > limits.totalBytes) throw new IOException("backup too large");
                 items.add(new Item(DATA_DIR + "/" + folder + "/" + child.getName(), child));
             }
         }
@@ -230,6 +227,10 @@ final class BackupArchive {
         byte[] settingsBytes = settings == null ? null : settings.getBytes(StandardCharsets.UTF_8);
         if (manifestBytes.length > limits.jsonBytes) throw new IOException("manifest too large");
         if (settingsBytes != null && settingsBytes.length > limits.jsonBytes) throw new IOException("settings too large");
+        // 복원과 같은 압축 전 바이트 기준이다. 메타데이터와 실제로 읽은 데이터만 센다.
+        long total = manifestBytes.length;
+        if (settingsBytes != null) total += settingsBytes.length;
+        if (total > limits.totalBytes) throw new IOException("backup too large");
 
         byte[] buffer = new byte[64 * 1024];
         try (ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(zip)))) {
@@ -241,9 +242,11 @@ final class BackupArchive {
                 try (InputStream in = new FileInputStream(item.file)) {
                     int read;
                     while ((read = in.read(buffer)) > 0) {
+                        // 파일이 열거 뒤 커졌어도 항목·전체 한도를 모두 지킨다. 더하기 전 검사해 넘침도 막는다.
+                        if (read > limits.entryBytes - written) throw new IOException("file too large");
+                        if (read > limits.totalBytes - total) throw new IOException("backup too large");
                         written += read;
-                        // 만드는 동안 파일이 커졌어도 복원이 거부할 크기는 담지 않는다.
-                        if (written > limits.entryBytes) throw new IOException("file too large");
+                        total += read;
                         out.write(buffer, 0, read);
                     }
                 }
