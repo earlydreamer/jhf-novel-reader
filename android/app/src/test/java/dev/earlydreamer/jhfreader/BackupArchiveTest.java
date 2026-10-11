@@ -85,11 +85,13 @@ public class BackupArchiveTest {
     }
 
     private BackupArchive.PreparedRestore prepare(byte[] archive) throws Exception {
-        return BackupArchive.prepare(filesDir, new ByteArrayInputStream(archive), VALIDATOR, BackupArchive.Limits.DEFAULT);
+        return BackupArchive.prepare(filesDir, new ByteArrayInputStream(archive), VALIDATOR,
+            BackupArchive.Limits.DEFAULT, HostStateMarkerReplacer::replace);
     }
 
     private int restore(byte[] archive, BackupArchive.Limits limits) throws Exception {
-        BackupArchive.PreparedRestore prepared = BackupArchive.prepare(filesDir, new ByteArrayInputStream(archive), VALIDATOR, limits);
+        BackupArchive.PreparedRestore prepared = BackupArchive.prepare(filesDir, new ByteArrayInputStream(archive),
+            VALIDATOR, limits, HostStateMarkerReplacer::replace);
         return prepared.commit(prepared.token, settings.last, settings);
     }
 
@@ -203,7 +205,7 @@ public class BackupArchiveTest {
     @Test public void stagedReadsRejectTraversalAndCanonicalEscapeAndEnforceByteLimit() throws Exception {
         BackupArchive.PreparedRestore prepared = BackupArchive.prepare(filesDir,
             new ByteArrayInputStream(zip("manifest.json", manifest(1), "narou-reader/library/index.json", "12345")),
-            VALIDATOR, new BackupArchive.Limits(5, 1024, 10, 1024));
+            VALIDATOR, new BackupArchive.Limits(5, 1024, 10, 1024), HostStateMarkerReplacer::replace);
         for (String path : new String[] {"../manifest.json", "/library/index.json", "library/../index.json",
             "library/index.json/extra", "library/..", "narou-reader/library/index.json", "library/a\\b.json"}) {
             assertThrows(path, IOException.class, () -> prepared.read(prepared.token, path));
@@ -414,7 +416,7 @@ public class BackupArchiveTest {
         assertTrue(BackupRestoreTransaction.pending(filesDir));
         assertEquals(2, settings.calls);
         settings.fail = false;
-        new BackupRestoreTransaction(filesDir, settings).recover();
+        HostStateMarkerReplacer.transaction(filesDir, settings).recover();
         assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
         assertEquals("unset", settings.last);
         assertFalse(BackupRestoreTransaction.pending(filesDir));
@@ -461,7 +463,7 @@ public class BackupArchiveTest {
         assertThrows(AssertionError.class, () -> prepared.commit(prepared.token, "old settings", value -> {
             throw new AssertionError("synthetic process death after new tree placement");
         }));
-        new BackupRestoreTransaction(filesDir, settings).recover();
+        HostStateMarkerReplacer.transaction(filesDir, settings).recover();
         assertEquals("old chapter", read("narou-reader/chapters/keep-1.json"));
         assertFalse(new File(filesDir, "narou-reader/library/new.json").exists());
         assertEquals("old settings", settings.last);
@@ -516,7 +518,7 @@ public class BackupArchiveTest {
         File old = new File(filesDir, "narou-reader.old");
         assertTrue(live.renameTo(old));
         new File(filesDir, "narou-reader.restore/narou-reader").mkdirs();
-        assertThrows(IOException.class, () -> new BackupRestoreTransaction(filesDir, settings).recover());
+        assertThrows(IOException.class, () -> HostStateMarkerReplacer.transaction(filesDir, settings).recover());
         assertEquals("old chapter", read("narou-reader.old/chapters/keep-1.json"));
         assertTrue(new File(filesDir, "narou-reader.restore").exists());
         assertEquals(0, settings.calls);
@@ -537,7 +539,8 @@ public class BackupArchiveTest {
 
         File target = temp.newFolder("other");
         BackupArchive.PreparedRestore prepared = BackupArchive.prepare(
-            target, new java.io.FileInputStream(zip), VALIDATOR, BackupArchive.Limits.DEFAULT
+            target, new java.io.FileInputStream(zip), VALIDATOR, BackupArchive.Limits.DEFAULT,
+            HostStateMarkerReplacer::replace
         );
         int restored = prepared.commit(prepared.token, null, new Recorder());
         assertEquals(3, restored);

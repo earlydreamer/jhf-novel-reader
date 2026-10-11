@@ -10,8 +10,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -27,18 +25,27 @@ final class BackupRestoreTransaction {
 
     /** 실제 파일 작업 직후 중단을 주입하는 JVM 시험 경계. 제품 경로는 아무 일도 하지 않는다. */
     interface Checkpoint { void after(String step) throws IOException; }
+    /** 상태 마커의 원자 교체 경계. 제품은 Android Os.rename, JVM 테스트는 호스트 NIO를 쓴다. */
+    interface StateMarkerReplacer { void replace(File source, File destination) throws IOException; }
     private final File directory;
     private final BackupArchive.SettingsStore settings;
     private final Checkpoint checkpoint;
+    private final StateMarkerReplacer stateMarkerReplacer;
 
     BackupRestoreTransaction(File directory, BackupArchive.SettingsStore settings) {
-        this(directory, settings, step -> {});
+        this(directory, settings, step -> {}, BackupRestoreTransaction::renameOnAndroid);
     }
 
     BackupRestoreTransaction(File directory, BackupArchive.SettingsStore settings, Checkpoint checkpoint) {
+        this(directory, settings, checkpoint, BackupRestoreTransaction::renameOnAndroid);
+    }
+
+    BackupRestoreTransaction(File directory, BackupArchive.SettingsStore settings, Checkpoint checkpoint,
+                            StateMarkerReplacer stateMarkerReplacer) {
         this.directory = directory;
         this.settings = settings;
         this.checkpoint = checkpoint;
+        this.stateMarkerReplacer = stateMarkerReplacer;
     }
 
     private File file(String name) { return new File(directory, name); }
@@ -165,24 +172,14 @@ final class BackupRestoreTransaction {
             file.getFD().sync();
         }
         checkpoint.after(record.phase + "-synced");
-        // Android는 POSIX rename으로, 호스트 JVM은 NIO atomic move로 기존 기록을 교체한다.
-        replaceState(file(TEMP), file(STATE));
+        stateMarkerReplacer.replace(file(TEMP), file(STATE));
         checkpoint.after(record.phase + "-recorded");
     }
 
-    private static void replaceState(File source, File destination) throws IOException {
-        if (System.getProperty("java.vm.name", "").contains("Dalvik")) {
-            try {
-                Os.rename(source.getAbsolutePath(), destination.getAbsolutePath());
-            } catch (ErrnoException failure) {
-                throw new IOException("cannot persist restore state", failure);
-            }
-            return;
-        }
+    private static void renameOnAndroid(File source, File destination) throws IOException {
         try {
-            Files.move(source.toPath(), destination.toPath(),
-                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException failure) {
+            Os.rename(source.getAbsolutePath(), destination.getAbsolutePath());
+        } catch (ErrnoException failure) {
             throw new IOException("cannot persist restore state", failure);
         }
     }

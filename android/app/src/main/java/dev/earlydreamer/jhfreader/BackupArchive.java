@@ -108,14 +108,17 @@ final class BackupArchive {
         private final File root;
         private final Limits limits;
         private final List<String> paths;
+        private final BackupRestoreTransaction.StateMarkerReplacer stateMarkerReplacer;
         private State state = State.PREPARED;
 
         private enum State { PREPARED, ABORTING, COMMITTING, FINISHED, FAILED }
 
-        private PreparedRestore(File filesDir, Extracted extracted, Limits limits) throws IOException {
+        private PreparedRestore(File filesDir, Extracted extracted, Limits limits,
+                                BackupRestoreTransaction.StateMarkerReplacer stateMarkerReplacer) throws IOException {
             this.filesDir = filesDir;
             this.root = new File(filesDir, RESTORE_DIR).getCanonicalFile();
             this.limits = limits;
+            this.stateMarkerReplacer = stateMarkerReplacer;
             files = extracted.files;
             settings = extracted.settings;
             paths = extracted.paths;
@@ -170,7 +173,10 @@ final class BackupArchive {
             requirePrepared(candidate);
             state = State.COMMITTING;
             try {
-                new BackupRestoreTransaction(filesDir, store).commit(previousSettings, settings);
+                BackupRestoreTransaction transaction = stateMarkerReplacer == null
+                    ? new BackupRestoreTransaction(filesDir, store)
+                    : new BackupRestoreTransaction(filesDir, store, step -> {}, stateMarkerReplacer);
+                transaction.commit(previousSettings, settings);
                 state = State.FINISHED;
                 return files;
             } catch (IOException | RuntimeException failure) {
@@ -347,10 +353,17 @@ final class BackupArchive {
     /** 준비 실패와 취소는 임시 폴더만 건드린다. 복구·교체·설정 저장을 하지 않는다. */
     static PreparedRestore prepare(File filesDir, InputStream source, Validator validator, Limits limits)
         throws IOException, InvalidBackupException {
+        return prepare(filesDir, source, validator, limits, null);
+    }
+
+    /** JVM filesystem provider를 검증할 때만 host marker replacer를 주입한다. */
+    static PreparedRestore prepare(File filesDir, InputStream source, Validator validator, Limits limits,
+                                   BackupRestoreTransaction.StateMarkerReplacer stateMarkerReplacer)
+        throws IOException, InvalidBackupException {
         File root = new File(filesDir, RESTORE_DIR);
         if (root.exists() || new File(filesDir, OLD_DIR).exists() || BackupRestoreTransaction.pending(filesDir)) throw new IOException("restore already pending");
         try {
-            return new PreparedRestore(filesDir, extract(source, root, validator, limits), limits);
+            return new PreparedRestore(filesDir, extract(source, root, validator, limits), limits, stateMarkerReplacer);
         } catch (IOException | InvalidBackupException | RuntimeException failure) {
             deleteRecursively(root);
             if (root.exists()) failure.addSuppressed(new IOException("cannot remove restore staging"));
