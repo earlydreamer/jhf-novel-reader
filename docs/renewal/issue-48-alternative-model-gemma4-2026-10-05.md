@@ -60,7 +60,7 @@
 
 - 기기: Black Shark 2(`SKW-H0`), Android 10(API 29), 1080x2340. `adb`로 설치·조작.
 - 앱: `app.narou.reader` (MAINPC `7074af8` app-debug APK, 4,404,302 bytes).
-- 설정: 제공자 "LM Studio / Ollama", API 기본 주소 `http://100.73.103.1:8080`(Tailnet) → "연결 확인" 성공, 모델 목록에서 `/home/jakka4/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf` 선택.
+- 설정: 제공자 "LM Studio / Ollama", API 기본 주소 `http://<tailnet-host>:8080`(Tailnet) → "연결 확인" 성공, 모델 목록에서 `/path/to/models/gemma-4-E4B-it-UD-Q4_K_XL.gguf` 선택.
 - 흐름: 작품 화면(`リビティウム皇国のブタクサ姫`, 2026-10-05 목차 1–100화) → 3화 `森の修行と黒猫の使い魔` 선택 → **"이 화 번역" 1회**.
 - 서버 로그: 요청 1건, `total time = 47,921 ms / 9,431 tokens`, `truncated = 0`.
 - 저장: `files/narou-reader/versions/<uuid>.0.json`에 durable 저장. `payload.text` 7,967자, `payload.blocks` **103개**(원문 비공백 103과 일치).
@@ -84,3 +84,4 @@
 
 ### 12B QAT — 8GB 부적합
 `gemma-4-12b-it-UD-Q4_K_XL.gguf`(7,366,423,360 bytes)를 8GB RTX 3070 Ti에 로드하면 KV 캐시 할당(1,440MiB)에서 `cudaMalloc failed: out of memory`로 실패한다. **12B는 8GB VRAM에서 구동 불가**이며, **E4B(4.22GB QAT)가 8GB의 실질 최적 후보**다.
+

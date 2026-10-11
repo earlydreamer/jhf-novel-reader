@@ -103,9 +103,9 @@ public class SourceBrowserThemeTest {
 
 - [ ] **Step 2: 실패 확인**
 
-Run(Git Bash): `cd android && JAVA_HOME='D:/tools/narou-reader-android-build/jdk-21.0.12.1+1' ANDROID_HOME='C:/Users/User/AppData/Local/Android/Sdk' ./gradlew --no-daemon :app:testDebugUnitTest --tests app.narou.reader.SourceBrowserThemeTest`
+Run(Git Bash): `cd android && JAVA_HOME='/path/to/jdk-21' ANDROID_HOME='/path/to/android-sdk' ./gradlew --no-daemon :app:testDebugUnitTest --tests app.narou.reader.SourceBrowserThemeTest`
 Expected: 컴파일 실패(`SourceBrowserTheme` 없음).
-(JDK 경로가 다르면 `ls D:/tools/narou-reader-android-build/`로 찾는다. 다른 Gradle 데몬·빌드 산출물 정리는 하지 않는다.)
+(JDK·SDK 경로는 해당 환경의 실제 설치 경로로 바꾼다. 다른 Gradle 데몬·빌드 산출물 정리는 하지 않는다.)
 
 - [ ] **Step 3: `SourceBrowserTheme.java`**
 
@@ -316,9 +316,10 @@ import: `android.content.res.Configuration`, `androidx.appcompat.app.AppCompatDe
 - [ ] **Step 9: 검증**
 
 ```bash
-cd android && JAVA_HOME='D:/tools/narou-reader-android-build/jdk-21.0.12.1+1' ANDROID_HOME='C:/Users/User/AppData/Local/Android/Sdk' ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
+cd android && JAVA_HOME='/path/to/jdk-21' ANDROID_HOME='/path/to/android-sdk' ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
 ```
 
 `lintDebug`가 원래부터 실패하면(변경 전 `git stash` 금지 — 대신 실패 항목이 이번 변경 파일과 관련 있는지만 확인) 보고서에 적는다. 웹 쪽은 바뀌지 않으므로 `npx vitest run`은 필요 없다.
 
 - [ ] **Step 10: 커밋** — `feat: 원문 탐색 화면을 앱 테마와 해요체에 맞추기 (#99)`, 6개 경로 명시 stage.
+

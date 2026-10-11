@@ -1,4 +1,35 @@
-# Narou Reader 작업 컨벤션
+# JHF Novel Reader 기여 안내
+
+## 처음 기여하기
+
+버그는 재현 순서와 기대/실제 동작을 이슈에 적는다. 기능이나 큰 변경은 구현 전에 목적과 범위를 이슈에서 정리한다. 서버 인증값, 개인 주소, 실제 소설 본문이나 원시 모델 응답을 이슈·PR·스크린샷에 넣지 않는다.
+
+1. 저장소에 접근할 수 있고 fork가 허용된 경우 자신의 계정으로 fork한다. 직접 쓰기 권한이 있는 기여자는 이 저장소의 작업 브랜치를 사용할 수 있다.
+2. 자신의 fork를 clone하고 원본 저장소를 `upstream`으로 등록한다. 아래 `<your-account>`는 자신의 GitHub 계정으로 바꾼다.
+
+   ```sh
+   git clone https://github.com/<your-account>/jhf-novel-reader.git
+   cd jhf-novel-reader
+   git remote add upstream https://github.com/earlydreamer/jhf-novel-reader.git
+   git fetch upstream
+   ```
+
+   직접 쓰기 권한으로 작업한다면 원본 저장소를 clone하고 아래 명령의 `upstream/main`을 `origin/main`으로 바꾼다. push 대상도 원본 저장소의 작업 브랜치다.
+
+3. 이슈별 브랜치와 별도 작업 폴더를 만든다. 아래 `<issue>`와 `<short-slug>`는 실제 이슈 번호와 짧은 설명으로 바꾼다.
+
+   ```sh
+   git worktree add -b codex/<issue>-<short-slug> ../jhf-<issue> upstream/main
+   cd ../jhf-<issue>
+   ```
+
+4. [개발 환경과 검사](docs/development-checks.md)에 따라 Node와 의존성을 준비하고 필요한 검사를 실행한다. 웹 합성 미리보기에는 휴대폰·번역 서버·서명키가 필요 없다. Android 빌드와 기기 검증은 [별도 안내](docs/android-validation.md)를 따른다.
+5. 이번 이슈의 파일만 커밋하고 fork의 작업 브랜치에 push한다. 원본 저장소의 `main`을 대상으로 Draft PR을 열고 관련 이슈, 변경 이유, 실행한 검사와 남은 조건을 적는다. 직접 쓰기 권한이 있는 경우에도 PR로 변경을 검토한다.
+6. 검토 의견을 반영하고 필수 CI와 완료 조건을 확인한다. 병합과 원본 저장소 브랜치 정리는 유지관리자가 진행한다. 다른 사람이 쓰는 브랜치나 미커밋 작업은 정리하지 않는다.
+
+릴리스 서명키는 기여와 일반 개발 검사에 필요하지 않다. 개인키·비밀번호·실제 사용자 데이터는 요청하거나 공유하지 않는다.
+
+## 유지관리 작업 규칙
 
 이 문서는 사람과 에이전트가 함께 사용하는 프로젝트 작업 규칙이다. 새 구현을 시작하거나 기존 작업을 인계받을 때 먼저 읽는다. 사용자의 현재 지시와 이미 승인된 범위를 우선하고, 이 문서를 이유로 불필요한 재승인 절차를 만들지 않는다.
 
@@ -71,3 +102,4 @@ docs: 프로젝트 작업 분할과 전달 규칙 명문화 (#88)
 ## 작업 기록
 
 장기 재개에 필요한 결정과 검증만 프로젝트 문서 또는 요청받은 Vault에 기록한다. GitHub의 이슈/PR 상태를 실행 기준으로 유지하고 로컬 저장과 NAS 동기화를 구분한다. 기록을 남긴 것과 코드 분리·검증·병합을 끝낸 것을 구분한다.
+
