@@ -52,7 +52,7 @@
 
 ```powershell
 node tools/diagnostics/build-adapter.mjs
-node tools/diagnostics/hymt2-fidelity.mjs --mode no-repeat --model narou-hy-mt2-7b --repo . --adapter .superpowers/issue48/adapter.mjs --lms C:/Users/early/.lmstudio/bin/lms.exe --out .superpowers/issue48/no-repeat-new.json
+node tools/diagnostics/hymt2-fidelity.mjs --mode no-repeat --model narou-hy-mt2-7b --repo . --adapter .superpowers/issue48/adapter.mjs --lms C:/path/to/lmstudio/bin/lms.exe --out .superpowers/issue48/no-repeat-new.json
 ```
 
 `app`, `official`, `greedy`, `recommended`, `faithful`, `no-repeat`는 별개의 수동 비교 모드다. `--scope diagnostic-middle`은 조사 전용이며 전체 회차 acceptance 실행이 아님을 메타데이터에 표시한다. `--review-port`를 지정한 경우 본문을 localhost 화면의 메모리에만 유지하므로 사용 후 프로세스를 닫아야 한다. 기본 실행은 본문을 출력하거나 저장하지 않고 종료한다.
@@ -68,3 +68,4 @@ node tools/diagnostics/hymt2-fidelity.mjs --mode no-repeat --model narou-hy-mt2-
 5. 임시 대조 화면 2개, SSH forward 2개와 독립 stock 엔진을 정리했다. MAINPC에서 진단 port 18748–18750의 남은 listener 0개를 확인했으며 기존 LM Studio 모델은 같은 context/parallel로 idle 상태다. 진단 archive·스크립트·메타데이터는 MAINPC의 별도 작업 디렉터리에 보존했다.
 
 환경 준비 검증: `npm ci`, 기존 웹 607개/41파일, production build 통과. 진단 가드 추가 후 전체 suite는 **609개/42파일 PASS**, typecheck·lint PASS다. Windows checkout의 CRLF 때문에 기본 `format:check`는 실패했으나 `--end-of-line auto`를 추가한 검사는 통과했고 기존 tracked 파일은 변경하지 않았다. 새 진단 가드 2개는 합성 입력/전송으로 통과했다. 진단 스크립트·테스트 자체의 Prettier와 Node syntax 검사도 통과했다. Android 빌드와 휴대폰 G1은 이번에 실행하지 않았다.
+

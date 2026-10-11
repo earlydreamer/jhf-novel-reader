@@ -1,7 +1,7 @@
 # #96 몰입형 리더 구현 계획
 ## 실행 기준 (2026-10-08)
 
-#95 PR108을 최종77f8289/Checks1003테스트·Android CI·Sol6.1 high 증거 감사 승인 후 main1e9c73c06348c38f3ca32f8a562a21988834e230에 병합했다. 기본 main 원격 동일/clean·0/0, #95 브랜치/worktree 정리를 확인했다. #96 전용 C:/Users/User/.codex/worktrees/96-immersive-reader/narou-reader / codex/96-immersive-reader에서 이 base로 시작한다. 기준 b7 제품과 최신 main의 차이는 #95 문서2경로뿐이며 제품·테스트 변경0이다.
+#95 PR108을 최종77f8289/Checks1003테스트·Android CI·Sol6.1 high 증거 감사 승인 후 main1e9c73c06348c38f3ca32f8a562a21988834e230에 병합했다. 기본 main 원격 동일/clean·0/0, #95 브랜치/worktree 정리를 확인했다. #96 전용 `<worktrees>/96-immersive-reader/narou-reader` / codex/96-immersive-reader에서 이 base로 시작한다. 기준 b7 제품과 최신 main의 차이는 #95 문서2경로뿐이며 제품·테스트 변경0이다.
 
 사용자 지정 구현 Luna high/독립 감사 GPT-6.1 Sol high다. 원본 승인 계획 SHA256f12ff0391a58be17e84345f8c6fd7a315e25f789cf99a6cb72310341bc345172은 root ignored verification-96-plan/plan-draft.md에 변경 없이 보존한다. 아래 과거 후보 상태 설명은 사전 계획 작성 당시 맥락이며 실제 실행 기준은 이 단락과 현재 코드다. 생산 데이터·실제 소설·사설 endpoint·모델 통신을 이 UI 작업의 실기 검증에 사용하지 않는다.
 
@@ -74,3 +74,4 @@
 ## Sol 6.1 high 읽기 전용 감사 반영
 
 정본6.1 Back은 overlay→reader 바숨김→route순서, 6.5 문단 시트는 재번역/원문보기와 본문선택차단을 요구한다. 실제 API의 source가용성·colomo 완료route·legacy홀수font값·legacy테스트경계를 위 본문에 보정했다. #95 전달 뒤 최신main과실제코드를다시대조한뒤구현하며 이 계획만으로 실제모델/사설endpoint/생산데이터접근은허용하지않는다.
+

@@ -67,10 +67,12 @@ JHF Novel Reader는 **내 컴퓨터의 로컬 모델**로 번역해서 이런 �
 ## 처음 쓰기
 
 1. [릴리스 페이지][release-url]에서 최신 APK를 받아 설치해요. 처음이면 ‘출처를 알 수 없는 앱 설치’를 허용해야 해요.
-2. PC에서 번역 서버를 켜고 모델을 불러와요. 다른 기기에서 접속할 수 있게 열어 두세요.
+2. PC에서 번역 서버를 켜고 모델을 불러와요. 휴대폰이 접속할 수 있도록 신뢰하는 같은 로컬 네트워크나 이미 구성한 안전한 연결에서만 사용하세요.
 3. 앱의 **설정 → 번역 서버**에 서버 주소와 포트를 넣어요. `LM Studio 1234`·`Ollama 11434`·`llama.cpp 8080` 버튼이 주소 형식을 프리셋으로 채워 줘요.
 4. **연결 확인하기**를 누르고 번역에 쓸 모델을 골라요.
 5. 서재의 **작품 찾기**에서 작품을 열고 회차를 누르면 번역이 시작돼요.
+
+HTTP 주소를 쓰면 회차 원문과 서버 인증값이 암호화되지 않은 채 전송돼요. 신뢰할 수 있는 HTTPS 연결을 권장하며, 앱을 쓰려고 서버 포트를 인터넷에 공개하지 마세요. 자세한 연결 제한은 [Android 네트워크 정책](docs/android-validation.md#http-policy-and-its-limits)을 참고하세요.
 
 ## 앱 구성
 
@@ -110,6 +112,10 @@ JHF Novel Reader는 **내 컴퓨터의 로컬 모델**로 번역해서 이런 �
 - 공개된 회차만 읽어요. 로그인이나 연령 확인이 필요한 회차는 열지 않아요.
 - 번역 결과는 개인 감상용이에요. 원문과 번역을 다시 배포하지 마세요.
 
+## 개발과 기여
+
+처음 참여한다면 [기여 안내](CONTRIBUTING.md)에서 저장소 준비와 PR 흐름을 확인하세요. [개발 환경과 검사](docs/development-checks.md)에 Node 버전, 실행 명령, 합성 미리보기와 Android 검증 경로를 정리했어요.
+
 ## 라이선스
 
 앱 코드는 [MIT 라이선스](LICENSE)예요. 소설 원문과 번역의 권리는 각 작품의 저작권자에게 있어요. 포함된 오픈소스는 앱의 **설정 → 오픈소스 라이선스**와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에서 볼 수 있어요. 나로우 페이지 해석에는 [LNReader](https://github.com/LNReader/lnreader-plugins)의 Syosetu 플러그인 구조를 참고했어요(MIT).
@@ -121,3 +127,4 @@ JHF Novel Reader는 **내 컴퓨터의 로컬 모델**로 번역해서 이런 �
 [license-url]: LICENSE
 [checks-shield]: https://img.shields.io/github/actions/workflow/status/earlydreamer/jhf-novel-reader/check.yml?style=flat-square
 [checks-url]: https://github.com/earlydreamer/jhf-novel-reader/actions/workflows/check.yml
+

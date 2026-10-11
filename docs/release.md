@@ -4,11 +4,11 @@
 
 ## 1. 키 만들기 (처음 한 번, 키 주인이 직접)
 
-JDK의 `keytool`로 저장소 **밖**에 만든다. 비밀번호는 실행할 때 직접 입력한다.
+JDK의 `keytool`로 저장소 **밖**에 만든다. 비밀번호는 실행할 때 직접 입력한다. 아래 경로는 예시이며 JDK 설치 위치와 저장소 밖의 키 보관 위치로 직접 바꾼다.
 
 ```powershell
-& 'D:\tools\narou-reader-android-build\jdk-21.0.12.1+1\bin\keytool.exe' -genkeypair -v `
-  -keystore D:\keys\jhf-release.jks -alias jhf-release `
+& 'C:\path\to\jdk-21\bin\keytool.exe' -genkeypair -v `
+  -keystore C:\path\outside-repo\jhf-release.jks -alias jhf-release `
   -keyalg RSA -keysize 4096 -validity 36500
 ```
 
@@ -21,7 +21,7 @@ JDK의 `keytool`로 저장소 **밖**에 만든다. 비밀번호는 실행할 �
 
 - `android/keystore.properties` (git 제외, 직접 만든다)
   ```properties
-  storeFile=D:/keys/jhf-release.jks
+  storeFile=C:/path/outside-repo/jhf-release.jks
   storePassword=...
   keyAlias=jhf-release
   keyPassword=...
@@ -52,3 +52,4 @@ cd android && ./gradlew --no-daemon :app:assembleRelease
 ## 4. 배포
 
 GitHub 릴리스에 APK와 SHA-256을 올린다. 정식 판은 `--prerelease` 없이.
+
