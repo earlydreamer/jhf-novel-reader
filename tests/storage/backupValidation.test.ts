@@ -316,3 +316,32 @@ it.each([source.chapterId, 'n9999zz/1'])(
     await expect(f.validate()).rejects.toThrow();
   },
 );
+
+it('preserves permanent legacy deletion markers alongside fresh live translations', async () => {
+  const f = await fixture();
+  const current = JSON.parse(f.memory.get('library/index.0.json')!).payload;
+  await put(f.memory, 'library/index.0.json', {
+    ...current,
+    legacyRemovedChapterIds: [source.chapterId],
+  });
+  const before = [...f.memory];
+  await expect(f.validate()).resolves.toBeUndefined();
+  expect([...f.memory]).toEqual(before);
+});
+
+it.each([
+  { markers: ['../../outside'] },
+  { markers: ['n1234ab/1', 'n1234ab/1'] },
+  { markers: [3] },
+  { markers: 'n1234ab/1' },
+])('rejects invalid legacy deletion markers %j', async ({ markers }) => {
+  const f = await fixture();
+  f.memory.clear();
+  await put(f.memory, 'library/index.0.json', {
+    versions: [],
+    workIds: [],
+    recent: [],
+    legacyRemovedChapterIds: markers,
+  });
+  await expect(f.validate()).rejects.toThrow();
+});

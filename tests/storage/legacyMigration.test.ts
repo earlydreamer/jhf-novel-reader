@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { migrateLegacyData } from '../../src/storage/legacyMigration';
 import { createLibraryStore } from '../../src/storage/library';
+import { validateBackupSnapshot } from '../../src/storage/backupValidation';
 import { digest } from '../../src/storage/journal';
 import type { PrivateFiles } from '../../src/storage/journal';
 import { createReaderStore } from '../../src/storage/store';
@@ -490,3 +491,330 @@ it.each([false, true])(
     expect(await legacy.read(completed.cacheKey)).not.toBeNull();
   },
 );
+
+async function deletedLegacyFixture() {
+  const memory = new Files();
+  const files: PrivateFiles = {
+    read: memory.read.bind(memory),
+    write: memory.write.bind(memory),
+    remove: async (path) => {
+      memory.data.delete(path);
+    },
+    list: async (directory) =>
+      [...memory.data.keys()]
+        .filter((path) => path.startsWith(`${directory}/`))
+        .map((path) => path.slice(directory.length + 1)),
+  };
+  const originals = [
+    await fixture(),
+    await fixture({ model: 'second-model' }),
+    await fixture({ canonicalUrl: 'https://ncode.syosetu.com/n1234ab/2/' }),
+  ];
+  const legacy = createReaderStore(files);
+  for (const original of originals) {
+    await legacy.commitChapter(original);
+    memory.data.set(
+      `chapters/${original.cacheKey}.1.json`,
+      memory.data.get(`chapters/${original.cacheKey}.0.json`)!,
+    );
+  }
+  const prefs = preferences();
+  const library = createLibraryStore(files, { preferences: prefs });
+  await createV1Migration(files, prefs, library)();
+  return {
+    memory,
+    files,
+    prefs,
+    library,
+    originals,
+    originalBytes: [...memory.data].filter(([path]) => path.startsWith('chapters/')),
+  };
+}
+
+it('does not resurrect a deleted chapter from both v1 slots or another model on later startups', async () => {
+  const f = await deletedLegacyFixture();
+  expect(await f.library.listVersions('n1234ab/1')).toHaveLength(2);
+  expect(await f.library.removeChapterVersions!('n1234ab/1')).toMatchObject({
+    cleanupComplete: true,
+  });
+  expect(await f.library.readChapterRemovalInventory!()).toEqual([]);
+  for (let restart = 0; restart < 3; restart++) {
+    const library = createLibraryStore(f.files, { preferences: f.prefs });
+    await createV1Migration(f.files, f.prefs, library)();
+    expect(await library.listVersions('n1234ab/1')).toEqual([]);
+    expect(await library.listVersions('n1234ab/2')).toHaveLength(1);
+  }
+  expect([...f.memory.data].filter(([path]) => path.startsWith('chapters/'))).toEqual(
+    f.originalBytes,
+  );
+});
+
+it('allows a new UUID translation and position without reimporting deleted legacy versions', async () => {
+  const f = await deletedLegacyFixture();
+  const old = (await f.library.listVersions('n1234ab/1'))[0]!;
+  await f.library.removeChapterVersions!('n1234ab/1');
+  const fresh = { ...old, versionId: 'explicit-new-version', createdAt: '2026-10-11T00:00:00Z' };
+  await f.library.commitVersion(fresh);
+  const position = {
+    workId: fresh.source.workId,
+    chapterId: fresh.source.chapterId,
+    versionId: fresh.versionId,
+    blockId: fresh.blocks[0]!.id,
+    offset: 17,
+  };
+  await f.library.savePosition(position);
+  const recent = await f.library.listRecent();
+  for (let restart = 0; restart < 2; restart++) {
+    const library = createLibraryStore(f.files);
+    await createV1Migration(f.files, f.prefs, library)();
+    expect(await library.listVersions('n1234ab/1')).toEqual([fresh]);
+    expect(await library.readPosition(fresh.versionId)).toEqual(position);
+    expect(await library.listRecent()).toEqual(recent);
+  }
+});
+
+it.each([1, 2, 3, 4])(
+  'preserves the committed deletion intent after index write %i fails',
+  async (failAt) => {
+    const f = await deletedLegacyFixture();
+    let writes = 0,
+      armed = true;
+    const files: PrivateFiles = {
+      ...f.files,
+      write: async (path, text) => {
+        if (armed && path.startsWith('library/index.') && ++writes === failAt)
+          throw new Error('interrupted index write');
+        await f.files.write(path, text);
+      },
+    };
+    const result = await createLibraryStore(files).removeChapterVersions!('n1234ab/1');
+    expect(result.removed).toBe(failAt !== 1);
+    armed = false;
+    for (let restart = 0; restart < 2; restart++) {
+      const library = createLibraryStore(files);
+      await createV1Migration(files, f.prefs, library)();
+      expect(await library.listVersions('n1234ab/1')).toHaveLength(failAt === 1 ? 2 : 0);
+      expect(await library.listVersions('n1234ab/2')).toHaveLength(1);
+    }
+  },
+);
+
+it.each([1, 2])(
+  'handles partial index write %i without reviving a logically deleted chapter',
+  async (failAt) => {
+    const f = await deletedLegacyFixture();
+    let writes = 0,
+      armed = true;
+    const files: PrivateFiles = {
+      ...f.files,
+      write: async (path, text) => {
+        if (armed && path.startsWith('library/index.') && ++writes === failAt) {
+          f.memory.data.set(path, text.slice(0, 20));
+          return;
+        }
+        await f.files.write(path, text);
+      },
+    };
+    const result = await createLibraryStore(files).removeChapterVersions!('n1234ab/1');
+    expect(result.removed).toBe(failAt !== 1);
+    armed = false;
+    for (let restart = 0; restart < 2; restart++) {
+      const library = createLibraryStore(files);
+      await createV1Migration(files, f.prefs, library)();
+      expect(await library.listVersions('n1234ab/1')).toHaveLength(failAt === 1 ? 2 : 0);
+    }
+  },
+);
+
+it.each(['page-write', 'work-removal'])(
+  'keeps an older-slot deletion marker during unrelated %s',
+  async (action) => {
+    const f = await deletedLegacyFixture();
+    await f.library.removeChapterVersions!('n1234ab/1');
+    const payload = JSON.parse(f.memory.data.get('library/index.0.json')!).payload;
+    const put = async (slot: number, generation: number, value: unknown) =>
+      f.memory.data.set(
+        `library/index.${slot}.json`,
+        JSON.stringify({
+          format: 1,
+          generation,
+          payload: value,
+          checksum: await digest([1, generation, value]),
+        }),
+      );
+    await put(0, 101, { ...payload, legacyRemovedChapterIds: [] });
+    await put(1, 100, { ...payload, legacyRemovedChapterIds: ['n1234ab/1'] });
+    const reopened = createLibraryStore(f.files, { preferences: f.prefs });
+    if (action === 'page-write') {
+      const page = (await reopened.readWork('n1234ab'))[0]!;
+      await reopened.saveWorkPage(page);
+      await reopened.saveWorkPage(page);
+    } else {
+      await reopened.removeWork!('n5678cd');
+    }
+    await createV1Migration(f.files, f.prefs, createLibraryStore(f.files))();
+    expect(await reopened.listVersions('n1234ab/1')).toEqual([]);
+    expect(await reopened.listVersions('n1234ab/2')).toHaveLength(1);
+  },
+);
+
+it('retains deletion markers through a validated backup snapshot and a corrupt newer index slot', async () => {
+  const f = await deletedLegacyFixture();
+  await f.library.removeChapterVersions!('n1234ab/1');
+  await validateBackupSnapshot({
+    read: f.files.read,
+    paths: [...f.memory.data.keys()],
+    settings: null,
+  });
+  const restored = new Map(f.memory.data);
+  const newest = [0, 1].sort(
+    (a, b) =>
+      JSON.parse(restored.get(`library/index.${b}.json`)!).generation -
+      JSON.parse(restored.get(`library/index.${a}.json`)!).generation,
+  )[0]!;
+  restored.set(`library/index.${newest}.json`, '{');
+  const files: PrivateFiles = {
+    read: async (path) => restored.get(path) ?? null,
+    write: async (path, text) => {
+      restored.set(path, text);
+    },
+    list: async (directory) =>
+      [...restored.keys()]
+        .filter((path) => path.startsWith(`${directory}/`))
+        .map((path) => path.slice(directory.length + 1)),
+  };
+  const library = createLibraryStore(files);
+  await createV1Migration(files, f.prefs, library)();
+  expect(await library.listVersions('n1234ab/1')).toEqual([]);
+  expect(await library.listVersions('n1234ab/2')).toHaveLength(1);
+  expect(await library.readLegacyRemovedChapterIds!()).toEqual(['n1234ab/1']);
+});
+
+it('upgrades an older pending cleanup inventory into a permanent legacy deletion marker', async () => {
+  const f = await deletedLegacyFixture();
+  const blocked = {
+    ...f.files,
+    remove: async () => {
+      throw new Error('temporary delete failure');
+    },
+  };
+  await createLibraryStore(blocked).removeChapterVersions!('n1234ab/1');
+  for (const slot of [0, 1]) {
+    const path = `library/index.${slot}.json`;
+    const envelope = JSON.parse(f.memory.data.get(path)!);
+    delete envelope.payload.legacyRemovedChapterIds;
+    envelope.checksum = await digest([1, envelope.generation, envelope.payload]);
+    f.memory.data.set(path, JSON.stringify(envelope));
+  }
+  for (let restart = 0; restart < 3; restart++) {
+    const library = createLibraryStore(f.files);
+    await createV1Migration(f.files, f.prefs, library)();
+    expect(await library.listVersions('n1234ab/1')).toEqual([]);
+    expect(await library.readChapterRemovalInventory!()).toEqual([]);
+    expect(await library.readLegacyRemovedChapterIds!()).toEqual(['n1234ab/1']);
+  }
+});
+
+it('retains the chapter marker after the containing work is deleted', async () => {
+  const f = await deletedLegacyFixture();
+  await f.library.removeChapterVersions!('n1234ab/1');
+  expect(await f.library.removeWork!('n1234ab')).toMatchObject({ cleanupComplete: true });
+  const library = createLibraryStore(f.files);
+  expect(await library.readLegacyRemovedChapterIds!()).toEqual(['n1234ab/1', 'n1234ab/2']);
+  await createV1Migration(f.files, f.prefs, library)();
+  expect(await library.listWorkIds()).toEqual([]);
+  expect([...f.memory.data.keys()].filter((path) => path.startsWith('chapters/'))).toEqual([]);
+});
+
+it.each(['work', 'version', 'position'])(
+  'concurrent deletion wins over automatic legacy import at the %s stage',
+  async (stage) => {
+    const f = await deletedLegacyFixture();
+    const old = (await f.library.listVersions('n1234ab/1'))[0]!;
+    await createReaderStore(f.files).savePosition({
+      chapterId: 'n1234ab/1',
+      paragraphId: 'p1',
+      offset: 8,
+    });
+    let armed = true;
+    let removal: ReturnType<NonNullable<typeof f.library.removeChapterVersions>> | undefined;
+    const files: PrivateFiles = {
+      ...f.files,
+      read: async (path) => {
+        const raw = await f.files.read(path);
+        const prefix =
+          stage === 'work'
+            ? 'works/n1234ab.'
+            : `${stage === 'version' ? 'versions' : 'reading'}/${old.versionId}.`;
+        if (armed && path.startsWith(prefix)) {
+          armed = false;
+          removal = library.removeChapterVersions!('n1234ab/1');
+        }
+        return raw;
+      },
+    };
+    const library = createLibraryStore(files);
+    await expect(createV1Migration(files, f.prefs, library)()).resolves.toMatchObject({
+      warnings: [],
+    });
+    expect(armed).toBe(false);
+    expect(await removal).toMatchObject({ removed: true, cleanupComplete: true });
+    expect(await library.listVersions('n1234ab/1')).toEqual([]);
+    expect(await library.readPosition(old.versionId)).toBeNull();
+    expect(await library.listVersions('n1234ab/2')).toHaveLength(1);
+    await createV1Migration(files, f.prefs, library)();
+    expect(await library.listVersions('n1234ab/1')).toEqual([]);
+    const fresh = { ...old, versionId: `explicit-${stage}`, createdAt: '2026-10-11T00:00:00Z' };
+    await library.commitVersion(fresh);
+    await library.savePosition({
+      workId: fresh.source.workId,
+      chapterId: fresh.source.chapterId,
+      versionId: fresh.versionId,
+      blockId: fresh.blocks[0]!.id,
+      offset: 19,
+    });
+    expect(await library.listVersions('n1234ab/1')).toEqual([fresh]);
+  },
+);
+
+it('does not restore an already-loaded v1 chapter after concurrent whole-work deletion', async () => {
+  const f = await deletedLegacyFixture();
+  let armed = true;
+  let removal: ReturnType<NonNullable<typeof f.library.removeWork>> | undefined;
+  const files: PrivateFiles = {
+    ...f.files,
+    read: async (path) => {
+      const raw = await f.files.read(path);
+      if (armed && path.startsWith('works/n1234ab.')) {
+        armed = false;
+        removal = library.removeWork!('n1234ab');
+      }
+      return raw;
+    },
+  };
+  const library = createLibraryStore(files, { preferences: f.prefs });
+  await createV1Migration(files, f.prefs, library)();
+  expect(await removal).toMatchObject({ removed: true, cleanupComplete: true });
+  expect(await library.listVersions('n1234ab/1')).toEqual([]);
+  expect(await library.listVersions('n1234ab/2')).toEqual([]);
+  expect(await library.listRecent()).toEqual([]);
+  expect(await library.listWorkIds()).toEqual([]);
+});
+
+it('does not mark another work from an inconsistent live ref during work deletion', async () => {
+  const f = await deletedLegacyFixture();
+  const old = (await f.library.listVersions('n1234ab/1'))[0]!;
+  await f.library.commitVersion({
+    ...old,
+    versionId: 'inconsistent-owner',
+    source: { ...old.source, chapterId: 'n9999zz/1' },
+  });
+  const candidate = await fixture({ canonicalUrl: 'https://ncode.syosetu.com/n9999zz/1/' });
+  const foreign = { ...candidate, source: { ...candidate.source, workId: 'n9999zz' } };
+  await createReaderStore(f.files).commitChapter(foreign);
+  await f.library.removeWork!('n1234ab');
+  expect(await f.library.readLegacyRemovedChapterIds!()).toEqual(['n1234ab/1', 'n1234ab/2']);
+  await createV1Migration(f.files, f.prefs, f.library)();
+  expect(await f.library.listVersions('n9999zz/1')).toHaveLength(1);
+  expect(await f.library.listVersions('n1234ab/1')).toEqual([]);
+});

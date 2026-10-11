@@ -170,6 +170,11 @@ export interface LibraryStore {
   commitVersion(value: CompletedTranslation): Promise<void>;
   savePosition(value: ReadingPosition): Promise<void>;
   readPosition(versionId: string): Promise<ReadingPosition | null>;
+  /** 자동 v1 가져오기 전용. 삭제 표식을 확인하고 본문·누락 위치를 한 큐 작업으로 복구한다.
+   * 새 본문 또는 누락 위치를 저장하면 true, 기존 저장본/삭제된 회차를 건너뛰면 false.
+   */
+  importLegacyVersion?(value: CompletedTranslation, position?: ReadingPosition): Promise<boolean>;
+  readLegacyRemovedChapterIds?(): Promise<readonly string[]>;
   readChapterRemovalInventory?(): Promise<readonly ChapterRemovalInventory[]>;
   /** 이미 기록된 정리 대상만 재시도한다. 이후 저장한 새 버전은 포함하지 않는다. */
   retryChapterRemoval?(chapterId: string): Promise<ChapterRemovalResult>;

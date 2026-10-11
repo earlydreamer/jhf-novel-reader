@@ -21,7 +21,10 @@ export function createV1Migration(
       }
     }
     const remaining = (await library.readChapterRemovalInventory?.()) ?? [];
-    const skipChapterIds = [...new Set([...pending, ...remaining].map((entry) => entry.chapterId))];
+    const deleted = (await library.readLegacyRemovedChapterIds?.()) ?? [];
+    const skipChapterIds = [
+      ...new Set([...deleted, ...[...pending, ...remaining].map((entry) => entry.chapterId)]),
+    ];
     const cacheKey = await createLastChapterRepository(preferences).read();
     const removalInventory = (await library.readRemovalInventory?.()) ?? [];
     const cacheKeys = cacheKey ? [cacheKey] : [];
