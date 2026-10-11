@@ -48,21 +48,42 @@ public final class BackupPlugin extends Plugin {
     private volatile int pendingFiles;
     // 아래 세션은 단일 executor에서만 읽고 바꾼다. URI는 준비 뒤 보관하거나 다시 열지 않는다.
     private BackupArchive.PreparedRestore pendingRestore;
+    private volatile boolean storageReady;
+    private volatile boolean preparingRestore;
 
     @Override
     public void load() {
-        File filesDir = getContext().getFilesDir();
-        // 데이터 폴더가 없는데 .old가 남았다면 교체 도중 끊긴 것이다. 웹이 읽기 전에 이름만 되돌린다.
-        BackupArchive.recoverInterruptedSwap(filesDir);
+        executor.execute(() -> new File(getContext().getCacheDir(), CACHE_ZIP).delete());
+    }
+
+    /** 웹의 저장소/컨트롤러 구성 전에 호출한다. 실패하면 어느 저장 접근도 시작하지 않는다. */
+    @PluginMethod
+    public void recoverRestore(PluginCall call) {
         executor.execute(() -> {
-            BackupArchive.deleteLeftovers(filesDir);
-            new File(getContext().getCacheDir(), CACHE_ZIP).delete();
+            storageReady = false;
+            // WebView만 다시 열린 동안 시스템 선택기/준비 작업이 끝나지 않았을 수 있다.
+            if (pendingZip != null || preparingRestore) {
+                call.reject("restore_recovery_required");
+                return;
+            }
+            busy.set(true);
+            try {
+                new BackupRestoreTransaction(getContext().getFilesDir(), this::saveSettings).recover();
+                pendingRestore = null;
+                storageReady = true;
+                busy.set(false);
+                JSObject response = new JSObject();
+                response.put("ready", true);
+                call.resolve(response);
+            } catch (Exception failure) {
+                call.reject("restore_recovery_required");
+            }
         });
     }
 
     @PluginMethod
     public void export(PluginCall call) {
-        if (!busy.compareAndSet(false, true)) {
+        if (!storageReady || !busy.compareAndSet(false, true)) {
             call.reject("backup_failed");
             return;
         }
@@ -124,10 +145,11 @@ public final class BackupPlugin extends Plugin {
 
     @PluginMethod
     public void prepareRestore(PluginCall call) {
-        if (!busy.compareAndSet(false, true)) {
+        if (!storageReady || !busy.compareAndSet(false, true)) {
             call.reject("restore_failed");
             return;
         }
+        preparingRestore = true;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT)
             .addCategory(Intent.CATEGORY_OPENABLE)
             .setType("*/*")
@@ -135,6 +157,7 @@ public final class BackupPlugin extends Plugin {
         try {
             startActivityForResult(call, intent, "prepareRestoreResult");
         } catch (RuntimeException unavailable) {
+            preparingRestore = false;
             busy.set(false);
             call.reject("restore_failed");
         }
@@ -143,12 +166,14 @@ public final class BackupPlugin extends Plugin {
     @ActivityCallback
     private void prepareRestoreResult(PluginCall call, ActivityResult result) {
         if (call == null) {
+            preparingRestore = false;
             busy.set(false);
             return;
         }
         Intent data = result.getData();
         Uri uri = data == null ? null : data.getData();
         if (result.getResultCode() == Activity.RESULT_CANCELED) {
+            preparingRestore = false;
             busy.set(false);
             JSObject response = new JSObject();
             response.put("prepared", false);
@@ -156,6 +181,7 @@ public final class BackupPlugin extends Plugin {
             return;
         }
         if (result.getResultCode() != Activity.RESULT_OK || uri == null) {
+            preparingRestore = false;
             busy.set(false);
             call.reject("restore_failed");
             return;
@@ -178,6 +204,7 @@ public final class BackupPlugin extends Plugin {
                 }
                 boolean stagingRemains = new File(getContext().getFilesDir(), BackupArchive.RESTORE_DIR).exists();
                 boolean restartRequired = pendingRestore != null || stagingRemains;
+                preparingRestore = false;
                 busy.set(restartRequired);
                 // 토큰을 돌려주기 전 정리가 실패해도 웹이 기존 런타임을 재개하지 않게 알린다.
                 call.reject(restartRequired ? "restore_restart_required"
@@ -185,6 +212,7 @@ public final class BackupPlugin extends Plugin {
                 return;
             }
             JSObject response = new JSObject();
+            preparingRestore = false;
             response.put("prepared", true);
             response.put("token", pendingRestore.token);
             response.put("files", pendingRestore.files);
@@ -228,7 +256,7 @@ public final class BackupPlugin extends Plugin {
     public void commitRestore(PluginCall call) {
         executor.execute(() -> {
             try {
-                int files = restoreSession().commit(call.getString("token"), this::saveSettings);
+                int files = restoreSession().commit(call.getString("token"), readSettings(), this::saveSettings);
                 pendingRestore = null;
                 busy.set(false);
                 JSObject response = new JSObject();
