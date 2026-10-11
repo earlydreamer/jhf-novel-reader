@@ -82,7 +82,7 @@ describe('제3자 고지 생성물', () => {
     );
     expect(item?.license).toBe('Apache-2.0');
     expect(notices.texts[item?.textId ?? '']).toContain('Apache License');
-    expect(committedMarkdown).toContain('사용자가 설정에서 켜면 그 기기에 내려받는다');
+    expect(committedMarkdown).toContain('사용자가 설정에서 켜면 그 기기에 내려받습니다');
   });
 
   it('Android 섹션에 -bom 아티팩트가 없다', () => {

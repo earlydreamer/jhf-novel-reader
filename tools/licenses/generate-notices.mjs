@@ -41,10 +41,10 @@ const DIRECT = [
     textFile: 'licenses/lnreader-plugins-MIT.txt',
     md: [
       '- 출처: https://github.com/LNReader/lnreader-plugins , 고정 커밋 `358388426c0b23674b97760c352ee972b8e4d7b8`, 파일 [`plugins/japanese/Syosetu.ts`](https://github.com/LNReader/lnreader-plugins/blob/358388426c0b23674b97760c352ee972b8e4d7b8/plugins/japanese/Syosetu.ts)',
-      '- 라이선스: MIT, Copyright (c) 2021 Rajarshee Chatterjee. 변경 없는 전체 원문은 아래 "라이선스 원문"에 있다.',
-      '- 적용 위치: `src/source/parse.ts`(본문·회차 제목 선택자 `BODY`·`TITLE`, 목차 파싱 `parseWork`), `src/source/work.ts`(목차 선택자 사용). 본문 번호 제외 규칙과 페이지별 목차 선택자도 같은 파일에 있다.',
-      '- 변경: Cheerio와 플러그인 fetch를 분리된 비활성 브라우저 템플릿과 주입된 SourceTransport로 바꿨다. HTML 대신 구조화된 문단·ruby를 낸다. URL·내비게이션 검증, 결정적 SHA-256 식별자, 접근 페이지 감지, 제한된 파싱, 취소 검사, 이전 선택자를 더했다. 랭킹·검색·필터·표지·user-agent 위장·플러그인 런타임·전체 페이지 수집은 제거했다.',
-      '- 주의: 파싱 로직만 재사용한다. 업스트림 소설 픽스처나 본문은 포함하지 않는다. 업스트림 코드 라이선스는 소설 본문에 대한 권리나 자동 접근 허가를 주지 않는다. 이 앱 자체 코드는 MIT 라이선스(저장소의 LICENSE)이며, 그것이 소설 본문에 대한 권리를 주지 않는 것도 같다.',
+      '- 라이선스: MIT, Copyright (c) 2021 Rajarshee Chatterjee. 변경 없는 전체 원문은 아래 "라이선스 원문"에 있습니다.',
+      '- 적용 위치: `src/source/parse.ts`(본문·회차 제목 선택자 `BODY`·`TITLE`, 목차 파싱 `parseWork`), `src/source/work.ts`(목차 선택자 사용). 본문 번호 제외 규칙과 페이지별 목차 선택자도 같은 파일에 있습니다.',
+      '- 변경: Cheerio와 플러그인 fetch를 분리된 비활성 브라우저 템플릿과 주입된 SourceTransport로 바꿨습니다. HTML 대신 구조화된 문단·ruby를 출력합니다. URL·내비게이션 검증, 결정적 SHA-256 식별자, 접근 페이지 감지, 제한된 파싱, 취소 검사, 이전 선택자를 추가했습니다. 랭킹·검색·필터·표지·user-agent 위장·플러그인 런타임·전체 페이지 수집은 제거했습니다.',
+      '- 주의: 파싱 로직만 재사용합니다. 업스트림 소설 픽스처나 본문은 포함하지 않습니다. 업스트림 코드 라이선스는 소설 본문에 대한 권리나 자동 접근 허가를 주지 않습니다. 이 앱 자체 코드는 MIT 라이선스(저장소의 LICENSE)이며, 그것이 소설 본문에 대한 권리를 주지 않는 것도 같습니다.',
     ],
   },
   {
@@ -55,7 +55,7 @@ const DIRECT = [
     md: [
       '- 출처: https://github.com/orioncactus/pretendard (npm `pretendard@1.3.9`)',
       '- 파일: `src/ui/theme/fonts/PretendardVariable.woff2` (수정 없이 복사)',
-      '- 라이선스: SIL Open Font License 1.1. 전체 원문은 아래 "라이선스 원문"에 있다.',
+      '- 라이선스: SIL Open Font License 1.1. 전체 원문은 아래 "라이선스 원문"에 있습니다.',
     ],
   },
   {
@@ -67,7 +67,7 @@ const DIRECT = [
     md: [
       '- 출처: https://www.edrdg.org/edrdg/licence.html (EDRDG), 원본 http://www.edrdg.org/kanjidic/kanjidic2.xml.gz',
       '- 파일: `src/translation/kanjidic.json` (원본에서 한자, 한국어 한자음, 영어 뜻만 추림)',
-      '- 라이선스: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). 전체 원문은 아래 "라이선스 원문"에 있다.',
+      '- 라이선스: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). 전체 원문은 아래 "라이선스 원문"에 있습니다.',
       "- 고지: This package uses the KANJIDIC2 dictionary file. These files are the property of the Electronic Dictionary Research and Development Group, and are used in conformance with the Group's licence.",
     ],
   },
@@ -79,7 +79,7 @@ const DIRECT = [
     md: [
       '- 출처: https://github.com/google/material-design-icons (npm `@material-symbols/svg-400@0.47.6`)',
       '- 파일: `src/ui/icons/*.svg` (앱이 쓰는 아이콘의 수정 없는 복사본)',
-      '- 라이선스: Apache License 2.0. 전체 원문은 아래 "라이선스 원문"에 있다.',
+      '- 라이선스: Apache License 2.0. 전체 원문은 아래 "라이선스 원문"에 있습니다.',
     ],
   },
   {
@@ -90,8 +90,8 @@ const DIRECT = [
     textFile: 'licenses/Apache-2.0.txt',
     md: [
       '- 출처: https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm , 고정 커밋 `9be6e8b90982095dc05c2bd162e4b954ee4dbac7`',
-      '- 파일: `embeddinggemma-2-text-270m.litertlm`. APK에 들어 있지 않고, 사용자가 설정에서 켜면 그 기기에 내려받는다.',
-      '- 라이선스: Apache License 2.0. 전체 원문은 아래 "라이선스 원문"에 있다.',
+      '- 파일: `embeddinggemma-2-text-270m.litertlm`. APK에 들어 있지 않고, 사용자가 설정에서 켜면 그 기기에 내려받습니다.',
+      '- 라이선스: Apache License 2.0. 전체 원문은 아래 "라이선스 원문"에 있습니다.',
     ],
   },
   {
@@ -102,7 +102,7 @@ const DIRECT = [
     textFrom: 'MIT License',
     md: [
       '- 출처: `@capacitor/cli` 8.5.2가 생성한 `android/` 기본 구조 (https://capacitorjs.com)',
-      '- 라이선스: MIT, Copyright (c) 2017-present Drifty Co. 원문은 `android/NOTICE`의 MIT 부분과 같고 아래 "라이선스 원문"에 있다.',
+      '- 라이선스: MIT, Copyright (c) 2017-present Drifty Co. 원문은 `android/NOTICE`의 MIT 부분과 같고 아래 "라이선스 원문"에 있습니다.',
     ],
   },
 ];
@@ -293,8 +293,10 @@ function renderMarkdown({ direct, web, excluded, android, texts }) {
   const lines = [
     '# 제3자 고지',
     '',
-    '이 앱에 포함된 제3자 구성 요소와 그 라이선스를 적는다. 앱 자체 코드는 MIT 라이선스이며 전문은 저장소의 LICENSE에 있다.',
-    '이 파일은 `node tools/licenses/generate-notices.mjs`로 만든다. 직접 고치지 않는다.',
+    '이 앱에 포함된 제3자 구성 요소와 라이선스를 안내합니다. 앱 자체 코드는 MIT 라이선스를 따르며 전문은 저장소의 LICENSE에서 확인합니다.',
+    '이 파일은 `node tools/licenses/generate-notices.mjs`로 생성합니다. 설명을 수정할 때는 생성기를 고친 뒤 다시 생성합니다.',
+    '',
+    '라이선스 전문과 권리자가 요구하는 영문 고지는 원문을 유지합니다. 아래 한국어 설명은 법률 원문을 대체하지 않습니다.',
     '',
     '## 직접 가져온 코드와 자산',
     '',
@@ -386,7 +388,11 @@ function renderJson({ direct, web, android, texts }) {
     sections: [
       { id: 'direct', title: SECTION_TITLES.direct, items: direct.map(strip) },
       { id: 'web', title: SECTION_TITLES.web, items: web.map(strip) },
-      { id: 'android', title: SECTION_TITLES.android, items: android.map(strip) },
+      {
+        id: 'android',
+        title: SECTION_TITLES.android,
+        items: android.map(strip),
+      },
     ],
     texts: sortedTexts,
   };
@@ -419,8 +425,14 @@ function main(argv) {
   const check = argv.includes('--check');
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const outputs = [
-    { path: join(root, 'THIRD_PARTY_NOTICES.md'), label: 'THIRD_PARTY_NOTICES.md' },
-    { path: join(root, 'src/ui/licenses/notices.json'), label: 'src/ui/licenses/notices.json' },
+    {
+      path: join(root, 'THIRD_PARTY_NOTICES.md'),
+      label: 'THIRD_PARTY_NOTICES.md',
+    },
+    {
+      path: join(root, 'src/ui/licenses/notices.json'),
+      label: 'src/ui/licenses/notices.json',
+    },
   ];
   const built = buildNotices(root);
   const expected = [built.markdown, built.json];

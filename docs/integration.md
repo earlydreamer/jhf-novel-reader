@@ -1,33 +1,31 @@
-# Current-chapter workflow (#6)
+# 현재 앱의 통합 흐름
 
-The app now composes the source parser, OpenAI-compatible local-model provider, private reader store and reader/settings UI. The browser build is a shell and synthetic-test target: production HTTP, body storage and credentials remain native-only. No backend, proxy, PC companion or live-source permission is implied.
+현재 앱은 `src/app/bootstrap.tsx` → `src/app/compose.ts` → `src/app/renewalController.ts` 경로를 사용합니다. 초기 이슈 #6의 `createTranslationEngine`·`src/jobs`·현재/선행 번역 엔진 조합은 이전 구조입니다. 이 문서는 현재 경로와 당시 검증 범위를 구분합니다.
 
-## Translation and durable readiness
+## 시작과 저장본 읽기
 
-`createTranslationEngine` in `src/jobs/engine.ts` owns a job and uses the shared priority scheduler in `src/jobs/scheduler.ts`. `startChapter(url, config)` reads the source and constructs the shared cache fingerprint; `restoreChapter(key, config)` reads a saved snapshot without contacting the source or model; `resumeChapter(key, config)` explicitly resumes a compatible checkpoint. Each returns a handle with `done` and `cancel()`. The application keeps separate current/prefetch engines with one shared native model slot, observes only current-engine immutable snapshots and uses `retry()` to retain validated in-memory output after a storage failure.
+앱은 중단된 백업 복구와 시작 시 인증 참조 정리를 먼저 처리합니다. 복구가 실패하면 컨트롤러를 시작하지 않고 안전한 안내와 재시도 동작을 표시합니다. [인증값 보존과 회수](renewal/credential-retention.md)를 참고합니다.
 
-The planner in `src/jobs/chunking.ts` groups ordered paragraphs, assigns deterministic UTF-16-range IDs to split paragraphs and preserves code-point/ruby boundaries. An indivisible ruby span that cannot fit is rejected rather than truncated. Empty source paragraphs and whitespace-only split ranges bypass the model and are restored exactly. Context is a bounded previous segment, distinct from output IDs. Input estimates include nested JSON escaping plus a system/framing reserve; output estimates include ID/JSON overhead and conservative text expansion. These are planning estimates, not a model-specific tokenizer guarantee. The provider independently checks its exact serialized prompt; truncation is always rejected.
+작품·회차 메타데이터와 원문 스냅샷, 번역 버전, 읽기 위치는 서재 저장소에서 관리합니다. 저장본은 원문·모델 재요청 없이 읽을 수 있습니다. 저장된 원문은 당시 버전이며 원격 수정 여부를 보장하지 않습니다. 구형 v1 데이터는 명시적인 마이그레이션 경로로 처리합니다.
 
-A result must have the expected chunk ID, complete finish reason and exactly ordered, nonempty translated output IDs. Only verified chunks are checkpointed. Reassembly validates full original-paragraph coverage and restores original IDs. `ready` is emitted only after the whole chapter's durable `commitChapter` resolves, or after a previously committed chapter is loaded and validated. Partial text never reaches the reader as a completed chapter.
+## 번역과 화면
 
-## Cancellation, foreground and ambiguous outcomes
+`createWholeChapterFlow`가 회차 번역을, `createBatchTranslation`이 확정한 범위의 순차 번역을 담당합니다. 모델 요청은 `ProviderSession`을 통해 실행합니다. 로컬 번역은 스트리밍과 기존 묶음 번역을 구분하며, 선택한 방식에 따라 분할·이어 보내기 계약이 달라집니다. 따라서 “회차당 항상 비스트리밍 POST 한 번”이나 초기 문단 JSON 계약을 현재 앱 전체의 규칙으로 사용하지 않습니다.
 
-Cancellation or a settings change immediately invalidates the UI job. A queued job rechecks its identity and foreground state before starting. The model slot remains occupied until the native promise actually settles; aborting JavaScript is not evidence of server cancellation. A stuck native operation can therefore delay the next job. There is no automatic POST retry and no cloud fallback.
+스트리밍에서는 도착한 문단부터 표시할 수 있습니다. 저장 전 결과와 실패 문단을 구분하고, 검증과 저장을 마친 결과를 저장본으로 다룹니다. 실패 문단만 다시 요청하는 선택적 동작은 통신 결과 불명 상태의 자동 재전송과 구별합니다.
 
-Backgrounding stops further source/model dispatch and invalidates in-flight results. Returning to the foreground does not automatically continue the current-reader job; speculative work continues only after a known-unsent pause. If a model request may have been sent, the UI warns about unknown server outcome and duplicate processing/cost before explicit retry. Incomplete checkpoints found after restart receive the same warning: the saved schema cannot prove that no subsequent request was active when the process died. Storage failures preserve validated output in memory and retry checkpoint/commit without resending those chunks to the model.
+작품의 용어·말투·제목 번역은 회차 본문 흐름과 함께 연결됩니다. 승인 데이터의 변경은 번역 작업의 재사용·재개 조건에 영향을 줍니다.
 
-## Cache, offline restore and settings
+## 중단과 재개
 
-The cache fingerprint includes canonical source URL/hash, provider, normalized endpoint, model, prompt version and language direction. Explicit URL open fetches the source again, so changed body content gets a new key. When only the title or previous/next link changes, the cached translation is reused with freshly fetched source metadata and the refreshed record is committed before ready. Offline restore intentionally reads the saved source version; it cannot detect a remote edit without fetching. Model/endpoint/prompt mismatches are rejected. Completed translations do not depend on future chunk budgets; incomplete checkpoints are re-planned and only exact ordered matching chunks are reused. Changed chunk budgets invalidate checkpoint chunk reuse.
+이동·설정 변경·취소·백그라운드 전환 이후의 오래된 결과가 현재 작업을 덮어쓰지 못하게 합니다. 요청을 취소해도 서버 처리가 끝났다고 단정하지 않습니다. 전송 여부가 불명인 작업은 중복 처리 가능성을 안내하고, 명시적인 재개 없이 다시 보내지 않습니다. 저장 실패 시 확보한 결과를 유지하는 흐름에서는 저장 재시도로 생성 요청을 추가하지 않습니다.
 
-Application-owned Preferences hold a strict last-cache-key pointer separately from body files. Startup restores a completed chapter and its saved position in one snapshot. Positions are viewport pixel offsets, rounded to nonnegative safe integers before persistence; UI restoration clamps them to the rendered paragraph height. Settings and pointer failures are visible without exposing raw exceptions or credentials.
+현재 미리 번역은 범위·전체 회차를 확인하고 시작하는 일괄 작업입니다. 구형 `prefetchEnabled` 기반 다음 한 화 자동 준비와 구별합니다. 작업 상태, 설정 고정, 재실행 복구, 완성본 건너뛰기는 [일괄 번역](renewal/batch-translation.md)을 확인합니다.
 
-An endpoint change detaches the previous credential reference. Secret save/remove operations use captured endpoint generations, so stale completions cannot assign credentials to a newer endpoint. Secret values never enter snapshots or Preferences. The existing explicit save action uses the native secure store; no plaintext fallback is introduced. Prefetch is an explicit, persisted, default-off setting; see [prefetch.md](prefetch.md) for its foreground and checkpoint policy.
+## 초기 통합 검증 기록
 
-## Evidence and limits
+이슈 #6에서는 새로 작성한 합성 HTML, 모델 모의 응답, 메모리 파일 어댑터와 수명주기 시험용 데이터를 사용했습니다. 당시 청크 분할은 UTF-16 범위 ID, 코드 포인트·루비 경계, 빈 문단 복원, 순서·완전성 검증을 다뤘습니다. 저장 완료 이후에만 준비 상태가 되었으며, 저장 오류 후 검증한 청크를 다시 모델에 보내지 않는 경로를 시험했습니다. 이 기록은 현재 코드 경로의 전체 검증 결과를 대신하지 않습니다.
 
-Tests use newly written synthetic HTML, mocked model responses, in-memory private-file adapters and lifecycle fixtures. They exercise real parser/provider/store/controller composition as well as chunk coverage, ambiguous retries, late responses, foreground interruption, storage-only retries, settings/credential races and offline position restoration. No real Syosetu page, local LLM, paid API or genuine credential was used.
+원문 깊이 회귀 테스트에는 512단계 경계 자료와 기존 4,000단계 공격성 자료가 있습니다. 후자는 통합 테스트 병렬 실행 중 jsdom 파싱이 기본 5초를 넘겨 테스트 시간 제한을 20초로 지정했습니다. 운영 파서의 깊이 제한을 늘린 변경은 아닙니다. 실제 WebView의 처리 지연과 반응성은 별도 기기 측정 대상입니다.
 
-Web tests, typechecking, bundle build and native sync do not establish actual Android installation, LAN HTTP policy, Keystore behavior, power-loss durability or kill/restart behavior. Those require issue #8 device evidence. Live source access/content rights, signed release and public distribution remain separate gates.
-
-The source depth regression keeps both a 512-level boundary fixture and the original adversarial 4,000-level fixture. The latter has an explicit 20-second test timeout because jsdom parsing exceeded the default five seconds while integration tests ran concurrently. This changes no production parser limit. Native WebView parsing latency and UI responsiveness on adversarial markup remain unmeasured device concerns.
+합성 테스트·타입 검사·웹 빌드·네이티브 동기화는 실제 설치, LAN HTTP, Keystore, 강제 종료·재시작, 전원 손실 내구성을 입증하지 않습니다. [Android 검증](android-validation.md)의 검증 절차와 한계를 확인합니다. 과거 모의 테스트에서 실제 원문 사이트·유료 API·실제 인증값을 사용하지 않았다는 기록을 이후 모든 개발 활동의 포괄적 주장으로 확대하지 않습니다.

@@ -1,10 +1,14 @@
-# 화면 문서 안내
+# 화면과 문구 문서 안내
 
-화면 디자인과 UX의 정본은 다음 문서예요.
+현재 화면을 확인할 때는 다음 문서를 사용합니다.
 
-- [`DESIGN.md`](../DESIGN.md): 색 토큰, 타이포그래피, 컴포넌트, 해요체 UX 라이팅 규칙
-- [`docs/superpowers/specs/2026-10-08-ui-design-system-design.md`](superpowers/specs/2026-10-08-ui-design-system-design.md): 화면별 구조와 Android UX 결정(서재·목차·몰입형 리더·설정·원문 탐색)
+- [디자인 시스템](../DESIGN.md): 색, 글꼴, 크기, 컴포넌트와 화면 배치 규칙을 설명합니다.
+- [인터랙티브 디자인 시스템](design-system.html): 컴포넌트와 상태를 직접 눌러 확인하는 HTML 문서입니다. 파일을 내려받아 브라우저에서 엽니다.
+- [UX 라이팅 가이드](ux-writing.md): 현재 앱의 문구와 상태 안내 원칙을 설명합니다.
 
-## 합성 미리보기와 테스트
 
-`npm run dev -- --host 0.0.0.0`로 실행한 뒤 `/tests/ui/renewal-preview.html`을 열어요. 테스트 고정 데이터만 쓰는 390 × 844 휴대폰 미리보기라 실제 번역 요청을 보낼 수 없고, 제품 진입점은 이 파일을 import하지 않아요. 테스트는 jsdom과 Testing Library로 실행하며 원문 사이트나 모델에 접속하지 않아요. 좁은 화면 확인은 Android 실기 검증과 별개예요.
+## 앱 화면 미리보기
+
+`npm run dev`를 실행한 뒤 개발 서버의 `/tests/ui/renewal-preview.html`을 엽니다. 390 × 844 크기의 합성 데이터 미리보기이며 실제 번역 요청은 보내지 않습니다. 제품 진입점에서도 이 파일을 불러오지 않습니다.
+
+화면 테스트는 jsdom과 Testing Library를 사용합니다. 브라우저에서 확인한 화면과 Android 기기의 인셋, 뒤로 가기, 글꼴 설정 검증은 구분합니다. 기기 검증 절차는 [Android 검증 안내](android-validation.md)를 따릅니다.
