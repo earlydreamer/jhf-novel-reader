@@ -557,4 +557,80 @@ public class BackupArchiveTest {
             // 기대한 결과
         }
     }
+
+    @Test public void exportCountsMetadataBytesEvenWithoutDataFiles() throws Exception {
+        File empty = temp.newFolder("empty");
+        for (String value : new String[] {null, "{\"label\":\"한글🙂\"}"}) {
+            long bytes = manifest(0).getBytes(StandardCharsets.UTF_8).length
+                + (value == null ? 0 : value.getBytes(StandardCharsets.UTF_8).length);
+            File zip = new File(temp.getRoot(), value == null ? "without-settings.zip" : "with-settings.zip");
+            BackupArchive.Limits limits = new BackupArchive.Limits(1024, bytes - 1, 10, 1024);
+            assertThrows(IOException.class, () -> BackupArchive.write(empty, value, BackupArchiveTest::manifest, zip, limits));
+            assertFalse("메타데이터만으로 초과하면 출력 파일을 열지 않는다", zip.exists());
+        }
+    }
+
+    @Test public void exportAndExtractAgreeAtExactUtf8TotalByteBoundaries() throws Exception {
+        File data = new File(filesDir, "narou-reader");
+        String extra = ",\"name\":\"한글🙂\"";
+        String metadata = manifest(2).replace("}", extra + "}");
+        BackupArchive.Validator unicodeValidator = new BackupArchive.Validator() {
+            @Override public long manifestFiles(String text) throws BackupArchive.InvalidBackupException {
+                return VALIDATOR.manifestFiles(text.replace(extra, ""));
+            }
+            @Override public void settings(String text) throws BackupArchive.InvalidBackupException { VALIDATOR.settings(text); }
+        };
+        for (String value : new String[] {null, "{\"label\":\"설정🙂\"}"}) {
+            long bytes = metadata.getBytes(StandardCharsets.UTF_8).length
+                + (value == null ? 0 : value.getBytes(StandardCharsets.UTF_8).length)
+                + "old chapter".getBytes(StandardCharsets.UTF_8).length
+                + "old position".getBytes(StandardCharsets.UTF_8).length;
+            for (int margin : new int[] {-1, 0, 1}) {
+                BackupArchive.Limits limits = new BackupArchive.Limits(1024, bytes + margin, 10, 1024);
+                File zip = new File(temp.newFolder(), "boundary.zip");
+                if (margin < 0) {
+                    assertThrows(IOException.class, () -> BackupArchive.write(data, value, count -> metadata, zip, limits));
+                } else {
+                    assertEquals(2, BackupArchive.write(data, value, count -> metadata, zip, limits));
+                    try (java.io.FileInputStream in = new java.io.FileInputStream(zip)) {
+                        BackupArchive.Extracted restored = BackupArchive.extract(in, temp.newFolder(), unicodeValidator, limits);
+                        assertEquals(2, restored.files);
+                        assertEquals(value, restored.settings);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test public void fileGrowthAfterEnumerationCannotBypassAggregateExportLimit() throws Exception {
+        File data = new File(filesDir, "narou-reader");
+        long initialBytes = manifest(2).getBytes(StandardCharsets.UTF_8).length + 11 + 12;
+        BackupArchive.Limits limits = new BackupArchive.Limits(64, initialBytes, 10, 1024);
+        File zip = new File(temp.getRoot(), "grown.zip");
+        BackupArchive.ManifestFactory growing = count -> {
+            try {
+                Files.write(new File(data, "chapters/keep-1.json").toPath(), ("old chapter" + "x".repeat(20)).getBytes(StandardCharsets.UTF_8));
+            } catch (IOException failure) { throw new AssertionError(failure); }
+            return manifest(count);
+        };
+        assertThrows(IOException.class, () -> BackupArchive.write(data, null, growing, zip, limits));
+        assertTrue(new File(data, "chapters/keep-1.json").length() < limits.entryBytes);
+    }
+
+    @Test public void exportUsesTransferredSizeWhenFilesShrinkAfterEnumeration() throws Exception {
+        File data = new File(filesDir, "narou-reader");
+        put("chapters", "keep-1.json", "x".repeat(200));
+        long actualBytes = manifest(2).getBytes(StandardCharsets.UTF_8).length + 1 + 12;
+        BackupArchive.Limits limits = new BackupArchive.Limits(1024, actualBytes, 10, 1024);
+        File zip = new File(temp.getRoot(), "shrunk.zip");
+        BackupArchive.ManifestFactory shrinking = count -> {
+            try { Files.write(new File(data, "chapters/keep-1.json").toPath(), new byte[] {'x'}); }
+            catch (IOException failure) { throw new AssertionError(failure); }
+            return manifest(count);
+        };
+        assertEquals(2, BackupArchive.write(data, null, shrinking, zip, limits));
+        try (java.io.FileInputStream in = new java.io.FileInputStream(zip)) {
+            assertEquals(2, BackupArchive.extract(in, temp.newFolder(), VALIDATOR, limits).files);
+        }
+    }
 }
