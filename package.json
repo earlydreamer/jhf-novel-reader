@@ -1,11 +1,11 @@
 {
   "name": "jhf-novel-reader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": "^22.18.0 || >=24.11.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,7 @@
     "test": "vitest",
     "build": "vite build",
     "android:sync": "npm run build && cap sync android",
-    "postinstall": "patch-package --error-on-fail",
+    "postinstall": "node tools/apply-capacitor-patch.mjs",
     "lint": "eslint src tests vite.config.ts capacitor.config.ts --max-warnings 0",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,html}\" \"tools/**/*.{mjs,js,ts}\" \"*.{json,mjs,ts}\" .prettierrc.json"
   },
@@ -41,10 +41,14 @@
     "eslint": "10.12.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "jsdom": "30.1.2",
-    "patch-package": "8.0.1",
     "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vite": "8.3.2",
     "vitest": "5.0.3"
+  },
+  "overrides": {
+    "xcode": {
+      "uuid": "11.1.1"
+    }
   }
 }
