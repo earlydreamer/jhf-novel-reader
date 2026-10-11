@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import type { CompletedTranslation, WorkPage } from '../../src/contracts';
-import { createLibraryStore } from '../../src/storage/library';
-import type { PrivateFiles } from '../../src/storage/journal';
+import { createLibraryStore, validateLibraryIndex } from '../../src/storage/library';
+import { digest, Journal, type PrivateFiles } from '../../src/storage/journal';
 import { createReaderStore } from '../../src/storage/store';
 import { createV1Migration } from '../../src/storage/migration';
 import { createCacheKey, type CacheIdentity } from '../../src/contracts/legacy';
@@ -962,3 +962,158 @@ test('실제 prepare owner는 latest persistent batch가 다른 작품이어도 
     phase: 'paused',
   });
 });
+
+test.each([false, true])(
+  '소유권이 불일치하는 회차의 이전 위치는 보존하고 요청 작품의 위치만 지운다 (재시도=%s)',
+  async (interruptCleanup) => {
+    const state = fixture();
+    const ownedChapterId = 'n1111aa/1';
+    const foreignChapterId = 'n2222bb/1';
+    const ownedPrefix = `positions/${await digest(ownedChapterId)}`;
+    const foreignPrefix = `positions/${await digest(foreignChapterId)}`;
+    let blockOwnedRemoval = interruptCleanup;
+    const files: PrivateFiles = {
+      ...state.files,
+      remove: async (path) => {
+        if (blockOwnedRemoval && path === `${ownedPrefix}.0.json`)
+          throw new Error('interrupt owned position cleanup');
+        await state.files.remove!(path);
+      },
+    };
+    const library = createLibraryStore(files, { preferences: state.preferences });
+    const ownedVersion = version('n1111aa');
+    await library.commitVersion(ownedVersion);
+    await library.commitVersion({
+      ...ownedVersion,
+      versionId: 'inconsistent-owner',
+      source: { ...ownedVersion.source, chapterId: foreignChapterId },
+    });
+    const legacy = createReaderStore(files);
+    for (const chapterId of [ownedChapterId, foreignChapterId]) {
+      await legacy.savePosition({ chapterId, paragraphId: 'p1', offset: 1 });
+      await legacy.savePosition({ chapterId, paragraphId: 'p1', offset: 2 });
+    }
+    const foreignBytes = [0, 1].map((slot) => {
+      const path = `${foreignPrefix}.${slot}.json`;
+      const bytes = state.memory.get(path);
+      expect(bytes).toBeDefined();
+      return [path, bytes] as const;
+    });
+    for (const slot of [0, 1]) expect(state.memory.has(`${ownedPrefix}.${slot}.json`)).toBe(true);
+
+    const first = await library.removeWork!('n1111aa');
+
+    expect(first).toMatchObject({ removed: true, cleanupComplete: !interruptCleanup });
+    for (const [path, bytes] of foreignBytes) {
+      expect(state.memory.get(path)).toBe(bytes);
+      expect(state.removed).not.toContain(path);
+    }
+    blockOwnedRemoval = false;
+    const restarted = createLibraryStore(files, { preferences: state.preferences });
+    expect(await restarted.removeWork!('n1111aa')).toMatchObject({ cleanupComplete: true });
+    expect(await restarted.readRemovalInventory!()).toEqual([]);
+    for (const slot of [0, 1]) expect(state.memory.has(`${ownedPrefix}.${slot}.json`)).toBe(false);
+    for (const [path, bytes] of foreignBytes) expect(state.memory.get(path)).toBe(bytes);
+  },
+);
+
+async function seedPositionRemoval(files: PrivateFiles, path: string) {
+  const value = {
+    versions: [],
+    recent: [],
+    workIds: [],
+    removalInventory: [
+      { workId: 'n1111aa', cacheKeys: [], paths: [path], createdAt: '2026-10-11T00:00:00Z' },
+    ],
+  };
+  const journal = new Journal(files);
+  await journal.save('library/index', value, validateLibraryIndex);
+  await journal.save('library/index', value, validateLibraryIndex);
+}
+
+test.each([
+  'foreign',
+  'corrupt',
+  'unsupported',
+  'digest-mismatch',
+  'invalid-chapter',
+  'read-error',
+])('이전 inventory의 확인할 수 없는 위치 슬롯은 재시도해도 보존한다 (%s)', async (kind) => {
+  const state = fixture();
+  const chapterId =
+    kind === 'foreign'
+      ? 'n2222bb/1'
+      : kind === 'invalid-chapter'
+        ? 'n1111aa/../n2222bb/1'
+        : 'n1111aa/1';
+  const prefix = `positions/${await digest(chapterId)}`;
+  const legacy = createReaderStore(state.files);
+  await legacy.savePosition({ chapterId, paragraphId: 'p1', offset: 1 });
+  await legacy.savePosition({ chapterId, paragraphId: 'p1', offset: 2 });
+  let path = `${prefix}.0.json`;
+  if (kind === 'corrupt') state.memory.set(path, '{broken');
+  if (kind === 'unsupported') {
+    const envelope = JSON.parse(state.memory.get(path)!);
+    envelope.format = 2;
+    state.memory.set(path, JSON.stringify(envelope));
+  }
+  if (kind === 'digest-mismatch') {
+    path = `positions/${await digest('n2222bb/1')}.0.json`;
+    state.memory.set(path, state.memory.get(`${prefix}.0.json`)!);
+  }
+  const before = state.memory.get(path);
+  const siblingBefore = state.memory.get(`${prefix}.1.json`);
+  let rejectRead = kind === 'read-error';
+  const files: PrivateFiles = {
+    ...state.files,
+    read: async (candidate) => {
+      if (rejectRead && candidate === path) throw new Error('position unavailable');
+      return state.files.read(candidate);
+    },
+  };
+  await seedPositionRemoval(files, path);
+
+  for (let restart = 0; restart < 2; restart++) {
+    const library = createLibraryStore(files, { preferences: state.preferences });
+    const result = await library.removeWork!('n1111aa');
+    expect(result).toMatchObject({ removed: true, cleanupComplete: false });
+    expect(result.remainingInventory).toContain(path);
+    expect(state.memory.get(path)).toBe(before);
+    expect(state.removed).not.toContain(path);
+    expect(state.memory.get(`${prefix}.1.json`)).toBe(siblingBefore);
+    expect((await library.readRemovalInventory!())[0]!.paths).toContain(path);
+  }
+  rejectRead = false;
+  state.memory.delete(path);
+  const restarted = createLibraryStore(files, { preferences: state.preferences });
+  expect(await restarted.removeWork!('n1111aa')).toMatchObject({ cleanupComplete: true });
+  expect(await restarted.readRemovalInventory!()).toEqual([]);
+});
+
+test.each(['owned', 'absent'])(
+  '이전 inventory의 소유권이 확인되거나 이미 없는 위치는 정리한다 (%s)',
+  async (kind) => {
+    const state = fixture();
+    const chapterId = 'n1111aa/1';
+    const prefix = `positions/${await digest(chapterId)}`;
+    const path = `${prefix}.0.json`;
+    if (kind === 'owned') {
+      await createReaderStore(state.files).savePosition({
+        chapterId,
+        paragraphId: 'p1',
+        offset: 3,
+      });
+      // A bad sibling neither authorizes nor prevents deletion of this exact valid slot.
+      state.memory.set(`${prefix}.1.json`, '{unrelated broken sibling');
+    }
+    const siblingBefore = state.memory.get(`${prefix}.1.json`);
+    await seedPositionRemoval(state.files, path);
+    const library = createLibraryStore(state.files, { preferences: state.preferences });
+
+    expect(await library.removeWork!('n1111aa')).toMatchObject({ cleanupComplete: true });
+
+    expect(state.memory.has(path)).toBe(false);
+    expect(state.memory.get(`${prefix}.1.json`)).toBe(siblingBefore);
+    expect(await library.readRemovalInventory!()).toEqual([]);
+  },
+);

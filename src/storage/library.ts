@@ -234,6 +234,40 @@ async function removeOwnedVersionPath(
   }
 }
 
+/** Old inventories are discovery records, not authority to delete another work's position. */
+async function removeOwnedLegacyPositionPath(
+  files: PrivateFiles,
+  path: string,
+  workId: string,
+): Promise<boolean> {
+  const match = /^positions\/([a-f0-9]{64})\.([01])\.json$/.exec(path);
+  if (!match) return false;
+  try {
+    const raw = await files.read(path);
+    if (raw === null) return true;
+    const exact = new Journal({
+      read: async (candidate) => (candidate === path ? raw : null),
+      write: async () => {
+        throw new Error('read-only cleanup validation');
+      },
+    });
+    const value = (await exact.load(`positions/${match[1]}`, legacyPositionRecord))?.value;
+    if (!value) return false;
+    const chapterId = value.position.chapterId;
+    chapterIdentity(chapterId);
+    if (
+      !chapterId.startsWith(`${workId}/`) ||
+      (await digest(chapterId)) !== match[1] ||
+      !files.remove
+    )
+      return false;
+    await files.remove(path);
+    return (await files.read(path)) === null;
+  } catch {
+    return false;
+  }
+}
+
 async function removeWorkData(
   files: PrivateFiles,
   journal: Journal,
@@ -458,7 +492,15 @@ async function removeWorkData(
   } else {
     issues.push('마지막 읽기 위치 저장소를 사용할 수 없어 정리 완료를 확인하지 못했어요.');
   }
-  for (const chapterId of chapterIds) {
+  const removedChapterIds = [...chapterIds].filter((chapterId) => {
+    try {
+      chapterIdentity(chapterId);
+      return chapterId.startsWith(`${workId}/`);
+    } catch {
+      return false;
+    }
+  });
+  for (const chapterId of removedChapterIds) {
     const name = `positions/${await digest(chapterId)}`;
     await collect(name, legacyPositionRecord, (value) => value.position.chapterId === chapterId);
   }
@@ -471,14 +513,6 @@ async function removeWorkData(
     ...(issues.length ? { issues: unique(issues) } : {}),
   };
 
-  const removedChapterIds = [...chapterIds].filter((chapterId) => {
-    try {
-      chapterIdentity(chapterId);
-      return chapterId.startsWith(`${workId}/`);
-    } catch {
-      return false;
-    }
-  });
   const removedIndex: Index = {
     ...current,
     workIds: current.workIds.filter((id) => id !== workId),
@@ -540,6 +574,10 @@ async function removeWorkData(
   for (const path of inventory.paths) {
     if (/^(versions|reading)\//.test(path)) {
       if (!(await removeOwnedVersionPath(files, path, { workId }))) remaining.push(path);
+      continue;
+    }
+    if (path.startsWith('positions/')) {
+      if (!(await removeOwnedLegacyPositionPath(files, path, workId))) remaining.push(path);
       continue;
     }
     if (!remove) {
