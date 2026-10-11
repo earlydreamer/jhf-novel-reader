@@ -1248,3 +1248,50 @@ it('기기 판정을 켜도 판정할 이름이 없는 회차는 판정 기록�
     embeddingPort.ready = false;
   }
 });
+
+it('startup finishes failed chapter cleanup after its saved-chapter action disappeared', async () => {
+  const h = harness();
+  let fail = true;
+  Object.assign(h.adapters.files, {
+    async remove(path: string) {
+      if (fail) throw new Error('temporary cleanup failure');
+      h.bytes.delete(path);
+    },
+  });
+  const base = await legacyCompleted();
+  const identity = { ...base.identity, canonicalUrl: `${workUrl}1/` };
+  const legacy = {
+    ...base,
+    identity,
+    cacheKey: await createCacheKey(identity),
+    source: {
+      ...base.source,
+      canonicalUrl: identity.canonicalUrl,
+      workId: 'n1234ab',
+      chapterId: 'n1234ab/1',
+    },
+  };
+  await createReaderStore(h.adapters.files).commitChapter(legacy);
+  await createLastChapterRepository(h.adapters.preferences).save(legacy.cacheKey);
+  await h.app.initialize();
+  await h.app.openWork(workUrl);
+  const chapter = h.app
+    .getSnapshot()
+    .work!.chapters.find((ref) => ref.chapterId === legacy.source.chapterId)!;
+  const old = (await h.store.listVersions(chapter.chapterId))[0]!;
+  expect(h.app.getSnapshot().savedChapterIds).toContain(chapter.chapterId);
+  expect(await h.app.removeChapterVersions(chapter)).toMatchObject({
+    removed: true,
+    cleanupComplete: false,
+  });
+  expect(h.app.getSnapshot().savedChapterIds).not.toContain(chapter.chapterId);
+  h.app.dispose();
+  fail = false;
+  const restarted = createRenewalApplication(h.adapters);
+  await restarted.initialize();
+  expect(h.bytes.has(`versions/${old.versionId}.0.json`)).toBe(false);
+  expect(await h.store.readChapterRemovalInventory!()).toEqual([]);
+  expect(await h.store.listVersions(chapter.chapterId)).toEqual([]);
+  expect(h.posts()).toEqual([]);
+  restarted.dispose();
+});
