@@ -255,6 +255,11 @@ export function SettingsScreen({
       state.connection.baseUrl.trim() !== '' &&
       parsePresetAddress(state.connection.baseUrl) === null,
   );
+  // 같은 목적지인 입력도 편집 중에는 남긴다. 실제 연결이 바뀌면 그 연결의 주소를 표시한다.
+  const [manualAddressDraft, setManualAddressDraft] = useState<{
+    connection: ConnectionConfig;
+    text: string;
+  } | null>(null);
   const [host, setHost] = useState(() => parsePresetAddress(state.connection.baseUrl)?.host ?? '');
   const [port, setPort] = useState(() => parsePresetAddress(state.connection.baseUrl)?.port ?? '');
   const [authOpen, setAuthOpen] = useState(false);
@@ -440,8 +445,20 @@ export function SettingsScreen({
             API 기본 주소
             <input
               type="url"
-              value={state.connection.baseUrl}
-              onChange={(event) => update({ baseUrl: event.target.value })}
+              disabled={state.batch?.active}
+              value={
+                manualAddressDraft?.connection === state.connection
+                  ? manualAddressDraft.text
+                  : state.connection.baseUrl
+              }
+              onChange={(event) => {
+                if (state.batch?.active) return;
+                setManualAddressDraft({
+                  connection: state.connection,
+                  text: event.target.value,
+                });
+                update({ baseUrl: event.target.value });
+              }}
               placeholder="http://192.168.0.10:1234/v1"
             />
           </label>

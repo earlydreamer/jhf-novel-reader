@@ -38,6 +38,7 @@ import type {
 } from '../contracts/reading';
 import type { Route } from './routes';
 import { limitsForModel } from '../translation/segments';
+import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import type {
   BatchState,
   BatchTranslation,
@@ -1926,6 +1927,20 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     await verifyWorkRecent(workId);
   }
   function changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void {
+    if (input.provider === snapshot.connection.provider) {
+      if (input.baseUrl === snapshot.connection.baseUrl) return;
+      if (input.provider === 'openai-compatible') {
+        try {
+          if (
+            normalizeOpenAICompatibleBaseUrl(input.baseUrl) ===
+            normalizeOpenAICompatibleBaseUrl(snapshot.connection.baseUrl)
+          )
+            return;
+        } catch {
+          // 입력 중인 주소가 잘못됐거나 불완전하면 기존 선택과 인증은 아래에서 해제한다.
+        }
+      }
+    }
     titleAbort?.abort();
     if (disposed || dependencies.batch?.active) return;
     catalogOperation++;
