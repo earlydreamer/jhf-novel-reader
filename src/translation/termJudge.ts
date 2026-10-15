@@ -1,6 +1,7 @@
 import type { LookupHit } from './lookup';
 import { guidesFor } from './scanGuides';
 import type { ScanCandidate } from './termScan';
+import type { NicknameMeaning } from './nicknameMeaning';
 
 export type JudgeKind = 'real' | 'work' | 'common';
 export type JudgeAnswer = { kind: JudgeKind; category: string; target: string; reason: string };
@@ -54,6 +55,7 @@ const idOf = (index: number) => `c${index + 1}`;
 export function judgeRequest(
   batch: readonly ScanCandidate[],
   lookups?: ReadonlyMap<string, readonly LookupHit[]>,
+  meanings?: ReadonlyMap<string, NicknameMeaning>,
 ): {
   system: string;
   user: string;
@@ -66,7 +68,12 @@ export function judgeRequest(
     system: [SYSTEM, ...(hasLookup ? [LOOKUP_GUIDE] : []), 'Guides:', ...guides].join('\n'),
     user: batch
       .map((candidate, index) =>
-        candidateBlock(idOf(index), candidate, lookups?.get(candidate.source) ?? []),
+        candidateBlock(
+          idOf(index),
+          candidate,
+          lookups?.get(candidate.source) ?? [],
+          meanings?.get(candidate.source),
+        ),
       )
       .join('\n\n'),
     schema: SCHEMA,
@@ -74,7 +81,12 @@ export function judgeRequest(
   };
 }
 
-function candidateBlock(id: string, candidate: ScanCandidate, hits: readonly LookupHit[]): string {
+function candidateBlock(
+  id: string,
+  candidate: ScanCandidate,
+  hits: readonly LookupHit[],
+  meaning?: NicknameMeaning,
+): string {
   const lines = [`[${id}] ${candidate.source}`];
   if (candidate.existing) {
     const origin = candidate.existing.origin === undefined ? 'human' : 'machine';
@@ -95,6 +107,10 @@ function candidateBlock(id: string, candidate: ScanCandidate, hits: readonly Loo
         : `lookup: ${hit.ko} (${hit.kind}${hit.exact ? ', exact link' : ''})`,
     );
   }
+  if (meaning)
+    lines.push(
+      `meaning: ${JSON.stringify(meaning)} (unverified model suggestion, not lookup evidence)`,
+    );
   lines.push('contexts:', ...candidate.contexts.map((context) => `- ${context}`));
   return lines.join('\n');
 }
