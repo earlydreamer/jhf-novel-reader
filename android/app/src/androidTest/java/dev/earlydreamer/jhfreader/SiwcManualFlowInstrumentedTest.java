@@ -97,6 +97,7 @@ public class SiwcManualFlowInstrumentedTest {
     @Test public void explicitlyRequestedStoredSessionRefreshSyntheticInferenceAndDisconnect() throws Exception {
         assumeTrue("manual account flow disabled", "true".equals(
             InstrumentationRegistry.getArguments().getString("siwcManualFlow")));
+        boolean diagnostic = "true".equals(InstrumentationRegistry.getArguments().getString("siwcDiagnostic"));
         assertEquals("dev.earlydreamer.jhfreader.issue307", instrumentation.getTargetContext().getPackageName());
         assertTrue("complete user login first", report("probe").getBoolean("protectedSessionStored"));
         assertFalse("preserve earlier inference evidence before another manual flow", new File(
@@ -110,17 +111,24 @@ public class SiwcManualFlowInstrumentedTest {
         if (activity == null) activity = (SiwcProbeActivity) instrumentation.startActivitySync(new Intent(
             instrumentation.getTargetContext(), SiwcProbeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         JSONObject safe = new JSONObject().put("restore", false).put("refresh", false).put("inferenceCompleted", false)
-            .put("localCleared", false).put("revocationConfirmed", false).put("restoreRejectedAfterDisconnect", false);
+            .put("localCleared", false).put("revocationConfirmed", false).put("restoreRejectedAfterDisconnect", false)
+            .put("diagnostic", diagnostic);
         record(safe);
         try {
             click("보호 저장 연결 복원"); idle(10000);
             assertEquals("restore", report("session").getString("operation"));
             assertTrue(report("session").getBoolean("success"));
             safe.put("restore", true); record(safe);
-            click("토큰 갱신 검증 1회"); idle(90000);
-            assertEquals("refresh", report("session").getString("operation"));
-            assertTrue(report("session").getBoolean("success"));
-            safe.put("refresh", true); record(safe);
+            if (!diagnostic) {
+                click("토큰 갱신 검증 1회"); idle(90000);
+                assertEquals("refresh", report("session").getString("operation"));
+                assertTrue(report("session").getBoolean("success"));
+                safe.put("refresh", true); record(safe);
+            } else {
+                click("정밀 진단 허용 · 같은 연결 총 3회"); idle(10000);
+                assertTrue(report("session").getBoolean("success"));
+                safe.put("maxInferenceAttempts", 3).put("forcedRefreshSkipped", true); record(safe);
+            }
             click("계정 모델 목록 읽기"); idle(90000);
             assertEquals("models", report("session").getString("operation"));
             assertTrue(report("session").getBoolean("success"));
@@ -140,14 +148,17 @@ public class SiwcManualFlowInstrumentedTest {
             assertTrue(inference.getInt("textChars") > 0);
             safe.put("inferenceCompleted", true); record(safe);
         } finally {
-            // 실패하더라도 두 번째 추론 요청은 만들지 않고 연결 해제만 시도한다.
-            idle(45000);
-            click("연결 해제 · 원격 철회와 로컬 삭제"); idle(60000);
-            JSONObject disconnected = report("session");
-            safe.put("localCleared", disconnected.optBoolean("localCleared"))
-                .put("revocationConfirmed", disconnected.optBoolean("revocationConfirmed"));
+            // 기본 흐름은 정리한다. 명시적 정밀 진단만 세션을 유지하며 추가 추론을 자동 실행하지 않는다.
+            if (!diagnostic) {
+                idle(45000);
+                click("연결 해제 · 원격 철회와 로컬 삭제"); idle(60000);
+                JSONObject disconnected = report("session");
+                safe.put("localCleared", disconnected.optBoolean("localCleared"))
+                    .put("revocationConfirmed", disconnected.optBoolean("revocationConfirmed"));
+            } else safe.put("disconnectDeferred", true);
             record(safe);
         }
+        if (diagnostic) return;
         assertEquals("disconnect", report("session").getString("operation"));
         assertTrue(report("session").getBoolean("localCleared"));
         assertTrue(report("session").getBoolean("revocationConfirmed"));

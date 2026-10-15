@@ -101,4 +101,23 @@ public class SiwcResponsesInstrumentedTest {
             assertFalse(failure.toString().contains(privateText));
         }
     }
+
+    @Test public void protocolGuardsReportExactLocalSiteAndOnlyFixedReasons() throws Exception {
+        try {
+            consume("event: message\ndata: {\"type\":\"response.in_progress\"}\n\n");
+            fail("mismatch accepted");
+        } catch (SiwcResponses.ProtocolFailure error) {
+            JSONObject guard = SiwcResponses.guard(error);
+            assertEquals("event_mismatch", guard.getString("reason"));
+            assertEquals("SiwcResponses", guard.getString("component"));
+            assertEquals("consume", guard.getString("method"));
+            assertEquals("message", guard.getJSONObject("details").getString("sseEvent"));
+            assertEquals(1, guard.getJSONObject("details").getInt("frames"));
+        }
+        StringBuilder large = new StringBuilder();
+        for (int i = 0; i < 131074; i++) large.append('x');
+        try { consume(large.toString()); fail("oversize line accepted"); }
+        catch (SiwcResponses.ProtocolFailure error) { assertEquals("line_limit", SiwcResponses.guard(error).getString("reason")); }
+        assertFalse(SiwcResponses.guard(new IllegalArgumentException("PRIVATE-SYNTHETIC-MESSAGE")).toString().contains("PRIVATE"));
+    }
 }

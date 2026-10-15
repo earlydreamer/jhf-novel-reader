@@ -35,6 +35,7 @@ public final class SiwcProbeActivity extends Activity {
     private volatile SiwcLoopback listener;
     private volatile boolean cancelled, destroyed, busy, inferring;
     private volatile String inferenceModel;
+    private volatile int inferenceNumber;
     private SiwcVault vault;
     private SiwcSession session;
     private TextView status, translation;
@@ -52,11 +53,16 @@ public final class SiwcProbeActivity extends Activity {
         TextView info = new TextView(this);
         info.setText("JHF SiwC 보호 저장·합성 번역 검증\n\nA 인증 왕복은 앞선 APK에서 확인했어. 이번 연결은 B 검증을 위해 토큰을 Android Keystore로 암호화해 이 테스트 앱에 보관해. 명시적으로 연결 해제를 누르면 원격 철회와 로컬 삭제를 진행해. 기존 JHF 앱과 별도 패키지야.\n\n로그인·복원·갱신·모델 목록은 번역을 요청하지 않아. 모델을 직접 선택하고 합성 번역 버튼을 누를 때만 아래 합성 문단과 번역 지침을 OpenAI에 보내. Codex/ChatGPT Work 공유 한도를 쓰며 다른 과금 경로로 자동 전환하지 않아.\n\n브라우저 콜백 뒤 뒤로가기로 돌아와. 저장 확인→앱 재실행 후 복원→갱신→모델 목록→합성 번역 1회→연결 해제 순서로 검증해. 결과 불명 요청은 재전송하지 않아.\n\n합성 원문: " + SiwcResponses.SYNTHETIC + "\n");
         layout.addView(info);
+        TextView diagnosticInfo = new TextView(this);
+        diagnosticInfo.setText("정밀 검증: 기본 추론 한도는 연결당 1회야. 추가 진단을 명시적으로 허용하면 같은 연결에서 총 3회까지 각각 실행할 수 있어. 결과 불명 요청도 시도 수에 포함하고 자동 재시도하지 않아. 진단 중에는 암호화한 연결을 유지할 수 있으며 검증이 끝나면 연결 해제를 실행해.\n");
+        layout.addView(diagnosticInfo);
         button(layout, "Continue with ChatGPT", this::begin);
         button(layout, "보호 저장 연결 복원", () -> perform("restore", () -> {
             JSONObject value = current(false, false);
             report("session", new JSONObject().put("operation", "restore").put("success", true)
-                .put("inferenceAttempted", value.getBoolean("inferenceAttempted")));
+                .put("inferenceAttempted", value.getBoolean("inferenceAttempted"))
+                .put("inferenceAttempts", value.optInt("inferenceAttempts", 0))
+                .put("maxInferenceAttempts", value.optInt("maxInferenceAttempts", 1)));
             show("보호 저장 연결 복원됨 · 계정 정보·토큰은 표시하지 않아");
         }));
         button(layout, "토큰 갱신 검증 1회", () -> perform("refresh", () -> {
@@ -78,6 +84,13 @@ public final class SiwcProbeActivity extends Activity {
         }));
         picker = new Spinner(this);
         layout.addView(picker);
+        button(layout, "정밀 진단 허용 · 같은 연결 총 3회", () -> perform("diagnostic_budget", () -> {
+            JSONObject value = current(false, false);
+            session.allowAdditionalDiagnostics(value.getString("client"), value.getString("subject"));
+            report("session", new JSONObject().put("operation", "diagnostic_budget").put("success", true)
+                .put("maxInferenceAttempts", 3));
+            show("진단 상한 총 3회 · 기존 시도 수를 유지하며 요청은 각각 명시적으로 실행해");
+        }));
         button(layout, "합성 문단 번역 1회 · 공유 한도 사용", this::translate);
         button(layout, "연결 해제 · 원격 철회와 로컬 삭제", () -> perform("disconnect", () -> {
             boolean present = vault.load() != null;
@@ -143,8 +156,9 @@ public final class SiwcProbeActivity extends Activity {
                 try {
                     if (!"inference".equals(operation) || inferring) {
                         JSONObject failure = new JSONObject().put("operation", operation).put("success", false)
-                            .put("attempted", inferring).put("completed", false).put("cancelled", cancelled);
-                        if (inferring && inferenceModel != null) failure.put("model", inferenceModel);
+                            .put("attempted", inferring).put("completed", false).put("cancelled", cancelled)
+                            .put("guard", SiwcResponses.guard(error));
+                        if (inferring && inferenceModel != null) failure.put("model", inferenceModel).put("attemptNumber", inferenceNumber);
                         if (error instanceof SiwcHttp.Failure) {
                             failure.put("failureKind", "http").put("httpStatus", ((SiwcHttp.Failure) error).status)
                                 .put("errorCode", ((SiwcHttp.Failure) error).code).put("http", ((SiwcHttp.Failure) error).details);
@@ -180,20 +194,20 @@ public final class SiwcProbeActivity extends Activity {
         final String model = choices.get(picker.getSelectedItemPosition()).slug;
         perform("inference", () -> {
             JSONObject value = current(true, false);
-            session.markInference(value.getString("client"), value.getString("subject"));
+            inferenceNumber = session.markInference(value.getString("client"), value.getString("subject"));
             inferenceModel = model;
             inferring = true;
-            report("inference", new JSONObject().put("attempted", true).put("completed", false).put("model", model));
+            report("inference", new JSONObject().put("attempted", true).put("completed", false).put("model", model).put("attemptNumber", inferenceNumber));
             SiwcResponses.Result result = http.translate(value.getString("access_token"), model,
                 () -> cancelled || destroyed, partial -> runOnUiThread(() -> {
                     if (!destroyed) translation.setText("수신 중 · 완료 미확인\n" + partial);
                 }));
             report("inference", new JSONObject().put("attempted", true).put("completed", true)
-                .put("model", model).put("firstMs", result.firstMs).put("totalMs", result.totalMs)
+                .put("model", model).put("attemptNumber", inferenceNumber).put("firstMs", result.firstMs).put("totalMs", result.totalMs)
                 .put("inputTokens", result.inputTokens).put("outputTokens", result.outputTokens)
                 .put("textChars", result.text.length()));
             runOnUiThread(() -> { if (!destroyed) translation.setText(result.text); });
-            show("response.completed 확인 · 합성 번역 완료. 같은 연결에서는 다시 요청하지 않아.");
+            show("response.completed 확인 · 합성 번역 완료. 남은 진단 예산도 자동으로 사용하지 않아.");
         });
     }
 

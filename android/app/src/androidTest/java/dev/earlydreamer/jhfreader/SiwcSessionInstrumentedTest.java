@@ -170,4 +170,23 @@ public class SiwcSessionInstrumentedTest {
             assertEquals(0, calls.get());
         } finally { vault.destroyTestKey(); }
     }
+
+    @Test public void explicitDiagnosticBudgetSurvivesRotationAndNeverResetsConsumedAttempts() throws Exception {
+        SiwcVault vault = vault();
+        try {
+            SiwcSession session = new SiwcSession(vault, (path, form) -> new JSONObject()
+                .put("access_token", "synthetic-new-access").put("refresh_token", "synthetic-new-refresh")
+                .put("token_type", "Bearer").put("expires_in", 3600).toString());
+            session.install("oaiapp_test", "synthetic-sub", tokens(3600), 1000);
+            assertEquals(1, session.markInference("oaiapp_test", "synthetic-sub"));
+            fails(() -> session.markInference("oaiapp_test", "synthetic-sub"));
+            session.allowAdditionalDiagnostics("oaiapp_test", "synthetic-sub");
+            session.fresh("oaiapp_test", "synthetic-sub", 1001, true);
+            assertEquals(2, session.markInference("oaiapp_test", "synthetic-sub"));
+            assertEquals(3, session.markInference("oaiapp_test", "synthetic-sub"));
+            session.allowAdditionalDiagnostics("oaiapp_test", "synthetic-sub");
+            fails(() -> session.markInference("oaiapp_test", "synthetic-sub"));
+            assertEquals(3, vault.load().getInt("inferenceAttempts"));
+        } finally { vault.destroyTestKey(); }
+    }
 }

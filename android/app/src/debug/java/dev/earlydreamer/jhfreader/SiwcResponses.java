@@ -8,6 +8,37 @@ import java.util.function.Consumer;
 
 /** Responses SSE 전용. delta나 EOF를 완료 응답으로 승격하지 않는다. */
 final class SiwcResponses {
+    static final class ProtocolFailure extends IllegalArgumentException {
+        final JSONObject details;
+        ProtocolFailure(String reason, JSONObject details) { super(reason); this.details = details; }
+    }
+    static JSONObject guard(Exception error) throws Exception {
+        JSONObject result = new JSONObject();
+        String message = error.getMessage();
+        String[] messages = {"model slug", "stream size", "SSE line size", "event mismatch", "text size", "final text size",
+            "completed status mismatch", "completed response mismatch", "not SSE"};
+        String[] codes = {"model_slug", "stream_limit", "line_limit", "event_mismatch", "delta_text_limit", "final_text_limit",
+            "completed_status", "completed_id", "content_type"};
+        String reason = "unclassified";
+        for (int i = 0; i < messages.length; i++) if (messages[i].equals(message)) reason = codes[i];
+        result.put("reason", reason);
+        if (error instanceof ProtocolFailure) result.put("details", ((ProtocolFailure) error).details);
+        for (StackTraceElement frame : error.getStackTrace()) {
+            String prefix = "dev.earlydreamer.jhfreader.";
+            if (!frame.getClassName().startsWith(prefix)) continue;
+            String component = frame.getClassName().substring(prefix.length());
+            if (!java.util.Arrays.asList("SiwcHttp", "SiwcResponses", "SiwcSession", "SiwcVault", "SiwcProbeActivity", "SiwcLoopback", "SiwcProtocol").contains(component)) continue;
+            result.put("component", component).put("method", frame.getMethodName()).put("line", frame.getLineNumber());
+            break;
+        }
+        return result;
+    }
+    private static String eventName(String event) {
+        return java.util.Arrays.asList("message", "error", "response.created", "response.in_progress", "response.completed",
+            "response.failed", "response.incomplete", "response.output_text.delta", "response.output_text.done",
+            "response.output_item.added", "response.output_item.done", "response.content_part.added", "response.content_part.done")
+            .contains(event) ? event : "other";
+    }
     static String safeCode(String code) {
         return java.util.Arrays.asList("subscription_sharing_usage_limit_exceeded", "subscription_sharing_usage_unavailable",
             "subscription_sharing_user_not_eligible", "subscription_sharing_unsupported_capability", "subscription_sharing_route_not_supported",
@@ -51,7 +82,8 @@ final class SiwcResponses {
         for (;;) {
             int ch = input.read();
             if (ch < 0) return value.length() == 0 ? null : value.toString();
-            if (--budget[0] < 0 || value.length() > 131072) throw new IllegalArgumentException("stream size");
+            if (--budget[0] < 0) throw new ProtocolFailure("stream size", new JSONObject().put("charsRead", 2097152 - budget[0]));
+            if (value.length() > 131072) throw new ProtocolFailure("SSE line size", new JSONObject().put("lineChars", value.length()));
             if (ch == '\n') return value.toString();
             if (ch != '\r') value.append((char) ch);
         }
@@ -62,6 +94,7 @@ final class SiwcResponses {
         String event = "", responseId = null;
         int[] budget = {2097152};
         long first = -1;
+        int frames = 0;
         for (;;) {
             if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
             if (android.os.SystemClock.elapsedRealtime() - started > 120000) throw new java.util.concurrent.TimeoutException();
@@ -77,13 +110,16 @@ final class SiwcResponses {
                 if ("[DONE]".equals(payload)) throw new Failure("done_without_completed", "");
                 JSONObject frame = new JSONObject(payload);
                 String type = frame.getString("type");
-                if (!event.isEmpty() && !event.equals(type)) throw new IllegalArgumentException("event mismatch");
+                frames++;
+                if (!event.isEmpty() && !event.equals(type)) throw new ProtocolFailure("event mismatch", new JSONObject()
+                    .put("sseEvent", eventName(event)).put("dataType", eventName(type)).put("frames", frames)
+                    .put("charsRead", 2097152 - budget[0]));
                 event = "";
                 if ("response.created".equals(type)) responseId = frame.getJSONObject("response").getString("id");
                 else if ("response.output_text.delta".equals(type)) {
                     if (first < 0) first = android.os.SystemClock.elapsedRealtime() - started;
                     partial.append(frame.getString("delta"));
-                    if (partial.length() > 32768) throw new IllegalArgumentException("text size");
+                    if (partial.length() > 32768) throw new ProtocolFailure("text size", new JSONObject().put("textChars", partial.length()).put("frames", frames));
                     delta.accept(partial.toString());
                 } else if ("response.failed".equals(type) || "response.incomplete".equals(type) || "error".equals(type)) {
                     JSONObject response = frame.optJSONObject("response");
@@ -92,9 +128,9 @@ final class SiwcResponses {
                         error == null ? frame.optString("param") : error.optString("param"));
                 } else if ("response.completed".equals(type)) {
                     JSONObject response = frame.getJSONObject("response");
-                    if (!"completed".equals(response.getString("status"))
-                        || (responseId != null && !responseId.equals(response.getString("id"))))
-                        throw new IllegalArgumentException("completed response mismatch");
+                    if (!"completed".equals(response.getString("status"))) throw new ProtocolFailure("completed status mismatch", new JSONObject().put("frames", frames));
+                    if (responseId != null && !responseId.equals(response.getString("id")))
+                        throw new ProtocolFailure("completed response mismatch", new JSONObject().put("frames", frames).put("idsMatch", false));
                     StringBuilder text = new StringBuilder();
                     JSONArray output = response.getJSONArray("output");
                     for (int i = 0; i < output.length(); i++) {
@@ -104,7 +140,7 @@ final class SiwcResponses {
                         for (int j = 0; j < content.length(); j++) {
                             JSONObject part = content.getJSONObject(j);
                             if ("output_text".equals(part.optString("type"))) text.append(part.getString("text"));
-                            if (text.length() > 32768) throw new IllegalArgumentException("final text size");
+                            if (text.length() > 32768) throw new ProtocolFailure("final text size", new JSONObject().put("textChars", text.length()).put("frames", frames));
                         }
                     }
                     if (text.toString().trim().isEmpty() || cancelled.getAsBoolean())

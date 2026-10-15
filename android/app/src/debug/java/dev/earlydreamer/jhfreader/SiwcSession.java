@@ -29,7 +29,8 @@ final class SiwcSession {
             long expires = tokens.getLong("expires_in");
             if (expires <= 0 || expires > 604800) throw new IllegalArgumentException("expiry");
             JSONObject value = new JSONObject(tokens.toString()).put("client", client).put("subject", subject)
-                .put("expiresAt", now + expires).put("phase", "ready").put("inferenceAttempted", false);
+                .put("expiresAt", now + expires).put("phase", "ready").put("inferenceAttempted", false)
+                .put("inferenceAttempts", 0).put("maxInferenceAttempts", 1);
             vault.save(value);
         }
     }
@@ -72,17 +73,30 @@ final class SiwcSession {
                 if (!SiwcProtocol.equal(subject, verified)) throw new IllegalArgumentException("refreshed account mismatch");
             } else { next.put("id_token", old.getString("id_token")); }
             next.put("client", client).put("subject", subject).put("expiresAt", now + expires)
-                .put("phase", "ready").put("inferenceAttempted", old.getBoolean("inferenceAttempted"));
+                .put("phase", "ready").put("inferenceAttempted", old.getBoolean("inferenceAttempted"))
+                .put("inferenceAttempts", old.optInt("inferenceAttempts", old.getBoolean("inferenceAttempted") ? 1 : 0))
+                .put("maxInferenceAttempts", old.optInt("maxInferenceAttempts", 1));
             vault.save(next);
             return next;
         }
     }
 
-    void markInference(String client, String subject) throws Exception {
+    int markInference(String client, String subject) throws Exception {
         synchronized (LOCK) {
             JSONObject value = restore(client, subject);
-            if (value.getBoolean("inferenceAttempted")) throw new IllegalStateException("inference already attempted");
-            vault.save(value.put("inferenceAttempted", true));
+            int used = value.optInt("inferenceAttempts", value.getBoolean("inferenceAttempted") ? 1 : 0);
+            int maximum = Math.min(3, Math.max(1, value.optInt("maxInferenceAttempts", 1)));
+            if (used >= maximum) throw new IllegalStateException("inference budget exhausted");
+            vault.save(value.put("inferenceAttempted", true).put("inferenceAttempts", used + 1));
+            return used + 1;
+        }
+    }
+
+    void allowAdditionalDiagnostics(String client, String subject) throws Exception {
+        synchronized (LOCK) {
+            JSONObject value = restore(client, subject);
+            // 명시적 진단 허용은 상한만 늘린다. 이미 소비한 시도 수나 결과 불명 표식을 초기화하지 않는다.
+            vault.save(value.put("maxInferenceAttempts", 3));
         }
     }
 

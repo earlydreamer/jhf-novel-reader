@@ -150,8 +150,11 @@ final class SiwcHttp implements SiwcSession.Auth {
             post(connection, "application/json", SiwcResponses.body(model).toString());
             try (InputStream input = successful(connection)) {
                 String type = connection.getContentType();
-                if (type == null || !type.toLowerCase(java.util.Locale.ROOT).startsWith("text/event-stream"))
-                    throw new IllegalArgumentException("not SSE");
+                if (type == null || !type.toLowerCase(java.util.Locale.ROOT).startsWith("text/event-stream")) {
+                    String media = type == null ? "missing" : type.toLowerCase(java.util.Locale.ROOT).split(";", 2)[0].trim();
+                    if (!Arrays.asList("missing", "application/json", "application/x-ndjson", "text/html", "text/plain", "application/octet-stream").contains(media)) media = "other";
+                    throw new SiwcResponses.ProtocolFailure("not SSE", new JSONObject().put("mediaType", media).put("httpStatus", 200));
+                }
                 return SiwcResponses.consume(new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8)),
                     cancelled, delta, started);
             }
