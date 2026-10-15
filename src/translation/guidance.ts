@@ -36,7 +36,13 @@ export type GuidanceDraft = {
 export type WorkGuidance = GuidanceDraft & { schemaVersion: 1; workId: string; hash: string };
 export interface GuidanceRepository {
   read(workId: string): Promise<WorkGuidance | null>;
-  save(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
+  save(workId: string, draft: GuidanceDraft, expectedHash?: string | null): Promise<WorkGuidance>;
+}
+/** 편집을 시작한 뒤 다른 작업이 용어집을 저장했다. 초안을 보존하고 다시 읽어야 한다. */
+export class GuidanceConflictError extends ReaderError {
+  constructor() {
+    super('storage');
+  }
 }
 function string(value: unknown, maximum: number, required = false): asserts value is string {
   check(typeof value === 'string' && value.length <= maximum && (!required || !!value.trim()));
@@ -129,7 +135,7 @@ export function createGuidanceRepository(files: PrivateFiles): GuidanceRepositor
         return record;
       });
     },
-    async save(workId, draft) {
+    async save(workId, draft, expectedHash) {
       duplicateFree(draft);
       const value: WorkGuidance = {
         ...structuredClone(draft),
@@ -142,7 +148,13 @@ export function createGuidanceRepository(files: PrivateFiles): GuidanceRepositor
           ...(draft.plotSummary === undefined ? [] : [draft.plotSummary]),
         ]),
       };
-      await serial(files, () => journal.save(`guidance/${workId}`, value, validateGuidance));
+      await serial(files, async () => {
+        if (expectedHash !== undefined) {
+          const current = (await journal.load(`guidance/${workId}`, validateGuidance))?.value;
+          if ((current?.hash ?? null) !== expectedHash) throw new GuidanceConflictError();
+        }
+        await journal.save(`guidance/${workId}`, value, validateGuidance);
+      });
       return value;
     },
   };

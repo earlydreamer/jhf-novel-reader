@@ -51,15 +51,27 @@ function RouteScreen({
       : state.route.kind === 'reader'
         ? (state.version?.source.workId ?? null)
         : null;
+  const [guidanceRevision, setGuidanceRevision] = useState(0);
+  const guidanceLocked =
+    state.busy ||
+    state.translationActive ||
+    state.termScan?.phase === 'running' ||
+    state.batchFill?.phase === 'running';
+  const readerGuidance = state.guidanceAvailable
+    ? {
+        locked: guidanceLocked,
+        onRead: controller.readGuidance,
+        onSave: controller.saveGuidance,
+        onSaved: () => setGuidanceRevision((value) => value + 1),
+      }
+    : undefined;
   const glossary = useReaderGlossary({
     workId: state.guidanceAvailable ? readerWorkId : null,
-    refreshKey: state.version?.versionId,
+    refreshKey: `${state.version?.versionId ?? ''}:${guidanceRevision}`,
     read: controller.readGuidance,
     save: controller.saveGuidance,
   });
-  const readerGlossary = glossary
-    ? { ...glossary, locked: state.busy || state.translationActive }
-    : undefined;
+  const readerGlossary = glossary ? { ...glossary, locked: guidanceLocked } : undefined;
   const titles = state.titlesAvailable
     ? {
         entries: state.titles,
@@ -111,7 +123,7 @@ function RouteScreen({
           guidance={
             state.guidanceAvailable
               ? {
-                  locked: state.busy || state.translationActive,
+                  locked: guidanceLocked,
                   onRead: controller.readGuidance,
                   onSave: controller.saveGuidance,
                 }
@@ -178,6 +190,7 @@ function RouteScreen({
           lineHeight={state.lineHeight}
           termHighlight={state.termHighlight}
           glossary={readerGlossary}
+          guidance={readerGuidance}
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy}
@@ -265,6 +278,7 @@ function RouteScreen({
           lineHeight={state.lineHeight}
           termHighlight={state.termHighlight}
           glossary={readerGlossary}
+          guidance={readerGuidance}
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy}

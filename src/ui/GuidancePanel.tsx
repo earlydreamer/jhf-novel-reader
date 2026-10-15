@@ -1,5 +1,6 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
 import {
+  GuidanceConflictError,
   isUnsafeTermName,
   type GuidanceDraft,
   type GuidanceTerm,
@@ -27,8 +28,11 @@ export interface GuidancePanelProps {
   locked: boolean;
   refreshKey?: string;
   onRead(workId: string): Promise<WorkGuidance | null>;
-  onSave(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
+  onSave(workId: string, draft: GuidanceDraft, expectedHash?: string | null): Promise<WorkGuidance>;
+  onSaved?(value: WorkGuidance): void;
+  onStateChange?(state: GuidancePanelState): void;
 }
+export type GuidancePanelState = { dirty: boolean; saving: boolean; canSave: boolean };
 const aliases = (value: string) => value.split(/[,、]/).map((name) => name.trim());
 export function GuidancePanel({
   workId,
@@ -36,18 +40,39 @@ export function GuidancePanel({
   refreshKey,
   onRead,
   onSave,
+  onSaved,
+  onStateChange,
 }: GuidancePanelProps): JSX.Element {
   const [draft, setDraft] = useState<GuidanceDraft>({ terms: [], voices: [] });
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState('');
   const [available, setAvailable] = useState(false);
-  const loadKey = `${workId}:${refreshKey ?? ''}`;
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [reload, setReload] = useState(0);
+  const baseHash = useRef<string | null>(null);
+  const loadKey = `${workId}:${refreshKey ?? ''}:${reload}`;
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const canSave = !busy && !locked && available && loadedKey === loadKey && !conflict;
+  useLayoutEffect(() => {
+    onStateChange?.({ dirty, saving, canSave });
+  }, [dirty, saving, canSave, onStateChange]);
   useEffect(() => {
+    if (dirtyRef.current) {
+      setConflict(true);
+      setMessage('다른 작업에서 용어집이 바뀌었어요. 입력한 내용을 확인한 뒤 다시 읽어 주세요.');
+      return;
+    }
     let mounted = true;
+    setBusy(true);
+    setAvailable(false);
     void onRead(workId)
       .then((value) => {
         if (!mounted) return;
+        baseHash.current = value?.hash ?? null;
         setDraft({
           terms: value?.terms ?? [],
           voices: value?.voices ?? [],
@@ -67,29 +92,51 @@ export function GuidancePanel({
     };
   }, [workId, onRead, loadKey]);
   function change(next: GuidanceDraft) {
+    dirtyRef.current = true;
+    setDirty(true);
     setDraft(next);
     setMessage('변경 사항을 저장해야 번역에 적용돼요.');
   }
   async function save() {
-    if (busy || locked || !available || loadedKey !== loadKey) return;
+    if (!canSave || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     setBusy(true);
     try {
-      const value = await onSave(workId, {
-        ...(draft.plotSummary !== undefined ? { plotSummary: draft.plotSummary } : {}),
-        terms: draft.terms.map((term) => ({ ...term, aliases: term.aliases.filter(Boolean) })),
-        voices: draft.voices.map((voice) => ({ ...voice, aliases: voice.aliases.filter(Boolean) })),
-      });
+      const value = await onSave(
+        workId,
+        {
+          ...(draft.plotSummary !== undefined ? { plotSummary: draft.plotSummary } : {}),
+          terms: draft.terms.map((term) => ({ ...term, aliases: term.aliases.filter(Boolean) })),
+          voices: draft.voices.map((voice) => ({
+            ...voice,
+            aliases: voice.aliases.filter(Boolean),
+          })),
+        },
+        baseHash.current,
+      );
+      baseHash.current = value.hash;
+      dirtyRef.current = false;
+      setDirty(false);
       setDraft({
         terms: value.terms,
         voices: value.voices,
         ...(value.plotSummary !== undefined ? { plotSummary: value.plotSummary } : {}),
       });
       setMessage('저장했어요. 다음 번역부터 적용되고 기존 번역은 그대로 남아요.');
-    } catch {
+      onSaved?.(value);
+    } catch (error) {
+      if (error instanceof GuidanceConflictError) {
+        setConflict(true);
+        setMessage('다른 작업에서 용어집이 바뀌었어요. 입력한 내용을 확인한 뒤 다시 읽어 주세요.');
+        return;
+      }
       setMessage(
         '저장하지 못했어요. 필수 항목, 글자 수·별칭 수, 중복된 이름을 확인해 주세요. 입력한 내용은 그대로 남아 있어요.',
       );
     } finally {
+      savingRef.current = false;
+      setSaving(false);
       setBusy(false);
     }
   }
@@ -105,7 +152,10 @@ export function GuidancePanel({
         40자, 설명은 300자, 말투 지침은 400자까지 입력할 수 있어요. 같은 이름(전각·반각 차이 포함)은
         한 번만 등록할 수 있어요.
       </p>
-      <fieldset disabled={busy || locked || !available || loadedKey !== loadKey}>
+      {locked && (
+        <p role="status">작업 중에는 용어집을 고칠 수 없어요. 작업이 끝난 뒤 저장해 주세요.</p>
+      )}
+      <fieldset disabled={!canSave}>
         <legend>용어집</legend>
         <label>
           이전 이야기 요약 (선택, 이름 없이 400자 이내)
@@ -281,6 +331,21 @@ export function GuidancePanel({
       </fieldset>
       {busy && <p>용어집 처리 중…</p>}
       {message && <p role="status">{message}</p>}
+      {(conflict || (!busy && !available)) && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            dirtyRef.current = false;
+            setDirty(false);
+            setConflict(false);
+            setMessage('');
+            setReload((value) => value + 1);
+          }}
+        >
+          {dirty ? '입력한 변경을 버리고 다시 읽기' : '용어집 다시 읽기'}
+        </button>
+      )}
     </div>
   );
 }

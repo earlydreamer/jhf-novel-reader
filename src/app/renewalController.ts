@@ -392,7 +392,11 @@ export interface RenewalController {
   openBatch(): void;
   dismissBatchNotice(): void;
   readGuidance(workId: string): Promise<WorkGuidance | null>;
-  saveGuidance(workId: string, draft: GuidanceDraft): Promise<WorkGuidance>;
+  saveGuidance(
+    workId: string,
+    draft: GuidanceDraft,
+    expectedHash?: string | null,
+  ): Promise<WorkGuidance>;
   startTermScan(workId: string): Promise<void>;
   cancelTermScan(): void;
   revertTermScanChange(source: string): Promise<void>;
@@ -3191,7 +3195,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     removeTermScanCommon,
     closeTermScan,
     readGuidance: async (workId) => (await dependencies.guidance?.read(workId)) ?? null,
-    async saveGuidance(workId, draft) {
+    async saveGuidance(workId, draft, expectedHash) {
       if (
         !dependencies.guidance ||
         removingWorkIds.has(workId) ||
@@ -3201,10 +3205,16 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         snapshot.work?.workId !== workId ||
         activeTranslation ||
         dependencies.batch?.active ||
-        dependencies.flow?.active
+        dependencies.flow?.active ||
+        termScanAbort !== null ||
+        termScanChecking
       )
         throw new ReaderError('storage');
-      return trackWorkWrite(workId, () => dependencies.guidance!.save(workId, draft));
+      return trackWorkWrite(workId, () =>
+        expectedHash === undefined
+          ? dependencies.guidance!.save(workId, draft)
+          : dependencies.guidance!.save(workId, draft, expectedHash),
+      );
     },
     translate,
     refreshSource,
