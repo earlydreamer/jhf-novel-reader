@@ -129,4 +129,23 @@ public class SiwcResponsesInstrumentedTest {
             fail("completed accepted after cancellation");
         } catch (java.util.concurrent.CancellationException expected) { assertTrue(cancelled.get()); }
     }
+
+    @Test public void emptyCompletedOutputReportsOnlySafeSchemaAndNeverPromotesDelta() throws Exception {
+        JSONObject response = new JSONObject().put("id", "PRIVATE-SYNTHETIC-ID").put("status", "completed")
+            .put("output", new JSONArray().put(new JSONObject().put("type", "reasoning").put("summary", "PRIVATE-SYNTHETIC-TEXT")));
+        try {
+            consume(delta() + event("response.completed", new JSONObject().put("response", response)));
+            fail("partial delta promoted to completed translation");
+        } catch (SiwcResponses.ProtocolFailure error) {
+            JSONObject guard = SiwcResponses.guard(error);
+            assertEquals("completed_text_empty", guard.getString("reason"));
+            JSONObject details = guard.getJSONObject("details");
+            assertTrue(details.getBoolean("completedEvent"));
+            assertTrue(details.getInt("deltaTextChars") > 0);
+            assertEquals(1, details.getInt("outputCount"));
+            assertEquals("reasoning", details.getJSONArray("outputShape").getJSONObject(0).getString("type"));
+            assertEquals(1, details.getJSONObject("eventCounts").getInt("response.completed"));
+            assertFalse(guard.toString().contains("PRIVATE"));
+        }
+    }
 }

@@ -16,9 +16,9 @@ final class SiwcResponses {
         JSONObject result = new JSONObject();
         String message = error.getMessage();
         String[] messages = {"model slug", "stream size", "SSE line size", "event mismatch", "text size", "final text size",
-            "completed status mismatch", "completed response mismatch", "not SSE"};
+            "completed status mismatch", "completed response mismatch", "not SSE", "no completed translation"};
         String[] codes = {"model_slug", "stream_limit", "line_limit", "event_mismatch", "delta_text_limit", "final_text_limit",
-            "completed_status", "completed_id", "content_type"};
+            "completed_status", "completed_id", "content_type", "completed_text_empty"};
         String reason = "unclassified";
         for (int i = 0; i < messages.length; i++) if (messages[i].equals(message)) reason = codes[i];
         result.put("reason", reason);
@@ -101,6 +101,7 @@ final class SiwcResponses {
         int[] budget = {2097152};
         long first = -1;
         int frames = 0;
+        JSONObject eventCounts = new JSONObject();
         for (;;) {
             if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
             if (android.os.SystemClock.elapsedRealtime() - started > 120000) throw new java.util.concurrent.TimeoutException();
@@ -117,6 +118,8 @@ final class SiwcResponses {
                 JSONObject frame = new JSONObject(payload);
                 String type = frame.getString("type");
                 frames++;
+                String safeEvent = eventName(type);
+                eventCounts.put(safeEvent, eventCounts.optInt(safeEvent, 0) + 1);
                 if (!event.isEmpty() && !event.equals(type)) throw new ProtocolFailure("event mismatch", new JSONObject()
                     .put("sseEvent", eventName(event)).put("dataType", eventName(type)).put("frames", frames)
                     .put("charsRead", 2097152 - budget[0]));
@@ -139,8 +142,21 @@ final class SiwcResponses {
                         throw new ProtocolFailure("completed response mismatch", new JSONObject().put("frames", frames).put("idsMatch", false));
                     StringBuilder text = new StringBuilder();
                     JSONArray output = response.getJSONArray("output");
+                    JSONArray shape = new JSONArray();
                     for (int i = 0; i < output.length(); i++) {
                         JSONObject item = output.getJSONObject(i);
+                        String itemType = item.optString("type"), role = item.optString("role");
+                        JSONObject itemShape = new JSONObject().put("type", java.util.Arrays.asList("message", "reasoning", "function_call").contains(itemType) ? itemType : "other")
+                            .put("role", java.util.Arrays.asList("assistant", "user", "system", "developer").contains(role) ? role : "other");
+                        JSONArray parts = item.optJSONArray("content");
+                        JSONArray partShape = new JSONArray();
+                        if (parts != null) for (int p = 0; p < Math.min(parts.length(), 16); p++) {
+                            JSONObject part = parts.optJSONObject(p);
+                            String partType = part == null ? "" : part.optString("type");
+                            partShape.put(new JSONObject().put("type", java.util.Arrays.asList("output_text", "refusal", "text").contains(partType) ? partType : "other")
+                                .put("textChars", part == null ? 0 : part.optString("text").length()));
+                        }
+                        if (i < 16) shape.put(itemShape.put("content", partShape).put("contentCount", parts == null ? -1 : parts.length()));
                         if (!"message".equals(item.optString("type")) || !"assistant".equals(item.optString("role"))) continue;
                         JSONArray content = item.getJSONArray("content");
                         for (int j = 0; j < content.length(); j++) {
@@ -149,8 +165,12 @@ final class SiwcResponses {
                             if (text.length() > 32768) throw new ProtocolFailure("final text size", new JSONObject().put("textChars", text.length()).put("frames", frames));
                         }
                     }
-                    if (text.toString().trim().isEmpty() || cancelled.getAsBoolean())
-                        throw new IllegalStateException("no completed translation");
+                    if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
+                    if (text.toString().trim().isEmpty())
+                        throw new ProtocolFailure("no completed translation", new JSONObject().put("completedEvent", true)
+                            .put("frames", frames).put("charsRead", 2097152 - budget[0]).put("deltaTextChars", partial.length())
+                            .put("firstMs", first).put("totalMs", android.os.SystemClock.elapsedRealtime() - started)
+                            .put("outputCount", output.length()).put("outputShape", shape).put("eventCounts", eventCounts));
                     JSONObject usage = response.optJSONObject("usage");
                     return new Result(text.toString(), first, android.os.SystemClock.elapsedRealtime() - started,
                         usage == null ? -1 : Math.max(-1, usage.optLong("input_tokens", -1)),
