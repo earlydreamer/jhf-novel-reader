@@ -5,157 +5,230 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.util.AtomicFile;
 import android.view.WindowManager;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import org.json.JSONObject;
-import javax.net.ssl.HttpsURLConnection;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** 인증 A 단계만. 제품 설정·서재·WebView·모델 호출에 접근하지 않는다. */
+/** debug 전용 A→B→C PoC. 제품 설정·서재·WebView 브리지에 연결하지 않는다. */
 public final class SiwcProbeActivity extends Activity {
-    private static final class HttpFailure extends Exception {
-        final int status;
-        HttpFailure(int status) { this.status = status; }
-    }
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final SiwcHttp http = new SiwcHttp();
+    private final List<Button> controls = new ArrayList<>();
     private volatile SiwcLoopback listener;
-    private volatile boolean cancelled;
-    private volatile boolean destroyed;
-    private TextView status;
-    private Button start;
+    private volatile boolean cancelled, destroyed, busy, inferring;
+    private SiwcVault vault;
+    private SiwcSession session;
+    private TextView status, translation;
+    private Spinner picker;
+    private List<SiwcHttp.Model> choices = new ArrayList<>();
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        vault = new SiwcVault(this, "session");
+        session = new SiwcSession(vault, http);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(32, 64, 32, 32);
+        layout.setPadding(32, 48, 32, 32);
         TextView info = new TextView(this);
-        info.setText("JHF SiwC 인증 검증 · A 단계\n\n시스템 브라우저에서 네가 직접 로그인하고 권한을 확인해. 플랜 권한은 Codex/ChatGPT Work 공유 한도에 연결돼. 이 검증은 번역·모델 요청을 하지 않아.\n\n토큰은 파일에 저장하지 않고, 교환 후 refresh 세션 철회를 시도해. 철회 결과는 별도로 표시해. 브라우저의 ChatGPT 로그인 자체를 로그아웃하지는 않아. 결과 파일에는 단계별 성공 여부·시간만 남겨.\n\n콜백 수신 안내가 뜨면 뒤로가기로 이 화면에 돌아와. 5분 뒤에는 시도를 종료해. 앱 종료·취소 뒤 예전 콜백은 사용할 수 없어.\n");
+        info.setText("JHF SiwC 보호 저장·합성 번역 검증\n\nA 인증 왕복은 앞선 APK에서 확인했어. 이번 연결은 B 검증을 위해 토큰을 Android Keystore로 암호화해 이 테스트 앱에 보관해. 명시적으로 연결 해제를 누르면 원격 철회와 로컬 삭제를 진행해. 기존 JHF 앱과 별도 패키지야.\n\n로그인·복원·갱신·모델 목록은 번역을 요청하지 않아. 모델을 직접 선택하고 합성 번역 버튼을 누를 때만 아래 합성 문단과 번역 지침을 OpenAI에 보내. Codex/ChatGPT Work 공유 한도를 쓰며 다른 과금 경로로 자동 전환하지 않아.\n\n브라우저 콜백 뒤 뒤로가기로 돌아와. 저장 확인→앱 재실행 후 복원→갱신→모델 목록→합성 번역 1회→연결 해제 순서로 검증해. 결과 불명 요청은 재전송하지 않아.\n\n합성 원문: " + SiwcResponses.SYNTHETIC + "\n");
         layout.addView(info);
-        start = new Button(this);
-        start.setText("Continue with ChatGPT");
-        start.setOnClickListener(v -> begin());
-        layout.addView(start);
+        button(layout, "Continue with ChatGPT", this::begin);
+        button(layout, "보호 저장 연결 복원", () -> perform("restore", () -> {
+            JSONObject value = current(false, false);
+            report("session", new JSONObject().put("operation", "restore").put("success", true)
+                .put("inferenceAttempted", value.getBoolean("inferenceAttempted")));
+            show("보호 저장 연결 복원됨 · 계정 정보·토큰은 표시하지 않아");
+        }));
+        button(layout, "토큰 갱신 검증 1회", () -> perform("refresh", () -> {
+            current(true, true);
+            report("session", new JSONObject().put("operation", "refresh").put("success", true));
+            show("갱신 완료 · 최신 회전 토큰을 보호 저장했어");
+        }));
+        button(layout, "계정 모델 목록 읽기", () -> perform("models", () -> {
+            JSONObject value = current(true, false);
+            List<SiwcHttp.Model> models = http.models(value.getString("access_token"));
+            if (models.isEmpty()) throw new IllegalStateException("no visible models");
+            runOnUiThread(() -> {
+                if (destroyed) return;
+                choices = models;
+                picker.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, models));
+            });
+            report("session", new JSONObject().put("operation", "models").put("success", true).put("modelCount", models.size()));
+            show("모델 목록 확인됨 · 선택 후 합성 번역을 직접 실행해");
+        }));
+        picker = new Spinner(this);
+        layout.addView(picker);
+        button(layout, "합성 문단 번역 1회 · 공유 한도 사용", this::translate);
+        button(layout, "연결 해제 · 원격 철회와 로컬 삭제", () -> perform("disconnect", () -> {
+            boolean revoked = session.disconnect();
+            report("session", new JSONObject().put("operation", "disconnect").put("localCleared", true)
+                .put("revocationConfirmed", revoked).put("success", revoked));
+            runOnUiThread(() -> {
+                choices = new ArrayList<>();
+                picker.setAdapter(null);
+                translation.setText("");
+            });
+            show(revoked ? "원격 철회 응답 확인 · 로컬 토큰 삭제 완료"
+                : "로컬 토큰 삭제 · 원격 철회 미확인, ChatGPT 연결 관리에서 확인해");
+        }));
         Button cancel = new Button(this);
-        cancel.setText("검증 취소");
+        cancel.setText("진행 중 검증 취소");
         cancel.setOnClickListener(v -> cancel());
         layout.addView(cancel);
         status = new TextView(this);
-        status.setText("준비됨 · 자동 로그인 없음");
-        status.setTextIsSelectable(false);
+        status.setText("준비됨 · 로그인·번역 자동 실행 없음");
         layout.addView(status);
+        translation = new TextView(this);
+        layout.addView(translation);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(layout);
         setContentView(scroll);
     }
 
-    private void show(String text) {
-        runOnUiThread(() -> { if (!destroyed) status.setText(text); });
+    private void button(LinearLayout layout, String label, Runnable action) {
+        Button control = new Button(this);
+        control.setText(label);
+        control.setOnClickListener(v -> action.run());
+        controls.add(control);
+        layout.addView(control);
     }
 
+    private void enabled(boolean value) {
+        busy = !value;
+        runOnUiThread(() -> { if (!destroyed) for (Button control : controls) control.setEnabled(value); });
+    }
+    private void show(String text) { runOnUiThread(() -> { if (!destroyed) status.setText(text); }); }
     private void cancel() {
         cancelled = true;
         SiwcLoopback current = listener;
         if (current != null) current.close();
-        show("취소 요청됨 · 교환이 진행 중이면 결과 확인과 세션 정리 뒤 종료해. 자동 재전송은 없어.");
+        http.cancelInference();
+        show("취소 요청됨 · 교환 중이면 정리 뒤 종료해. 결과 불명 요청은 재전송하지 않아.");
+    }
+    private interface Task { void run() throws Exception; }
+
+    private void perform(String operation, Task task) {
+        if (busy) return;
+        enabled(false);
+        cancelled = false;
+        worker.execute(() -> {
+            try {
+                if (destroyed || cancelled) return;
+                task.run();
+            } catch (Exception error) {
+                String message = operation + " 실패 또는 결과 불명 · 자동 재전송 없음";
+                if (error instanceof SiwcHttp.Failure) message += " · HTTP " + ((SiwcHttp.Failure) error).status;
+                show(message);
+                try {
+                    if (!"inference".equals(operation) || inferring)
+                        report("inference".equals(operation) ? "inference" : "session",
+                            new JSONObject().put("operation", operation).put("success", false)
+                                .put("attempted", inferring).put("completed", false).put("cancelled", cancelled));
+                } catch (Exception ignored) { }
+            } finally { inferring = false; enabled(true); }
+        });
+    }
+
+    private JSONObject current(boolean fresh, boolean force) throws Exception {
+        if (cancelled || destroyed) throw new java.util.concurrent.CancellationException();
+        JSONObject metadata = registration();
+        String client = metadata.getString("client"), subject = metadata.getString("subject");
+        return fresh ? session.fresh(client, subject, System.currentTimeMillis() / 1000, force)
+            : session.restore(client, subject);
+    }
+
+    private void translate() {
+        if (busy || choices.isEmpty() || picker.getSelectedItemPosition() < 0) {
+            show("연결한 계정의 모델 목록을 먼저 읽고 모델을 선택해.");
+            return;
+        }
+        final String model = choices.get(picker.getSelectedItemPosition()).slug;
+        perform("inference", () -> {
+            JSONObject value = current(true, false);
+            session.markInference(value.getString("client"), value.getString("subject"));
+            inferring = true;
+            report("inference", new JSONObject().put("attempted", true).put("completed", false).put("model", model));
+            SiwcResponses.Result result = http.translate(value.getString("access_token"), model,
+                () -> cancelled || destroyed, partial -> runOnUiThread(() -> {
+                    if (!destroyed) translation.setText("수신 중 · 완료 미확인\n" + partial);
+                }));
+            report("inference", new JSONObject().put("attempted", true).put("completed", true)
+                .put("model", model).put("firstMs", result.firstMs).put("totalMs", result.totalMs)
+                .put("inputTokens", result.inputTokens).put("outputTokens", result.outputTokens)
+                .put("textChars", result.text.length()));
+            runOnUiThread(() -> { if (!destroyed) translation.setText(result.text); });
+            show("response.completed 확인 · 합성 번역 완료. 같은 연결에서는 다시 요청하지 않아.");
+        });
+    }
+
+    private synchronized JSONObject registration() throws Exception {
+        AtomicFile file = new AtomicFile(new File(getNoBackupFilesDir(), "siwc-probe-registration.json"));
+        if (file.getBaseFile().exists() || new File(file.getBaseFile().getPath() + ".bak").exists()) {
+            try (InputStream input = file.openRead(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[1024];
+                for (int n; (n = input.read(buffer)) >= 0;) {
+                    if (output.size() + n > 8192) throw new IllegalArgumentException("metadata size");
+                    output.write(buffer, 0, n);
+                }
+                return new JSONObject(output.toString("UTF-8"));
+            }
+        }
+        JSONObject metadata = new JSONObject().put("host", "urn:uuid:" + UUID.randomUUID());
+        write("siwc-probe-registration.json", metadata);
+        return metadata;
+    }
+
+    private synchronized void write(String filename, JSONObject value) throws Exception {
+        AtomicFile file = new AtomicFile(new File(getNoBackupFilesDir(), filename));
+        FileOutputStream output = file.startWrite();
+        try {
+            output.write(value.toString().getBytes(StandardCharsets.UTF_8));
+            file.finishWrite(output);
+        } catch (Exception error) { file.failWrite(output); throw error; }
+    }
+    private void report(String kind, JSONObject safe) throws Exception {
+        if (!"session".equals(kind) && !"inference".equals(kind)) throw new IllegalArgumentException("report");
+        // 호출자가 만든 성패·시간·모델 slug만 기록한다. 인증정보·응답 본문을 전달하지 않는다.
+        write("siwc-" + kind + "-result.json", safe);
     }
 
     private void begin() {
-        if (!start.isEnabled()) return;
+        if (busy) return;
         File previous = new File(getNoBackupFilesDir(), "siwc-probe-result.json");
-        if (previous.exists() && !previous.delete()) {
-            show("이전 검증 결과를 지울 수 없어. 인증을 시작하지 않았어.");
-            return;
-        }
-        start.setEnabled(false);
+        if (previous.exists() && !previous.delete()) { show("이전 검증 결과를 지울 수 없어 인증을 시작하지 않았어."); return; }
+        enabled(false);
         cancelled = false;
         worker.execute(this::probe);
     }
 
-    private static String read(InputStream input, int limit) throws Exception {
-        try (InputStream stream = input; ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[2048];
-            for (int count; (count = stream.read(buffer)) >= 0;) {
-                if (bytes.size() + count > limit) throw new IllegalArgumentException("response size");
-                bytes.write(buffer, 0, count);
-            }
-            return bytes.toString("UTF-8");
-        }
-    }
-
-    // URL은 외부 입력으로 받지 않는다. POST 실패·결과 불명은 재전송하지 않는다.
-    private static String request(String path, Map<String, String> form) throws Exception {
-        if (!Arrays.asList("/.well-known/jwks.json", "/api/accounts/oauth/token", "/api/accounts/oauth/revoke").contains(path))
-            throw new IllegalArgumentException("endpoint");
-        HttpsURLConnection connection = (HttpsURLConnection) new URL(SiwcProtocol.ISSUER + path).openConnection();
-        try {
-            connection.setInstanceFollowRedirects(false);
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(20000);
-            connection.setRequestProperty("Accept", "application/json");
-            if (form != null) {
-                connection.setRequestMethod("POST");
-                connection.setDoOutput(true);
-                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                byte[] body = SiwcProtocol.form(form).getBytes(StandardCharsets.UTF_8);
-                connection.setFixedLengthStreamingMode(body.length);
-                try (java.io.OutputStream stream = connection.getOutputStream()) { stream.write(body); }
-            }
-            int code = connection.getResponseCode();
-            if (code != 200) throw new HttpFailure(code);
-            return read(connection.getInputStream(), 262144);
-        } finally { connection.disconnect(); }
-    }
-
-    private synchronized JSONObject registration() throws Exception {
-        File file = new File(getNoBackupFilesDir(), "siwc-probe-registration.json");
-        android.util.AtomicFile atomic = new android.util.AtomicFile(file);
-        if (file.exists() || new File(file.getPath() + ".bak").exists())
-            return new JSONObject(read(atomic.openRead(), 8192));
-        JSONObject initial = new JSONObject().put("host", "urn:uuid:" + UUID.randomUUID());
-        saveRegistration(initial);
-        return initial;
-    }
-
-    private synchronized void saveRegistration(JSONObject metadata) throws Exception {
-        // 계정별 등록 ID·검증된 sub와 안정된 host만 보존. 토큰·이메일은 저장하지 않는다.
-        android.util.AtomicFile file = new android.util.AtomicFile(new File(getNoBackupFilesDir(), "siwc-probe-registration.json"));
-        FileOutputStream stream = file.startWrite();
-        try {
-            stream.write(metadata.toString().getBytes(StandardCharsets.UTF_8));
-            file.finishWrite(stream);
-        } catch (Exception error) { file.failWrite(stream); throw error; }
-    }
-
     private void probe() {
-        String refresh = null;
-        String issued = null;
-        boolean tokenResponse = false;
-        boolean callbackReceived = false;
-        boolean identity = false;
-        boolean plan = false;
-        boolean revoked = false;
-        String outcome = "인증 실패 또는 결과 불명 · 자동 재전송 없음";
-        String phase = "인증 준비";
-        String revocation = "토큰 응답 미확인 · 원격 세션 상태 미확인";
+        String refresh = null, issued = null;
+        boolean callbackReceived = false, tokenResponse = false, identity = false, plan = false;
+        boolean retained = false, revoked = false;
+        String phase = "인증 준비", outcome = "인증 실패 또는 결과 불명 · 자동 재전송 없음";
         long started = SystemClock.elapsedRealtime();
         try (SiwcLoopback loopback = new SiwcLoopback()) {
             listener = loopback;
+            if (vault.load() != null) throw new IllegalStateException("disconnect previous session first");
             JSONObject metadata = registration();
             String selected = metadata.optString("client", SiwcProtocol.DYNAMIC);
             String state = SiwcProtocol.random(), nonce = SiwcProtocol.random(), verifier = SiwcProtocol.random();
@@ -165,17 +238,15 @@ public final class SiwcProbeActivity extends Activity {
             runOnUiThread(() -> {
                 if (cancelled || destroyed) { loopback.close(); return; }
                 try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(authorization))
-                        .addCategory(Intent.CATEGORY_BROWSABLE));
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(authorization)).addCategory(Intent.CATEGORY_BROWSABLE));
                 } catch (Exception ignored) { cancelled = true; loopback.close(); }
             });
-            show("시스템 브라우저에서 로그인 중 · 리스너 유지 · 5분 제한");
             phase = "브라우저 콜백";
+            show("시스템 브라우저에서 로그인 중 · 리스너 유지 · 5분 제한");
             Map<String, String> callback = loopback.await(state, started + 300000);
             callbackReceived = true;
             issued = SiwcProtocol.callbackClient(callback, state, selected);
             if (cancelled || destroyed) throw new java.util.concurrent.CancellationException();
-            show("콜백 검증 완료 · 코드 교환 1회 진행");
             phase = "코드 교환";
             Map<String, String> form = new LinkedHashMap<>();
             form.put("grant_type", "authorization_code");
@@ -184,68 +255,63 @@ public final class SiwcProbeActivity extends Activity {
             form.put("code_verifier", verifier);
             form.put("redirect_uri", redirect);
             form.put("resource", SiwcProtocol.RESOURCE);
-            JSONObject tokens = new JSONObject(request("/api/accounts/oauth/token", form));
+            JSONObject tokens = new JSONObject(http.request("/api/accounts/oauth/token", form));
             tokenResponse = true;
             refresh = tokens.optString("refresh_token", "");
             phase = "공식 키 조회·ID token 검증";
             String subject = SiwcProtocol.identity(tokens.getString("id_token"),
-                new JSONObject(request("/.well-known/jwks.json", null)), issued, nonce, System.currentTimeMillis() / 1000);
+                new JSONObject(http.request("/.well-known/jwks.json", null)), issued, nonce, System.currentTimeMillis() / 1000);
             if (metadata.has("subject") && !SiwcProtocol.equal(metadata.getString("subject"), subject))
                 throw new IllegalArgumentException("account mismatch");
             identity = true;
-            plan = Arrays.asList(tokens.optString("scope", "").split(" +")).contains("chatgpt.tokens.use.direct")
-                && "Bearer".equalsIgnoreCase(tokens.optString("token_type"))
-                && !tokens.optString("access_token").isEmpty();
-            if (!cancelled && !destroyed) {
-                saveRegistration(new JSONObject().put("host", metadata.getString("host")).put("client", issued).put("subject", subject));
-                outcome = plan ? "인증·플랜 권한 검증 완료 (번역 미실행)" : "신원 검증 완료 · 플랜 권한 미확인";
-            }
-        } catch (java.util.concurrent.CancellationException ignored) {
-            outcome = "취소됨 · 자동 재시작 없음";
+            plan = SiwcSession.permits(tokens);
+            if (!plan) throw new IllegalStateException("plan permission missing");
+            if (cancelled || destroyed) throw new java.util.concurrent.CancellationException();
+            phase = "토큰 보호 저장";
+            write("siwc-probe-registration.json", new JSONObject().put("host", metadata.getString("host"))
+                .put("client", issued).put("subject", subject));
+            session.install(issued, subject, tokens, System.currentTimeMillis() / 1000);
+            retained = true;
+            outcome = "인증·플랜 권한 검증과 토큰 보호 저장 완료 · 번역 미실행";
         } catch (java.util.concurrent.TimeoutException ignored) {
-            outcome = "시간 초과 · 새 시도가 필요해";
-        } catch (HttpFailure error) {
-            outcome = phase + " 실패 · HTTP " + error.status + " · 자동 재전송 없음";
-        } catch (Exception ignored) {
-            // 인증 URL·예외 메시지·토큰·콜백·개인정보를 로그 또는 화면에 출력하지 않는다.
+            outcome = "로그인 시간 초과 · 새 시도가 필요해";
+        } catch (Exception error) {
             outcome = phase + " 실패 또는 결과 불명 · 자동 재전송 없음";
+            if (error instanceof SiwcHttp.Failure) outcome += " · HTTP " + ((SiwcHttp.Failure) error).status;
         } finally {
             listener = null;
-            if (tokenResponse && refresh != null && !refresh.isEmpty() && issued != null) {
+            if (retained && (cancelled || destroyed)) {
+                try { revoked = session.disconnect(); retained = false; refresh = null; }
+                catch (Exception ignored) { outcome = "취소 뒤 로컬 삭제 미확인 · 연결 해제를 다시 실행해"; }
+            }
+            if (!retained && tokenResponse && refresh != null && !refresh.isEmpty() && issued != null) {
                 try {
                     Map<String, String> form = new LinkedHashMap<>();
                     form.put("client_id", issued);
                     form.put("token", refresh);
                     form.put("token_type_hint", "refresh_token");
-                    request("/api/accounts/oauth/revoke", form);
+                    http.request("/api/accounts/oauth/revoke", form);
                     revoked = true;
-                    revocation = "임시 refresh 세션 원격 철회 응답 확인 (HTTP 200)";
-                } catch (Exception ignored) { revocation = "원격 철회 미확인 · ChatGPT 연결 관리에서 확인 필요"; }
-            } else if (tokenResponse) { revocation = "refresh token 없음 · 원격 철회 미확인"; }
+                } catch (Exception ignored) { }
+            }
             refresh = null;
             try {
-                JSONObject result = new JSONObject().put("completed", true).put("callbackReceived", callbackReceived)
+                write("siwc-probe-result.json", new JSONObject().put("completed", true).put("callbackReceived", callbackReceived)
                     .put("tokenResponse", tokenResponse).put("identityVerified", identity).put("planGranted", plan)
-                    .put("revocationConfirmed", revoked).put("cancelled", cancelled)
-                    .put("elapsedMs", SystemClock.elapsedRealtime() - started).put("outcome", outcome);
-                // 비밀이 없는 고정 항목만 기록한다. URL·계정·토큰을 받지 않는다.
-                android.util.AtomicFile report = new android.util.AtomicFile(new File(getNoBackupFilesDir(), "siwc-probe-result.json"));
-                FileOutputStream output = report.startWrite();
-                try {
-                    output.write(result.toString().getBytes(StandardCharsets.UTF_8));
-                    report.finishWrite(output);
-                } catch (Exception error) { report.failWrite(output); throw error; }
-            } catch (Exception ignored) { /* 결과 기록 실패로 인증·철회를 재전송하지 않는다. */ }
-            show((cancelled ? "취소됨 · 정리 결과 확인" : outcome)
-                + "\n신원=" + identity + " · 플랜 권한=" + plan
-                + "\n" + revocation + "\n경과 " + ((SystemClock.elapsedRealtime() - started) / 1000) + "초"
-                + "\n토큰 파일 저장 없음 · 번역/모델 호출 없음");
-            runOnUiThread(() -> { if (!destroyed) start.setEnabled(true); });
+                    .put("protectedSessionStored", retained).put("revocationConfirmed", revoked).put("cancelled", cancelled)
+                    .put("elapsedMs", SystemClock.elapsedRealtime() - started).put("outcome", outcome));
+            } catch (Exception ignored) { }
+            show(outcome + "\n보호 저장=" + retained + " · 원격 철회 확인=" + revoked
+                + (retained ? "\n연결은 유지돼. 복원·갱신 검증 뒤 명시적으로 연결 해제를 눌러줘." : "\n철회 미확인 시 ChatGPT 연결 관리에서 확인해."));
+            enabled(true);
         }
     }
 
+    @Override protected void onPause() {
+        if (inferring) cancel();
+        super.onPause();
+    }
     @Override public void onBackPressed() { cancel(); super.onBackPressed(); }
-
     @Override protected void onDestroy() {
         destroyed = true;
         cancel();

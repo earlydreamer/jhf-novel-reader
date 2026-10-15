@@ -138,7 +138,7 @@ final class SiwcProtocol {
         if (!ISSUER.equals(claims.getString("iss")) || !audOk
             || claims.getLong("exp") <= now || claims.getLong("iat") > now + 60
             || (claims.has("nbf") && claims.getLong("nbf") > now)
-            || !equal(nonce, claims.getString("nonce"))) throw new IllegalArgumentException("claims");
+            || (nonce != null && !equal(nonce, claims.getString("nonce")))) throw new IllegalArgumentException("claims");
         String subject = claims.getString("sub");
         if (subject.isEmpty() || subject.length() > 512) throw new IllegalArgumentException("subject");
         return subject;

@@ -18,7 +18,7 @@
 
 [별명 뜻 분해 비교 실험](nickname-experiment.md)은 합성 사례로 기존 판정과 추가 뜻 분해를 비교하는 명시적 실행 절차입니다.
 
-[Android SiwC 인증 검증](siwc-android-probe.md)은 #307의 debug 전용 수동 인증 화면과 합성 검사·사용자 참여 검증의 경계를 설명합니다.
+[Android SiwC 연결 검증](siwc-android-probe.md)은 #307의 debug 전용 인증·보호 저장·합성 번역 PoC와 사용자 참여 검증의 경계를 설명합니다.
 
 ## 화면과 문구를 수정하는 경우
 
