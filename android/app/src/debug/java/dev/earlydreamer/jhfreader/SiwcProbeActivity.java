@@ -45,7 +45,7 @@ public final class SiwcProbeActivity extends Activity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32, 64, 32, 32);
         TextView info = new TextView(this);
-        info.setText("JHF SiwC 인증 검증 · A 단계\n\n시스템 브라우저에서 네가 직접 로그인하고 권한을 확인해. 플랜 권한은 Codex/ChatGPT Work 공유 한도에 연결돼. 이 검증은 번역·모델 요청을 하지 않아.\n\n토큰은 파일에 저장하지 않고, 교환 후 refresh 세션 철회를 시도해. 철회 결과는 별도로 표시해. 브라우저의 ChatGPT 로그인 자체를 로그아웃하지는 않아.\n\n콜백 수신 안내가 뜨면 뒤로가기로 이 화면에 돌아와. 5분 뒤에는 시도를 종료해. 앱 종료·취소 뒤 예전 콜백은 사용할 수 없어.\n");
+        info.setText("JHF SiwC 인증 검증 · A 단계\n\n시스템 브라우저에서 네가 직접 로그인하고 권한을 확인해. 플랜 권한은 Codex/ChatGPT Work 공유 한도에 연결돼. 이 검증은 번역·모델 요청을 하지 않아.\n\n토큰은 파일에 저장하지 않고, 교환 후 refresh 세션 철회를 시도해. 철회 결과는 별도로 표시해. 브라우저의 ChatGPT 로그인 자체를 로그아웃하지는 않아. 결과 파일에는 단계별 성공 여부·시간만 남겨.\n\n콜백 수신 안내가 뜨면 뒤로가기로 이 화면에 돌아와. 5분 뒤에는 시도를 종료해. 앱 종료·취소 뒤 예전 콜백은 사용할 수 없어.\n");
         layout.addView(info);
         start = new Button(this);
         start.setText("Continue with ChatGPT");
@@ -77,6 +77,11 @@ public final class SiwcProbeActivity extends Activity {
 
     private void begin() {
         if (!start.isEnabled()) return;
+        File previous = new File(getNoBackupFilesDir(), "siwc-probe-result.json");
+        if (previous.exists() && !previous.delete()) {
+            show("이전 검증 결과를 지울 수 없어. 인증을 시작하지 않았어.");
+            return;
+        }
         start.setEnabled(false);
         cancelled = false;
         worker.execute(this::probe);
@@ -141,8 +146,10 @@ public final class SiwcProbeActivity extends Activity {
         String refresh = null;
         String issued = null;
         boolean tokenResponse = false;
+        boolean callbackReceived = false;
         boolean identity = false;
         boolean plan = false;
+        boolean revoked = false;
         String outcome = "인증 실패 또는 결과 불명 · 자동 재전송 없음";
         String phase = "인증 준비";
         String revocation = "토큰 응답 미확인 · 원격 세션 상태 미확인";
@@ -165,6 +172,7 @@ public final class SiwcProbeActivity extends Activity {
             show("시스템 브라우저에서 로그인 중 · 리스너 유지 · 5분 제한");
             phase = "브라우저 콜백";
             Map<String, String> callback = loopback.await(state, started + 300000);
+            callbackReceived = true;
             issued = SiwcProtocol.callbackClient(callback, state, selected);
             if (cancelled || destroyed) throw new java.util.concurrent.CancellationException();
             show("콜백 검증 완료 · 코드 교환 1회 진행");
@@ -210,10 +218,24 @@ public final class SiwcProbeActivity extends Activity {
                     form.put("token", refresh);
                     form.put("token_type_hint", "refresh_token");
                     request("/api/accounts/oauth/revoke", form);
+                    revoked = true;
                     revocation = "임시 refresh 세션 원격 철회 응답 확인 (HTTP 200)";
                 } catch (Exception ignored) { revocation = "원격 철회 미확인 · ChatGPT 연결 관리에서 확인 필요"; }
             } else if (tokenResponse) { revocation = "refresh token 없음 · 원격 철회 미확인"; }
             refresh = null;
+            try {
+                JSONObject result = new JSONObject().put("completed", true).put("callbackReceived", callbackReceived)
+                    .put("tokenResponse", tokenResponse).put("identityVerified", identity).put("planGranted", plan)
+                    .put("revocationConfirmed", revoked).put("cancelled", cancelled)
+                    .put("elapsedMs", SystemClock.elapsedRealtime() - started).put("outcome", outcome);
+                // 비밀이 없는 고정 항목만 기록한다. URL·계정·토큰을 받지 않는다.
+                android.util.AtomicFile report = new android.util.AtomicFile(new File(getNoBackupFilesDir(), "siwc-probe-result.json"));
+                FileOutputStream output = report.startWrite();
+                try {
+                    output.write(result.toString().getBytes(StandardCharsets.UTF_8));
+                    report.finishWrite(output);
+                } catch (Exception error) { report.failWrite(output); throw error; }
+            } catch (Exception ignored) { /* 결과 기록 실패로 인증·철회를 재전송하지 않는다. */ }
             show((cancelled ? "취소됨 · 정리 결과 확인" : outcome)
                 + "\n신원=" + identity + " · 플랜 권한=" + plan
                 + "\n" + revocation + "\n경과 " + ((SystemClock.elapsedRealtime() - started) / 1000) + "초"

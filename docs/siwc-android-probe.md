@@ -14,6 +14,8 @@
 
 안정된 host ID, 검증된 계정 식별자와 발급 client ID만 앱 전용 `noBackupFilesDir`에 원자적으로 보존합니다. 이메일·ID/access/refresh token을 보존하지 않습니다. 재로그인 시 같은 client ID를 사용하며 다른 계정의 검증된 식별자로 바뀌면 거절합니다. 여러 계정 등록 UI는 A 범위에 없습니다. 검증 화면에는 `FLAG_SECURE`를 적용합니다.
 
+사용자가 시작한 시도가 끝나면 `noBackupFilesDir/siwc-probe-result.json`에 콜백·토큰 응답 수신·신원·플랜 권한·철회 확인 여부와 경과 시간·고정 결과 문구만 기록합니다. `completed`는 시도 종료를 뜻하며 인증 성공과 다릅니다. 계정·등록 ID·토큰·인증 URL·원시 응답은 결과 파일에 넣지 않습니다. 다음 시도 시작 전 이전 결과를 삭제합니다. 진단을 읽을 때 이 파일만 대상으로 하며 앱 전체 저장소나 브라우저 로그를 덤프하지 않습니다.
+
 ## 빌드와 합성 검사
 
 기본 검사와 `npm run android:sync` 뒤 Android debug·계측 APK를 빌드합니다. 테스트 패키지 ID는 외부 Gradle init의 `defaultConfig.applicationId`로 지정하며 제품 applicationId를 변경하여 커밋하지 않습니다. 빌드 소스 커밋과 APK SHA-256을 기록합니다. 패키지 ID가 다른 검증 산출물을 정식 CI APK로 표시하지 않습니다.
