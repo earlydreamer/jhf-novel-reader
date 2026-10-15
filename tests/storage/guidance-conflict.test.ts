@@ -18,8 +18,13 @@ test('같은 초안에서 동시에 저장하면 하나만 반영하고 다른 �
     repo.save('n1234ab', first, base.hash),
     repo.save('n1234ab', second, base.hash),
   ]);
-  expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
-  expect(results[1]).toMatchObject({ reason: expect.any(GuidanceConflictError) });
-  expect((await repo.read('n1234ab'))?.plotSummary).toBe('첫 변경');
+  expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+  const winner = results.find((result) => result.status === 'fulfilled');
+  const loser = results.find((result) => result.status === 'rejected');
+  expect(loser).toMatchObject({ reason: expect.any(GuidanceConflictError) });
+  expect(await repo.read('n1234ab')).toEqual(winner?.value);
+  await expect(repo.save('n1234ab', first, base.hash)).rejects.toBeInstanceOf(
+    GuidanceConflictError,
+  );
   await expect(repo.save('n1234ab', second, null)).rejects.toBeInstanceOf(GuidanceConflictError);
 });
