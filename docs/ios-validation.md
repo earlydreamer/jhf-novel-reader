@@ -6,16 +6,16 @@
 
 독서 화면·번역 엔진·용어집·저장 형식·백업의 앱 데이터 검증은 기존 TypeScript를 공유한다. Capacitor 8.5.2는 화면과 네이티브 경계 역할을 한다. iOS 기기 동작은 Swift로 구현한다.
 
-| 역할 | 구현과 선택 이유 |
-| --- | --- |
-| 나로우 탐색 | 독립 `WKWebView`와 비영구 저장소. 원격 페이지에는 Capacitor 브리지를 설치하지 않으며, 탐색 URL과 가져올 작품 URL을 따로 검사한다. |
-| 모델 목록·일반 HTTP | 격리된 `URLSessionConfiguration.ephemeral`. WebView 쿠키와 인증 상태를 공유하지 않고 리다이렉트를 거부한다. |
-| 스트리밍 번역 | `URLSessionDataDelegate`. UTF-8 문자를 바이트 경계에서 자르지 않고 SSE 줄을 전달한다. 취소·백그라운드 전환 시 요청을 중단한다. |
-| 서재와 설정 | 기존 Capacitor Filesystem·Preferences. 데이터는 `Library/NoCloud/narou-reader`에 저장한다. |
-| 인증값 | 기존 SecureStorage의 iOS Keychain 구현. 기기 한정 저장과 iCloud 동기화 금지 설정을 유지한다. |
-| 백업·복원 | ZIPFoundation 0.9.20과 시스템 문서 선택기. Android와 같은 백업 형식이다. 크기·경로·중복·CRC·manifest 검증 후 기존 TypeScript 검증을 거쳐 교체한다. 교체 전 undo 기록으로 파일과 설정을 함께 복구한다. |
-| 기기 용어 판정 | Google LiteRT-LM 0.18.0 Swift SDK와 Android와 같은 EmbeddingGemma 2 모델·해시·256차원 출력. 번역 LLM을 아이폰에 올리지 않는다. 선택 기능이며 백그라운드·메모리 경고 때 해제한다. |
-| 테마·화면 유지 | `overrideUserInterfaceStyle`, `isIdleTimerDisabled` 등 UIKit API. |
+| 역할                | 구현과 선택 이유                                                                                                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 나로우 탐색         | 독립 `WKWebView`와 비영구 저장소. 원격 페이지에는 Capacitor 브리지를 설치하지 않으며, 탐색 URL과 가져올 작품 URL을 따로 검사한다.                                                                     |
+| 모델 목록·일반 HTTP | 격리된 `URLSessionConfiguration.ephemeral`. WebView 쿠키와 인증 상태를 공유하지 않고 리다이렉트를 거부한다.                                                                                           |
+| 스트리밍 번역       | `URLSessionDataDelegate`. UTF-8 문자를 바이트 경계에서 자르지 않고 SSE 줄을 전달한다. 취소·백그라운드 전환 시 요청을 중단한다.                                                                        |
+| 서재와 설정         | 기존 Capacitor Filesystem·Preferences. 데이터는 `Library/NoCloud/narou-reader`에 저장한다.                                                                                                            |
+| 인증값              | 기존 SecureStorage의 iOS Keychain 구현. 기기 한정 저장과 iCloud 동기화 금지 설정을 유지한다.                                                                                                          |
+| 백업·복원           | ZIPFoundation 0.9.20과 시스템 문서 선택기. Android와 같은 백업 형식이다. 크기·경로·중복·CRC·manifest 검증 후 기존 TypeScript 검증을 거쳐 교체한다. 교체 전 undo 기록으로 파일과 설정을 함께 복구한다. |
+| 기기 용어 판정      | Google LiteRT-LM 0.18.0 Swift SDK와 Android와 같은 EmbeddingGemma 2 모델·해시·256차원 출력. 번역 LLM을 아이폰에 올리지 않는다. 선택 기능이며 백그라운드·메모리 경고 때 해제한다.                      |
+| 테마·화면 유지      | `overrideUserInterfaceStyle`, `isIdleTimerDisabled` 등 UIKit API.                                                                                                                                     |
 
 네이티브 의존성 버전과 SPM 해석 결과를 고정한다. 라이선스는 앱의 기존 제3자 고지에 추가하며, LiteRT-LM 배포물의 제3자 고지 묶음도 리소스로 보존한다.
 
@@ -77,5 +77,7 @@ PowerShell 7과 `ssh`, `scp`, `git`, `tar`를 사용한다. `jhf-ios`는 사용�
 - Mac에서 ZIP 왕복·원본 보존·잘못된 경로/manifest/중복 거부·복원 실패 후 재시작 복구·손상 ZIP/심볼릭 링크 거부 검사 5개가 통과했다. 이는 macOS 호스트 검사다.
 - 실제 제품 iPhoneOS 빌드와 실기 검사 타깃의 `build-for-testing` 컴파일이 통과했다. 시뮬레이터는 실행하지 않았다.
 - 정식 제품 ID의 최초 서명은 프로필 부재 및 CLI의 `missing Xcode-Username` 오류로 실패했다. 기존 유효한 개발 프로필을 재사용한 연구용 ID `dev.earlydreamer.jhfreader.envcheck`에서는 실제 JHF 전체 앱의 빌드·서명 검증·iPhone 12 설치가 성공했다. 환경 샘플 소스를 설치한 결과가 아니다.
-- 해당 설치 직후 원격 실행은 iPhone 잠금으로 거부됐다. 기기 잠금 해제 후 앱 실행·실기 smoke 검사를 이어가야 한다. 설치 성공을 화면 렌더·실제 모델 통신 성공으로 기록하지 않는다.
+- 이후 Xcode에서 최초 정식 제품 빌드가 성공했고, Windows의 `device.ps1`로도 정식 ID `dev.earlydreamer.jhfreader`의 빌드·서명 검증·iPhone 12 설치가 성공했다. 이 CLI 실행에서는 앞선 계정 자격정보·프로필 오류가 재현되지 않았다.
+- 설치 소스는 `2ac4b0b1fa0f7ef3b9dde49b5f4868fe8f4429b9`, 전송 아카이브 SHA-256은 `08e871d8671240b133b1b0dd03d78fe97b77fe286cff780d965559629bab5fda`다. 원격 영수증의 `dirty: true`는 그대로 유지했다. 원격 Git에 표시된 4개 경로를 확인했으며 두 Gradle 실행 파일의 권한과 줄바꿈 표현 차이이고, 각 경로의 Git 정규화 콘텐츠 해시는 HEAD와 같았다. 이 기록 이후의 문서 커밋을 설치 소스로 표기하지 않는다.
+- 정식 ID 설치 직후에도 원격 실행은 iPhone 잠금으로 거부됐다. 영수증은 `signed: true`, `installed: true`, `launched: false`이며 도구 전체 종료 코드는 1이다. 기기 잠금 해제 후 앱 실행·실기 smoke 검사를 이어가야 한다. 설치 성공을 화면 렌더·실제 모델 통신 성공으로 기록하지 않는다.
 - 독립 리뷰에서 발견한 부재 저널 슬롯의 반환 계약을 Swift 회귀 검사로 재현한 뒤 수정했다. 설정 화면 검사도 실제 설정 섹션·서버 제목·입력창을 확인하도록 강화했다.
