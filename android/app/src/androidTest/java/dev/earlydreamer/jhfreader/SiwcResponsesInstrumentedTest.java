@@ -75,4 +75,30 @@ public class SiwcResponsesInstrumentedTest {
         try { SiwcResponses.body("invalid\r\nmodel"); fail("invalid model accepted"); }
         catch (IllegalArgumentException expected) { }
     }
+
+    @Test public void failureDiagnosticsKeepCodesAndShapeWithoutCopyingPrivateMessages() throws Exception {
+        String privateText = "PRIVATE-SYNTHETIC-IDENTIFIER";
+        JSONObject error = new JSONObject().put("code", "subscription_sharing_unsupported_capability")
+            .put("param", "model").put("type", "invalid_request_error").put("message", privateText);
+        SiwcHttp.Failure http = SiwcHttp.Failure.describe(400, new JSONObject().put("error", error).toString(), "req_synthetic12345");
+        assertEquals("subscription_sharing_unsupported_capability", http.code);
+        assertEquals("api_error_object", http.details.getString("bodyShape"));
+        assertEquals("model", http.details.getString("parameter"));
+        assertEquals("req_synthetic12345", http.details.getString("requestId"));
+        assertFalse(http.details.toString().contains(privateText));
+        SiwcHttp.Failure direct = SiwcHttp.Failure.describe(503, new JSONObject()
+            .put("detail", "Direct serving is not enabled for client " + privateText).toString(), privateText);
+        assertEquals("detail_string", direct.details.getString("bodyShape"));
+        assertTrue(direct.details.getJSONArray("diagnosticTerms").toString().contains("serving"));
+        assertFalse(direct.details.toString().contains(privateText));
+        try {
+            consume(delta() + event("response.failed", new JSONObject().put("response", new JSONObject().put("error", error))));
+            fail("failed stream accepted");
+        } catch (SiwcResponses.Failure failure) {
+            assertEquals("response.failed", failure.event);
+            assertEquals("subscription_sharing_unsupported_capability", failure.code);
+            assertEquals("model", failure.parameter);
+            assertFalse(failure.toString().contains(privateText));
+        }
+    }
 }

@@ -34,6 +34,7 @@ public final class SiwcProbeActivity extends Activity {
     private final List<Button> controls = new ArrayList<>();
     private volatile SiwcLoopback listener;
     private volatile boolean cancelled, destroyed, busy, inferring;
+    private volatile String inferenceModel;
     private SiwcVault vault;
     private SiwcSession session;
     private TextView status, translation;
@@ -79,16 +80,17 @@ public final class SiwcProbeActivity extends Activity {
         layout.addView(picker);
         button(layout, "합성 문단 번역 1회 · 공유 한도 사용", this::translate);
         button(layout, "연결 해제 · 원격 철회와 로컬 삭제", () -> perform("disconnect", () -> {
+            boolean present = vault.load() != null;
             boolean revoked = session.disconnect();
             report("session", new JSONObject().put("operation", "disconnect").put("localCleared", true)
-                .put("revocationConfirmed", revoked).put("success", revoked));
+                .put("hadSession", present).put("revocationConfirmed", revoked).put("success", !present || revoked));
             runOnUiThread(() -> {
                 choices = new ArrayList<>();
                 picker.setAdapter(null);
                 translation.setText("");
             });
-            show(revoked ? "원격 철회 응답 확인 · 로컬 토큰 삭제 완료"
-                : "로컬 토큰 삭제 · 원격 철회 미확인, ChatGPT 연결 관리에서 확인해");
+            show(!present ? "저장된 연결 없음 · 원격 철회 요청 없음" : (revoked ? "원격 철회 응답 확인 · 로컬 토큰 삭제 완료"
+                : "로컬 토큰 삭제 · 원격 철회 미확인, ChatGPT 연결 관리에서 확인해"));
         }));
         Button cancel = new Button(this);
         cancel.setText("진행 중 검증 취소");
@@ -139,12 +141,26 @@ public final class SiwcProbeActivity extends Activity {
                 if (error instanceof SiwcHttp.Failure) message += " · HTTP " + ((SiwcHttp.Failure) error).status;
                 show(message);
                 try {
-                    if (!"inference".equals(operation) || inferring)
-                        report("inference".equals(operation) ? "inference" : "session",
-                            new JSONObject().put("operation", operation).put("success", false)
-                                .put("attempted", inferring).put("completed", false).put("cancelled", cancelled));
+                    if (!"inference".equals(operation) || inferring) {
+                        JSONObject failure = new JSONObject().put("operation", operation).put("success", false)
+                            .put("attempted", inferring).put("completed", false).put("cancelled", cancelled);
+                        if (inferring && inferenceModel != null) failure.put("model", inferenceModel);
+                        if (error instanceof SiwcHttp.Failure) {
+                            failure.put("failureKind", "http").put("httpStatus", ((SiwcHttp.Failure) error).status)
+                                .put("errorCode", ((SiwcHttp.Failure) error).code).put("http", ((SiwcHttp.Failure) error).details);
+                        } else if (error instanceof SiwcResponses.Failure) {
+                            failure.put("failureKind", "sse").put("terminalEvent", ((SiwcResponses.Failure) error).event)
+                                .put("errorCode", ((SiwcResponses.Failure) error).code)
+                                .put("parameter", ((SiwcResponses.Failure) error).parameter);
+                        } else failure.put("failureKind", cancelled ? "cancelled"
+                            : error instanceof org.json.JSONException ? "response_schema"
+                            : error instanceof java.util.concurrent.TimeoutException || error instanceof java.net.SocketTimeoutException ? "timeout"
+                            : error instanceof java.io.IOException ? "transport_unknown"
+                            : error instanceof IllegalArgumentException ? "protocol_validation" : "state_or_storage");
+                        report("inference".equals(operation) ? "inference" : "session", failure);
+                    }
                 } catch (Exception ignored) { }
-            } finally { inferring = false; enabled(true); }
+            } finally { inferring = false; inferenceModel = null; enabled(true); }
         });
     }
 
@@ -165,6 +181,7 @@ public final class SiwcProbeActivity extends Activity {
         perform("inference", () -> {
             JSONObject value = current(true, false);
             session.markInference(value.getString("client"), value.getString("subject"));
+            inferenceModel = model;
             inferring = true;
             report("inference", new JSONObject().put("attempted", true).put("completed", false).put("model", model));
             SiwcResponses.Result result = http.translate(value.getString("access_token"), model,

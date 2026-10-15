@@ -160,4 +160,14 @@ public class SiwcSessionInstrumentedTest {
             assertTrue(reloaded.restore("oaiapp_test", "synthetic-sub").getBoolean("inferenceAttempted"));
         } finally { vault.destroyTestKey(); }
     }
+
+    @Test public void absentSessionNeverClaimsRemoteRevocationWasConfirmed() throws Exception {
+        SiwcVault vault = vault();
+        try {
+            AtomicInteger calls = new AtomicInteger();
+            SiwcSession session = new SiwcSession(vault, (path, form) -> { calls.incrementAndGet(); return ""; });
+            assertFalse(session.disconnect());
+            assertEquals(0, calls.get());
+        } finally { vault.destroyTestKey(); }
+    }
 }

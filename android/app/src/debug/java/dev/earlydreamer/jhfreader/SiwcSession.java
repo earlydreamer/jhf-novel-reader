@@ -89,7 +89,7 @@ final class SiwcSession {
     boolean disconnect() throws Exception {
         synchronized (LOCK) {
             JSONObject value = vault.load();
-            if (value == null) return true;
+            if (value == null) return false;
             // 철회 도중 종료돼도 추론에 복귀하지 않는다.
             vault.save(new JSONObject(value.toString()).put("phase", "revoking"));
             boolean revoked = false;

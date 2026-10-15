@@ -21,7 +21,46 @@ import java.util.function.Consumer;
 final class SiwcHttp implements SiwcSession.Auth {
     static final class Failure extends Exception {
         final int status;
-        Failure(int status) { this.status = status; }
+        final String code;
+        final JSONObject details;
+        private Failure(int status, String code, JSONObject details) {
+            this.status = status; this.code = SiwcResponses.safeCode(code); this.details = details;
+        }
+        static Failure describe(int status, String raw, String requestId) throws Exception {
+            JSONObject safe = new JSONObject().put("status", status);
+            String shape = raw == null ? "unreadable" : raw.isEmpty() ? "empty" : "non_json", code = "", parameter = "", type = "";
+            String diagnostic = raw == null ? "" : raw;
+            try {
+                JSONObject body = new JSONObject(raw == null ? "" : raw);
+                JSONObject error = body.optJSONObject("error");
+                if (error != null) {
+                    shape = "api_error_object";
+                    code = error.optString("code"); parameter = error.optString("param"); type = error.optString("type");
+                    diagnostic = error.optString("message");
+                } else if (body.opt("detail") instanceof String) {
+                    shape = "detail_string";
+                    diagnostic = body.getString("detail");
+                } else { shape = "other_json"; diagnostic = ""; }
+            } catch (org.json.JSONException ignored) { }
+            safe.put("bodyShape", shape).put("errorCode", SiwcResponses.safeCode(code))
+                .put("parameter", SiwcResponses.safeParam(parameter));
+            if (Arrays.asList("invalid_request_error", "authentication_error", "permission_error", "rate_limit_error", "server_error").contains(type))
+                safe.put("errorType", type);
+            JSONArray terms = new JSONArray();
+            String lower = diagnostic.toLowerCase(java.util.Locale.ROOT);
+            // 자유 문장을 복사하지 않고 고정 어휘의 존재 여부만 남긴다.
+            for (String word : new String[]{"direct", "route", "routing", "serving", "enabled", "disabled", "unavailable", "unsupported",
+                "region", "country", "policy", "identity", "signed", "scope", "permission", "client", "token", "expired",
+                "account", "workspace", "eligible", "subscription", "usage", "quota", "model", "parameter", "required", "missing",
+                "invalid", "denied", "unauthorized", "unrecognized", "cloudflare", "challenge", "not", "no", "cannot",
+                "available", "integration", "agent", "registered", "allowlisted", "authorization", "signature", "audience",
+                "issuer", "resource", "instructions", "input", "store", "stream", "temperature", "max_output_tokens", "previous_response_id"})
+                if (java.util.regex.Pattern.compile("\\b" + word + "\\b").matcher(lower).find()) terms.put(word);
+            safe.put("diagnosticTerms", terms);
+            if (requestId != null && requestId.matches("req_[A-Za-z0-9_-]{8,96}|[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"))
+                safe.put("requestId", requestId);
+            return new Failure(status, code, safe);
+        }
     }
     static final class Model {
         final String slug, name;
@@ -53,7 +92,14 @@ final class SiwcHttp implements SiwcSession.Auth {
     }
     private static InputStream successful(HttpsURLConnection connection) throws Exception {
         int status = connection.getResponseCode();
-        if (status != 200) throw new Failure(status);
+        if (status != 200) {
+            String raw = "";
+            try {
+                InputStream input = connection.getErrorStream();
+                if (input != null) raw = read(input);
+            } catch (Exception ignored) { raw = null; /* 원시 오류 본문·message는 진단에 전달하지 않는다. */ }
+            throw Failure.describe(status, raw, connection.getHeaderField("x-request-id"));
+        }
         return connection.getInputStream();
     }
     private static String read(InputStream input) throws Exception {

@@ -8,6 +8,28 @@ import java.util.function.Consumer;
 
 /** Responses SSE 전용. delta나 EOF를 완료 응답으로 승격하지 않는다. */
 final class SiwcResponses {
+    static String safeCode(String code) {
+        return java.util.Arrays.asList("subscription_sharing_usage_limit_exceeded", "subscription_sharing_usage_unavailable",
+            "subscription_sharing_user_not_eligible", "subscription_sharing_unsupported_capability", "subscription_sharing_route_not_supported",
+            "subscription_sharing_invalid_user", "subscription_sharing_user_unavailable", "chatpass_v2_scope_not_authorized",
+            "chatpass_v2_invalid_authorization_context", "invalid_grant", "invalid_refresh_token", "token_expired",
+            "refresh_token_expired", "refresh_token_invalidated", "refresh_token_reused", "invalid_client",
+            "rate_limit_exceeded", "insufficient_quota", "model_not_found", "invalid_request_error", "invalid_api_key",
+            "permission_denied", "authentication_error", "unsupported_parameter", "server_error", "access_denied")
+            .contains(code) ? code : "unclassified";
+    }
+    static String safeParam(String parameter) {
+        return java.util.Arrays.asList("model", "input", "instructions", "store", "stream", "temperature", "top_p",
+            "max_output_tokens", "previous_response_id", "service_tier", "reasoning", "tools", "include", "client_id",
+            "resource", "scope", "grant_type").contains(parameter) ? parameter : "unclassified";
+    }
+    static final class Failure extends Exception {
+        final String event, code, parameter;
+        Failure(String event, String code) { this(event, code, ""); }
+        Failure(String event, String code, String parameter) {
+            this.event = event; this.code = safeCode(code); this.parameter = safeParam(parameter);
+        }
+    }
     static final String SYNTHETIC = "朝の図書館は静かだった。窓から柔らかな光が差し込んでいた。";
     static JSONObject body(String model) throws Exception {
         if (!model.matches("[A-Za-z0-9._:/-]{1,160}")) throw new IllegalArgumentException("model slug");
@@ -44,7 +66,7 @@ final class SiwcResponses {
             if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
             if (android.os.SystemClock.elapsedRealtime() - started > 120000) throw new java.util.concurrent.TimeoutException();
             String line = line(input, budget);
-            if (line == null) throw new IllegalStateException("stream ended without completed");
+            if (line == null) throw new Failure("stream_eof", "");
             if (line.startsWith("event:")) event = line.substring(6).trim();
             else if (line.startsWith("data:")) {
                 if (data.length() > 0) data.append('\n');
@@ -52,7 +74,7 @@ final class SiwcResponses {
             } else if (line.isEmpty() && data.length() > 0) {
                 String payload = data.toString();
                 data.setLength(0);
-                if ("[DONE]".equals(payload)) throw new IllegalStateException("done without completed");
+                if ("[DONE]".equals(payload)) throw new Failure("done_without_completed", "");
                 JSONObject frame = new JSONObject(payload);
                 String type = frame.getString("type");
                 if (!event.isEmpty() && !event.equals(type)) throw new IllegalArgumentException("event mismatch");
@@ -64,7 +86,10 @@ final class SiwcResponses {
                     if (partial.length() > 32768) throw new IllegalArgumentException("text size");
                     delta.accept(partial.toString());
                 } else if ("response.failed".equals(type) || "response.incomplete".equals(type) || "error".equals(type)) {
-                    throw new IllegalStateException("response did not complete");
+                    JSONObject response = frame.optJSONObject("response");
+                    JSONObject error = response == null ? frame.optJSONObject("error") : response.optJSONObject("error");
+                    throw new Failure(type, error == null ? frame.optString("code") : error.optString("code"),
+                        error == null ? frame.optString("param") : error.optString("param"));
                 } else if ("response.completed".equals(type)) {
                     JSONObject response = frame.getJSONObject("response");
                     if (!"completed".equals(response.getString("status"))
