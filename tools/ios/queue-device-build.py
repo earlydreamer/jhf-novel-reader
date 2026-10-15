@@ -9,7 +9,10 @@ import sys
 
 
 def main():
-    project, job, device, action = sys.argv[1:]
+    project, job, device, action = sys.argv[1:5]
+    bundle = sys.argv[5] if len(sys.argv) > 5 else 'dev.earlydreamer.jhfreader'
+    if bundle not in ('dev.earlydreamer.jhfreader', 'dev.earlydreamer.jhfreader.envcheck'):
+        raise SystemExit('Invalid product or research bundle ID.')
     project, job = Path(project).resolve(), Path(job).resolve()
     base = Path.home() / '.local/share/jhf-ios'
     job.mkdir(parents=True, exist_ok=True)
@@ -31,7 +34,7 @@ def main():
     definition = {
         'Label': label,
         'ProgramArguments': ['/bin/bash', str(project / 'tools/ios/build-device.sh'),
-                             str(project), device, team, str(job), action],
+                             str(project), device, team, str(job), action, bundle],
         'EnvironmentVariables': {'HOME': str(Path.home()), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin'},
         'RunAtLoad': True, 'KeepAlive': False,
         'StandardOutPath': str(job / 'build.log'), 'StandardErrorPath': str(job / 'build.log'),

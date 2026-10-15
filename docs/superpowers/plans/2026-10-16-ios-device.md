@@ -23,9 +23,9 @@
 
 파일: `package.json`, `capacitor.config.ts`, `src/app/compose.ts`, `src/platform/{browse,backup}.ts`, `src/platform/http/stream.ts`, 관련 플랫폼 테스트, `ios/App`.
 
-- [ ] iOS에서 탐색과 백업이 차단되는 회귀 테스트를 먼저 실행한다.
-- [ ] iOS 네이티브 어댑터를 연결하고 Capacitor 기본 프로젝트를 구성한다.
-- [ ] `npm run ios:sync` 반복 실행 후 연결이 보존되는지 확인한다.
+- [x] iOS에서 탐색과 백업이 차단되는 회귀 테스트를 먼저 실행한다.
+- [x] iOS 네이티브 어댑터를 연결하고 Capacitor 기본 프로젝트를 구성한다.
+- [x] `npm run ios:sync` 반복 실행 후 연결이 보존되는지 확인한다.
 
 ## 작업 2: iOS 네이티브 연결부
 
@@ -33,20 +33,20 @@
 
 인터페이스: 기존 TypeScript `SourceBrowser`, `ModelStream`, `Backup`, `ReaderTheme`, `ScreenAwake`, `AppReady`, `OnDeviceEmbedding` 플러그인 계약을 그대로 구현한다.
 
-- [ ] 경로 탈출·잘못된 manifest·압축 손상·중단 복구 테스트를 추가하고 Mac에서 실패를 확인한다.
-- [ ] Swift 구현과 고정된 OSS 패키지를 연결한다.
-- [ ] 호스트 단위 검사와 실제 iPhoneOS 컴파일로 검증한다.
+- [x] 경로 탈출·잘못된 manifest·압축 손상·중단 복구 테스트를 추가하고 Mac에서 실패를 확인한다.
+- [x] Swift 구현과 고정된 OSS 패키지를 연결한다.
+- [x] 호스트 단위 검사와 실제 iPhoneOS 컴파일로 검증한다.
 
 ## 작업 3: 원격 실기 설치
 
 파일: `tools/ios/` 빌드·전송 도구, `docs/ios-validation.md`.
 
-- [ ] 로컬 소스 스냅샷을 별도 원격 작업 폴더에 전달하고 해시를 확인한다.
+- [x] 로컬 소스 스냅샷을 별도 원격 작업 폴더에 전달하고 해시를 확인한다.
 - [ ] 로그인 세션의 일회성 CLI 작업으로 빌드·서명·설치·실행하고 결과를 회수한다.
-- [ ] 기기 실행·네이티브 호출·저장·모델 통신에서 확인된 범위와 수동 확인 항목을 나눠 기록한다.
+- [x] 기기 실행·네이티브 호출·저장·모델 통신에서 확인된 범위와 수동 확인 항목을 나눠 기록한다.
 
 ## 작업 4: 전달
 
-- [ ] format, lint, typecheck, 전체 Vitest, production build를 실행한다.
-- [ ] 한국어 커밋·Draft PR을 만들고 이슈에 검증 근거를 연결한다.
+- [x] format, lint, typecheck, 전체 Vitest, production build를 실행한다.
+- [x] 한국어 커밋·Draft PR을 만들고 이슈에 검증 근거를 연결한다.
 - [ ] 실제 설치 소스와 최종 문서 커밋의 관계, 작업 폴더 상태, 남은 실기 확인을 보고한다.

@@ -39,6 +39,13 @@ PowerShell 7과 `ssh`, `scp`, `git`, `tar`를 사용한다. `jhf-ios`는 사용�
 # 현재 iOS 작업 워크트리에서 실행한다. PR·push·CI를 먼저 실행할 필요가 없다.
 ./tools/ios/device.ps1 -SshHost jhf-ios
 
+# 제품 ID용 프로필 발급 전, 기존 실기 검증 프로필로 실제 JHF를 연구용 ID에 설치한다.
+# 이 ID용 유효한 프로필이 이미 Mac에 있어야 하며 기존 환경 샘플 앱을 대체한다.
+./tools/ios/device.ps1 -SshHost jhf-ios -BundleId dev.earlydreamer.jhfreader.envcheck
+
+# 같은 연구용 설치 ID에서 실제 기기 smoke 검사도 실행할 수 있다.
+./tools/ios/device.ps1 -Action test -SshHost jhf-ios -BundleId dev.earlydreamer.jhfreader.envcheck
+
 # 같은 실제 iPhone에서 자동 smoke 검사까지 실행한다.
 ./tools/ios/device.ps1 -Action test -SshHost jhf-ios
 
@@ -47,6 +54,8 @@ PowerShell 7과 `ssh`, `scp`, `git`, `tar`를 사용한다. `jhf-ios`는 사용�
 ```
 
 기본값은 페어링된 iPhone 한 대를 자동 선택한다. 한 대로 결정할 수 없으면 명시적인 DeviceId를 요구한다. 도구는 로컬 HEAD의 Git bundle과 미커밋 변경을 포함한 소스 스냅샷을 전달한다. `.gitignore`로 제외된 로컬 설정·기록·인증 파일은 전달하지 않는다. 전송 해시를 검증한 뒤 독립 checkout에서 `npm ci`와 `npm run ios:sync`를 실행한다.
+
+연구용 ID 경로는 기존 프로필의 팀·앱 ID·실제 기기·유효기간이 모두 맞을 때만 기존 Xcode 관리 프로필로 서명한다. 앱 화면과 기능은 실제 JHF 소스이며, 환경 샘플 코드를 빌드하지 않는다. 앱 타깃의 `JHF_APP_BUNDLE_ID`만 덮어쓰므로 검사 타깃과 SDK 리소스의 식별자는 바꾸지 않는다. 제품 ID의 설치와 연구용 ID의 설치는 따로 기록한다.
 
 서명 빌드는 실제 기기의 UDID 목적지만 사용하며 `-jobs 2`와 단일 빌드 잠금으로 제한한다. 성공하면 서명을 검사하고 설치·실행한다. 결과와 소스 해시는 Mac 작업 폴더와 Windows 출력 폴더의 JSON 및 로그에 남는다. 미커밋 스냅샷의 `dirty: true`는 숨기지 않는다. 이때 정확한 소스는 전송 아카이브 해시와 함께 식별한다.
 
@@ -67,4 +76,6 @@ PowerShell 7과 `ssh`, `scp`, `git`, `tar`를 사용한다. `jhf-ios`는 사용�
 - TypeScript 플랫폼 경계와 기존 전체 테스트를 실행했다. 정확한 최종 개수와 소스 커밋은 PR에 기록한다.
 - Mac에서 ZIP 왕복·원본 보존·잘못된 경로/manifest/중복 거부·복원 실패 후 재시작 복구·손상 ZIP/심볼릭 링크 거부 검사 5개가 통과했다. 이는 macOS 호스트 검사다.
 - 실제 제품 iPhoneOS 빌드와 실기 검사 타깃의 `build-for-testing` 컴파일이 통과했다. 시뮬레이터는 실행하지 않았다.
-- 최초 실기 서명 시 제품 앱 프로필 부재 및 CLI의 `missing Xcode-Username` 오류가 확인됐다. 최종 설치·실기 실행 결과가 확보되면 이 항목을 갱신한다. 컴파일 성공을 설치 성공으로 기록하지 않는다.
+- 정식 제품 ID의 최초 서명은 프로필 부재 및 CLI의 `missing Xcode-Username` 오류로 실패했다. 기존 유효한 개발 프로필을 재사용한 연구용 ID `dev.earlydreamer.jhfreader.envcheck`에서는 실제 JHF 전체 앱의 빌드·서명 검증·iPhone 12 설치가 성공했다. 환경 샘플 소스를 설치한 결과가 아니다.
+- 해당 설치 직후 원격 실행은 iPhone 잠금으로 거부됐다. 기기 잠금 해제 후 앱 실행·실기 smoke 검사를 이어가야 한다. 설치 성공을 화면 렌더·실제 모델 통신 성공으로 기록하지 않는다.
+- 독립 리뷰에서 발견한 부재 저널 슬롯의 반환 계약을 Swift 회귀 검사로 재현한 뒤 수정했다. 설정 화면 검사도 실제 설정 섹션·서버 제목·입력창을 확인하도록 강화했다.

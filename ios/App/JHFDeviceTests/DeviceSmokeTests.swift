@@ -45,12 +45,19 @@ final class DeviceSmokeTests: XCTestCase {
     shot.name = "JHF-iPhone-library"
     shot.lifetime = .keepAlways
     add(shot)
+    let settingsReady =
+      "!!document.querySelector('section.nr-settings #settings-server') && !!document.querySelector('section.nr-settings input')"
+    let before = try await web.evaluateJavaScript(settingsReady)
+    XCTAssertEqual(before as? Bool, false)
     _ = try await web.evaluateJavaScript(
       "document.querySelector('button[aria-label=\"설정\"]').click()")
-    try await Task.sleep(nanoseconds: 500_000_000)
-    let settings = try await web.evaluateJavaScript(
-      "!!document.querySelector('[aria-label=\"설정\"]')")
-    XCTAssertEqual(settings as? Bool, true)
+    var settings = false
+    for _ in 0..<100 {
+      settings = (try await web.evaluateJavaScript(settingsReady)) as? Bool == true
+      if settings { break }
+      try await Task.sleep(nanoseconds: 100_000_000)
+    }
+    XCTAssertTrue(settings)
     let image = try await web.takeSnapshot(configuration: nil)
     let attachment = XCTAttachment(image: image)
     attachment.name = "JHF-iPhone-settings"
@@ -157,7 +164,8 @@ private final class HTTPFixture: @unchecked Sendable {
       if let boundary = buffer.range(of: Data("\r\n\r\n".utf8)),
         let text = String(data: buffer[..<boundary.upperBound], encoding: .utf8)
       {
-        let length = text.components(separatedBy: "\r\n")
+        let length =
+          text.components(separatedBy: "\r\n")
           .first(where: { $0.lowercased().hasPrefix("content-length:") })
           .flatMap { Int($0.split(separator: ":").last!.trimmingCharacters(in: .whitespaces)) } ?? 0
         if buffer.count - boundary.upperBound < length {
@@ -186,13 +194,18 @@ private final class HTTPFixture: @unchecked Sendable {
             .utf8)
         if text.hasPrefix("POST "), let word = response.range(of: Data("아이폰".utf8)) {
           let split = word.lowerBound + 1
-          connection.send(content: response[..<split], completion: .contentProcessed { _ in
-            self.queue.asyncAfter(deadline: .now() + 0.05) {
-              connection.send(content: response[split...], completion: .contentProcessed { _ in connection.cancel() })
-            }
-          })
+          connection.send(
+            content: response[..<split],
+            completion: .contentProcessed { _ in
+              self.queue.asyncAfter(deadline: .now() + 0.05) {
+                connection.send(
+                  content: response[split...],
+                  completion: .contentProcessed { _ in connection.cancel() })
+              }
+            })
         } else {
-          connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() })
+          connection.send(
+            content: response, completion: .contentProcessed { _ in connection.cancel() })
         }
       } else if complete || error != nil {
         connection.cancel()

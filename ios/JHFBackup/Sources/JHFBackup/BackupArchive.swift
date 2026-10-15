@@ -204,9 +204,10 @@ public final class BackupArchive {
     }
   }
   public func read(_ path: String) throws -> String? {
-    guard let snapshot, valid(path), snapshot.paths.contains(path) else {
+    guard let snapshot, valid(path) else {
       throw BackupFailure.invalid
     }
+    guard snapshot.paths.contains(path) else { return nil }
     return try String(contentsOf: staged.appendingPathComponent(path), encoding: .utf8)
   }
   public func abort() throws {

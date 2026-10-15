@@ -48,6 +48,10 @@ final class BackupArchiveTests: XCTestCase {
     let snapshot = try restore.prepare(from: file)
     XCTAssertEqual(snapshot.paths, ["library/index.0.json"])
     XCTAssertEqual(try restore.read(snapshot.paths[0]), "saved novel")
+    // Shared Journal validation reads both slots and optional repositories even when absent.
+    XCTAssertNil(try restore.read("library/index.1.json"))
+    XCTAssertNil(try restore.read("attempts/index.0.json"))
+    XCTAssertThrowsError(try restore.read("library/../../credentials"))
     XCTAssertEqual(
       try String(contentsOf: target.appendingPathComponent("narou-reader/library/index.0.json")),
       "original")
