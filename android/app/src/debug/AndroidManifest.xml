@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- 수동 실행하는 인증 PoC. release에는 Activity와 코드가 포함되지 않는다. -->
+        <activity android:name=".SiwcProbeActivity" android:exported="true"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:label="JHF SiwC 인증 검증" />
+    </application>
+</manifest>
