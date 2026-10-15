@@ -37,6 +37,18 @@ function section(id: string): NoticeSection {
 }
 
 describe('제3자 고지 생성물', () => {
+  it('iOS 연구 앱에 추가한 Swift 구성 요소의 버전과 고지 원문이 있다', () => {
+    for (const [name, version] of [
+      ['LiteRT-LM Swift (iOS)', '0.18.0'],
+      ['ZIPFoundation (iOS)', '0.9.20'],
+      ['KeychainSwift (iOS)', '21.0.0'],
+      ['IONFilesystemLib (iOS)', '2.0.1'],
+    ]) {
+      const item = section('direct').items.find((candidate) => candidate.name === name);
+      expect(item?.version).toBe(version);
+      expect(notices.texts[item?.textId ?? '']?.length).toBeGreaterThan(500);
+    }
+  });
   it('커밋된 THIRD_PARTY_NOTICES.md와 notices.json이 생성 결과와 같다', () => {
     expect(committedMarkdown).toBe(built.markdown);
     expect(committedNotices).toBe(built.json);

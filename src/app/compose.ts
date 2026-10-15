@@ -188,7 +188,7 @@ export function createRenewalApplication(
 export const lookupTransport = createLookupTransport(capacitorHttpClient);
 
 export function createNativeRenewalApplication(): RenewalController {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
+  if (!Capacitor.isNativePlatform() || !['android', 'ios'].includes(Capacitor.getPlatform()))
     return createRenewalController();
   return createRenewalApplication({
     sourceTransport: createSourceTransport(capacitorHttpClient, { minIntervalMs: 1000 }),
