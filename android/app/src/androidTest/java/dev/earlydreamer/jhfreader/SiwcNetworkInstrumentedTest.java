@@ -96,4 +96,42 @@ public class SiwcNetworkInstrumentedTest {
             } finally { worker.shutdownNow(); }
         }
     }
+
+    @Test public void missingContentTypeStillRequiresValidSseAndCompletedEvent() throws Exception {
+        assertEquals("missing", SiwcHttp.streamMediaType(null));
+        try { SiwcHttp.streamMediaType("application/json"); fail("explicit JSON accepted as SSE"); }
+        catch (SiwcResponses.ProtocolFailure expected) { }
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        try (ServerSocket server = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))) {
+            server.setSoTimeout(3000);
+            Future<?> response = worker.submit(() -> {
+                try (Socket socket = server.accept()) {
+                    receive(socket);
+                    String payload = "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"synthetic\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"synthetic\"}]}]}}\n\n";
+                    byte[] body = payload.getBytes(StandardCharsets.UTF_8);
+                    socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Length: " + body.length
+                        + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                    socket.getOutputStream().write(body);
+                }
+                return null;
+            });
+            HttpURLConnection connection = connection(server);
+            try {
+                SiwcHttp.post(connection, "text/plain", "synthetic");
+                assertEquals(200, connection.getResponseCode());
+                assertNull(connection.getContentType());
+                assertEquals("missing", SiwcHttp.streamMediaType(connection.getContentType()));
+                try (java.io.Reader input = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                    assertEquals("synthetic", SiwcResponses.consume(input, () -> false, text -> { },
+                        android.os.SystemClock.elapsedRealtime()).text);
+                }
+                response.get(5, TimeUnit.SECONDS);
+            } finally { connection.disconnect(); }
+        } finally { worker.shutdownNow(); }
+        try {
+            SiwcResponses.consume(new java.io.StringReader("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"),
+                () -> false, text -> { }, android.os.SystemClock.elapsedRealtime());
+            fail("missing-header partial stream accepted");
+        } catch (SiwcResponses.Failure expected) { assertEquals("stream_eof", expected.event); }
+    }
 }

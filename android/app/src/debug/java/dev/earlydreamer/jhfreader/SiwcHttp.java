@@ -68,6 +68,26 @@ final class SiwcHttp implements SiwcSession.Auth {
         @Override public String toString() { return name; }
     }
     private volatile HttpsURLConnection streaming;
+    private volatile JSONObject streamHeaders;
+
+    private static String mediaKind(String type) {
+        if (type == null || type.trim().isEmpty()) return "missing";
+        String media = type.toLowerCase(java.util.Locale.ROOT).split(";", 2)[0].trim();
+        return Arrays.asList("text/event-stream", "application/json", "application/problem+json", "application/x-ndjson",
+            "text/html", "text/plain", "application/octet-stream").contains(media) ? media : "other";
+    }
+    JSONObject transportDiagnostics() throws Exception {
+        JSONObject headers = streamHeaders;
+        return headers == null ? new JSONObject().put("stage", "no_response_headers") : new JSONObject(headers.toString());
+    }
+
+    static String streamMediaType(String type) throws Exception {
+        if (type == null || type.trim().isEmpty()) return "missing";
+        String media = type.toLowerCase(java.util.Locale.ROOT).split(";", 2)[0].trim();
+        if ("text/event-stream".equals(media)) return media;
+        if (!Arrays.asList("application/json", "application/problem+json", "application/x-ndjson", "text/html", "text/plain", "application/octet-stream").contains(media)) media = "other";
+        throw new SiwcResponses.ProtocolFailure("not SSE", new JSONObject().put("mediaType", media).put("httpStatus", 200));
+    }
 
     private static HttpsURLConnection open(String url, String access) throws Exception {
         HttpsURLConnection connection = (HttpsURLConnection) new URL(url).openConnection();
@@ -141,6 +161,7 @@ final class SiwcHttp implements SiwcSession.Auth {
     }
 
     SiwcResponses.Result translate(String access, String model, BooleanSupplier cancelled, Consumer<String> delta) throws Exception {
+        streamHeaders = null;
         HttpsURLConnection connection = open(SiwcProtocol.RESOURCE + "/responses", access);
         streaming = connection;
         long started = android.os.SystemClock.elapsedRealtime();
@@ -149,14 +170,13 @@ final class SiwcHttp implements SiwcSession.Auth {
             connection.setRequestProperty("Accept", "text/event-stream");
             post(connection, "application/json", SiwcResponses.body(model).toString());
             try (InputStream input = successful(connection)) {
-                String type = connection.getContentType();
-                if (type == null || !type.toLowerCase(java.util.Locale.ROOT).startsWith("text/event-stream")) {
-                    String media = type == null ? "missing" : type.toLowerCase(java.util.Locale.ROOT).split(";", 2)[0].trim();
-                    if (!Arrays.asList("missing", "application/json", "application/x-ndjson", "text/html", "text/plain", "application/octet-stream").contains(media)) media = "other";
-                    throw new SiwcResponses.ProtocolFailure("not SSE", new JSONObject().put("mediaType", media).put("httpStatus", 200));
-                }
+                streamHeaders = new JSONObject().put("httpStatus", 200)
+                    .put("getterType", mediaKind(connection.getContentType()))
+                    .put("namedHeaderType", mediaKind(connection.getHeaderField("Content-Type")))
+                    .put("lowercaseHeaderType", mediaKind(connection.getHeaderField("content-type")));
+                String media = streamMediaType(connection.getContentType());
                 return SiwcResponses.consume(new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8)),
-                    cancelled, delta, started);
+                    cancelled, delta, started).withMediaType(media);
             }
         } finally { streaming = null; connection.disconnect(); }
     }

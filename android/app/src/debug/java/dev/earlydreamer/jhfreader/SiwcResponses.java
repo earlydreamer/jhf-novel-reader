@@ -72,8 +72,14 @@ final class SiwcResponses {
     static final class Result {
         final String text;
         final long firstMs, totalMs, inputTokens, outputTokens;
-        Result(String text, long first, long total, long input, long output) {
+        final String mediaType;
+        final int frames, streamChars;
+        Result(String text, long first, long total, long input, long output, int frames, int chars, String media) {
             this.text = text; firstMs = first; totalMs = total; inputTokens = input; outputTokens = output;
+            this.frames = frames; streamChars = chars; mediaType = media;
+        }
+        Result withMediaType(String media) {
+            return new Result(text, firstMs, totalMs, inputTokens, outputTokens, frames, streamChars, media);
         }
     }
 
@@ -148,7 +154,8 @@ final class SiwcResponses {
                     JSONObject usage = response.optJSONObject("usage");
                     return new Result(text.toString(), first, android.os.SystemClock.elapsedRealtime() - started,
                         usage == null ? -1 : Math.max(-1, usage.optLong("input_tokens", -1)),
-                        usage == null ? -1 : Math.max(-1, usage.optLong("output_tokens", -1)));
+                        usage == null ? -1 : Math.max(-1, usage.optLong("output_tokens", -1)),
+                        frames, 2097152 - budget[0], "unavailable");
                 }
             } else if (line.isEmpty()) event = "";
         }

@@ -75,8 +75,12 @@ public class SiwcManualFlowInstrumentedTest {
         }
     }
     private void record(JSONObject safe) throws Exception {
+        recordNamed("manual", safe);
+    }
+    private void recordNamed(String name, JSONObject safe) throws Exception {
+        if (!"manual".equals(name) && !"cleanup".equals(name)) throw new IllegalArgumentException("safe record");
         android.util.AtomicFile file = new android.util.AtomicFile(new File(
-            instrumentation.getTargetContext().getNoBackupFilesDir(), "siwc-manual-result.json"));
+            instrumentation.getTargetContext().getNoBackupFilesDir(), "siwc-" + name + "-result.json"));
         java.io.FileOutputStream output = file.startWrite();
         try {
             output.write(safe.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -94,14 +98,7 @@ public class SiwcManualFlowInstrumentedTest {
         return null;
     }
 
-    @Test public void explicitlyRequestedStoredSessionRefreshSyntheticInferenceAndDisconnect() throws Exception {
-        assumeTrue("manual account flow disabled", "true".equals(
-            InstrumentationRegistry.getArguments().getString("siwcManualFlow")));
-        boolean diagnostic = "true".equals(InstrumentationRegistry.getArguments().getString("siwcDiagnostic"));
-        assertEquals("dev.earlydreamer.jhfreader.issue307", instrumentation.getTargetContext().getPackageName());
-        assertTrue("complete user login first", report("probe").getBoolean("protectedSessionStored"));
-        assertFalse("preserve earlier inference evidence before another manual flow", new File(
-            instrumentation.getTargetContext().getNoBackupFilesDir(), "siwc-inference-result.json").exists());
+    private void openProbe() {
         AtomicReference<SiwcProbeActivity> resumed = new AtomicReference<>();
         instrumentation.runOnMainSync(() -> {
             for (Activity candidate : ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED))
@@ -110,6 +107,19 @@ public class SiwcManualFlowInstrumentedTest {
         activity = resumed.get();
         if (activity == null) activity = (SiwcProbeActivity) instrumentation.startActivitySync(new Intent(
             instrumentation.getTargetContext(), SiwcProbeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    @Test public void explicitlyRequestedStoredSessionRefreshSyntheticInferenceAndDisconnect() throws Exception {
+        assumeTrue("manual account flow disabled", "true".equals(
+            InstrumentationRegistry.getArguments().getString("siwcManualFlow")));
+        boolean diagnostic = "true".equals(InstrumentationRegistry.getArguments().getString("siwcDiagnostic"));
+        boolean cancelAfterDelta = "true".equals(InstrumentationRegistry.getArguments().getString("siwcCancelAfterDelta"));
+        assertTrue("cancellation scenario requires explicit diagnostic mode", !cancelAfterDelta || diagnostic);
+        assertEquals("dev.earlydreamer.jhfreader.issue307", instrumentation.getTargetContext().getPackageName());
+        assertTrue("complete user login first", report("probe").getBoolean("protectedSessionStored"));
+        assertFalse("preserve earlier inference evidence before another manual flow", new File(
+            instrumentation.getTargetContext().getNoBackupFilesDir(), "siwc-inference-result.json").exists());
+        openProbe();
         JSONObject safe = new JSONObject().put("restore", false).put("refresh", false).put("inferenceCompleted", false)
             .put("localCleared", false).put("revocationConfirmed", false).put("restoreRejectedAfterDisconnect", false)
             .put("diagnostic", diagnostic);
@@ -142,11 +152,35 @@ public class SiwcManualFlowInstrumentedTest {
                     if ("gpt-6.1-sol".equals(((SiwcHttp.Model) picker.getItemAtPosition(i)).slug)) selected = i;
                 picker.setSelection(selected);
             });
+            java.util.concurrent.atomic.AtomicBoolean cancelledAtDelta = new java.util.concurrent.atomic.AtomicBoolean();
+            if (cancelAfterDelta) instrumentation.runOnMainSync(() -> {
+                android.widget.TextView text = activity.getWindow().getDecorView().findViewWithTag("siwc-translation");
+                assertNotNull(text);
+                text.addTextChangedListener(new android.text.TextWatcher() {
+                    public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+                    public void onTextChanged(CharSequence s, int start, int before, int count) { }
+                    public void afterTextChanged(android.text.Editable value) {
+                        if (value.toString().startsWith("수신 중 · 완료 미확인\n") && cancelledAtDelta.compareAndSet(false, true)) {
+                            Button cancel = (Button) find(activity.getWindow().getDecorView(), "진행 중 검증 취소");
+                            assertNotNull(cancel);
+                            cancel.performClick();
+                        }
+                    }
+                });
+            });
             click("합성 문단 번역 1회 · 공유 한도 사용"); idle(155000);
             JSONObject inference = report("inference");
-            assertTrue(inference.getBoolean("completed"));
-            assertTrue(inference.getInt("textChars") > 0);
-            safe.put("inferenceCompleted", true); record(safe);
+            if (!cancelAfterDelta) {
+                assertTrue(inference.getBoolean("completed"));
+                assertTrue(inference.getInt("textChars") > 0);
+                safe.put("inferenceCompleted", true);
+            } else {
+                assertTrue(cancelledAtDelta.get());
+                assertFalse(inference.getBoolean("completed"));
+                assertTrue(inference.getBoolean("cancelled"));
+                safe.put("cancelRequestedAfterDelta", true).put("expectedCancellation", true);
+            }
+            record(safe);
         } finally {
             // 기본 흐름은 정리한다. 명시적 정밀 진단만 세션을 유지하며 추가 추론을 자동 실행하지 않는다.
             if (!diagnostic) {
@@ -165,5 +199,20 @@ public class SiwcManualFlowInstrumentedTest {
         click("보호 저장 연결 복원"); idle(10000);
         assertFalse("session should not restore after disconnect", report("session").getBoolean("success"));
         safe.put("restoreRejectedAfterDisconnect", true); record(safe);
+    }
+
+    @Test public void explicitlyRequestedDisconnectAndRestoreRejection() throws Exception {
+        assumeTrue("manual disconnect disabled", "true".equals(
+            InstrumentationRegistry.getArguments().getString("siwcDisconnectOnly")));
+        assertEquals("dev.earlydreamer.jhfreader.issue307", instrumentation.getTargetContext().getPackageName());
+        openProbe(); idle(10000);
+        click("연결 해제 · 원격 철회와 로컬 삭제"); idle(60000);
+        JSONObject disconnected = report("session");
+        assertTrue(disconnected.getBoolean("localCleared"));
+        assertTrue(disconnected.getBoolean("revocationConfirmed"));
+        click("보호 저장 연결 복원"); idle(10000);
+        assertFalse(report("session").getBoolean("success"));
+        recordNamed("cleanup", new JSONObject().put("localCleared", true).put("revocationConfirmed", true)
+            .put("restoreRejectedAfterDisconnect", true));
     }
 }

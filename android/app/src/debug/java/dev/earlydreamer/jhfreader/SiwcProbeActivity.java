@@ -113,6 +113,7 @@ public final class SiwcProbeActivity extends Activity {
         status.setText("준비됨 · 로그인·번역 자동 실행 없음");
         layout.addView(status);
         translation = new TextView(this);
+        translation.setTag("siwc-translation");
         layout.addView(translation);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(layout);
@@ -158,7 +159,8 @@ public final class SiwcProbeActivity extends Activity {
                         JSONObject failure = new JSONObject().put("operation", operation).put("success", false)
                             .put("attempted", inferring).put("completed", false).put("cancelled", cancelled)
                             .put("guard", SiwcResponses.guard(error));
-                        if (inferring && inferenceModel != null) failure.put("model", inferenceModel).put("attemptNumber", inferenceNumber);
+                        if (inferring && inferenceModel != null) failure.put("model", inferenceModel).put("attemptNumber", inferenceNumber)
+                            .put("transport", http.transportDiagnostics());
                         if (error instanceof SiwcHttp.Failure) {
                             failure.put("failureKind", "http").put("httpStatus", ((SiwcHttp.Failure) error).status)
                                 .put("errorCode", ((SiwcHttp.Failure) error).code).put("http", ((SiwcHttp.Failure) error).details);
@@ -205,7 +207,8 @@ public final class SiwcProbeActivity extends Activity {
             report("inference", new JSONObject().put("attempted", true).put("completed", true)
                 .put("model", model).put("attemptNumber", inferenceNumber).put("firstMs", result.firstMs).put("totalMs", result.totalMs)
                 .put("inputTokens", result.inputTokens).put("outputTokens", result.outputTokens)
-                .put("textChars", result.text.length()));
+                .put("textChars", result.text.length()).put("mediaType", result.mediaType)
+                .put("frames", result.frames).put("streamChars", result.streamChars).put("transport", http.transportDiagnostics()));
             runOnUiThread(() -> { if (!destroyed) translation.setText(result.text); });
             show("response.completed 확인 · 합성 번역 완료. 남은 진단 예산도 자동으로 사용하지 않아.");
         });

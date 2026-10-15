@@ -120,4 +120,13 @@ public class SiwcResponsesInstrumentedTest {
         catch (SiwcResponses.ProtocolFailure error) { assertEquals("line_limit", SiwcResponses.guard(error).getString("reason")); }
         assertFalse(SiwcResponses.guard(new IllegalArgumentException("PRIVATE-SYNTHETIC-MESSAGE")).toString().contains("PRIVATE"));
     }
+
+    @Test public void cancellationAfterFirstDeltaCannotAcceptALaterCompletedFrame() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        try {
+            SiwcResponses.consume(new StringReader(delta() + completed("synthetic")), cancelled::get,
+                text -> cancelled.set(true), android.os.SystemClock.elapsedRealtime());
+            fail("completed accepted after cancellation");
+        } catch (java.util.concurrent.CancellationException expected) { assertTrue(cancelled.get()); }
+    }
 }
