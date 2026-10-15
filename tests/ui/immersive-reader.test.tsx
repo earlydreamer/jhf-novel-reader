@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { ReaderError } from '../../src/contracts';
@@ -9,6 +9,61 @@ import { runTopBackHandler } from '../../src/ui/shell/backStack';
 import { ImmersiveReader, type ImmersiveReaderProps } from '../../src/ui/ImmersiveReader';
 import { SnackbarProvider } from '../../src/ui/components/Snackbar';
 import { source } from '../providers/wholeChapterFixture';
+import { useReaderGlossary } from '../../src/ui/readerGlossary';
+import type { GuidanceDraft, WorkGuidance } from '../../src/translation/guidance';
+
+test('리더에서 전체 용어집을 고친 뒤 강조를 갱신하고 같은 본문과 읽기 위치로 돌아온다', async () => {
+  let stored: WorkGuidance = {
+    schemaVersion: 1,
+    workId: source.workId,
+    hash: 'h1',
+    voices: [],
+    terms: [{ source: 'ルシアナ', target: '이전 표기', aliases: [], category: '', note: '' }],
+  };
+  const read = vi.fn(async () => stored);
+  const save = vi.fn(
+    async (_id: string, draft: GuidanceDraft) => (stored = { ...stored, ...draft, hash: 'h2' }),
+  );
+  const actions = props({ version: termVersion(), onRetranslate: vi.fn() });
+  function Harness() {
+    const [revision, setRevision] = useState(0);
+    const glossary = useReaderGlossary({
+      workId: source.workId,
+      refreshKey: String(revision),
+      read,
+      save,
+    });
+    return (
+      <ImmersiveReader
+        {...actions}
+        glossary={glossary ? { ...glossary, locked: false } : undefined}
+        guidance={{
+          locked: false,
+          onRead: read,
+          onSave: save,
+          onSaved: () => setRevision((n) => n + 1),
+        }}
+      />
+    );
+  }
+  render(<Harness />);
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  article.scrollTop = 135;
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
+  const input = await screen.findByLabelText('용어 1 한국어 표기');
+  fireEvent.change(input, { target: { value: '루시아나' } });
+  fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
+  await screen.findByText('저장했어요. 다음 번역부터 적용되고 기존 번역은 그대로 남아요.');
+  fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+  expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+  expect(article.scrollTop).toBe(135);
+  await waitFor(() => expect(article.querySelector('mark')).toHaveTextContent('루시아나'));
+  expect(actions.onBack).not.toHaveBeenCalled();
+  expect(actions.onTranslate).not.toHaveBeenCalled();
+  expect(actions.onRetranslate).not.toHaveBeenCalled();
+});
 
 afterEach(() => {
   cleanup();

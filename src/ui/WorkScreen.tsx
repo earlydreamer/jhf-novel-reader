@@ -3,7 +3,8 @@ import type { ChapterRef, ChapterRemovalResult, WorkPage } from '../contracts/re
 import { BatchPanel } from './BatchPanel';
 import type { BatchPanelProps } from './BatchPanel';
 import { withoutOrdinalPrefix } from './chapterTitle';
-import { GuidancePanel, type GuidancePanelProps } from './GuidancePanel';
+import type { GuidancePanelProps } from './GuidancePanel';
+import { GuidanceDialog } from './GuidanceDialog';
 import { TermScanPanel, type TermScanPanelProps } from './TermScanPanel';
 import { TitleHeading, type TitleControls } from './TitleHeading';
 import { displayedTitle } from '../translation/titles';
@@ -102,7 +103,6 @@ export function WorkScreen({
   const [titleSaving, setTitleSaving] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
   const showSnackbar = useSnackbar();
-  const guidanceBody = useRef<HTMLDivElement>(null);
   const recentRow = useRef<HTMLDivElement>(null);
   const didScrollRecent = useRef(false);
   const recentIsLoaded =
@@ -273,6 +273,11 @@ export function WorkScreen({
           </p>
         )}
       </header>
+      {guidance && (
+        <Button variant="text" onClick={() => setDialog('guidance')}>
+          용어집 편집하기
+        </Button>
+      )}
       {currentBatchActive && (
         <div className="nr-batch-progress-card">
           <button type="button" onClick={() => setDialog('batch')}>
@@ -474,38 +479,24 @@ export function WorkScreen({
           </>
         )}
       </Dialog>
-      <Dialog
-        open={visibleDialog === 'guidance'}
-        title="작품 용어집"
-        onClose={closeDialog}
-        keepMounted
-        fullScreen={{
-          confirmLabel: '저장하기',
-          onConfirm: () =>
-            guidanceBody.current?.querySelector<HTMLButtonElement>('[data-guidance-save]')?.click(),
-          confirmDisabled: guidance?.locked,
-        }}
-      >
-        {guidance && (
-          <div ref={guidanceBody}>
-            <GuidancePanel
-              key={work.workId}
-              workId={work.workId}
-              {...guidance}
-              refreshKey={
-                [
-                  batchRecord?.scan?.status === 'confirmed'
-                    ? batchRecord.guidance?.hash
-                    : undefined,
-                  termScanRefreshKey,
-                ]
-                  .filter(Boolean)
-                  .join('|') || undefined
-              }
-            />
-          </div>
-        )}
-      </Dialog>
+      {guidance && (
+        <GuidanceDialog
+          open={visibleDialog === 'guidance'}
+          retainDraftOnClose
+          key={work.workId}
+          workId={work.workId}
+          {...guidance}
+          onClose={closeDialog}
+          refreshKey={
+            [
+              batchRecord?.scan?.status === 'confirmed' ? batchRecord.guidance?.hash : undefined,
+              termScanRefreshKey,
+            ]
+              .filter(Boolean)
+              .join('|') || undefined
+          }
+        />
+      )}
       <Dialog
         open={visibleDialog === 'batch'}
         title="미리 번역하기"

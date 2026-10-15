@@ -36,6 +36,8 @@ import { useSnackbar, useSnackbarOffset } from './components/Snackbar';
 import { TopAppBar } from './components/TopAppBar';
 import type { ReaderGlossary } from './readerGlossary';
 import { TermEditor } from './TermEditor';
+import { GuidanceDialog } from './GuidanceDialog';
+import type { GuidancePanelProps } from './GuidancePanel';
 import { paragraphTerms, sourceRanges, splitByRanges, translatedRanges } from './termHighlight';
 import { useBackHandler } from './shell/backStack';
 import './immersive-reader.css';
@@ -70,6 +72,7 @@ export interface ImmersiveReaderProps {
   titles?: { entries: readonly SavedTitle[]; busy: boolean };
   /** 작품 용어집. 없으면 용어 강조·편집·추가를 제공하지 않는다. */
   glossary?: ReaderGlossary & { locked: boolean };
+  guidance?: Omit<GuidancePanelProps, 'workId'>;
   onBack(): void;
   onShowOriginal(value: boolean): void;
   onFontSize(value: number): void;
@@ -165,6 +168,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   const [selectedParagraphs, setSelectedParagraphs] = useState<number[]>([]);
   const [titleEditorOpen, setTitleEditorOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [guidanceOpen, setGuidanceOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [titleSaving, setTitleSaving] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -238,6 +242,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   );
 
   const overlayOpen =
+    guidanceOpen ||
     menuOpen ||
     settingsOpen ||
     qualityOpen ||
@@ -478,6 +483,9 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   }
 
   const menuItems = [
+    ...(props.guidance
+      ? [{ label: '용어집 편집하기', onSelect: () => setGuidanceOpen(true) }]
+      : []),
     ...(displayVersion
       ? [
           { label: '번역 확인 결과 보기', onSelect: () => setQualityOpen(true) },
@@ -1251,6 +1259,14 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       >
         <p>다음 번역부터 이 표기를 쓰지 않아요. 이미 번역한 회차는 그대로예요.</p>
       </Dialog>
+      {guidanceOpen && props.guidance && (
+        <GuidanceDialog
+          key={chapter.workId}
+          {...props.guidance}
+          workId={chapter.workId}
+          onClose={() => setGuidanceOpen(false)}
+        />
+      )}
       {props.glossary && (
         <TermEditor
           open={editor !== null}
