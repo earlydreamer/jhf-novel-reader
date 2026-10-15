@@ -75,13 +75,19 @@ describe('capacitor backup preflight', () => {
     await expect(recoverBackupBeforeStartup(plugin)).resolves.toBeUndefined();
     expect(plugin.recoverRestore).toHaveBeenCalledTimes(3);
   });
-  it('is available only on native Android', () => {
+  it('is available on native Android and iOS, but never on the web', () => {
     const f = setup();
     expect(f.backup.available()).toBe(true);
     native.platform = 'ios';
-    expect(f.backup.available()).toBe(false);
+    expect(f.backup.available()).toBe(true);
     native.isNative = false;
     expect(f.backup.available()).toBe(false);
+  });
+  it('resolves a pending restore before iOS storage can start', async () => {
+    native.platform = 'ios';
+    const plugin = { recoverRestore: vi.fn(async () => ({ ready: true as const })) };
+    await recoverBackupBeforeStartup(plugin);
+    expect(plugin.recoverRestore).toHaveBeenCalledOnce();
   });
   it('preserves export results and error behavior', async () => {
     const f = setup();

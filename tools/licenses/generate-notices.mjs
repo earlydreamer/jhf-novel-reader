@@ -35,6 +35,43 @@ const LICENSE_TEXT_FILES = {
 // Capacitor 기본 구조의 MIT 원문은 android/NOTICE의 MIT 부분에서 꺼낸다.
 const DIRECT = [
   {
+    name: 'LiteRT-LM Swift (iOS)',
+    version: '0.18.0',
+    license: 'Apache-2.0',
+    textFile: 'licenses/Apache-2.0.txt',
+    md: [
+      '- 출처: https://github.com/google-ai-edge/LiteRT-LM/tree/v0.18.0 . iOS 연구 앱의 기기 임베딩에 사용합니다.',
+      '- 배포 바이너리의 제3자 고지 묶음은 `ios/JHFNative/Sources/JHFNative/Resources/third_party_licenses.bundle`에 원문 그대로 보존하고 Swift Package 리소스로 동봉합니다.',
+    ],
+  },
+  {
+    name: 'ZIPFoundation (iOS)',
+    version: '0.9.20',
+    license: 'MIT',
+    textFile: 'licenses/ZIPFoundation-MIT.txt',
+    md: [
+      '- 출처: https://github.com/weichsel/ZIPFoundation/tree/0.9.20 . iOS 백업 ZIP의 생성·제한된 추출에 사용합니다.',
+    ],
+  },
+  {
+    name: 'KeychainSwift (iOS)',
+    version: '21.0.0',
+    license: 'MIT',
+    textFile: 'licenses/KeychainSwift-MIT.txt',
+    md: [
+      '- 출처: https://github.com/evgenyneu/keychain-swift/tree/21.0.0 . SecureStorage의 iOS Keychain 의존성입니다.',
+    ],
+  },
+  {
+    name: 'IONFilesystemLib (iOS)',
+    version: '2.0.1',
+    license: 'MIT',
+    textFile: 'licenses/IONFilesystem-MIT.txt',
+    md: [
+      '- 출처: https://github.com/ionic-team/ion-ios-filesystem/tree/2.0.1 . Capacitor Filesystem의 iOS 의존성입니다.',
+    ],
+  },
+  {
     name: 'LNReader plugins: Syosetu 선택자와 추출 구조',
     version: '358388426c0b',
     license: 'MIT',

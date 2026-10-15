@@ -44,7 +44,7 @@ export async function openSourceBrowser(
   startUrl = 'https://syosetu.com/',
 ): Promise<{ selectedUrl: string } | null> {
   const url = normalizeBrowseStartUrl(startUrl);
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
+  if (!Capacitor.isNativePlatform() || !['android', 'ios'].includes(Capacitor.getPlatform()))
     throw new ReaderError('source_access');
   const result = await browser.open({ startUrl: url });
   if (typeof result !== 'object' || result === null || !('selectedUrl' in result))
