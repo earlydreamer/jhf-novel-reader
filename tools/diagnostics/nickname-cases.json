@@ -1,0 +1,185 @@
+[
+  {
+    "id": "mino-viper",
+    "source": "美濃の蝮",
+    "contexts": ["斎藤道三は美濃の蝮という異名で呼ばれた。"],
+    "expected": ["미노의 살무사"],
+    "kind": "real",
+    "categories": ["별명", "호칭"],
+    "nickname": true,
+    "refers": "사이토 도산"
+  },
+  {
+    "id": "kai-tiger",
+    "source": "甲斐の虎",
+    "contexts": ["武田信玄は甲斐の虎という異名で知られる。"],
+    "expected": ["가이의 호랑이"],
+    "kind": "real",
+    "categories": ["별명", "호칭"],
+    "nickname": true,
+    "refers": "다케다 신겐"
+  },
+  {
+    "id": "echigo-dragon",
+    "source": "越後の龍",
+    "contexts": ["上杉謙信は越後の龍という異名で知られる。"],
+    "expected": ["에치고의 용"],
+    "kind": "real",
+    "categories": ["별명", "호칭"],
+    "nickname": true,
+    "refers": "우에스기 겐신"
+  },
+  {
+    "id": "crimson-lion",
+    "source": "紅蓮の獅子",
+    "contexts": ["騎士のアルは紅蓮の獅子という異名で呼ばれる。"],
+    "expected": ["홍련의 사자"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "silver-wolf",
+    "source": "白銀の狼",
+    "contexts": ["剣士のミナは白銀の狼という異名で呼ばれる。"],
+    "expected": ["백은의 늑대", "은빛 늑대", "은빛의 늑대"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "steel-hawk",
+    "source": "鋼の鷹",
+    "contexts": ["隊長のベルは鋼の鷹という異名で呼ばれる。"],
+    "expected": ["강철의 매"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "desert-fox",
+    "source": "砂漠の狐",
+    "contexts": ["この物語の将軍レオンは砂漠の狐という異名を持つ。実在の人物ではない。"],
+    "expected": ["사막의 여우"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "ice-queen",
+    "source": "氷の女王",
+    "contexts": ["冷静な魔術師エマは氷の女王という異名で呼ばれる。"],
+    "expected": ["얼음의 여왕", "빙하의 여왕"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "black-witch",
+    "source": "黒衣の魔女",
+    "contexts": ["魔術師レナは黒衣の魔女という異名で呼ばれる。"],
+    "expected": ["흑의의 마녀", "검은 옷의 마녀", "검은 옷을 입은 마녀"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "sky-sword",
+    "source": "蒼天の剣",
+    "contexts": ["蒼天の剣は剣士カイの異名で、武器の名前ではない。"],
+    "expected": ["창천의 검", "푸른 하늘의 검"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "twilight-knight",
+    "source": "黄昏の騎士",
+    "contexts": ["騎士リオは黄昏の騎士という異名で呼ばれる。"],
+    "expected": ["황혼의 기사"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "iron-shield",
+    "source": "鉄壁の盾",
+    "contexts": ["守備隊長ロイは鉄壁の盾という異名で呼ばれる。"],
+    "expected": ["철벽의 방패"],
+    "kind": "work",
+    "categories": ["별명", "호칭"],
+    "nickname": true
+  },
+  {
+    "id": "star-capital",
+    "source": "星の都",
+    "contexts": ["この物語の首都は星の都と呼ばれる都市だ。人の異名ではない。"],
+    "expected": ["별의 도시", "별의 도읍", "별의 수도"],
+    "kind": "work",
+    "categories": ["지명"],
+    "nickname": false
+  },
+  {
+    "id": "moon-temple",
+    "source": "月の神殿",
+    "contexts": ["この物語の山に月の神殿と呼ばれる建物がある。人の異名ではない。"],
+    "expected": ["달의 신전"],
+    "kind": "work",
+    "categories": ["지명", "기타"],
+    "nickname": false
+  },
+  {
+    "id": "summer-book",
+    "source": "夏の物語",
+    "contexts": ["彼女は夏の物語という題名の架空の小説を読んだ。人の異名ではない。"],
+    "expected": ["여름 이야기", "여름의 이야기"],
+    "kind": "work",
+    "categories": ["작품명"],
+    "nickname": false
+  },
+  {
+    "id": "wind-book",
+    "source": "風の旅人",
+    "contexts": ["図書館で風の旅人という題名の架空の本を借りた。人の異名ではない。"],
+    "expected": ["바람의 여행자", "바람의 나그네"],
+    "kind": "work",
+    "categories": ["작품명"],
+    "nickname": false
+  },
+  {
+    "id": "albert-name",
+    "source": "アルベルト",
+    "contexts": ["アルベルトはこの物語に登場する青年の本名だ。"],
+    "expected": ["알베르트", "알버트", "알베르토"],
+    "kind": "work",
+    "categories": ["인명"],
+    "nickname": false
+  },
+  {
+    "id": "nobunaga-name",
+    "source": "織田信長",
+    "contexts": ["織田信長は実在した戦国時代の武将である。"],
+    "expected": ["오다 노부나가"],
+    "kind": "real",
+    "categories": ["인명"],
+    "nickname": false
+  },
+  {
+    "id": "duke-title",
+    "source": "公爵",
+    "contexts": ["彼の爵位は公爵だ。公爵は爵位であって固有の異名ではない。"],
+    "expected": ["공작"],
+    "kind": "common",
+    "categories": ["호칭", "기타"],
+    "nickname": false
+  },
+  {
+    "id": "elina-name",
+    "source": "エリナ",
+    "contexts": ["エリナはこの物語に登場する少女の本名だ。"],
+    "expected": ["엘리나", "에리나"],
+    "kind": "work",
+    "categories": ["인명"],
+    "nickname": false
+  }
+]
