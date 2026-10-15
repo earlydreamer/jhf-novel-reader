@@ -208,6 +208,7 @@ public final class SiwcProbeActivity extends Activity {
                 .put("model", model).put("attemptNumber", inferenceNumber).put("firstMs", result.firstMs).put("totalMs", result.totalMs)
                 .put("inputTokens", result.inputTokens).put("outputTokens", result.outputTokens)
                 .put("textChars", result.text.length()).put("mediaType", result.mediaType)
+                .put("textSource", result.textSource)
                 .put("frames", result.frames).put("streamChars", result.streamChars).put("transport", http.transportDiagnostics()));
             runOnUiThread(() -> { if (!destroyed) translation.setText(result.text); });
             show("response.completed 확인 · 합성 번역 완료. 남은 진단 예산도 자동으로 사용하지 않아.");

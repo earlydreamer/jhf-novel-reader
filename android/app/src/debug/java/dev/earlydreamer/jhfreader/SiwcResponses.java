@@ -73,14 +73,29 @@ final class SiwcResponses {
         final String text;
         final long firstMs, totalMs, inputTokens, outputTokens;
         final String mediaType;
+        String textSource = "completed_output";
         final int frames, streamChars;
         Result(String text, long first, long total, long input, long output, int frames, int chars, String media) {
             this.text = text; firstMs = first; totalMs = total; inputTokens = input; outputTokens = output;
             this.frames = frames; streamChars = chars; mediaType = media;
         }
         Result withMediaType(String media) {
-            return new Result(text, firstMs, totalMs, inputTokens, outputTokens, frames, streamChars, media);
+            Result value = new Result(text, firstMs, totalMs, inputTokens, outputTokens, frames, streamChars, media);
+            value.textSource = textSource;
+            return value;
         }
+    }
+
+    private static String assistantText(JSONObject item) throws Exception {
+        if (!"message".equals(item.optString("type")) || !"assistant".equals(item.optString("role"))) return "";
+        StringBuilder text = new StringBuilder();
+        JSONArray content = item.getJSONArray("content");
+        for (int j = 0; j < content.length(); j++) {
+            JSONObject part = content.getJSONObject(j);
+            if ("output_text".equals(part.optString("type"))) text.append(part.getString("text"));
+            if (text.length() > 32768) throw new IllegalArgumentException("final text size");
+        }
+        return text.toString();
     }
 
     private static String line(Reader input, int[] budget) throws Exception {
@@ -102,6 +117,8 @@ final class SiwcResponses {
         long first = -1;
         int frames = 0;
         JSONObject eventCounts = new JSONObject();
+        java.util.Map<Integer, JSONObject> addedItems = new java.util.HashMap<>();
+        java.util.SortedMap<Integer, JSONObject> completedItems = new java.util.TreeMap<>();
         for (;;) {
             if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
             if (android.os.SystemClock.elapsedRealtime() - started > 120000) throw new java.util.concurrent.TimeoutException();
@@ -124,7 +141,24 @@ final class SiwcResponses {
                     .put("sseEvent", eventName(event)).put("dataType", eventName(type)).put("frames", frames)
                     .put("charsRead", 2097152 - budget[0]));
                 event = "";
-                if ("response.created".equals(type)) responseId = frame.getJSONObject("response").getString("id");
+                if ("response.created".equals(type)) {
+                    if (responseId != null) throw new IllegalArgumentException("duplicate response");
+                    responseId = frame.getJSONObject("response").getString("id");
+                }
+                else if ("response.output_item.added".equals(type)) {
+                    int index = frame.getInt("output_index");
+                    if (index < 0 || index > 255 || addedItems.containsKey(index)) throw new IllegalArgumentException("output item index");
+                    addedItems.put(index, frame.getJSONObject("item"));
+                }
+                else if ("response.output_item.done".equals(type)) {
+                    int index = frame.getInt("output_index");
+                    JSONObject item = frame.getJSONObject("item"), added = addedItems.get(index);
+                    if (added == null || completedItems.containsKey(index)
+                        || !added.getString("id").equals(item.getString("id"))
+                        || !added.getString("type").equals(item.getString("type"))
+                        || !added.optString("role").equals(item.optString("role"))) throw new IllegalArgumentException("output item mismatch");
+                    completedItems.put(index, item);
+                }
                 else if ("response.output_text.delta".equals(type)) {
                     if (first < 0) first = android.os.SystemClock.elapsedRealtime() - started;
                     partial.append(frame.getString("delta"));
@@ -157,13 +191,20 @@ final class SiwcResponses {
                                 .put("textChars", part == null ? 0 : part.optString("text").length()));
                         }
                         if (i < 16) shape.put(itemShape.put("content", partShape).put("contentCount", parts == null ? -1 : parts.length()));
-                        if (!"message".equals(item.optString("type")) || !"assistant".equals(item.optString("role"))) continue;
-                        JSONArray content = item.getJSONArray("content");
-                        for (int j = 0; j < content.length(); j++) {
-                            JSONObject part = content.getJSONObject(j);
-                            if ("output_text".equals(part.optString("type"))) text.append(part.getString("text"));
-                            if (text.length() > 32768) throw new ProtocolFailure("final text size", new JSONObject().put("textChars", text.length()).put("frames", frames));
+                        text.append(assistantText(item));
+                        if (text.length() > 32768) throw new ProtocolFailure("final text size", new JSONObject().put("textChars", text.length()).put("frames", frames));
+                    }
+                    String textSource = "completed_output";
+                    // SiwC는 completed.output이 빈 배열이어도 item.done에 최종 항목을 전달할 수 있다.
+                    // 부분 delta는 승격하지 않는다. 같은 응답의 added/done 항목과 완료 상태를 요구한다.
+                    if (output.length() == 0 && responseId != null && !addedItems.isEmpty()
+                        && addedItems.size() == completedItems.size()) {
+                        for (JSONObject item : completedItems.values()) {
+                            if (!"completed".equals(item.optString("status"))) throw new IllegalArgumentException("output item incomplete");
+                            text.append(assistantText(item));
+                            if (text.length() > 32768) throw new IllegalArgumentException("final text size");
                         }
+                        textSource = "completed_items";
                     }
                     if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
                     if (text.toString().trim().isEmpty())
@@ -172,10 +213,12 @@ final class SiwcResponses {
                             .put("firstMs", first).put("totalMs", android.os.SystemClock.elapsedRealtime() - started)
                             .put("outputCount", output.length()).put("outputShape", shape).put("eventCounts", eventCounts));
                     JSONObject usage = response.optJSONObject("usage");
-                    return new Result(text.toString(), first, android.os.SystemClock.elapsedRealtime() - started,
+                    Result result = new Result(text.toString(), first, android.os.SystemClock.elapsedRealtime() - started,
                         usage == null ? -1 : Math.max(-1, usage.optLong("input_tokens", -1)),
                         usage == null ? -1 : Math.max(-1, usage.optLong("output_tokens", -1)),
                         frames, 2097152 - budget[0], "unavailable");
+                    result.textSource = textSource;
+                    return result;
                 }
             } else if (line.isEmpty()) event = "";
         }

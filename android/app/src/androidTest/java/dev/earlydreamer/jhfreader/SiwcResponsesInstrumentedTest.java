@@ -148,4 +148,51 @@ public class SiwcResponsesInstrumentedTest {
             assertFalse(guard.toString().contains("PRIVATE"));
         }
     }
+
+    private static String created(String id) throws Exception {
+        return event("response.created", new JSONObject().put("response", new JSONObject().put("id", id)));
+    }
+    private static String item(String type, String id, String status) throws Exception {
+        return event(type, new JSONObject().put("output_index", 0).put("item", new JSONObject().put("id", id)
+            .put("type", "message").put("role", "assistant").put("status", status)
+            .put("content", new JSONArray().put(new JSONObject().put("type", "output_text").put("text", "종료된 합성 번역")))));
+    }
+    private static String emptyCompleted(String id) throws Exception {
+        return event("response.completed", new JSONObject().put("response", new JSONObject().put("id", id)
+            .put("status", "completed").put("output", new JSONArray())));
+    }
+
+    @Test public void emptyCompletedOutputUsesBoundCompletedAssistantItemRatherThanDelta() throws Exception {
+        String stream = created("synthetic") + item("response.output_item.added", "one", "in_progress")
+            + delta() + item("response.output_item.done", "one", "completed") + emptyCompleted("synthetic");
+        SiwcResponses.Result result = consume(stream);
+        assertEquals("종료된 합성 번역", result.text);
+        assertEquals("completed_items", result.textSource);
+        assertEquals("completed_items", result.withMediaType("missing").textSource);
+    }
+
+    @Test public void completedItemRequiresResponseIdentityBindingAndTerminalCompletion() throws Exception {
+        String added = item("response.output_item.added", "one", "in_progress");
+        String done = item("response.output_item.done", "one", "completed");
+        rejects(created("synthetic") + done + emptyCompleted("synthetic"));
+        rejects(added + done + emptyCompleted("synthetic"));
+        rejects(created("synthetic") + added + item("response.output_item.done", "other", "completed") + emptyCompleted("synthetic"));
+        rejects(created("synthetic") + added + item("response.output_item.done", "one", "incomplete") + emptyCompleted("synthetic"));
+        rejects(created("synthetic") + added + done + emptyCompleted("other"));
+        rejects(created("synthetic") + added + done);
+        for (String type : new String[]{"response.failed", "response.incomplete", "error"})
+            rejects(created("synthetic") + added + done + event(type, new JSONObject()));
+    }
+
+    @Test public void terminalOutputStillOverridesItemDoneAndCancellationBlocksFallback() throws Exception {
+        String items = created("synthetic") + item("response.output_item.added", "one", "in_progress")
+            + item("response.output_item.done", "one", "completed");
+        assertEquals("합성 번역 완료", consume(items + completed("synthetic")).text);
+        java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        try {
+            SiwcResponses.consume(new StringReader(items + delta() + emptyCompleted("synthetic")), cancelled::get,
+                text -> cancelled.set(true), android.os.SystemClock.elapsedRealtime());
+            fail("cancelled completed items accepted");
+        } catch (java.util.concurrent.CancellationException expected) { }
+    }
 }

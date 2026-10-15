@@ -22,6 +22,12 @@
 
 ## 실행 범위
 
+같은 정밀 연결 두 번째 시도는 소스 `e809aaef95ce39009fc3b20e91f090a2e59b8e19`, APK `00E29E0DBB692191847C9BECE31B2B532493C9B34B04EA531F928EEDE2C02059`에서 헤더 검사를 통과해 `response.completed` 처리까지 도달했지만 최종 번역문 검사로 실패했습니다. 세 번째 시도는 소스 `8d8c6340f2be91b11c88e5ca033aeec0d6cc106c`, APK `3C94562054850B2DBFA32977E6207A6143AC56EF8D3E76D6535B1019FB2FDA07`에서 32개 프레임, delta 24개·36자, `output_text.done`·`output_item.done`·`response.completed` 각 1개를 확인했습니다. 첫 출력 2669ms·완료 이벤트 처리 3000ms였고 완료 이벤트의 `output`은 빈 배열이었습니다. 완료 이벤트 도달을 앱 번역 성공으로 집계하지 않습니다. 두 소스 모두 native getter와 이름/소문자 헤더 조회에서 Content-Type 부재가 확인됐습니다. 안전 진단에 원문·번역문·응답 ID를 기록하지 않았습니다.
+
+기존 파서는 완료 이벤트의 `output`에서만 최종 문장을 찾아 거절했습니다. 후속 수정은 빈 `completed.output`에 한해 같은 스트림의 `response.created`와 완료 응답 ID, `output_item.added/done`의 index·ID·종류·역할과 모든 항목의 완료 상태를 검증한 뒤 종료된 assistant 항목의 텍스트를 사용합니다. 부분 delta를 완성본으로 승격하지 않으며 failed·incomplete·EOF·취소는 계속 실패입니다. 완료 이벤트에 실제 output이 있으면 그 최종값을 우선합니다. 이는 [공식 스트리밍 예제](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)의 텍스트 수집 뒤 완료 이벤트 확인 계약을 따르며, 이 수정의 실제 계정 성공은 별도 재검증이 필요합니다.
+
+이번 정밀 연결은 3회 예산을 모두 사용했고 추가 추론 없이 종료했습니다. 실제 원격 철회 응답·로컬 삭제·연결 복원 거절을 확인했고 세션 파일과 `.bak`·`.new` 부재를 별도 확인했습니다. 실제 스트림 취소 시나리오는 원인 확인에 마지막 시도를 사용해 미실행이며 합성 취소 검사와 구분합니다. 원인 수정 뒤의 새 실제 1회가 남아 PR은 Draft로 유지합니다.
+
 정밀 진단 소스 `790a8dc0c75571fe7fc2be7c3930ebf8e8e35785`, APK SHA-256 `FE1A6C303D3908B80288C484A369DDE8A106449B515A0B46140A90CB5274B099`의 같은 연결 첫 시도는 `gpt-6.1-sol`, HTTP 200에서 `content_type` 검증으로 중단됐습니다. native `getContentType()`가 null이라 SSE 본문을 읽기 전에 거절한 위치까지 확인했습니다. 실제 서버의 wire 헤더 누락이나 앞선 두 실패의 동일 원인까지 입증한 것은 아닙니다. 보호 저장·복원·표시 모델 7개 조회는 성공했고 정밀 진단 예산 3회 중 1회를 사용했습니다.
 
 후속 수정은 Content-Type이 없을 때 고정된 공식 HTTPS Responses 경로의 본문을 기존 SSE 파서로 검증합니다. 명시적인 비 SSE 형식은 거절하며 typed 이벤트·완료 상태·응답 ID·최종 assistant text·크기 제한을 유지합니다. 헤더 getter와 대소문자 이름 조회의 안전한 MIME 분류, 프레임/문자 수만 추가 기록합니다. 합성 HTTP 200의 헤더 누락 성공, 명시 JSON 거절, completed 없는 EOF 거절과 첫 delta 뒤 취소를 회귀 검사합니다. 실제 수정 성공은 후속 명시적 요청으로 별도 판정합니다.
