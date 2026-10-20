@@ -148,7 +148,7 @@ return await (async()=>{
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const wait=async fn=>{for(let i=0;i<100;i++){if(fn())return;await delay(100);}throw Error('Fixture cleanup timed out');};
 try{
-if(document.querySelector('.nr-work-screen,.nr-settings')){document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__empty,.nr-library__updates button'));}
+if(document.querySelector('.nr-work-screen,.nr-settings')){document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__empty,.nr-library__list'));}
 const menu=document.querySelector('button[aria-label="실기 합성 작품 메뉴"]');
 if(menu){if(!document.querySelector('dialog[open]')){menu.click();await delay(100);[...document.querySelectorAll('[role="menuitem"]')].find(x=>x.textContent.includes('서재에서 제거하기')).click();await wait(()=>!!document.querySelector('dialog[open]'));}
 [...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='제거하기').click();await wait(()=>!!document.querySelector('.nr-library__empty'));}
@@ -163,7 +163,7 @@ return {fixtureRemoved:!!document.querySelector('.nr-library__empty')};
 return await (async()=>{
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const wait=async(fn,label)=>{for(let i=0;i<200;i++){if(await fn())return;await delay(100);}throw Error(label);};
-const click=text=>{const target=[...document.querySelectorAll('button,[role="menuitem"]')].find(x=>x.textContent.trim()===text);if(!target)throw Error('Missing '+text);target.click();};
+const click=async text=>{const target=[...document.querySelectorAll('button,[role="menuitem"]')].find(x=>x.textContent.trim()===text||x.getAttribute('aria-label')===text);if(!target)throw Error('Missing '+text);target.click();if(text==='새 회차 확인'||text==='서재 전체 새 회차 확인'){await wait(()=>!!document.querySelector('dialog[open]'),'Check confirmation');const date=document.querySelector('dialog[open] [role="status"]')?.textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0];await wait(()=>[...document.querySelectorAll('dialog[open] button')].some(x=>x.textContent.trim()==='확인하기'&&!x.disabled),'Check ready');[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='확인하기').click();await wait(()=>!document.querySelector('dialog[open]'),'Check submitted');return date;}};
 document.querySelector('button[aria-label="뒤로 가기"]')?.click();
 await wait(()=>!!document.querySelector('.nr-library__empty'),'Expected empty library');
 const original=Capacitor.nativePromise;
@@ -180,15 +180,19 @@ document.querySelector('button[aria-label="URL로 열기"]').click();await wait(
 const input=document.querySelector('input[name="url"]');input.value='https://ncode.syosetu.com/n1234ab/';
 document.querySelector('.nr-library__url-form').requestSubmit();
 await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===1,'Initial work');
-await wait(()=>[...document.querySelectorAll('.nr-chapter-update-control button')].some(button=>button.textContent.trim()==='새 회차 확인' && !button.disabled),'Individual check ready');
+await wait(()=>[...document.querySelectorAll('.nr-top-app-bar button')].some(button=>button.getAttribute('aria-label')==='새 회차 확인' && !button.disabled),'Individual check ready');
+document.querySelector('.nr-top-app-bar button[aria-label="새 회차 확인"]').click();
+await wait(()=>/\d{4}-\d{2}-\d{2}/.test(document.querySelector('dialog[open] [role="status"]')?.textContent||''),'Initial check record');
+[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='취소').click();
+await wait(()=>!document.querySelector('dialog[open]'),'Initial check status closed');
 const initialRequests=window.__jhfFixture.requests;
 window.__jhfFixture.count=2;
-click('새 회차 확인');
+const lastDate=await click('새 회차 확인');
 await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===2&&document.querySelector('.nr-new-chapter-badge')?.textContent==='새 회차 1','Individual new badge');
-const report={individualCheck:true,workBadge:true,lastDate:document.querySelector('.nr-chapter-update-control [role="status"]').textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0]};
-document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__updates button'),'Home');
+const report={individualCheck:true,workBadge:true,lastDate};
+document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-top-app-bar button[aria-label="서재 전체 새 회차 확인"]'),'Home');
 report.libraryBadge=document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 1';
-window.__jhfFixture.count=3;click('서재 전체 새 회차 확인');
+window.__jhfFixture.count=3;await click('서재 전체 새 회차 확인');
 await wait(()=>document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 2','All check badge');
 report.allCheck=true;report.combinedBadge=true;report.manualRequests=window.__jhfFixture.requests-initialRequests;
 return report;
@@ -232,35 +236,55 @@ return await (async () => {
     }
     throw new Error(label);
   };
-  const button = text => [...document.querySelectorAll('button')].find(element => element.textContent.trim() === text);
-  const click = text => {
-    const element = button(text);
-    if (!element || element.disabled) throw new Error('Button unavailable: ' + text);
-    element.click();
+  const button = label => document.querySelector(`.nr-top-app-bar button[aria-label="${label}"]`);
+  const modal = () => document.querySelector('dialog[open]');
+  const clickModal = text => {
+    const target = [...modal().querySelectorAll('button')].find(element => element.textContent.trim() === text);
+    if (!target || target.disabled) throw new Error('Modal button unavailable: ' + text);
+    target.click();
   };
   if (window.__jhfFixture) throw new Error('Synthetic source fixture is active');
   const original = Capacitor.nativePromise;
   const report = window.__jhfLive = {
-    url, platform: Capacitor.getPlatform(), requests: [],
-    responseReplacement: false,
+    url, platform: Capacitor.getPlatform(), requests: [], responseReplacement: false,
     initialLibraryCount: document.querySelectorAll('.nr-library__list > li').length,
   };
-  Capacitor.nativePromise = function (plugin, method, options) {
+  const openConfirmation = async label => {
+    const target = button(label);
+    if (!target || target.disabled || !target.querySelector('[data-icon="refresh"]')) throw new Error('Refresh icon unavailable');
+    target.click();
+    await wait(modal, 'Confirmation did not open');
+  };
+  const confirmCheck = async (label, prefix) => {
+    const before = report.requests.length;
+    await openConfirmation(label);
+    await sleep(600);
+    report[prefix + 'BeforeConfirmNoRequest'] = report.requests.length === before;
+    clickModal('취소');
+    await wait(() => !modal(), 'Cancel did not close confirmation');
+    await sleep(100);
+    report[prefix + 'CancelNoRequest'] = report.requests.length === before;
+    await openConfirmation(label);
+    modal().dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+    await wait(() => !modal(), 'Escape did not close confirmation');
+    await sleep(250);
+    report[prefix + 'EscapeNoRequest'] = report.requests.length === before;
+    await openConfirmation(label);
+    clickModal('확인하기');
+    await wait(() => !modal(), 'Confirmation did not close after submit');
+    await wait(() => report.requests.length > before && report.requests.slice(before).every(request => request.completed) && button(label) && !button(label).disabled, 'Confirmed live check did not finish');
+    report[prefix + 'Requests'] = report.requests.length - before;
+    if (!report[prefix + 'BeforeConfirmNoRequest'] || !report[prefix + 'CancelNoRequest'] || !report[prefix + 'EscapeNoRequest']) throw new Error('Source requested without confirmation');
+  };
+  Capacitor.nativePromise = function(plugin, method, options) {
     if ((plugin === 'CapacitorHttp' || plugin === 'ReaderHttp') && method === 'request' && options.url.startsWith(url)) {
-      const entry = {url: options.url, completed: false};
+      const entry = {url: options.url, completed:false};
       report.requests.push(entry);
       const start = Date.now();
       return original.call(this, plugin, method, options).then(response => {
-        Object.assign(entry, {
-          completed: true, status: response.status,
-          bytes: typeof response.data === 'string' ? new TextEncoder().encode(response.data).length : 0,
-          elapsedMs: Date.now() - start,
-        });
+        Object.assign(entry, {completed:true, status:response.status, bytes:typeof response.data === 'string' ? new TextEncoder().encode(response.data).length : 0, elapsedMs:Date.now()-start});
         return response;
-      }, error => {
-        Object.assign(entry, {completed: true, failed: true, elapsedMs: Date.now() - start});
-        throw error;
-      });
+      }, error => { Object.assign(entry, {completed:true, failed:true}); throw error; });
     }
     return original.call(this, plugin, method, options);
   };
@@ -270,39 +294,49 @@ return await (async () => {
     document.querySelector('dialog[open] input[name="url"]').value = url;
     document.querySelector('.nr-library__url-form').requestSubmit();
     await wait(() => document.querySelectorAll('.nr-work-screen ol > li').length > 0, 'Real work did not render');
-    await wait(() => button('새 회차 확인') && !button('새 회차 확인').disabled, 'Initial source check did not settle');
+    await wait(() => button('새 회차 확인') && !button('새 회차 확인').disabled, 'Initial check did not settle');
+    await openConfirmation('새 회차 확인');
+    await wait(() => /\d{4}-\d{2}-\d{2}/.test(modal().querySelector('[role="status"]')?.textContent || '') && [...modal().querySelectorAll('button')].some(element => element.textContent.trim() === '확인하기' && !element.disabled), 'Initial check record did not settle');
+    clickModal('취소');
+    await wait(() => !modal(), 'Initial status did not close');
     report.importedChapterCount = document.querySelectorAll('.nr-work-screen ol > li').length;
     report.importRequests = report.requests.length;
-    const beforeIndividual = report.requests.length;
-    click('새 회차 확인');
-    await wait(() => report.requests.length > beforeIndividual && report.requests.slice(beforeIndividual).every(request => request.completed) && button('새 회차 확인') && !button('새 회차 확인').disabled, 'Individual live check did not finish');
-    report.individualRequests = report.requests.length - beforeIndividual;
-    report.individualSuccess = !!document.querySelector('.nr-chapter-update-success') && !document.querySelector('.nr-library__update-error');
+    report.workBodyControlRemoved = !document.querySelector('.nr-work-screen .nr-chapter-update-control');
+    await confirmCheck('새 회차 확인', 'individual');
+    await openConfirmation('새 회차 확인');
+    report.individualSuccess = !!modal().querySelector('.nr-chapter-update-success') && !modal().querySelector('.nr-library__update-error');
+    report.lastCheckDate = modal().querySelector('[role="status"]').textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+    clickModal('취소');
+    await wait(() => !modal(), 'Status modal did not close');
     report.checkedChapterCount = document.querySelectorAll('.nr-work-screen ol > li').length;
-    report.lastCheckDate = document.querySelector('.nr-chapter-update-control [role="status"]').textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0];
     document.querySelector('button[aria-label="뒤로 가기"]').click();
     await wait(() => button('서재 전체 새 회차 확인'), 'Library did not render');
     report.libraryCount = document.querySelectorAll('.nr-library__list > li').length;
-    if (report.initialLibraryCount === 0 && report.libraryCount === 1) {
-      const beforeAll = report.requests.length;
-      click('서재 전체 새 회차 확인');
-      await wait(() => report.requests.length > beforeAll && report.requests.slice(beforeAll).every(request => request.completed) && button('서재 전체 새 회차 확인') && !button('서재 전체 새 회차 확인').disabled, 'All-work live check did not finish');
-      report.allRequests = report.requests.length - beforeAll;
+    report.libraryBodyControlRemoved = !document.querySelector('.nr-library__updates');
+    if (report.libraryCount === 1) {
+      const beforeMenu = report.requests.length;
+      document.querySelector('.nr-library__list .nr-menu-anchor > button').click();
+      await wait(() => document.querySelector('[role="menuitem"]'), 'Work menu did not open');
+      [...document.querySelectorAll('[role="menuitem"]')].find(element => element.textContent.trim() === '새 회차 확인').click();
+      await wait(modal, 'Work menu bypassed confirmation');
+      await sleep(600);
+      clickModal('취소');
+      await wait(() => !modal(), 'Work-menu confirmation did not close');
+      report.menuCancelNoRequest = report.requests.length === beforeMenu;
+      if (!report.menuCancelNoRequest) throw new Error('Work-menu request bypassed confirmation');
+      await confirmCheck('서재 전체 새 회차 확인', 'all');
       report.allSuccess = !document.querySelector('.nr-library__update-error');
     } else report.allSkippedToPreserveOtherWorks = true;
     report.newBadgeCount = document.querySelectorAll('.nr-library .nr-new-chapter-badge').length;
     report.allResponsesSuccessful = report.requests.every(request => request.completed && request.status === 200 && request.bytes > 0);
     report.keptInLibrary = true;
-    if (!report.allResponsesSuccessful || !report.individualSuccess || report.checkedChapterCount !== report.importedChapterCount) throw new Error('Live source assertions failed');
+    if (!report.workBodyControlRemoved || !report.libraryBodyControlRemoved || !report.individualSuccess || !report.allResponsesSuccessful || report.checkedChapterCount !== report.importedChapterCount) throw new Error('Live refresh assertions failed');
     return report;
   } catch (error) {
     report.failure = String(error.message);
-    report.workVisible = !!document.querySelector('.nr-work-screen');
     report.errorNotice = document.querySelector('.nr-snackbar')?.textContent?.slice(0, 500);
     throw error;
-  } finally {
-    Capacitor.nativePromise = original;
-  }
+  } finally { Capacitor.nativePromise = original; }
 })();
 """#
     let result: [String: Any]
@@ -324,7 +358,13 @@ return await (async () => {
     XCTAssertGreaterThan(result["importedChapterCount"] as? Int ?? 0, 0)
     XCTAssertEqual(result["importedChapterCount"] as? Int, result["checkedChapterCount"] as? Int)
     XCTAssertGreaterThan(result["individualRequests"] as? Int ?? 0, 0)
-    if result["initialLibraryCount"] as? Int == 0 {
+    for key in ["workBodyControlRemoved", "libraryBodyControlRemoved", "individualBeforeConfirmNoRequest", "individualCancelNoRequest", "individualEscapeNoRequest"] {
+      XCTAssertEqual(result[key] as? Bool, true, key)
+    }
+    if result["libraryCount"] as? Int == 1 {
+      for key in ["allBeforeConfirmNoRequest", "allCancelNoRequest", "allEscapeNoRequest", "menuCancelNoRequest"] {
+        XCTAssertEqual(result[key] as? Bool, true, key)
+      }
       XCTAssertEqual(result["allSuccess"] as? Bool, true)
       XCTAssertGreaterThan(result["allRequests"] as? Int ?? 0, 0)
     }
