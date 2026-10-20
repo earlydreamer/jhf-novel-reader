@@ -106,6 +106,17 @@ it('최근 읽은 250화를 포함한 페이지만 처음 열고 갱신과 앞�
     blockId: 'b1',
     offset: 0,
   });
+  const readVersion = (await library.readVersion('recent-page'))!;
+  await library.commitVersion({
+    ...readVersion,
+    versionId: 'translated-not-read',
+    source: {
+      ...readVersion.source,
+      chapterId: 'n1234ab/301',
+      canonicalUrl: 'https://ncode.syosetu.com/n1234ab/301/',
+    },
+  });
+  expect((await library.listRecent())[0]?.chapterId).toBe('n1234ab/250');
   const getWorkPage = vi.fn(async (url: string) => pages.find((page) => page.pageUrl === url)!);
   const scroll = vi.fn();
   const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
@@ -126,7 +137,7 @@ it('최근 읽은 250화를 포함한 페이지만 처음 열고 갱신과 앞�
     await waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
     expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(201);
     expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(100);
-    expect(screen.getByText('전체 302화 · 1화 저장됨')).toBeInTheDocument();
+    expect(screen.getByText('전체 302화 · 2화 저장됨')).toBeInTheDocument();
     expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
     expect(getWorkPage).not.toHaveBeenCalled();
     await act(async () => {

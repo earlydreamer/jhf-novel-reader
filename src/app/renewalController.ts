@@ -1639,7 +1639,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       let work: WorkPage | null = null;
       for (const page of pages) work = rememberWorkPage(page);
       if (!work) throw new ReaderError('storage');
-      selectInitialWorkPage(work);
+      await selectInitialWorkPage(work);
+      if (disposed || operation !== sourceOperation) return;
       const savedChapterIds = [
         ...new Set([
           ...(savedChaptersByWork.get(workId) ?? []),
@@ -1696,9 +1697,22 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       (left, right) => (left.chapters[0]?.ordinal ?? 0) - (right.chapters[0]?.ordinal ?? 0),
     );
   }
-  function selectInitialWorkPage(work: WorkPage): void {
+  async function selectInitialWorkPage(work: WorkPage): Promise<void> {
     const pages = sortedWorkPages(work.workId);
-    const recentId = snapshot.recent.find((entry) => entry.workId === work.workId)?.chapterId;
+    const recent = snapshot.recent.find((entry) => entry.workId === work.workId);
+    let recentId: string | undefined;
+    try {
+      const position = recent && (await dependencies.library?.readPosition(recent.versionId));
+      if (
+        position &&
+        position.workId === work.workId &&
+        position.chapterId === recent?.chapterId &&
+        position.versionId === recent.versionId
+      )
+        recentId = position.chapterId;
+    } catch {
+      /* 읽기 기록에 문제가 있어도 목차 첫 페이지는 연다. 이어 읽기에서 복구를 안내한다. */
+    }
     const selected =
       pages.find((page) => page.chapters.some((chapter) => chapter.chapterId === recentId)) ??
       pages[0];
@@ -1804,7 +1818,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       )
         return;
       const work = rememberWorkPage(page);
-      selectInitialWorkPage(work);
+      await selectInitialWorkPage(work);
+      if (disposed || operation !== sourceOperation) return;
       removedWorkIds.delete(page.workId);
       const savedChapterIds = [
         ...new Set([...(savedChaptersByWork.get(page.workId) ?? []), ...newlySavedChapterIds]),
