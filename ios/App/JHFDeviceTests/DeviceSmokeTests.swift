@@ -214,6 +214,132 @@ return report;
     let cleaned = try await evaluate(cleanup)
     XCTAssertEqual(cleaned["fixtureRemoved"] as? Bool, true)
   }
+  /// Explicit live-service check. No response fixtures and no source body in attachments.
+  func test06RealNarouWorkAddAndCheck() async throws {
+    guard let url = ProcessInfo.processInfo.environment["JHF_REAL_SOURCE_URL"], !url.isEmpty else {
+      throw XCTSkip("Pass LiveSourceUrl explicitly to run the real Narou check.")
+    }
+    let urlData = try JSONSerialization.data(withJSONObject: url, options: .fragmentsAllowed)
+    let urlLiteral = try XCTUnwrap(String(data: urlData, encoding: .utf8))
+    let script = #"""
+return await (async () => {
+  const url = __JHF_LIVE_URL_LITERAL__;
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const wait = async (predicate, label) => {
+    for (let n = 0; n < 900; n++) {
+      if (predicate()) return;
+      await sleep(100);
+    }
+    throw new Error(label);
+  };
+  const button = text => [...document.querySelectorAll('button')].find(element => element.textContent.trim() === text);
+  const click = text => {
+    const element = button(text);
+    if (!element || element.disabled) throw new Error('Button unavailable: ' + text);
+    element.click();
+  };
+  if (window.__jhfFixture) throw new Error('Synthetic source fixture is active');
+  const original = Capacitor.nativePromise;
+  const report = window.__jhfLive = {
+    url, platform: Capacitor.getPlatform(), requests: [],
+    responseReplacement: false,
+    initialLibraryCount: document.querySelectorAll('.nr-library__list > li').length,
+  };
+  Capacitor.nativePromise = function (plugin, method, options) {
+    if ((plugin === 'CapacitorHttp' || plugin === 'ReaderHttp') && method === 'request' && options.url.startsWith(url)) {
+      const entry = {url: options.url, completed: false};
+      report.requests.push(entry);
+      const start = Date.now();
+      return original.call(this, plugin, method, options).then(response => {
+        Object.assign(entry, {
+          completed: true, status: response.status,
+          bytes: typeof response.data === 'string' ? new TextEncoder().encode(response.data).length : 0,
+          elapsedMs: Date.now() - start,
+        });
+        return response;
+      }, error => {
+        Object.assign(entry, {completed: true, failed: true, elapsedMs: Date.now() - start});
+        throw error;
+      });
+    }
+    return original.call(this, plugin, method, options);
+  };
+  try {
+    document.querySelector('.nr-fab').click();
+    await wait(() => document.querySelector('dialog[open] input[name="url"]'), 'URL dialog not open');
+    document.querySelector('dialog[open] input[name="url"]').value = url;
+    document.querySelector('.nr-library__url-form').requestSubmit();
+    await wait(() => document.querySelectorAll('.nr-work-screen ol > li').length > 0, 'Real work did not render');
+    await wait(() => button('새 회차 확인') && !button('새 회차 확인').disabled, 'Initial source check did not settle');
+    report.importedChapterCount = document.querySelectorAll('.nr-work-screen ol > li').length;
+    report.importRequests = report.requests.length;
+    const beforeIndividual = report.requests.length;
+    click('새 회차 확인');
+    await wait(() => report.requests.length > beforeIndividual && report.requests.slice(beforeIndividual).every(request => request.completed) && button('새 회차 확인') && !button('새 회차 확인').disabled, 'Individual live check did not finish');
+    report.individualRequests = report.requests.length - beforeIndividual;
+    report.individualSuccess = !!document.querySelector('.nr-chapter-update-success') && !document.querySelector('.nr-library__update-error');
+    report.checkedChapterCount = document.querySelectorAll('.nr-work-screen ol > li').length;
+    report.lastCheckDate = document.querySelector('.nr-chapter-update-control [role="status"]').textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+    document.querySelector('button[aria-label="뒤로 가기"]').click();
+    await wait(() => button('서재 전체 새 회차 확인'), 'Library did not render');
+    report.libraryCount = document.querySelectorAll('.nr-library__list > li').length;
+    if (report.initialLibraryCount === 0 && report.libraryCount === 1) {
+      const beforeAll = report.requests.length;
+      click('서재 전체 새 회차 확인');
+      await wait(() => report.requests.length > beforeAll && report.requests.slice(beforeAll).every(request => request.completed) && button('서재 전체 새 회차 확인') && !button('서재 전체 새 회차 확인').disabled, 'All-work live check did not finish');
+      report.allRequests = report.requests.length - beforeAll;
+      report.allSuccess = !document.querySelector('.nr-library__update-error');
+    } else report.allSkippedToPreserveOtherWorks = true;
+    report.newBadgeCount = document.querySelectorAll('.nr-library .nr-new-chapter-badge').length;
+    report.allResponsesSuccessful = report.requests.every(request => request.completed && request.status === 200 && request.bytes > 0);
+    report.keptInLibrary = true;
+    if (!report.allResponsesSuccessful || !report.individualSuccess || report.checkedChapterCount !== report.importedChapterCount) throw new Error('Live source assertions failed');
+    return report;
+  } catch (error) {
+    report.failure = String(error.message);
+    report.workVisible = !!document.querySelector('.nr-work-screen');
+    report.errorNotice = document.querySelector('.nr-snackbar')?.textContent?.slice(0, 500);
+    throw error;
+  } finally {
+    Capacitor.nativePromise = original;
+  }
+})();
+"""#
+    let result: [String: Any]
+    do {
+      result = try await evaluate(script.replacingOccurrences(of: "__JHF_LIVE_URL_LITERAL__", with: urlLiteral))
+    } catch {
+      if let diagnostic = try? await evaluate("return window.__jhfLive || {started:false};") {
+        let data = try JSONSerialization.data(withJSONObject: diagnostic, options: [.prettyPrinted, .sortedKeys])
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+        attachment.name = "JHF-live-source-failure-metadata"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+      }
+      throw error
+    }
+    XCTAssertEqual(result["responseReplacement"] as? Bool, false)
+    XCTAssertEqual(result["individualSuccess"] as? Bool, true)
+    XCTAssertEqual(result["allResponsesSuccessful"] as? Bool, true)
+    XCTAssertGreaterThan(result["importedChapterCount"] as? Int ?? 0, 0)
+    XCTAssertEqual(result["importedChapterCount"] as? Int, result["checkedChapterCount"] as? Int)
+    XCTAssertGreaterThan(result["individualRequests"] as? Int ?? 0, 0)
+    if result["initialLibraryCount"] as? Int == 0 {
+      XCTAssertEqual(result["allSuccess"] as? Bool, true)
+      XCTAssertGreaterThan(result["allRequests"] as? Int ?? 0, 0)
+    }
+    let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
+    let metadata = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+    metadata.name = "JHF-live-source-result-metadata"
+    metadata.lifetime = .keepAlways
+    add(metadata)
+    let web = try await webView()
+    try await Task.sleep(nanoseconds: 400_000_000)
+    let attachment = XCTAttachment(image: try await web.takeSnapshot(configuration: nil))
+    attachment.name = "JHF-iPhone-real-Narou-library"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
   func test02PrivateFilesPreferencesAndKeychainRoundTrip() async throws {
     let value = try await evaluate(
       """

@@ -4,11 +4,17 @@ param(
     [ValidatePattern('^[A-Za-z0-9-]+$')][string]$DeviceId = 'auto',
     [ValidateSet('dev.earlydreamer.jhfreader', 'dev.earlydreamer.jhfreader.envcheck')]
     [string]$BundleId = 'dev.earlydreamer.jhfreader',
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [ValidatePattern('^https://ncode\.syosetu\.com/n[0-9]{1,4}[a-z]{1,2}/$')]
+    [string]$LiveSourceUrl
 )
 $ErrorActionPreference = 'Stop'
 $Action = $Action.ToLowerInvariant()
 $BundleId = $BundleId.ToLowerInvariant()
+if ($LiveSourceUrl) {
+    $LiveSourceUrl = $LiveSourceUrl.ToLowerInvariant()
+    if ($Action -ne 'test') { throw 'LiveSourceUrl requires Action test.' }
+}
 $OutputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $project = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -36,7 +42,7 @@ try {
     Check-Exit 'Cannot transfer the source snapshot.'
     ssh -o BatchMode=yes $SshHost "/usr/bin/python3 $remote/prepare-source.py $remote $bundleHash $sourceHash"
     Check-Exit 'Remote source verification failed.'
-    ssh -o BatchMode=yes $SshHost ". ~/.local/share/jhf-ios/env.sh; cd $remote/app; npm ci > ../npm-ci.log 2>&1 && npm run ios:sync > ../ios-sync.log 2>&1 && /usr/bin/python3 tools/ios/queue-device-build.py . .. $DeviceId $Action $BundleId"
+    ssh -o BatchMode=yes $SshHost ". ~/.local/share/jhf-ios/env.sh; cd $remote/app; npm ci > ../npm-ci.log 2>&1 && npm run ios:sync > ../ios-sync.log 2>&1 && /usr/bin/python3 tools/ios/queue-device-build.py . .. $DeviceId $Action $BundleId $LiveSourceUrl"
     Check-Exit 'Remote dependency setup or build dispatch failed; inspect the job logs.'
     Write-Output "Mac job: ~/$remote"
     $finished = $false

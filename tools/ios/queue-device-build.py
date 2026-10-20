@@ -11,6 +11,9 @@ import sys
 def main():
     project, job, device, action = sys.argv[1:5]
     bundle = sys.argv[5] if len(sys.argv) > 5 else 'dev.earlydreamer.jhfreader'
+    live_url = sys.argv[6] if len(sys.argv) > 6 else ''
+    if live_url and (action != 'test' or not re.fullmatch(r'https://ncode\.syosetu\.com/n[0-9]{1,4}[a-z]{1,2}/', live_url)):
+        raise SystemExit('Live source checks require test action and a canonical Narou work URL.')
     if bundle not in ('dev.earlydreamer.jhfreader', 'dev.earlydreamer.jhfreader.envcheck'):
         raise SystemExit('Invalid product or research bundle ID.')
     project, job = Path(project).resolve(), Path(job).resolve()
@@ -34,7 +37,7 @@ def main():
     definition = {
         'Label': label,
         'ProgramArguments': ['/bin/bash', str(project / 'tools/ios/build-device.sh'),
-                             str(project), device, team, str(job), action, bundle],
+                             str(project), device, team, str(job), action, bundle, live_url],
         'EnvironmentVariables': {'HOME': str(Path.home()), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin'},
         'RunAtLoad': True, 'KeepAlive': False,
         'StandardOutPath': str(job / 'build.log'), 'StandardErrorPath': str(job / 'build.log'),

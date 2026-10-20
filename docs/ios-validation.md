@@ -49,6 +49,9 @@ PowerShell 7과 `ssh`, `scp`, `git`, `tar`를 사용한다. `jhf-ios`는 사용�
 # 같은 실제 iPhone에서 자동 smoke 검사까지 실행한다.
 ./tools/ios/device.ps1 -Action test -SshHost jhf-ios
 
+# 실제 공개 작품 추가·새 회차 검사. 합성 응답을 쓰지 않는 별도 검사만 실행한다.
+./tools/ios/device.ps1 -Action test -SshHost jhf-ios -LiveSourceUrl https://ncode.syosetu.com/n3283lf/
+
 # 페어링된 iPhone이 여러 대라면 CoreDevice ID를 명시한다.
 ./tools/ios/device.ps1 -Action install -SshHost jhf-ios -DeviceId '실제-CoreDevice-ID'
 ```
@@ -60,6 +63,8 @@ PowerShell 7과 `ssh`, `scp`, `git`, `tar`를 사용한다. `jhf-ios`는 사용�
 서명 빌드는 실제 기기의 UDID 목적지만 사용하며 `-jobs 2`와 단일 빌드 잠금으로 제한한다. 성공하면 서명을 검사하고 설치·실행한다. 결과와 소스 해시는 Mac 작업 폴더와 Windows 출력 폴더의 JSON 및 로그에 남는다. 미커밋 스냅샷의 `dirty: true`는 숨기지 않는다. 이때 정확한 소스는 전송 아카이브 해시와 함께 식별한다.
 
 `-Action test`는 서재·설정 화면, 별도의 시험 경로를 사용한 파일·Preferences·Keychain 저장, 기본 상태의 기기 모델 미로드, 잘못된 탐색 주소 차단, 아이폰 내부 합성 HTTP/SSE 서버로 Unicode·리다이렉트 거부를 검사한다. 실제 사용자 작품·API 키를 픽스처에 넣지 않는다. 테스트의 화면 첨부는 `DeviceTests.xcresult`에 보관한다. 합성 스트리밍 검사를 실제 모델의 번역 품질 검증으로 해석하지 않는다.
+
+`-LiveSourceUrl`은 정규 나로우 작품 URL을 명시했을 때만 실제 서버에 요청한다. 이 옵션은 `-Action test`와 함께 사용하며 실제 작품 검사 한 개만 선택한다. 옵션을 생략한 기본 합성 검사는 유지되고 실제 서버 검사는 건너뛴다. 실서버 검사는 작품 추가 → 목차 렌더링 → 개별 새 회차 검사 → 서재 복귀를 실행하고, 기존 서재가 비어 있었을 때 전체 검사까지 실행한다. 응답을 대체하지 않으며 실제 네이티브 HTTP를 관찰해 URL·상태·바이트 수·시간만 JSON 첨부로 남긴다. 원문 응답이나 본문은 첨부하지 않는다. 추가한 작품은 확인할 수 있도록 서재에 남기며 기존 작품과 설정을 삭제하지 않는다. 조회 중 새 회차가 실제로 발행되지 않았다면 배지 없는 결과가 정상이며, 이를 실연재 증가 검증으로 해석하지 않는다.
 
 ## 직접 기능 확인
 
