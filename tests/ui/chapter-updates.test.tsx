@@ -84,7 +84,8 @@ test('상단 아이콘과 작품 메뉴의 확인 모달로 갱신하고 회차�
     }),
   ).toBeEnabled();
   expect(document.querySelector('.nr-work-screen .nr-chapter-update-control')).toBeNull();
-  expect(within(screen.getByRole('list')).getAllByText('새 회차 1')).toHaveLength(2);
+  expect(within(screen.getByRole('list')).getAllByText('새 회차', { exact: true })).toHaveLength(2);
+  expect(within(screen.getByRole('list')).queryByText('새 회차 1')).toBeNull();
   await act(async () => {
     await h.controller.selectChapter(toc('n1234aa', [2]).chapters[0]!);
   });
