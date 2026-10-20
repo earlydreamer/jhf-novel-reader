@@ -404,14 +404,16 @@ it('새 작품을 URL로 열고 서재로 돌아오면 즉시 목록에 등록�
     'src',
     expect.stringMatching(/\S/),
   );
-  expect(screen.getByText('위의 링크 버튼에서 작품 또는 회차 URL을 입력해 주세요.')).toBeVisible();
+  expect(screen.getByText('작품 추가 버튼에서 작품 또는 회차 URL을 입력해 주세요.')).toBeVisible();
   expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+  expect(screen.getByRole('button', { name: '작품 추가' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'URL로 열기' })).toBeEnabled();
   await controller.openWork(added.canonicalUrl);
   await screen.findByRole('heading', { name: added.title });
   controller.back();
   await screen.findByText('새 작품');
   expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+  expect(screen.getByRole('button', { name: '작품 추가' })).toBeEnabled();
   expect(library.listWorkIds).toHaveBeenCalled();
   controller.dispose();
 });
@@ -513,7 +515,7 @@ it('URL 입력 실패는 대화상자를 닫은 뒤 snackbar로 알린다', asyn
   controller.dispose();
 });
 
-it('작품의 원문 보기 실패는 기본 높이의 스낵바로 안내한다', async () => {
+it('서재의 스낵바는 작품 추가 버튼을 피하고 설정에서는 기본 높이로 돌아간다', async () => {
   const browse = vi.fn(async () => {
     throw new ReaderError('source_access');
   });
@@ -527,7 +529,7 @@ it('작품의 원문 보기 실패는 기본 높이의 스낵바로 안내한다
   expect(await screen.findByText('원문 탐색을 사용할 수 없어요. URL로 열어 주세요.')).toBeVisible();
   expect(browse).toHaveBeenCalledWith(cached.canonicalUrl);
   const region = document.querySelector<HTMLElement>('.nr-snackbar-region')!;
-  expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
+  expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('64px');
   fireEvent.click(screen.getByRole('button', { name: '설정' }));
   await screen.findByRole('heading', { name: '설정' });
   expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
