@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
 import { createRenewalController } from '../../src/app/renewalController';
@@ -112,6 +112,98 @@ test('automatic titles arrive in small batches, cache across reopening and never
   expect(h.translateTitles).toHaveBeenCalledTimes(2);
   restarted.dispose();
 });
+
+test('모델을 고르지 않아 실제 요청하지 않을 때 제목 번역 중 안내를 발행하지 않는다', async () => {
+  const h = harness(true);
+  const app = h.create();
+  await app.initialize();
+  const requests: number[] = [];
+  const unsubscribe = app.subscribe(() =>
+    requests.push(app.getSnapshot().titlesRequestRevision ?? 0),
+  );
+  await app.openWork(work.canonicalUrl);
+  await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
+  expect(h.translateTitles).not.toHaveBeenCalled();
+  expect(requests.every((revision) => revision === 0)).toBe(true);
+  unsubscribe();
+  app.dispose();
+});
+
+test('시도 기록 저장 대기에는 번역 안내가 없고 실제 번역 호출을 시작하면 안내한다', async () => {
+  const h = harness(true);
+  const record = h.repo.recordAttempt.bind(h.repo);
+  let finish!: () => void;
+  vi.spyOn(h.repo, 'recordAttempt').mockImplementationOnce(async (workId, inputs) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    await record(workId, inputs);
+  });
+  const app = await h.ready();
+  render(<Application controller={app} />);
+  expect(app.getSnapshot().titlesBusy).toBe(true);
+  expect(h.translateTitles).not.toHaveBeenCalled();
+  expect(screen.queryByText('제목을 번역하고 있어요.')).toBeNull();
+  await act(async () => {
+    finish();
+  });
+  await screen.findByText('제목을 번역하고 있어요.');
+  await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
+  expect(h.translateTitles).toHaveBeenCalledTimes(2);
+  expect(app.getSnapshot().titlesRequestRevision).toBe(1);
+  app.dispose();
+});
+
+test.each([false, true])(
+  '이전 제목 요청 중 펼친 다음 페이지를 누락하지 않고 결과 불명도 재전송하지 않는다 (unknown=%s)',
+  async (unknown) => {
+    const h = harness(true);
+    const first = {
+      ...work,
+      chapters: work.chapters.slice(0, 4),
+      complete: false,
+      nextPageUrl: work.canonicalUrl + '?p=2',
+    };
+    const second = {
+      ...work,
+      chapters: work.chapters.slice(4, 8),
+      pageUrl: first.nextPageUrl,
+      nextPageUrl: null,
+    };
+    h.setPage(first);
+    let finish!: () => void;
+    h.translateTitles.mockImplementationOnce(async (_selection, _work, inputs) => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      if (unknown) throw new ReaderError('timeout_unknown', 'unknown');
+      return inputs.map(() => '첫 페이지 번역');
+    });
+    const app = await h.ready();
+    await waitFor(() => expect(h.translateTitles).toHaveBeenCalledTimes(1));
+    h.setPage(second);
+    await app.loadMoreWorkPage();
+    expect(app.getSnapshot().workViewport?.chapters).toHaveLength(8);
+    expect(h.translateTitles).toHaveBeenCalledTimes(1);
+    finish();
+    await waitFor(() => expect(h.translateTitles).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
+    expect(h.translateTitles.mock.calls[1]![2].map((input) => input.key)).toEqual([
+      'n1234ab/5',
+      'n1234ab/6',
+      'n1234ab/7',
+      'n1234ab/8',
+    ]);
+    expect(app.getSnapshot().titles).toHaveLength(unknown ? 4 : 9);
+    expect(h.startTranslation).not.toHaveBeenCalled();
+    app.dispose();
+    h.setPage(first);
+    const restarted = await h.ready();
+    await waitFor(() => expect(restarted.getSnapshot().titlesBusy).toBe(false));
+    expect(h.translateTitles).toHaveBeenCalledTimes(2);
+    restarted.dispose();
+  },
+);
 test('automatic off sends no title request; explicit translation, editing and retranslation share one visible saved title', async () => {
   const h = harness();
   const app = await h.ready();
