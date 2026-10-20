@@ -1436,6 +1436,24 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   async function readSavedChapterIds(chapters: readonly ChapterRef[]): Promise<readonly string[]> {
     const library = dependencies.library;
     if (!library) return [];
+    if (library.listSavedChapterIds) {
+      const byWork = new Map<string, string[]>();
+      for (const chapter of chapters) {
+        const ids = byWork.get(chapter.workId) ?? [];
+        ids.push(chapter.chapterId);
+        byWork.set(chapter.workId, ids);
+      }
+      const saved = new Set(
+        (
+          await Promise.all(
+            [...byWork].map(([workId, ids]) => library.listSavedChapterIds!(workId, ids)),
+          )
+        ).flat(),
+      );
+      return [...new Set(chapters.map((chapter) => chapter.chapterId))].filter((id) =>
+        saved.has(id),
+      );
+    }
     const savedEntries = await Promise.all(
       chapters.map(async (chapter) => {
         const versions = await library.listVersions(chapter.chapterId);
