@@ -9,6 +9,9 @@ action="${5:-install}"
 bundle="${6:-dev.earlydreamer.jhfreader}"
 live_url="${7:-}"
 case "$bundle" in dev.earlydreamer.jhfreader|dev.earlydreamer.jhfreader.envcheck) ;; *) exit 2;; esac
+if [ "$action" = test ] && [ "$bundle" = dev.earlydreamer.jhfreader ]; then
+    printf 'XCTest must use the isolated envcheck application.\n' >&2; exit 2
+fi
 base="$HOME/.local/share/jhf-ios"
 . "$base/env.sh"
 owned_lock=0
@@ -78,8 +81,14 @@ fi
 app="$derived/Build/Products/Debug-iphoneos/App.app"
 /usr/bin/codesign --verify --deep --strict "$app"
 /usr/bin/python3 tools/ios/write-receipt.py "$app" "$job" "$bundle" signed
+if [ "$bundle" = dev.earlydreamer.jhfreader ]; then
+    /usr/bin/python3 tools/ios/preserve-device-data.py capture "$destination" "$bundle" "$job"
+fi
 xcrun devicectl device install app --timeout 120 --device "$device" "$app" > "$job/install.log" 2>&1
 /usr/bin/python3 tools/ios/write-receipt.py "$app" "$job" "$bundle" installed
 xcrun devicectl device process launch --timeout 60 --device "$device" "$bundle" > "$job/launch.log" 2>&1
+if [ "$bundle" = dev.earlydreamer.jhfreader ]; then
+    /usr/bin/python3 tools/ios/preserve-device-data.py verify "$destination" "$bundle" "$job"
+fi
 /usr/bin/python3 tools/ios/write-receipt.py "$app" "$job" "$bundle" launched
 cat "$job/install.log" "$job/launch.log"

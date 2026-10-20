@@ -16,6 +16,8 @@ def main():
         raise SystemExit('Live source checks require test action and a canonical Narou work URL.')
     if bundle not in ('dev.earlydreamer.jhfreader', 'dev.earlydreamer.jhfreader.envcheck'):
         raise SystemExit('Invalid product or research bundle ID.')
+    if action == 'test' and bundle == 'dev.earlydreamer.jhfreader':
+        raise SystemExit('XCTest must use the isolated envcheck application, not the user app.')
     project, job = Path(project).resolve(), Path(job).resolve()
     base = Path.home() / '.local/share/jhf-ios'
     job.mkdir(parents=True, exist_ok=True)

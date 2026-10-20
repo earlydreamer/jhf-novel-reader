@@ -11,6 +11,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $Action = $Action.ToLowerInvariant()
 $BundleId = $BundleId.ToLowerInvariant()
+if ($Action -eq 'test') {
+    if (-not $PSBoundParameters.ContainsKey('BundleId')) { $BundleId = 'dev.earlydreamer.jhfreader.envcheck' }
+    if ($BundleId -eq 'dev.earlydreamer.jhfreader') {
+        throw '실사용 앱에서는 XCTest를 실행하지 않습니다. 테스트용 envcheck BundleId를 사용하세요.'
+    }
+}
 if ($LiveSourceUrl) {
     $LiveSourceUrl = $LiveSourceUrl.ToLowerInvariant()
     if ($Action -ne 'test') { throw 'LiveSourceUrl requires Action test.' }
