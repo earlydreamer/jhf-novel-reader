@@ -21,6 +21,7 @@ import { ListItem } from './components/ListItem';
 import { Switch } from './components/Switch';
 import { useSnackbar } from './components/Snackbar';
 import { LicensesList } from './LicensesList';
+import { ChapterUpdateSettings } from './ChapterUpdateSettings';
 import brandLogo from './assets/brand-logo.png';
 
 export interface SettingsScreenProps {
@@ -32,6 +33,7 @@ export interface SettingsScreenProps {
   onAutoTranslate?(enabled: boolean): void;
   onAutoRetryFailed?(enabled: boolean): void;
   onAutoGlossary?(enabled: boolean): void;
+  onChapterUpdateDays?(days: number): void;
   onLookupWikipedia?(enabled: boolean): void;
   onLookupNamuwiki?(enabled: boolean): void;
   onEnableEmbedding?(): void;
@@ -236,6 +238,7 @@ export function SettingsScreen({
   onAutoTranslate,
   onAutoRetryFailed,
   onAutoGlossary,
+  onChapterUpdateDays,
   onLookupWikipedia,
   onLookupNamuwiki,
   onEnableEmbedding,
@@ -581,6 +584,16 @@ export function SettingsScreen({
         />
       </section>
 
+      {state.chapterUpdatesAvailable && onChapterUpdateDays && (
+        <section aria-labelledby="settings-chapter-updates">
+          <h2 id="settings-chapter-updates">새 회차 검사</h2>
+          <ChapterUpdateSettings
+            key={state.chapterUpdateDays}
+            days={state.chapterUpdateDays}
+            onSave={onChapterUpdateDays}
+          />
+        </section>
+      )}
       <section aria-labelledby="settings-translation">
         <h2 id="settings-translation">번역 방식</h2>
         {state.streamingAvailable && onMode && (

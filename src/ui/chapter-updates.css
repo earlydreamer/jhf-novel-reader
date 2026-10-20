@@ -1,0 +1,51 @@
+.nr-new-chapter-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-inline-start: 8px;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font: var(--type-label-medium);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.nr-chapter-update-control,
+.nr-library__updates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 12px;
+}
+.nr-chapter-update-control p,
+.nr-library__updates p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--on-surface-variant);
+  font: var(--type-body-small);
+}
+.nr-library__update-error {
+  display: block;
+  color: var(--error);
+}
+.nr-chapter-update-success {
+  display: block;
+}
+.nr-chapter-update-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.nr-chapter-update-settings label {
+  display: grid;
+  gap: 6px;
+}
+.nr-chapter-update-settings input {
+  inline-size: 100px;
+}
+.nr-chapter-update-settings p {
+  flex-basis: 100%;
+  margin: 0;
+}

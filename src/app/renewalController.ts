@@ -15,6 +15,8 @@ import {
 } from '../storage/settings';
 import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
 import { ReaderError } from '../contracts';
+import { createChapterUpdates, type ChapterUpdatesSnapshot } from './chapterUpdates';
+import { DEFAULT_CHAPTER_UPDATE_DAYS, validChapterUpdateDays } from './chapterUpdateSchedule';
 import {
   EmbeddingError,
   type EmbeddingStatus,
@@ -160,6 +162,8 @@ export interface RenewalDependencies {
   ) => Promise<void>;
 }
 export interface RenewalSnapshot {
+  readonly chapterUpdates: ChapterUpdatesSnapshot;
+  readonly chapterUpdatesAvailable: boolean;
   readonly titles: readonly SavedTitle[];
   readonly titlesBusy: boolean;
   readonly titlesError: string | null;
@@ -168,6 +172,7 @@ export interface RenewalSnapshot {
   readonly autoTranslate: boolean;
   readonly autoRetryFailed: boolean;
   readonly autoGlossary: boolean;
+  readonly chapterUpdateDays: number;
   /** 리더 용어 강조. 기본은 켜짐이다. */
   readonly termHighlight: boolean;
   readonly lookupWikipedia: boolean;
@@ -345,6 +350,7 @@ export interface RenewalController {
   changeAutoTranslate(enabled: boolean): void;
   changeAutoRetryFailed(enabled: boolean): void;
   changeAutoGlossary(enabled: boolean): void;
+  changeChapterUpdateDays(days: number): void;
   changeTermHighlight(enabled: boolean): void;
   changeLookupWikipedia(enabled: boolean): void;
   changeLookupNamuwiki(enabled: boolean): void;
@@ -372,6 +378,7 @@ export interface RenewalController {
   readerDisplayed(versionId: string): void;
   retryTranslation(): Promise<void>;
   openWork(url: string): Promise<void>;
+  checkChapterUpdates(workId?: string): Promise<void>;
   openLibraryWork(workId: string): Promise<void>;
   loadMoreWorkPage(): Promise<void>;
   selectChapter(chapter: ChapterRef): Promise<void>;
@@ -436,6 +443,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     autoTranslate: true,
     autoRetryFailed: true,
     autoGlossary: true,
+    chapterUpdateDays: DEFAULT_CHAPTER_UPDATE_DAYS,
     termHighlight: true,
     lookupWikipedia: false,
     lookupNamuwiki: false,
@@ -459,6 +467,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     translationTimings: null,
     recent: [],
     libraryWorks: [],
+    chapterUpdates: { works: {}, checkingAll: false, message: null },
+    chapterUpdatesAvailable: Boolean(
+      dependencies.source &&
+      dependencies.library?.saveWorkUpdate &&
+      dependencies.library.readWorkUpdates &&
+      dependencies.library.acknowledgeChapterUpdate,
+    ),
     libraryLoaded: !dependencies.library,
     connection: DEFAULT_CONNECTION,
     models: [],
@@ -529,6 +544,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ...(snapshot.autoTranslate ? {} : { autoTranslate: false }),
       ...(snapshot.autoRetryFailed ? {} : { autoRetryFailed: false }),
       ...(snapshot.autoGlossary ? {} : { autoGlossary: false }),
+      ...(snapshot.chapterUpdateDays === DEFAULT_CHAPTER_UPDATE_DAYS
+        ? {}
+        : { chapterUpdateDays: snapshot.chapterUpdateDays }),
       ...(snapshot.termHighlight ? {} : { termHighlight: false }),
       ...(snapshot.lookupWikipedia ? { lookupWikipedia: true } : {}),
       ...(snapshot.lookupNamuwiki ? { lookupNamuwiki: true } : {}),
@@ -598,6 +616,31 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   function removalGeneration(workId: string): number {
     return removalGenerations.get(workId) ?? 0;
   }
+  const chapterUpdates = snapshot.chapterUpdatesAvailable
+    ? createChapterUpdates({
+        library: dependencies.library!,
+        source: dependencies.source!,
+        changed: (chapterUpdates) => publish({ chapterUpdates }),
+        write: trackWorkWrite,
+        removed: (id) => removingWorkIds.has(id) || removedWorkIds.has(id),
+        updated(workId, pages) {
+          pagesByWorkId.delete(workId);
+          let work: WorkPage | null = null;
+          for (const page of pages) work = rememberWorkPage(page);
+          if (!work) return;
+          // 전체 페이지를 확인한 결과를 한 목차로 표시한다.
+          work = { ...work, complete: true, nextPageUrl: null };
+          worksById.set(workId, work);
+          const visible = snapshot.work?.workId === workId;
+          publish({
+            ...(visible ? { work } : {}),
+            libraryWorks: snapshot.libraryWorks.map((entry) =>
+              entry.work.workId === workId ? { ...entry, work } : entry,
+            ),
+          });
+        },
+      })
+    : null;
   function workIdFromUrl(value: string): string | null {
     try {
       const segment = new URL(value).pathname.split('/').filter(Boolean)[0] ?? '';
@@ -1011,6 +1054,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return { removed: false, cleanupComplete: false, remainingInventory: [], blockedBy: 'batch' };
 
     removingWorkIds.add(workId);
+    chapterUpdates?.cancel(workId);
     removalGenerations.set(workId, removalGeneration(workId) + 1);
     sourceOperation++;
     libraryRefreshOperation++;
@@ -1040,6 +1084,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return result;
     }
     if (result.removed === true) {
+      chapterUpdates?.remove(workId);
       removedWorkIds.add(workId);
       if (batchState?.record?.work.workId === workId)
         retiredBatchRecordIds.add(batchState.record.id);
@@ -1235,6 +1280,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             if (!active && activeTranslation) activeTranslation.cancelled = true;
             if (!active) titleAbort?.abort();
             if (!active) termScanAbort?.abort();
+            chapterUpdates?.setForeground(active);
             dependencies.flow?.setForeground(active);
             dependencies.batch?.setForeground(active);
             if (active) runAutomaticTranslation();
@@ -1279,6 +1325,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             autoTranslate: saved.autoTranslate ?? true,
             autoRetryFailed: saved.autoRetryFailed ?? saved.selection?.autoRetryFailed ?? true,
             autoGlossary: saved.autoGlossary ?? true,
+            chapterUpdateDays: saved.chapterUpdateDays ?? DEFAULT_CHAPTER_UPDATE_DAYS,
             termHighlight: saved.termHighlight ?? true,
             lookupWikipedia: saved.lookupWikipedia ?? false,
             lookupNamuwiki: saved.lookupNamuwiki ?? false,
@@ -1307,6 +1354,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       } finally {
         // Saved reading does not depend on lifecycle, settings or request recovery.
         if (!disposed && dependencies.library) await refreshLibrary();
+        if (!disposed && chapterUpdates) {
+          await chapterUpdates.initialize();
+          chapterUpdates.setIntervalDays(snapshot.chapterUpdateDays);
+          chapterUpdates.setForeground(foreground);
+        }
       }
     })();
     return initialization;
@@ -1555,7 +1607,20 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ).values(),
     ].sort((left, right) => left.ordinal - right.ordinal);
     const latestPage = loadedPages[loadedPages.length - 1] ?? page;
-    const work = { ...latestPage, chapters };
+    let cursor: string | null = page.canonicalUrl;
+    const visited = new Set<string>();
+    let complete = false;
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const loaded: WorkPage | undefined =
+        pages.get(cursor) ??
+        (cursor === page.canonicalUrl ? pages.get(`${cursor}?p=1`) : undefined);
+      if (!loaded) break;
+      if (!loaded.nextPageUrl) complete = true;
+      cursor = loaded.nextPageUrl;
+    }
+    complete = complete && chapters.every((chapter, index) => chapter.ordinal === index + 1);
+    const work = { ...latestPage, chapters, complete, ...(complete ? { nextPageUrl: null } : {}) };
     worksById.set(work.workId, work);
     chapters.forEach((chapter) => chaptersById.set(chapter.chapterId, chapter));
     return work;
@@ -1629,6 +1694,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       )
         return;
       if (dependencies.library) await dependencies.library.saveWorkPage(page);
+      chapterUpdates?.registered();
       const newlySavedChapterIds = await readSavedChapterIds(page.chapters);
       if (
         operation !== sourceOperation ||
@@ -1762,11 +1828,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       });
       if (version) {
         navigate({ kind: 'reader', versionId: version.versionId });
+        void chapterUpdates?.acknowledge(chapter.workId, chapter.chapterId);
         void checkSourceChange(version, chapter);
         if (titleJob) void stopTitles().then(() => requestTitleTranslation());
         else requestTitleTranslation();
       } else {
         navigate({ kind: 'translation', chapterId: chapter.chapterId });
+        void chapterUpdates?.acknowledge(chapter.workId, chapter.chapterId);
         const routedOperation = selectionOperation;
         // Restore connectivity on demand; cached reading and startup stay offline.
         if (
@@ -1822,6 +1890,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       versionsById.set(version.versionId, version);
       positionsByVersion.set(version.versionId, position);
       publish({ work, chapter, version, position, savedChapterIds });
+      void chapterUpdates?.acknowledge(workId, version.source.chapterId);
       navigate({ kind: 'reader', versionId });
       await loadTitles(version.source.workId);
       void checkSourceChange(version, chapter);
@@ -3031,6 +3100,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     await refreshEmbeddingModel();
   }
   function dispose(): void {
+    chapterUpdates?.dispose();
     titleAbort?.abort();
     termScanAbort?.abort();
     disposed = true;
@@ -3063,6 +3133,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     },
     changeAutoGlossary(enabled) {
       publish({ autoGlossary: enabled });
+      persistSettings();
+    },
+    changeChapterUpdateDays(days) {
+      if (!validChapterUpdateDays(days)) return;
+      publish({ chapterUpdateDays: days });
+      chapterUpdates?.setIntervalDays(days);
       persistSettings();
     },
     changeTermHighlight(enabled) {
@@ -3169,6 +3245,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }
     },
     openWork,
+    checkChapterUpdates: (workId) =>
+      (workId ? chapterUpdates?.checkWork(workId) : chapterUpdates?.checkAll()) ??
+      Promise.resolve(),
     openLibraryWork: openCachedWork,
     loadMoreWorkPage,
     selectChapter,
