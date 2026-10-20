@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Application } from '../../src/app/Application';
 import { createRenewalController } from '../../src/app/renewalController';
 import type { ChapterRef, WorkPage } from '../../src/contracts/reading';
+import { createLibraryStore } from '../../src/storage/library';
+import { recentToc } from '../fixtures/chapterUpdates';
 
 function chapter(ordinal: number): ChapterRef {
   return {
@@ -45,7 +47,7 @@ it('loads another TOC page and navigates chapters across its boundary', async ()
     library: {
       saveWorkPage: vi.fn(async () => {}),
       listWorkIds: vi.fn(async () => [firstPage.workId]),
-      readWork: vi.fn(async () => [firstPage, secondPage]),
+      readWork: vi.fn(async () => [firstPage]),
       listRecent: vi.fn(async () => []),
       listVersions: vi.fn(async () => []),
       readVersion: vi.fn(async () => null),
@@ -85,4 +87,80 @@ it('loads another TOC page and navigates chapters across its boundary', async ()
     chapter(2).chapterId,
     chapter(3).chapterId,
   ]);
+});
+
+it('전체 검사 캐시가 있어도 첫 페이지만 열고 다음 페이지는 재요청 없이 펼친다', async () => {
+  const memory = new Map<string, string>();
+  const library = createLibraryStore({
+    read: async (path) => memory.get(path) ?? null,
+    write: async (path, text) => {
+      memory.set(path, text);
+    },
+  });
+  const pages = [
+    recentToc(
+      'n1234aa',
+      Array.from({ length: 200 }, (_, i) => i + 1),
+      1,
+      true,
+    ),
+    recentToc(
+      'n1234aa',
+      Array.from({ length: 200 }, (_, i) => i + 201),
+      2,
+      true,
+    ),
+    recentToc('n1234aa', [401, 402, 403, 404, 405], 3),
+  ];
+  await library.saveWorkPage(pages[0]!);
+  const getWorkPage = vi.fn(async (url: string) => pages.find((page) => page.pageUrl === url)!);
+  const versions = vi.spyOn(library, 'listVersions');
+  const controller = createRenewalController({
+    library,
+    source: { getWorkPage, getChapter: vi.fn() },
+  });
+  await controller.initialize();
+  await controller.checkChapterUpdates();
+  expect((await library.readWork('n1234aa')).flatMap((page) => page.chapters)).toHaveLength(405);
+  render(<Application controller={controller} />);
+  versions.mockClear();
+  getWorkPage.mockClear();
+  await act(async () => {
+    await controller.openLibraryWork('n1234aa');
+  });
+  expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
+  expect(versions).toHaveBeenCalledTimes(200);
+  expect(controller.getSnapshot().workViewport).toMatchObject({
+    complete: false,
+    nextPageUrl: pages[1]!.pageUrl,
+  });
+
+  // 화면을 열어 둔 상태의 전체 검사도 펼친 범위를 늘리지 않는다.
+  await act(async () => {
+    await controller.checkChapterUpdates('n1234aa');
+  });
+  expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
+  expect(controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toHaveLength(404);
+  getWorkPage.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: '다음 목차 페이지 불러오기' }));
+  await waitFor(() =>
+    expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(400),
+  );
+  expect(getWorkPage).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '다음 목차 페이지 불러오기' }));
+  await waitFor(() =>
+    expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(405),
+  );
+  expect(controller.getSnapshot().workViewport).toMatchObject({
+    complete: true,
+    nextPageUrl: null,
+  });
+  expect(getWorkPage).not.toHaveBeenCalled();
+  await act(async () => {
+    controller.back();
+    await controller.openLibraryWork('n1234aa');
+  });
+  expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
+  expect(getWorkPage).not.toHaveBeenCalled();
+  controller.dispose();
 });
