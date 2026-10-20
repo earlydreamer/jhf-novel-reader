@@ -16,7 +16,7 @@ final class DeviceSmokeTests: XCTestCase {
       if let root = windows.compactMap({ $0.rootViewController as? JHFBridgeViewController }).first,
         let web = root.webView,
         let ready = try? await web.evaluateJavaScript(
-          "document.readyState === 'complete' && !!document.querySelector('button')"),
+          "document.readyState === 'complete' && !!document.querySelector('.nr-library__empty, .nr-library__list, .nr-settings')"),
         ready as? Bool == true
       {
         return web
@@ -42,6 +42,7 @@ final class DeviceSmokeTests: XCTestCase {
     XCTAssertEqual(value["library"] as? Bool, true)
     XCTAssertEqual(value["browse"] as? Bool, false)
     XCTAssertEqual(value["url"] as? Bool, true)
+    try await Task.sleep(nanoseconds: 400_000_000)
     let library = try await web.takeSnapshot(configuration: nil)
     let shot = XCTAttachment(image: library)
     shot.name = "JHF-iPhone-library"
@@ -78,6 +79,108 @@ final class DeviceSmokeTests: XCTestCase {
     attachment.name = "JHF-iPhone-settings"
     attachment.lifetime = .keepAlways
     add(attachment)
+  }
+  /// Synthetic source responses at the JS/native boundary; real storage and product UI.
+  /// Native HTTP/SSE are independently exercised by test04 with an in-device server.
+  func test05UpdateSettingsManualChecksAndBadges() async throws {
+    let settings = try await evaluate(#"""
+return await (async()=>{
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+const wait=async fn=>{for(let n=0;n<150;n++){if(await fn())return;await pause(100);}throw Error('UI wait timed out');};
+const key='narou-reader.reading-settings.v2', prefs=Capacitor.Plugins.Preferences;
+const original=(await prefs.get({key})).value;
+window.__jhfOriginalSettings=original;
+const input=()=>document.querySelector('.nr-chapter-update-settings input');
+const set=value=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input(),String(value)); input().dispatchEvent(new Event('input',{bubbles:true}));};
+const originalDays=Number(input().value), trial=originalDays===3?2:3;
+const report={defaultDays:originalDays};
+try{
+set(0);await pause(100);report.rejectsZero=document.querySelector('.nr-chapter-update-settings button').disabled;
+set(366);await pause(100);report.rejectsOverMaximum=document.querySelector('.nr-chapter-update-settings button').disabled;
+set(trial);await pause(100);document.querySelector('.nr-chapter-update-settings button').click();
+await wait(async()=>JSON.parse((await prefs.get({key})).value)?.chapterUpdateDays===trial);
+document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library'));
+document.querySelector('button[aria-label="설정"]').click();await wait(()=>input()?.value===String(trial));
+report.savedAndReopened=true;
+set(originalDays);await pause(100);document.querySelector('.nr-chapter-update-settings button').click();
+await wait(()=>document.querySelector('.nr-chapter-update-settings button').disabled);
+}finally{
+if(original===null)await prefs.remove({key});else await prefs.set({key,value:original});
+report.originalPreferenceRestored=(await prefs.get({key})).value===original;
+}
+return report;
+})();
+"""#)
+    XCTAssertEqual(settings["rejectsZero"] as? Bool, true)
+    XCTAssertEqual(settings["rejectsOverMaximum"] as? Bool, true)
+    XCTAssertEqual(settings["savedAndReopened"] as? Bool, true)
+    XCTAssertEqual(settings["originalPreferenceRestored"] as? Bool, true)
+    let cleanup = #"""
+return await (async()=>{
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const wait=async fn=>{for(let i=0;i<100;i++){if(fn())return;await delay(100);}throw Error('Fixture cleanup timed out');};
+try{
+if(document.querySelector('.nr-work-screen')){document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__updates button'));}
+const menu=document.querySelector('button[aria-label="실기 합성 작품 메뉴"]');
+if(menu){if(!document.querySelector('dialog[open]')){menu.click();await delay(100);[...document.querySelectorAll('[role="menuitem"]')].find(x=>x.textContent.includes('서재에서 제거하기')).click();await wait(()=>!!document.querySelector('dialog[open]'));}
+[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='제거하기').click();await wait(()=>!!document.querySelector('.nr-library__empty'));}
+return {fixtureRemoved:!!document.querySelector('.nr-library__empty')};
+}finally{if(window.__jhfFixture){Capacitor.nativePromise=window.__jhfFixture.original;delete window.__jhfFixture;}}
+})();
+"""#
+    do {
+      let checks = try await evaluate(#"""
+return await (async()=>{
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const wait=async(fn,label)=>{for(let i=0;i<200;i++){if(await fn())return;await delay(100);}throw Error(label);};
+const click=text=>{const target=[...document.querySelectorAll('button,[role="menuitem"]')].find(x=>x.textContent.trim()===text);if(!target)throw Error('Missing '+text);target.click();};
+document.querySelector('button[aria-label="뒤로 가기"]')?.click();
+await wait(()=>!!document.querySelector('.nr-library__empty'),'Expected empty library');
+const original=Capacitor.nativePromise;
+window.__jhfFixture={count:1,requests:0,original};
+Capacitor.nativePromise=function(plugin,method,options){
+ if((plugin==='CapacitorHttp'||plugin==='ReaderHttp')&&method==='request'&&options.url.startsWith('https://ncode.syosetu.com/n1234ab/')){
+  const f=window.__jhfFixture;f.requests++;
+  const data='<h1 class="p-novel__title">실기 합성 작품</h1>'+Array.from({length:f.count},(_,i)=>`<div class="p-eplist__sublist"><a href="/n1234ab/${i+1}/">${i+1}화</a></div>`).join('');
+  return Promise.resolve({status:200,headers:{'Content-Type':'text/html; charset=utf-8'},data,url:options.url});
+ }
+ return original.call(this,plugin,method,options);
+};
+document.querySelector('button[aria-label="URL로 열기"]').click();await wait(()=>!!document.querySelector('input[name="url"]'),'URL dialog');
+const input=document.querySelector('input[name="url"]');input.value='https://ncode.syosetu.com/n1234ab/';
+document.querySelector('.nr-library__url-form').requestSubmit();
+await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===1,'Initial work');
+window.__jhfFixture.count=2;
+click('새 회차 확인');
+await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===2&&document.querySelector('.nr-new-chapter-badge')?.textContent==='새 회차 1','Individual new badge');
+const report={individualCheck:true,workBadge:true,lastDate:document.querySelector('.nr-chapter-update-control [role="status"]').textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0]};
+document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__updates button'),'Home');
+report.libraryBadge=document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 1';
+window.__jhfFixture.count=3;click('서재 전체 새 회차 확인');
+await wait(()=>document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 2','All check badge');
+report.allCheck=true;report.combinedBadge=true;report.fixtureRequests=window.__jhfFixture.requests;
+return report;
+})();
+"""#)
+      XCTAssertEqual(checks["individualCheck"] as? Bool, true)
+      XCTAssertEqual(checks["workBadge"] as? Bool, true)
+      XCTAssertEqual(checks["libraryBadge"] as? Bool, true)
+      XCTAssertEqual(checks["allCheck"] as? Bool, true)
+      XCTAssertEqual(checks["combinedBadge"] as? Bool, true)
+      XCTAssertEqual(checks["fixtureRequests"] as? Int, 3)
+      let web = try await webView()
+      try await Task.sleep(nanoseconds: 400_000_000)
+      let image = try await web.takeSnapshot(configuration: nil)
+      let attachment = XCTAttachment(image: image)
+      attachment.name = "JHF-iPhone-new-chapter-badge"
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    } catch {
+      _ = try? await evaluate(cleanup)
+      throw error
+    }
+    let cleaned = try await evaluate(cleanup)
+    XCTAssertEqual(cleaned["fixtureRemoved"] as? Bool, true)
   }
   func test02PrivateFilesPreferencesAndKeychainRoundTrip() async throws {
     let value = try await evaluate(
