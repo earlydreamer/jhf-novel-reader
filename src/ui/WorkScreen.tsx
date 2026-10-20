@@ -33,6 +33,9 @@ function chapterRemovalMessage(ordinal: number, result: ChapterRemovalResult): s
 
 export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   work: WorkPage;
+  totalChapterCount?: number | null;
+  previousPageUrl?: string | null;
+  onLoadPrevious?(): void;
   selectedChapterId?: string;
   recentChapterId?: string;
   recentStatus?: WorkRecentSnapshot['status'] | 'idle';
@@ -60,6 +63,9 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
 }
 export function WorkScreen({
   work,
+  totalChapterCount,
+  previousPageUrl,
+  onLoadPrevious,
   selectedChapterId,
   recentChapterId,
   savedChapterIds,
@@ -108,6 +114,8 @@ export function WorkScreen({
   const [titleError, setTitleError] = useState<string | null>(null);
   const showSnackbar = useSnackbar();
   const recentRow = useRef<HTMLDivElement>(null);
+  const listHeading = useRef<HTMLHeadingElement>(null);
+  const previousPage = useRef(work.pageUrl);
   const didScrollRecent = useRef(false);
   const recentIsLoaded =
     !!recentChapterId && work.chapters.some((item) => item.chapterId === recentChapterId);
@@ -116,6 +124,11 @@ export function WorkScreen({
     didScrollRecent.current = true;
     recentRow.current?.scrollIntoView?.({ block: 'nearest' });
   }, [recentChapterId, recentIsLoaded]);
+  useEffect(() => {
+    if (previousPage.current === work.pageUrl) return;
+    previousPage.current = work.pageUrl;
+    listHeading.current?.scrollIntoView?.({ block: 'start' });
+  }, [work.pageUrl]);
   useEffect(() => {
     if (!dialogRequest) return;
     return () => onDialogRequestHandled?.(dialogRequest.id);
@@ -157,7 +170,12 @@ export function WorkScreen({
       : undefined;
   const savedCount = new Set(savedChapterIds).size;
   const uniqueChapterCount = new Set(work.chapters.map((chapter) => chapter.chapterId)).size;
-  const maximumOrdinal = Math.max(0, ...work.chapters.map((chapter) => chapter.ordinal));
+  const total =
+    totalChapterCount !== undefined
+      ? totalChapterCount
+      : work.complete && !previousPageUrl
+        ? uniqueChapterCount
+        : null;
   const recordWorkId = batch?.record?.work.workId;
   const batchOwner = batch?.preparing
     ? batch.preparingWorkId
@@ -248,9 +266,7 @@ export function WorkScreen({
           {work.title}
         </p>
         <p className="nr-work-heading__meta">
-          {work.complete
-            ? `전체 ${uniqueChapterCount}화 · ${savedCount}화 저장됨`
-            : `${maximumOrdinal}화까지 확인했어요 · ${savedCount}화 저장됨`}
+          {total !== null ? `전체 ${total}화 · ${savedCount}화 저장됨` : `${savedCount}화 저장됨`}
         </p>
         <Button
           variant="filled"
@@ -297,7 +313,24 @@ export function WorkScreen({
           </Button>
         </div>
       )}
-      <h2>회차 목록</h2>
+      <h2 ref={listHeading}>회차 목록</h2>
+      {(previousPageUrl || work.nextPageUrl) && (
+        <nav className="nr-work-pages" aria-label="목차 페이지">
+          {previousPageUrl && (
+            <Button variant="text" disabled={busy} onClick={onLoadPrevious}>
+              이전 목차 페이지 불러오기
+            </Button>
+          )}
+          <span>
+            {work.chapters[0]?.ordinal}–{work.chapters.at(-1)?.ordinal}화
+          </span>
+          {work.nextPageUrl && (
+            <Button variant="text" disabled={busy} onClick={onLoadMore}>
+              다음 목차 페이지 불러오기
+            </Button>
+          )}
+        </nav>
+      )}
       <ol className="nr-work-chapters" start={work.chapters[0]?.ordinal || 1}>
         {work.chapters.map((chapter) => {
           const saved = savedChapterIds.includes(chapter.chapterId);
@@ -364,11 +397,6 @@ export function WorkScreen({
           );
         })}
       </ol>
-      {work.nextPageUrl && (
-        <Button variant="text" disabled={busy} onClick={onLoadMore}>
-          다음 목차 페이지 불러오기
-        </Button>
-      )}
       <BottomSheet
         open={!!sheetChapter}
         title={sheetChapter ? `${sheetChapter.ordinal}화 메뉴` : '회차 메뉴'}

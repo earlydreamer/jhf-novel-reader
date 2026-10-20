@@ -916,15 +916,28 @@ export function createLibraryStore(
       workId: value.source.workId,
       updatedAt: value.createdAt,
     });
-    current.recent = [
-      ...current.recent.filter((v) => v.workId !== value.source.workId),
-      {
-        versionId: value.versionId,
-        chapterId: value.source.chapterId,
-        workId: value.source.workId,
-        updatedAt: value.createdAt,
-      },
-    ];
+    const prior = current.recent.find((entry) => entry.workId === value.source.workId);
+    const priorPosition = prior
+      ? (await journal.load(`reading/${prior.versionId}`, readingPosition))?.value
+      : null;
+    // 새 번역 저장이 실제로 읽던 회차의 위치를 밀어내지 않는다.
+    if (!priorPosition) {
+      current.recent = [
+        ...current.recent.filter((v) => v.workId !== value.source.workId),
+        {
+          versionId: value.versionId,
+          chapterId: value.source.chapterId,
+          workId: value.source.workId,
+          updatedAt: value.createdAt,
+        },
+      ];
+    } else {
+      check(
+        priorPosition.workId === prior!.workId &&
+          priorPosition.chapterId === prior!.chapterId &&
+          priorPosition.versionId === prior!.versionId,
+      );
+    }
     await journal.save('library/index', current, index);
   };
   const savePosition = async (value: ReadingPosition) => {

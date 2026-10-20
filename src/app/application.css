@@ -75,6 +75,12 @@
 .nr-work-heading {
   padding: 12px 0 20px;
 }
+.nr-work-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 .nr-work-heading .nr-title h1 {
   margin-block: 4px 8px;
 }
