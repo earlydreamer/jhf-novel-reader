@@ -36,12 +36,40 @@ final class DeviceSmokeTests: XCTestCase {
   func test01ProductLibraryAndSettingsRender() async throws {
     let web = try await webView()
     let value = try await evaluate(
-      "return {platform: Capacitor.getPlatform(), library: !!document.querySelector('[aria-label=\"서재\"]'), browse: !!document.querySelector('.nr-fab'), url: !!document.querySelector('button[aria-label=\"URL로 열기\"]')};"
+      "return {platform: Capacitor.getPlatform(), library: !!document.querySelector('[aria-label=\"서재\"]'), add: document.querySelector('.nr-fab')?.textContent === '작품 추가', url: !!document.querySelector('button[aria-label=\"URL로 열기\"]')};"
     )
     XCTAssertEqual(value["platform"] as? String, "ios")
     XCTAssertEqual(value["library"] as? Bool, true)
-    XCTAssertEqual(value["browse"] as? Bool, false)
+    XCTAssertEqual(value["add"] as? Bool, true)
     XCTAssertEqual(value["url"] as? Bool, true)
+    let dialog = try await evaluate(
+      """
+      const wait = async predicate => {
+          for (let n=0; n<100; n++) {
+              if (predicate()) return;
+              await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          throw new Error('URL dialog did not reach the expected state');
+      };
+      const open = () => document.querySelector('dialog[open] .nr-library__url-form');
+      const close = () => [...document.querySelectorAll('dialog[open] button')]
+          .find(button => button.textContent.trim() === '닫기').click();
+      document.querySelector('.nr-fab').click();
+      await wait(open);
+      const viaAdd = !!open().querySelector('input[name="url"]');
+      close();
+      await wait(() => !open());
+      document.querySelector('button[aria-label="URL로 열기"]').click();
+      await wait(open);
+      const viaLink = !!open().querySelector('input[name="url"]');
+      const count = document.querySelectorAll('dialog[open] .nr-library__url-form').length;
+      close();
+      await wait(() => !open());
+      return {viaAdd, viaLink, count};
+      """)
+    XCTAssertEqual(dialog["viaAdd"] as? Bool, true)
+    XCTAssertEqual(dialog["viaLink"] as? Bool, true)
+    XCTAssertEqual(dialog["count"] as? Int, 1)
     try await Task.sleep(nanoseconds: 400_000_000)
     let library = try await web.takeSnapshot(configuration: nil)
     let shot = XCTAttachment(image: library)
@@ -120,7 +148,7 @@ return await (async()=>{
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const wait=async fn=>{for(let i=0;i<100;i++){if(fn())return;await delay(100);}throw Error('Fixture cleanup timed out');};
 try{
-if(document.querySelector('.nr-work-screen')){document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__updates button'));}
+if(document.querySelector('.nr-work-screen,.nr-settings')){document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__empty,.nr-library__updates button'));}
 const menu=document.querySelector('button[aria-label="실기 합성 작품 메뉴"]');
 if(menu){if(!document.querySelector('dialog[open]')){menu.click();await delay(100);[...document.querySelectorAll('[role="menuitem"]')].find(x=>x.textContent.includes('서재에서 제거하기')).click();await wait(()=>!!document.querySelector('dialog[open]'));}
 [...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='제거하기').click();await wait(()=>!!document.querySelector('.nr-library__empty'));}
@@ -128,6 +156,8 @@ return {fixtureRemoved:!!document.querySelector('.nr-library__empty')};
 }finally{if(window.__jhfFixture){Capacitor.nativePromise=window.__jhfFixture.original;delete window.__jhfFixture;}}
 })();
 """#
+    let before = try await evaluate(cleanup)
+    XCTAssertEqual(before["fixtureRemoved"] as? Bool, true)
     do {
       let checks = try await evaluate(#"""
 return await (async()=>{
@@ -150,6 +180,8 @@ document.querySelector('button[aria-label="URL로 열기"]').click();await wait(
 const input=document.querySelector('input[name="url"]');input.value='https://ncode.syosetu.com/n1234ab/';
 document.querySelector('.nr-library__url-form').requestSubmit();
 await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===1,'Initial work');
+await wait(()=>[...document.querySelectorAll('.nr-chapter-update-control button')].some(button=>button.textContent.trim()==='새 회차 확인' && !button.disabled),'Individual check ready');
+const initialRequests=window.__jhfFixture.requests;
 window.__jhfFixture.count=2;
 click('새 회차 확인');
 await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===2&&document.querySelector('.nr-new-chapter-badge')?.textContent==='새 회차 1','Individual new badge');
@@ -158,7 +190,7 @@ document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(
 report.libraryBadge=document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 1';
 window.__jhfFixture.count=3;click('서재 전체 새 회차 확인');
 await wait(()=>document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 2','All check badge');
-report.allCheck=true;report.combinedBadge=true;report.fixtureRequests=window.__jhfFixture.requests;
+report.allCheck=true;report.combinedBadge=true;report.manualRequests=window.__jhfFixture.requests-initialRequests;
 return report;
 })();
 """#)
@@ -167,7 +199,7 @@ return report;
       XCTAssertEqual(checks["libraryBadge"] as? Bool, true)
       XCTAssertEqual(checks["allCheck"] as? Bool, true)
       XCTAssertEqual(checks["combinedBadge"] as? Bool, true)
-      XCTAssertEqual(checks["fixtureRequests"] as? Int, 3)
+      XCTAssertEqual(checks["manualRequests"] as? Int, 2)
       let web = try await webView()
       try await Task.sleep(nanoseconds: 400_000_000)
       let image = try await web.takeSnapshot(configuration: nil)
