@@ -148,7 +148,7 @@ return await (async()=>{
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const wait=async fn=>{for(let i=0;i<100;i++){if(fn())return;await delay(100);}throw Error('Fixture cleanup timed out');};
 try{
-if(document.querySelector('.nr-work-screen')){document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__updates button'));}
+if(document.querySelector('.nr-work-screen,.nr-settings')){document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-library__empty,.nr-library__updates button'));}
 const menu=document.querySelector('button[aria-label="실기 합성 작품 메뉴"]');
 if(menu){if(!document.querySelector('dialog[open]')){menu.click();await delay(100);[...document.querySelectorAll('[role="menuitem"]')].find(x=>x.textContent.includes('서재에서 제거하기')).click();await wait(()=>!!document.querySelector('dialog[open]'));}
 [...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='제거하기').click();await wait(()=>!!document.querySelector('.nr-library__empty'));}
@@ -156,6 +156,8 @@ return {fixtureRemoved:!!document.querySelector('.nr-library__empty')};
 }finally{if(window.__jhfFixture){Capacitor.nativePromise=window.__jhfFixture.original;delete window.__jhfFixture;}}
 })();
 """#
+    let before = try await evaluate(cleanup)
+    XCTAssertEqual(before["fixtureRemoved"] as? Bool, true)
     do {
       let checks = try await evaluate(#"""
 return await (async()=>{
@@ -178,6 +180,8 @@ document.querySelector('button[aria-label="URL로 열기"]').click();await wait(
 const input=document.querySelector('input[name="url"]');input.value='https://ncode.syosetu.com/n1234ab/';
 document.querySelector('.nr-library__url-form').requestSubmit();
 await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===1,'Initial work');
+await wait(()=>[...document.querySelectorAll('.nr-chapter-update-control button')].some(button=>button.textContent.trim()==='새 회차 확인' && !button.disabled),'Individual check ready');
+const initialRequests=window.__jhfFixture.requests;
 window.__jhfFixture.count=2;
 click('새 회차 확인');
 await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===2&&document.querySelector('.nr-new-chapter-badge')?.textContent==='새 회차 1','Individual new badge');
@@ -186,7 +190,7 @@ document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(
 report.libraryBadge=document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 1';
 window.__jhfFixture.count=3;click('서재 전체 새 회차 확인');
 await wait(()=>document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 2','All check badge');
-report.allCheck=true;report.combinedBadge=true;report.fixtureRequests=window.__jhfFixture.requests;
+report.allCheck=true;report.combinedBadge=true;report.manualRequests=window.__jhfFixture.requests-initialRequests;
 return report;
 })();
 """#)
@@ -195,7 +199,7 @@ return report;
       XCTAssertEqual(checks["libraryBadge"] as? Bool, true)
       XCTAssertEqual(checks["allCheck"] as? Bool, true)
       XCTAssertEqual(checks["combinedBadge"] as? Bool, true)
-      XCTAssertEqual(checks["fixtureRequests"] as? Int, 3)
+      XCTAssertEqual(checks["manualRequests"] as? Int, 2)
       let web = try await webView()
       try await Task.sleep(nanoseconds: 400_000_000)
       let image = try await web.takeSnapshot(configuration: nil)
