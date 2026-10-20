@@ -680,18 +680,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       );
       titlesByWork.set(workId, entries);
       if (snapshot.work?.workId === workId) {
-        const current = workTitleInputs(snapshot.work);
-        const unresolved = attempts.some(
-          (input) =>
-            current.some((title) => title.key === input.key && title.source === input.source) &&
-            !entries.some((entry) => entry.key === input.key && entry.source === input.source),
-        );
-        publish({
-          titles: entries,
-          titlesError: unresolved
-            ? '끝나지 않은 제목 번역이 있어요. 그 제목은 자동으로 다시 요청하지 않아요. 제목 옆에서 다시 번역할 수 있어요.'
-            : null,
-        });
+        // 이전 요청 기록은 중복 전송 방지에만 사용한다. 다른 회차의 기록으로 진입을 오류 처리하지 않는다.
+        publish({ titles: entries, titlesError: null });
       }
     } catch {
       if (removingWorkIds.has(workId) || generation !== removalGeneration(workId)) return;
@@ -772,6 +762,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     publish({ titlesBusy: true, titlesError: null });
     titleWorkId = workId;
     const job = trackWorkWrite(workId, async () => {
+      let pendingBatch: readonly TitleInput[] | null = null;
+      const forgetUnsent = async () => {
+        if (!pendingBatch || !dependencies.titles?.forgetAttempts) return;
+        await dependencies.titles.forgetAttempts(workId, pendingBatch);
+        pendingBatch.forEach((input) =>
+          titleAttempts.delete(JSON.stringify([workId, input.key, input.source])),
+        );
+        pendingBatch = null;
+      };
       try {
         if (snapshot.catalogStatus === 'idle' && snapshot.selectedModelId) await checkConnection();
         if (control.signal.aborted || disposed) return;
@@ -790,7 +789,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           if (control.signal.aborted || disposed || !foreground) return;
           const batch = inputs.slice(cursor, cursor + 8);
           await dependencies.titles!.recordAttempt(workId, batch);
-          if (control.signal.aborted || disposed) return;
+          pendingBatch = batch;
+          if (control.signal.aborted || disposed) {
+            await forgetUnsent();
+            return;
+          }
           batch.forEach((input) =>
             titleAttempts.add(JSON.stringify([workId, input.key, input.source])),
           );
@@ -803,13 +806,14 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             batch,
             control.signal,
           );
+          pendingBatch = null;
           if (
             control.signal.aborted ||
             disposed ||
             selected.connection.revision !== snapshot.connection.revision
           )
             return;
-          if (results.length !== batch.length) throw new ReaderError('invalid_output');
+          if (results.length !== batch.length) throw new ReaderError('invalid_output', 'received');
           const entries: SavedTitle[] = batch.flatMap((input, index) =>
             results[index]
               ? [
@@ -828,13 +832,20 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             titlesByWork.set(workId, saved);
             if (snapshot.work?.workId === workId) publish({ titles: saved });
           }
-          if (results.some((result) => !result))
+          if (results.some((result) => !result) && snapshot.work?.workId === workId)
             publish({
               titlesError:
                 '일부 제목을 번역하지 못해 기존 제목을 그대로 두었어요. 제목 옆에서 다시 번역할 수 있어요.',
             });
         }
       } catch (error) {
+        if (error instanceof ReaderError && error.outcome === 'not_sent') {
+          try {
+            await forgetUnsent();
+          } catch {
+            /* 원래 오류를 유지하고 저장 실패 기록은 재전송하지 않는다. */
+          }
+        }
         if (!control.signal.aborted && !disposed && snapshot.work?.workId === workId)
           publish({
             titlesError:
@@ -1593,6 +1604,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       removedWorkIds.has(workId)
     )
       return;
+    if (titleWorkId && titleWorkId !== workId) titleAbort?.abort();
     const operation = ++sourceOperation;
     sourceAbort?.abort();
     sourceAbort = new AbortController();
@@ -1725,6 +1737,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     const expectedWorkId = workIdFromUrl(url);
     const expectedGeneration = expectedWorkId ? removalGeneration(expectedWorkId) : null;
     if (expectedWorkId && removingWorkIds.has(expectedWorkId)) return;
+    if (titleWorkId && titleWorkId !== expectedWorkId) titleAbort?.abort();
     const operation = ++sourceOperation;
     sourceAbort?.abort();
     sourceAbort = new AbortController();
