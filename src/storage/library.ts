@@ -958,6 +958,19 @@ export function createLibraryStore(
   };
   return {
     readWorkUpdates: () => serial(files, async () => (await readIndex()).workUpdates ?? []),
+    listReadChapterIds: (workId) =>
+      serial(files, async () => {
+        identifier(workId);
+        const current = await readIndex();
+        const ids = new Set<string>();
+        for (const entry of current.versions.filter((version) => version.workId === workId)) {
+          const position = (await journal.load(`reading/${entry.versionId}`, readingPosition))
+            ?.value;
+          if (position?.workId === workId && position.chapterId === entry.chapterId)
+            ids.add(position.chapterId);
+        }
+        return [...ids];
+      }),
     saveWorkUpdate: (input, inputPages) => {
       const value = snapshot(input),
         pages = inputPages && snapshot(inputPages);
@@ -978,14 +991,6 @@ export function createLibraryStore(
         await journal.save('library/index', current, index);
       });
     },
-    acknowledgeChapterUpdate: (workId, chapterId) =>
-      serial(files, async () => {
-        const current = await indexForWrite();
-        const update = current.workUpdates?.find((entry) => entry.workId === workId);
-        if (!update?.newChapterIds.includes(chapterId)) return;
-        update.newChapterIds = update.newChapterIds.filter((id) => id !== chapterId);
-        await journal.save('library/index', current, index);
-      }),
     readLegacyRemovedChapterIds: () => serial(files, readLegacyRemovedChapterIds),
     readChapterRemovalInventory: () => serial(files, readChapterRemovalInventory),
     retryChapterRemoval: (chapterId) =>

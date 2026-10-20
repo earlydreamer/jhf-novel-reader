@@ -6,12 +6,14 @@ import {
   nextChapterCheckAt,
   validChapterUpdateDays,
 } from './chapterUpdateSchedule';
+import { nextChapterBadgeExpiry, recentChapterIds } from './chapterPublication';
 
 export type ChapterUpdateStatus = WorkUpdate & { checking: boolean; error: string | null };
 export type ChapterUpdatesSnapshot = {
   works: Readonly<Record<string, ChapterUpdateStatus>>;
   checkingAll: boolean;
   message: string | null;
+  notice?: { id: number; text: string };
 };
 
 /** 화면 탐색과 독립된 단일 대기열. 서버에는 목차만 요청한다. */
@@ -30,18 +32,48 @@ export function createChapterUpdates(deps: {
     disposed = false,
     ready = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let badgeTimer: ReturnType<typeof setTimeout> | undefined;
+  let noticeSequence = 0;
   let queue: Promise<void> = Promise.resolve();
   let allJob: Promise<void> | null = null;
   let scheduleGeneration = 0;
   let intervalDays = DEFAULT_CHAPTER_UPDATE_DAYS;
   let libraryFailureDate: string | null = null;
   const jobs = new Map<string, { control: AbortController; promise: Promise<void> }>();
-  const seen = new Map<string, Set<string>>();
+  const publicationPages = new Map<string, readonly WorkPage[]>();
+  const readChapters = new Map<string, Set<string>>();
+  const badgeIds = (workId: string, pages = publicationPages.get(workId) ?? []) =>
+    recentChapterIds(pages, now()).filter((id) => !readChapters.get(workId)?.has(id));
+  async function loadReadChapters(workId: string) {
+    const saved = (await deps.library.listReadChapterIds?.(workId)) ?? [];
+    if (disposed || deps.removed(workId)) return;
+    readChapters.set(workId, new Set([...(readChapters.get(workId) ?? []), ...saved]));
+  }
   const notify = (patch: Partial<ChapterUpdatesSnapshot>) => {
     if (disposed) return;
     state = { ...state, ...patch };
     deps.changed(state);
   };
+  function resultNotice(text: string) {
+    notify({ notice: { id: ++noticeSequence, text } });
+  }
+  function scheduleBadges() {
+    clearTimeout(badgeTimer);
+    if (!active || disposed) return;
+    const expiry = Math.min(
+      Infinity,
+      ...[...publicationPages.values()].map((pages) => nextChapterBadgeExpiry(pages, now())),
+    );
+    if (Number.isFinite(expiry))
+      badgeTimer = setTimeout(refreshBadges, Math.max(1, expiry - now()));
+  }
+  function refreshBadges() {
+    for (const value of Object.values(state.works)) {
+      const ids = badgeIds(value.workId);
+      if (ids.join('\n') !== value.newChapterIds.join('\n')) publishWork(value);
+    }
+    scheduleBadges();
+  }
   function publishWork(value: ChapterUpdateStatus) {
     if (deps.removed(value.workId)) return;
     notify({
@@ -49,7 +81,7 @@ export function createChapterUpdates(deps: {
         ...state.works,
         [value.workId]: {
           ...value,
-          newChapterIds: value.newChapterIds.filter((id) => !seen.get(value.workId)?.has(id)),
+          newChapterIds: badgeIds(value.workId),
         },
       },
     });
@@ -116,8 +148,11 @@ export function createChapterUpdates(deps: {
         const cached = await deps.library.readWork(workId);
         if (!current()) return;
         if (!cached.length) throw new Error('missing cached toc');
-        // 첫 페이지만 저장된 작품은 첫 전체 확인에서 기존 회차를 신규로 세지 않는다.
-        if (baseline.knownChapterIds === null && cached.some((page) => page.complete)) {
+        await loadReadChapters(workId);
+        if (!current()) return;
+        publicationPages.set(workId, cached);
+        // 신규 여부는 최초 등록 시각, 표시 여부는 별도의 읽기 기록으로 계산한다.
+        if (baseline.knownChapterIds === null) {
           baseline.knownChapterIds = [
             ...new Set(cached.flatMap((page) => page.chapters.map((chapter) => chapter.chapterId))),
           ];
@@ -168,31 +203,28 @@ export function createChapterUpdates(deps: {
               throw new Error('invalid next page');
           }
         }
-        const known = baseline.knownChapterIds && new Set(baseline.knownChapterIds);
-        const fresh = known ? [...ids].filter((id) => !known.has(id)) : [];
         const result: WorkUpdate = {
           workId,
           lastCheckDate: chapterCheckDate(now()),
           attemptedAt: baseline.attemptedAt,
           checkedAt: now(),
           knownChapterIds: [...ids],
-          newChapterIds: [...new Set([...baseline.newChapterIds, ...fresh])].filter(
-            (id) => ids.has(id) && !seen.get(workId)?.has(id),
-          ),
+          newChapterIds: badgeIds(workId, pages),
           failed: false,
         };
         if (!current()) return;
         await deps.write(workId, () => deps.library.saveWorkUpdate!(result, pages));
         // 저장을 시작한 뒤 앱이 숨겨져도 이미 커밋한 결과와 메모리 상태는 맞춘다.
         if (disposed || deps.removed(workId)) return;
+        publicationPages.set(workId, pages);
         deps.updated(workId, pages);
         publishWork({ ...result, checking: false, error: null });
+        if (!allJob) resultNotice('회차 목록을 갱신했어요.');
       } catch {
         if (!disposed && !deps.removed(workId)) {
           baseline = {
             ...baseline,
             lastCheckDate: chapterCheckDate(now()),
-            newChapterIds: baseline.newChapterIds.filter((id) => !seen.get(workId)?.has(id)),
           };
           // 자정을 넘긴 실패도 처리 날짜를 보존한다. 실패 재시도는 다음 N일 뒤다.
           try {
@@ -207,6 +239,7 @@ export function createChapterUpdates(deps: {
               ? '확인을 중단했어요. 다시 확인할 수 있어요.'
               : '확인하지 못했어요. 연결을 확인하고 다시 시도해 주세요.',
           });
+          if (!allJob) resultNotice(state.works[workId]!.error!);
         }
       } finally {
         clearTimeout(timeout);
@@ -217,6 +250,7 @@ export function createChapterUpdates(deps: {
     queue = job.catch(() => {});
     const promise = job.finally(() => {
       jobs.delete(workId);
+      scheduleBadges();
       void schedule();
     });
     jobs.set(workId, { control, promise });
@@ -245,15 +279,18 @@ export function createChapterUpdates(deps: {
           checked++;
           if (state.works[id]?.error) failed++;
         }
-        if (active && checked)
-          notify({
-            message: failed
-              ? `${checked}개 작품 중 ${failed}개를 확인하지 못했어요. 나머지는 갱신했어요.`
-              : `${checked}개 작품의 새 회차 확인을 마쳤어요.`,
-          });
+        if (active && checked) {
+          const message = failed
+            ? `${checked}개 작품 중 ${failed}개를 확인하지 못했어요. 나머지는 갱신했어요.`
+            : '회차 목록을 갱신했어요.';
+          notify({ message });
+          resultNotice(message);
+        }
       } catch {
         libraryFailureDate = chapterCheckDate(now());
-        notify({ message: '서재를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.' });
+        const message = '서재를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+        notify({ message });
+        resultNotice(message);
       } finally {
         notify({ checkingAll: false });
       }
@@ -269,6 +306,15 @@ export function createChapterUpdates(deps: {
       if (ready || disposed) return;
       try {
         const records = await deps.library.readWorkUpdates!();
+        for (const value of records) {
+          try {
+            const pages = await deps.library.readWork(value.workId);
+            await loadReadChapters(value.workId);
+            publicationPages.set(value.workId, pages);
+          } catch {
+            // 캐시의 등록 시각을 읽지 못하면 이전의 누적 배지를 신규로 취급하지 않는다.
+          }
+        }
         if (disposed) return;
         notify({
           works: Object.fromEntries(
@@ -276,6 +322,7 @@ export function createChapterUpdates(deps: {
               value.workId,
               {
                 ...value,
+                newChapterIds: badgeIds(value.workId),
                 checking: false,
                 error: value.failed ? '지난 확인을 마치지 못했어요. 다시 확인할 수 있어요.' : null,
               },
@@ -290,8 +337,12 @@ export function createChapterUpdates(deps: {
     setForeground(value: boolean) {
       active = value;
       clearTimeout(timer);
+      clearTimeout(badgeTimer);
       if (!active) for (const { control } of jobs.values()) control.abort();
-      else void schedule();
+      else {
+        refreshBadges();
+        void schedule();
+      }
     },
     setIntervalDays(days: number) {
       if (!validChapterUpdateDays(days)) return;
@@ -313,27 +364,23 @@ export function createChapterUpdates(deps: {
       jobs.get(workId)?.control.abort();
       const works = { ...state.works };
       delete works[workId];
-      seen.delete(workId);
+      publicationPages.delete(workId);
+      readChapters.delete(workId);
       notify({ works });
+      scheduleBadges();
     },
-    async acknowledge(workId: string, chapterId: string) {
-      const opened = seen.get(workId) ?? new Set<string>();
-      opened.add(chapterId);
-      seen.set(workId, opened);
-      const previous = state.works[workId];
-      if (!previous?.newChapterIds.includes(chapterId)) return;
-      try {
-        await deps.write(workId, () => deps.library.acknowledgeChapterUpdate!(workId, chapterId));
-        const current = state.works[workId];
-        if (current) publishWork(current);
-      } catch {
-        opened.delete(chapterId);
-        notify({ message: '신규 회차 확인 상태를 저장하지 못했어요. 다시 열어 주세요.' });
-      }
+    readRecorded(workId: string, chapterId: string) {
+      if (disposed || deps.removed(workId)) return;
+      const ids = readChapters.get(workId) ?? new Set<string>();
+      ids.add(chapterId);
+      readChapters.set(workId, ids);
+      const value = state.works[workId];
+      if (value) publishWork(value);
     },
     dispose() {
       disposed = true;
       clearTimeout(timer);
+      clearTimeout(badgeTimer);
       for (const { control } of jobs.values()) control.abort();
     },
   };
