@@ -6,9 +6,9 @@ import { Card } from './components/Card';
 import { Dialog } from './components/Modal';
 import { Menu } from './components/Menu';
 import { ListItem } from './components/ListItem';
-import { ExtendedFab } from './components/ExtendedFab';
 import { IconButton } from './components/IconButton';
 import brandLogo from './assets/brand-logo.png';
+import { NewChapterBadge } from './ChapterUpdateControl';
 import './home.css';
 
 export interface HomeScreenProps {
@@ -17,8 +17,9 @@ export interface HomeScreenProps {
   onCloseUrlDialog(): void;
   onOpen(url: string): void;
   onOpenLibraryWork(workId: string): void;
+  onCheckUpdates?(workId?: string): void;
   onRequestRemove(workId: string, title: string): void;
-  onBrowse(startUrl?: string): void;
+  onBrowse(startUrl: string): void;
   onContinue(versionId: string): void;
   onOpenPendingSave(): void;
   onOpenBatch(): void;
@@ -143,18 +144,34 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
               <img className="nr-library__brand" src={brandLogo} alt="" width={160} height={160} />
             </div>
             <h1>읽고 싶은 작품을 찾아보세요</h1>
-            <p>나로우에서 작품을 고르면 서재에 담겨요.</p>
+            <p>나로우 작품의 URL을 입력하면 서재에 담겨요.</p>
             <p className="nr-library__hint">
-              아래 ‘작품 찾기’나 위의 링크 버튼으로 시작할 수 있어요.
+              위의 링크 버튼에서 작품 또는 회차 URL을 입력해 주세요.
             </p>
           </div>
         ) : null
       ) : (
         <section aria-label="작품 목록">
           <h1 className="nr-visually-hidden">서재</h1>
+          {state.chapterUpdatesAvailable && (
+            <div className="nr-library__updates">
+              <Button
+                variant="outlined"
+                disabled={state.chapterUpdates.checkingAll}
+                onClick={() => props.onCheckUpdates?.()}
+              >
+                {state.chapterUpdates.checkingAll
+                  ? '서재 새 회차 확인 중…'
+                  : '서재 전체 새 회차 확인'}
+              </Button>
+              <p>작품별 마지막 검사일에서 {state.chapterUpdateDays}일 뒤 0시부터 자동 검사해요.</p>
+              {state.chapterUpdates.message && <p role="status">{state.chapterUpdates.message}</p>}
+            </div>
+          )}
           <ul className="nr-library__list">
             {state.libraryWorks.map(({ work, savedChapterIds, recent }) => {
               const savedCount = new Set(savedChapterIds).size;
+              const update = state.chapterUpdates.works[work.workId];
               const supporting =
                 savedCount > 0
                   ? `${savedCount}화 저장 · ${recent ? dateRead(recent.updatedAt) : '아직 읽지 않았어요'}`
@@ -164,12 +181,29 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
                   <ListItem
                     headline={state.recentTitles[work.workId] ?? work.title}
                     lang={titleLang(state.recentTitles, work.workId, work.title)}
-                    supporting={supporting}
+                    supporting={
+                      <>
+                        {supporting}
+                        <NewChapterBadge count={update?.newChapterIds.length ?? 0} />
+                        {update?.checking && <span> · 새 회차 확인 중…</span>}
+                        {update?.error && (
+                          <span className="nr-library__update-error">{update.error}</span>
+                        )}
+                      </>
+                    }
                     onClick={() => props.onOpenLibraryWork(work.workId)}
                     trailing={
                       <Menu
                         label={`${state.recentTitles[work.workId] ?? work.title} 메뉴`}
                         items={[
+                          ...(state.chapterUpdatesAvailable
+                            ? [
+                                {
+                                  label: update?.checking ? '새 회차 확인 중…' : '새 회차 확인',
+                                  onSelect: () => props.onCheckUpdates?.(work.workId),
+                                },
+                              ]
+                            : []),
                           {
                             label: '원문 사이트에서 보기',
                             onSelect: () => props.onBrowse(work.canonicalUrl),
@@ -203,7 +237,6 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
       >
         <UrlForm onClose={props.onCloseUrlDialog} onOpen={props.onOpen} />
       </Dialog>
-      <ExtendedFab icon="search" label="작품 찾기" onClick={() => props.onBrowse()} />
     </section>
   );
 }

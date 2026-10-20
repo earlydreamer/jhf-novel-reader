@@ -1,7 +1,9 @@
 import { createRoot } from 'react-dom/client';
 import { Application } from '../../src/app/Application';
 import { createRenewalController } from '../../src/app/renewalController';
-import type { CompletedTranslation, WorkPage } from '../../src/contracts/reading';
+import type { CompletedTranslation, WorkPage, WorkUpdate } from '../../src/contracts/reading';
+import { chapterCheckDate } from '../../src/app/chapterUpdateSchedule';
+import { createReadingSettingsRepository } from '../../src/storage/settings';
 import { noopShell } from '../../src/platform/shell';
 const chapters = [1, 2].map((ordinal) => ({
   workId: 'n1234ab',
@@ -45,9 +47,32 @@ const saved: CompletedTranslation = {
   },
 };
 
+let update: WorkUpdate = {
+  workId: page.workId,
+  lastCheckDate: chapterCheckDate(Date.now()),
+  attemptedAt: Date.now(),
+  checkedAt: Date.now(),
+  knownChapterIds: chapters.map((chapter) => chapter.chapterId),
+  newChapterIds: [chapters[1]!.chapterId],
+  failed: false,
+};
+let settings: string | null = null;
 const controller = createRenewalController({
+  settings: createReadingSettingsRepository({
+    get: async () => ({ value: settings }),
+    set: async ({ value }) => {
+      settings = value;
+    },
+  }),
   source: { getWorkPage: async () => page, getChapter: async () => saved.source },
   library: {
+    readWorkUpdates: async () => [structuredClone(update)],
+    saveWorkUpdate: async (value) => {
+      update = structuredClone(value);
+    },
+    acknowledgeChapterUpdate: async (_workId, chapterId) => {
+      update.newChapterIds = update.newChapterIds.filter((id) => id !== chapterId);
+    },
     saveWorkPage: async () => {},
     listWorkIds: async () => [page.workId],
     readWork: async () => [page],

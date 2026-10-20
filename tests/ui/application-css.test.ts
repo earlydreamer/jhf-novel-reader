@@ -317,10 +317,11 @@ describe('base.css Korean line breaking (#167)', () => {
 const homeCss = readFileSync('src/ui/home.css', 'utf8');
 
 describe('home.css library scroll', () => {
-  it('서재는 내용이 짧으면 스크롤되지 않고 작품 추가 버튼만큼만 아래 여백을 둔다', () => {
+  it('서재는 최소 높이나 제거된 작품 찾기 버튼용 여백을 강제하지 않는다', () => {
     const library = rules(homeCss).find((rule) => rule.selector === '.nr-library');
+    expect(library).toBeDefined();
     expect(library?.body).not.toMatch(/min-block-size/);
-    expect(library?.body).toMatch(/padding-block-end:\s*calc\(var\(--fab\) \+ 16px\);/);
+    expect(library?.body).not.toMatch(/padding-block-end|var\(--fab\)/);
   });
 });
 
