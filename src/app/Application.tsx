@@ -4,7 +4,6 @@ import { HomeScreen } from '../ui/HomeScreen';
 import { WorkScreen } from '../ui/WorkScreen';
 import { ImmersiveReader } from '../ui/ImmersiveReader';
 import { SettingsScreen } from '../ui/SettingsScreen';
-import { ChapterUpdateStatus } from '../ui/ChapterUpdateControl';
 import { useReaderGlossary } from '../ui/readerGlossary';
 import { TopAppBar } from '../ui/components/TopAppBar';
 import { IconButton } from '../ui/components/IconButton';
@@ -22,7 +21,7 @@ import type { RenewalController, RenewalSnapshot } from './renewalController';
 import '../ui/theme/base.css';
 import './application.css';
 
-type ChapterUpdateRequest = { kind: 'all' } | { kind: 'work'; workId: string; title: string };
+type ChapterUpdateRequest = { kind: 'all' } | { kind: 'work'; workId: string };
 
 function RouteScreen({
   controller,
@@ -543,7 +542,6 @@ export function Application({
         setChapterUpdateRequest({
           kind: 'work',
           workId,
-          title: state.recentTitles[workId] ?? work.title,
         });
     } else if (!state.chapterUpdates.checkingAll && state.libraryWorks.length > 0) {
       setChapterUpdateRequest({ kind: 'all' });
@@ -703,16 +701,9 @@ export function Application({
         >
           <p>
             {chapterUpdateRequest?.kind === 'work'
-              ? `‘${chapterUpdateRequest.title}’의 목차를 가져와 새 회차를 확인해요.`
-              : '서재에 있는 모든 작품의 목차를 가져와 새 회차를 확인해요.'}
+              ? '이 작품의 목차를 최신화해요.'
+              : '서재에 있는 모든 작품의 목차를 최신화해요.'}
           </p>
-          <p>마지막 검사일과 관계없이 지금 검사해요. 회차 본문을 가져오거나 번역하지 않아요.</p>
-          {chapterUpdateRequest?.kind === 'work' && (
-            <ChapterUpdateStatus status={state.chapterUpdates.works[chapterUpdateRequest.workId]} />
-          )}
-          {chapterUpdateRequest?.kind === 'all' && state.chapterUpdates.message && (
-            <p role="status">최근 검사 결과: {state.chapterUpdates.message}</p>
-          )}
         </Dialog>
         <Dialog
           open={!!removeTarget}

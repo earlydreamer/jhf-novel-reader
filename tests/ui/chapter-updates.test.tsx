@@ -70,7 +70,7 @@ test('상단 아이콘과 확인 모달로 갱신하고 회차를 열어도 등�
   const beforeMenu = h.getWorkPage.mock.calls.length;
   fireEvent.click(screen.getByRole('menuitem', { name: '새 회차 확인' }));
   expect(screen.getByRole('dialog', { name: '이 작품의 새 회차를 확인할까요?' })).toHaveTextContent(
-    'n1234aa 작품',
+    '이 작품의 목차를 최신화해요.',
   );
   expect(h.getWorkPage).toHaveBeenCalledTimes(beforeMenu);
   fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
@@ -102,8 +102,8 @@ test('상단 아이콘과 확인 모달로 갱신하고 회차를 열어도 등�
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   h.setLatest([1, 2, 3, 4]);
   fireEvent.click(screen.getByRole('button', { name: '새 회차 확인' }));
-  expect(screen.getByRole('dialog')).toHaveTextContent('마지막 검사일:');
-  expect(screen.getByRole('dialog')).toHaveTextContent('마지막 성공:');
+  expect(screen.getByRole('dialog').querySelectorAll('p')).toHaveLength(1);
+  expect(screen.getByRole('dialog')).toHaveTextContent('이 작품의 목차를 최신화해요.');
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
   await screen.findByRole('button', { name: '4화 4화' });
@@ -242,8 +242,9 @@ test('서재 상단 아이콘은 확인 후 같은 날에도 전체를 갱신하
   h.setLatest([1, 2, 3]);
   fireEvent.click(screen.getByRole('button', { name: '서재 전체 새 회차 확인' }));
   expect(screen.getByRole('dialog', { name: '서재 전체 새 회차를 확인할까요?' })).toHaveTextContent(
-    '모든 작품',
+    '서재에 있는 모든 작품의 목차를 최신화해요.',
   );
+  expect(screen.getByRole('dialog').querySelectorAll('p')).toHaveLength(1);
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
   await screen.findByText('새 회차 2');

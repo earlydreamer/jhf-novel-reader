@@ -10,25 +10,9 @@
   vertical-align: middle;
   white-space: nowrap;
 }
-.nr-chapter-update-control {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-block: 12px;
-}
-.nr-chapter-update-control p {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--on-surface-variant);
-  font: var(--type-body-small);
-}
 .nr-library__update-error {
   display: block;
   color: var(--error);
-}
-.nr-chapter-update-success {
-  display: block;
 }
 .nr-chapter-update-settings {
   display: flex;
