@@ -16,7 +16,7 @@ final class DeviceSmokeTests: XCTestCase {
       if let root = windows.compactMap({ $0.rootViewController as? JHFBridgeViewController }).first,
         let web = root.webView,
         let ready = try? await web.evaluateJavaScript(
-          "document.readyState === 'complete' && !!document.querySelector('.nr-library__empty, .nr-library__list, .nr-settings')"),
+          "document.readyState === 'complete' && !!document.querySelector('.nr-library__empty, .nr-library__list, .nr-settings, .nr-work-screen')"),
         ready as? Bool == true
       {
         return web
