@@ -36,10 +36,12 @@ final class DeviceSmokeTests: XCTestCase {
   func test01ProductLibraryAndSettingsRender() async throws {
     let web = try await webView()
     let value = try await evaluate(
-      "return {platform: Capacitor.getPlatform(), library: !!document.querySelector('[aria-label=\"서재\"]')};"
+      "return {platform: Capacitor.getPlatform(), library: !!document.querySelector('[aria-label=\"서재\"]'), browse: !!document.querySelector('.nr-fab'), url: !!document.querySelector('button[aria-label=\"URL로 열기\"]')};"
     )
     XCTAssertEqual(value["platform"] as? String, "ios")
     XCTAssertEqual(value["library"] as? Bool, true)
+    XCTAssertEqual(value["browse"] as? Bool, false)
+    XCTAssertEqual(value["url"] as? Bool, true)
     let library = try await web.takeSnapshot(configuration: nil)
     let shot = XCTAttachment(image: library)
     shot.name = "JHF-iPhone-library"
@@ -58,6 +60,19 @@ final class DeviceSmokeTests: XCTestCase {
       try await Task.sleep(nanoseconds: 100_000_000)
     }
     XCTAssertTrue(settings)
+    let updates = try await evaluate(
+      """
+      const form = document.querySelector('.nr-chapter-update-settings');
+      const input = form?.querySelector('input[type="number"]');
+      return {present:!!form, value:Number(input?.value), min:input?.min, max:input?.max,
+          midnight:form?.textContent.includes('0시'), manual:form?.textContent.includes('수동 검사')};
+      """)
+    XCTAssertEqual(updates["present"] as? Bool, true)
+    XCTAssertTrue((1...365).contains(updates["value"] as? Int ?? 0))
+    XCTAssertEqual(updates["min"] as? String, "1")
+    XCTAssertEqual(updates["max"] as? String, "365")
+    XCTAssertEqual(updates["midnight"] as? Bool, true)
+    XCTAssertEqual(updates["manual"] as? Bool, true)
     let image = try await web.takeSnapshot(configuration: nil)
     let attachment = XCTAttachment(image: image)
     attachment.name = "JHF-iPhone-settings"
