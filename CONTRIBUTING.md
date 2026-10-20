@@ -63,6 +63,8 @@ git commit -m "docs: 개발 환경 안내 수정 (#123)"
 git push -u origin codex/<issue>-<short-slug>
 ```
 
+이슈·PR·댓글은 [GitHub 글 작성 기준](docs/github-writing.md)에 따라 `~한다 / ~했다`로 직접 서술합니다. 문제·변경 결과·검증 근거를 적고 대화 중계 표현이나 작성 도구별 인사·서명은 붙이지 않습니다.
+
 원본 저장소의 `main`을 대상으로 Draft PR을 엽니다. PR에는 다음 내용을 간단히 적습니다.
 
 - 해결하는 문제와 변경 후 동작
