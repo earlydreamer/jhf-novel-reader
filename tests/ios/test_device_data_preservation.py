@@ -40,12 +40,17 @@ class DeviceDataProtectionTests(unittest.TestCase):
             self.assertEqual(first['versions'], [{'versionId': 'v1'}])
             self.assertNotIn('private-sentinel', json.dumps(first))
             self.assertEqual(len(first['files']), 1)
+            (root / 'library/index.1.json').write_text('broken-slot')
+            self.assertEqual(first, preservation.protected_snapshot(library, BUNDLE))
             (library / 'cache').write_text('unprotected-cache')
             self.assertEqual(first, preservation.protected_snapshot(library, BUNDLE))
             body.write_text('changed-body')
             self.assertNotEqual(first['files'], preservation.protected_snapshot(library, BUNDLE)['files'])
             preferences.write_bytes(plistlib.dumps({'CapacitorStorage.setting': 'changed-setting'}))
             self.assertNotEqual(first['preferences'], preservation.protected_snapshot(library, BUNDLE)['preferences'])
+            (root / 'library/index.0.json').write_text('broken-slot')
+            with self.assertRaises(ValueError):
+                preservation.protected_snapshot(library, BUNDLE)
 
     def test_dispatch_refuses_xctest_in_the_user_application_before_touching_device(self):
         result = subprocess.run([sys.executable, str(ROOT / 'tools/ios/queue-device-build.py'),

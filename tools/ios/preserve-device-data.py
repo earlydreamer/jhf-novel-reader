@@ -29,11 +29,16 @@ def protected_snapshot(library, bundle):
                 files[relative] = digest(path.read_bytes())
             if len(suffix) == 2 and suffix[0] == 'library' and suffix[1] in ('index.0.json', 'index.1.json'):
                 found_index = True
-                envelope = json.loads(path.read_text())
-                encoded = json.dumps([1, envelope['generation'], envelope['payload']],
-                                     ensure_ascii=False, separators=(',', ':')).encode()
-                if envelope.get('format') == 1 and envelope.get('checksum') == digest(encoded):
-                    index_slots.append(envelope)
+                try:
+                    envelope = json.loads(path.read_text())
+                    encoded = json.dumps([1, envelope['generation'], envelope['payload']],
+                                         ensure_ascii=False, separators=(',', ':')).encode()
+                    if (envelope.get('format') == 1 and isinstance(envelope['generation'], int)
+                            and envelope['generation'] > 0 and isinstance(envelope['payload'], dict)
+                            and envelope.get('checksum') == digest(encoded)):
+                        index_slots.append(envelope)
+                except (ValueError, KeyError, TypeError):
+                    pass
     plist = library / 'Preferences' / (bundle + '.plist')
     preferences = plistlib.loads(plist.read_bytes()) if plist.exists() else {}
     saved = {key: digest(plistlib.dumps({'value': value}, sort_keys=True))
