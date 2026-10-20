@@ -283,10 +283,16 @@ return await (async () => {
   };
   const baseline = await protectedSnapshot();
   const report = window.__jhfLive = {url,platform:Capacitor.getPlatform(),requests:[],responseReplacement:false,initialLibraryCount:baseline.workIds.length};
+  const readingSettings = JSON.parse((await native('Preferences','get',{key:'narou-reader.reading-settings.v2'})).value ?? 'null');
+  report.modelConfigured = !!readingSettings?.selection?.modelId;
+  report.titleToastCount = 0;
   let toastEvents = 0;
   const observer = new MutationObserver(records => {
     for (const record of records) for (const node of record.addedNodes) {
-      if (node.nodeType === 1 && (node.matches?.('.nr-snackbar__text') || node.querySelector?.('.nr-snackbar__text')) && node.textContent.includes(refreshed)) toastEvents++;
+      if (node.nodeType === 1 && (node.matches?.('.nr-snackbar__text') || node.querySelector?.('.nr-snackbar__text'))) {
+        if (node.textContent.includes(refreshed)) toastEvents++;
+        if (node.textContent.includes('제목을 번역하고 있어요.')) report.titleToastCount++;
+      }
     }
   });
   observer.observe(document.body,{childList:true,subtree:true});
@@ -426,6 +432,7 @@ return await (async () => {
     report.readingHistoryUnchanged = JSON.stringify(baseline.recent)===JSON.stringify(after.recent);
     report.existingWorksPreserved = baseline.workIds.every(id=>after.workIds.includes(id));
     report.keptInLibrary = after.workIds.includes(workId);
+    if (!report.modelConfigured && report.titleToastCount!==0) throw Error('Title toast displayed without a model request');
     if (!report.workBodyControlRemoved || !report.libraryBodyControlRemoved || !report.allResponsesSuccessful || !report.allSuccess || !report.dateBasedCheck || report.checkedChapterCount!==report.importedChapterCount || !report.protectedFilesUnchanged || !report.preferencesUnchanged || !report.versionsUnchanged || !report.readingHistoryUnchanged || !report.existingWorksPreserved) throw Error('Live refresh/preservation assertions failed');
     return report;
   } catch (error) {
@@ -458,6 +465,9 @@ return await (async () => {
     XCTAssertGreaterThan(result["allRequests"] as? Int ?? 0, 0)
     XCTAssertEqual(result["individualToastCount"] as? Int, 1)
     XCTAssertEqual(result["allToastCount"] as? Int, 1)
+    if result["modelConfigured"] as? Bool == false {
+      XCTAssertEqual(result["titleToastCount"] as? Int, 0)
+    }
     if (result["cachedPageCount"] as? Int ?? 0) > 1 {
       XCTAssertEqual(result["cachedPagingWithoutRequests"] as? Bool, true)
       XCTAssertEqual(result["reopenedFirstPageCount"] as? Int, result["importedChapterCount"] as? Int)
