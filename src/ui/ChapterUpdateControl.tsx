@@ -1,10 +1,10 @@
 import type { ChapterUpdateStatus } from '../app/chapterUpdates';
 import './chapter-updates.css';
 
-export function NewChapterBadge({ count }: { count: number }) {
-  return count > 0 ? (
+export function NewChapterBadge({ count }: { count?: number }) {
+  return count === undefined || count > 0 ? (
     <span lang="ko" className="nr-new-chapter-badge">
-      새 회차 {count}
+      새 회차{count === undefined ? '' : ` ${count}`}
     </span>
   ) : null;
 }
