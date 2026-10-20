@@ -7,6 +7,7 @@ team="$3"
 job="$4"
 action="${5:-install}"
 bundle="${6:-dev.earlydreamer.jhfreader}"
+live_url="${7:-}"
 case "$bundle" in dev.earlydreamer.jhfreader|dev.earlydreamer.jhfreader.envcheck) ;; *) exit 2;; esac
 base="$HOME/.local/share/jhf-ios"
 . "$base/env.sh"
@@ -65,7 +66,12 @@ PY
     args+=("JHF_APP_BUNDLE_ID=$bundle" CODE_SIGN_STYLE=Automatic 'CODE_SIGN_IDENTITY=Apple Development')
 fi
 if [ "$action" = test ]; then
-    xcodebuild "${args[@]}" -parallel-testing-enabled NO -resultBundlePath "$job/DeviceTests.xcresult" test > "$job/xcodebuild.log" 2>&1
+    live_args=()
+    if [ -n "$live_url" ]; then
+        export TEST_RUNNER_JHF_REAL_SOURCE_URL="$live_url"
+        live_args+=(-only-testing:JHFDeviceTests/DeviceSmokeTests/test06RealNarouWorkAddAndCheck)
+    fi
+    xcodebuild "${args[@]}" "${live_args[@]}" -parallel-testing-enabled NO -resultBundlePath "$job/DeviceTests.xcresult" test > "$job/xcodebuild.log" 2>&1
 else
     xcodebuild "${args[@]}" build > "$job/xcodebuild.log" 2>&1
 fi
