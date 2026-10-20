@@ -1045,6 +1045,31 @@ export function createLibraryStore(
             return true;
           });
       }),
+    listSavedChapterIds: (workId, chapterIds) => {
+      const requested = [...new Set(chapterIds)];
+      return serial(files, async () => {
+        identifier(workId);
+        for (const chapterId of requested) {
+          chapterIdentity(chapterId);
+          check(chapterId.startsWith(`${workId}/`));
+        }
+        const candidates = new Set(requested);
+        const current = await readIndex();
+        const saved = new Set<string>();
+        for (const entry of current.versions) {
+          if (!candidates.has(entry.chapterId)) continue;
+          const value = await readVersion(entry.versionId);
+          check(
+            entry.workId === workId &&
+              value !== null &&
+              value.source.workId === workId &&
+              value.source.chapterId === entry.chapterId,
+          );
+          saved.add(entry.chapterId);
+        }
+        return requested.filter((chapterId) => saved.has(chapterId));
+      });
+    },
     listVersions: (chapterId) =>
       serial(files, async () => {
         chapterIdentity(chapterId);
