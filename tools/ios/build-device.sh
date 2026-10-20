@@ -17,6 +17,10 @@ base="$HOME/.local/share/jhf-ios"
 owned_lock=0
 finish() {
     status=$?
+    # Failed test installation must still prove that the user's app was untouched.
+    if [ -f "$job/data-before/snapshot.json" ] && [ ! -f "$job/data-preservation.json" ]; then
+        if ! /usr/bin/python3 "$project/tools/ios/preserve-device-data.py" verify "$destination" dev.earlydreamer.jhfreader "$job"; then status=1; fi
+    fi
     if [ "$owned_lock" = 1 ]; then rmdir "$base/iphone-build.lock"; fi
     printf '{"exitCode":%s,"completedAt":"%s"}\n' "$status" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$job/result.json.tmp"
     mv "$job/result.json.tmp" "$job/result.json"
