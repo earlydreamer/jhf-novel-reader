@@ -1,5 +1,26 @@
 import { expect, test } from 'vitest';
 import { createReadingSettingsRepository } from '../../src/storage/settings';
+
+test('새 회차 검사 주기는 선택적인 정수 일수로 보존하고 잘못된 값은 거부한다', async () => {
+  let stored: string | null = null;
+  const repository = createReadingSettingsRepository({
+    get: async () => ({ value: stored }),
+    set: async ({ value }) => {
+      stored = value;
+    },
+  });
+  const settings = { schemaVersion: 2 as const, selection: null, fontSize: 18 };
+  expect((await repository.readReadingSettings()).chapterUpdateDays).toBeUndefined();
+  for (const chapterUpdateDays of [1, 3, 365]) {
+    await repository.saveReadingSettings({ ...settings, chapterUpdateDays });
+    expect((await repository.readReadingSettings()).chapterUpdateDays).toBe(chapterUpdateDays);
+  }
+  for (const chapterUpdateDays of [0, -1, 1.5, 366, NaN, Infinity]) {
+    await expect(
+      repository.saveReadingSettings({ ...settings, chapterUpdateDays }),
+    ).rejects.toThrow();
+  }
+});
 test('v2 settings are separate and contain references only', async () => {
   const memory = new Map<string, string>([['narou-reader.settings.v1', 'legacy']]);
   const repository = createReadingSettingsRepository({

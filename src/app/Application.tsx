@@ -90,6 +90,7 @@ function RouteScreen({
           onBrowse={(startUrl) => void controller.browse(startUrl)}
           onOpen={(url) => void controller.openWork(url)}
           onOpenLibraryWork={(workId) => void controller.openLibraryWork(workId)}
+          onCheckUpdates={(workId) => void controller.checkChapterUpdates(workId)}
           onRequestRemove={onRequestRemove}
           onContinue={(id) => void controller.continueReading(id)}
           onOpenPendingSave={controller.openPendingSave}
@@ -104,6 +105,12 @@ function RouteScreen({
           key={state.work.workId}
           titles={titles}
           work={state.work}
+          updateStatus={state.chapterUpdates.works[state.work.workId]}
+          onCheckUpdates={
+            state.chapterUpdatesAvailable
+              ? () => void controller.checkChapterUpdates(state.work!.workId)
+              : undefined
+          }
           recentStatus={
             state.workRecent?.workId === state.work.workId ? state.workRecent.status : 'loading'
           }
@@ -340,6 +347,7 @@ function RouteScreen({
           onAutoTranslate={controller.changeAutoTranslate}
           onAutoRetryFailed={controller.changeAutoRetryFailed}
           onAutoGlossary={controller.changeAutoGlossary}
+          onChapterUpdateDays={controller.changeChapterUpdateDays}
           onLookupWikipedia={controller.changeLookupWikipedia}
           onLookupNamuwiki={controller.changeLookupNamuwiki}
           onEnableEmbedding={controller.enableOnDeviceEmbedding}

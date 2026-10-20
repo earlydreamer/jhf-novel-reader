@@ -159,6 +159,9 @@ export interface ProviderSession {
   ): Promise<unknown>;
 }
 export interface LibraryStore {
+  readWorkUpdates?(): Promise<readonly WorkUpdate[]>;
+  saveWorkUpdate?(update: WorkUpdate, pages?: readonly WorkPage[]): Promise<void>;
+  acknowledgeChapterUpdate?(workId: string, chapterId: string): Promise<void>;
   saveWorkPage(page: WorkPage): Promise<void>;
   listWorkIds(): Promise<readonly string[]>;
   readWork(workId: string): Promise<readonly WorkPage[]>;
@@ -186,6 +189,17 @@ export interface LibraryStore {
     runtime?: { activeBatchWorkId?: string },
   ): Promise<ChapterRemovalResult>;
 }
+/** 전체 목차를 확인한 기준과 아직 열지 않은 신규 회차. null 기준은 첫 전체 확인 전이다. */
+export type WorkUpdate = {
+  workId: string;
+  /** 실패도 포함한 마지막 검사 날짜. 기기 로컬 달력 기준 YYYY-MM-DD. */
+  lastCheckDate: string;
+  attemptedAt: number;
+  checkedAt: number | null;
+  knownChapterIds: readonly string[] | null;
+  newChapterIds: readonly string[];
+  failed: boolean;
+};
 export interface ChapterRemovalInventory {
   workId: string;
   chapterId: string;

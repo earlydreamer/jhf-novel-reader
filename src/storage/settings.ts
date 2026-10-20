@@ -1,4 +1,5 @@
 import { selected } from './readingValidation';
+import { validChapterUpdateDays } from '../app/chapterUpdateSchedule';
 import type { PreferencesPlugin } from '@capacitor/preferences';
 import { StorageError, storageError } from './errors';
 import { check, integer, object, snapshot as cloneInput } from './validation';
@@ -18,6 +19,7 @@ export type ReadingSettings = {
   autoTranslate?: boolean;
   autoRetryFailed?: boolean;
   autoGlossary?: boolean;
+  chapterUpdateDays?: number;
   /** 리더 용어 강조. 끌 때만 false로 저장한다. */
   termHighlight?: boolean;
   lookupWikipedia?: boolean;
@@ -36,6 +38,7 @@ function readingSettings(value: unknown): ReadingSettings {
     'autoTranslate',
     'autoRetryFailed',
     'autoGlossary',
+    'chapterUpdateDays',
     'termHighlight',
     'lookupWikipedia',
     'lookupNamuwiki',
@@ -47,6 +50,11 @@ function readingSettings(value: unknown): ReadingSettings {
   check(value.autoTranslate === undefined || typeof value.autoTranslate === 'boolean');
   check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
   check(value.autoGlossary === undefined || typeof value.autoGlossary === 'boolean');
+  check(
+    value.chapterUpdateDays === undefined ||
+      (typeof value.chapterUpdateDays === 'number' &&
+        validChapterUpdateDays(value.chapterUpdateDays)),
+  );
   check(value.termHighlight === undefined || typeof value.termHighlight === 'boolean');
   check(value.lookupWikipedia === undefined || typeof value.lookupWikipedia === 'boolean');
   check(value.lookupNamuwiki === undefined || typeof value.lookupNamuwiki === 'boolean');

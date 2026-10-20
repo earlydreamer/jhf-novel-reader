@@ -9,6 +9,7 @@ import { ListItem } from './components/ListItem';
 import { ExtendedFab } from './components/ExtendedFab';
 import { IconButton } from './components/IconButton';
 import brandLogo from './assets/brand-logo.png';
+import { NewChapterBadge } from './ChapterUpdateControl';
 import './home.css';
 
 export interface HomeScreenProps {
@@ -17,6 +18,7 @@ export interface HomeScreenProps {
   onCloseUrlDialog(): void;
   onOpen(url: string): void;
   onOpenLibraryWork(workId: string): void;
+  onCheckUpdates?(workId?: string): void;
   onRequestRemove(workId: string, title: string): void;
   onBrowse(startUrl?: string): void;
   onContinue(versionId: string): void;
@@ -152,9 +154,25 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
       ) : (
         <section aria-label="작품 목록">
           <h1 className="nr-visually-hidden">서재</h1>
+          {state.chapterUpdatesAvailable && (
+            <div className="nr-library__updates">
+              <Button
+                variant="outlined"
+                disabled={state.chapterUpdates.checkingAll}
+                onClick={() => props.onCheckUpdates?.()}
+              >
+                {state.chapterUpdates.checkingAll
+                  ? '서재 새 회차 확인 중…'
+                  : '서재 전체 새 회차 확인'}
+              </Button>
+              <p>작품별 마지막 검사일에서 {state.chapterUpdateDays}일 뒤 0시부터 자동 검사해요.</p>
+              {state.chapterUpdates.message && <p role="status">{state.chapterUpdates.message}</p>}
+            </div>
+          )}
           <ul className="nr-library__list">
             {state.libraryWorks.map(({ work, savedChapterIds, recent }) => {
               const savedCount = new Set(savedChapterIds).size;
+              const update = state.chapterUpdates.works[work.workId];
               const supporting =
                 savedCount > 0
                   ? `${savedCount}화 저장 · ${recent ? dateRead(recent.updatedAt) : '아직 읽지 않았어요'}`
@@ -164,12 +182,29 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
                   <ListItem
                     headline={state.recentTitles[work.workId] ?? work.title}
                     lang={titleLang(state.recentTitles, work.workId, work.title)}
-                    supporting={supporting}
+                    supporting={
+                      <>
+                        {supporting}
+                        <NewChapterBadge count={update?.newChapterIds.length ?? 0} />
+                        {update?.checking && <span> · 새 회차 확인 중…</span>}
+                        {update?.error && (
+                          <span className="nr-library__update-error">{update.error}</span>
+                        )}
+                      </>
+                    }
                     onClick={() => props.onOpenLibraryWork(work.workId)}
                     trailing={
                       <Menu
                         label={`${state.recentTitles[work.workId] ?? work.title} 메뉴`}
                         items={[
+                          ...(state.chapterUpdatesAvailable
+                            ? [
+                                {
+                                  label: update?.checking ? '새 회차 확인 중…' : '새 회차 확인',
+                                  onSelect: () => props.onCheckUpdates?.(work.workId),
+                                },
+                              ]
+                            : []),
                           {
                             label: '원문 사이트에서 보기',
                             onSelect: () => props.onBrowse(work.canonicalUrl),
