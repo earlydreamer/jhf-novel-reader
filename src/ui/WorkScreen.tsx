@@ -326,7 +326,7 @@ export function WorkScreen({
                     updateStatus?.newChapterIds.includes(chapter.chapterId) ? (
                       <>
                         {supporting}
-                        <NewChapterBadge count={1} />
+                        <NewChapterBadge />
                       </>
                     ) : (
                       supporting || undefined

@@ -6,8 +6,9 @@ import { createRenewalController } from '../../src/app/renewalController';
 import { Application } from '../../src/app/Application';
 import { createLibraryStore } from '../../src/storage/library';
 import { createReadingSettingsRepository } from '../../src/storage/settings';
-import { toc } from '../fixtures/chapterUpdates';
+import { recentToc as toc } from '../fixtures/chapterUpdates';
 import { runTopBackHandler } from '../../src/ui/shell/backStack';
+import { source } from '../providers/wholeChapterFixture';
 
 afterEach(() => {
   cleanup();
@@ -51,7 +52,7 @@ async function fixture() {
   };
 }
 
-test('상단 아이콘과 작품 메뉴의 확인 모달로 갱신하고 회차를 열면 해당 배지만 해제한다', async () => {
+test('상단 아이콘과 확인 모달로 갱신하고 회차를 열어도 등록 후 48시간 배지는 유지한다', async () => {
   const h = await fixture();
   const view = render(<Application controller={h.controller} />);
   const refresh = within(document.querySelector<HTMLElement>('.nr-top-app-bar')!).getByRole(
@@ -69,7 +70,7 @@ test('상단 아이콘과 작품 메뉴의 확인 모달로 갱신하고 회차�
   const beforeMenu = h.getWorkPage.mock.calls.length;
   fireEvent.click(screen.getByRole('menuitem', { name: '새 회차 확인' }));
   expect(screen.getByRole('dialog', { name: '이 작품의 새 회차를 확인할까요?' })).toHaveTextContent(
-    'n1234aa 작품',
+    '이 작품의 목차를 최신화해요.',
   );
   expect(h.getWorkPage).toHaveBeenCalledTimes(beforeMenu);
   fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
@@ -84,7 +85,8 @@ test('상단 아이콘과 작품 메뉴의 확인 모달로 갱신하고 회차�
     }),
   ).toBeEnabled();
   expect(document.querySelector('.nr-work-screen .nr-chapter-update-control')).toBeNull();
-  expect(within(screen.getByRole('list')).getAllByText('새 회차 1')).toHaveLength(2);
+  expect(within(screen.getByRole('list')).getAllByText('새 회차', { exact: true })).toHaveLength(2);
+  expect(within(screen.getByRole('list')).queryByText('새 회차 1')).toBeNull();
   await act(async () => {
     await h.controller.selectChapter(toc('n1234aa', [2]).chapters[0]!);
   });
@@ -93,18 +95,20 @@ test('상단 아이콘과 작품 메뉴의 확인 모달로 갱신하고 회차�
   });
   await waitFor(() =>
     expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([
+      'n1234aa/2',
       'n1234aa/3',
     ]),
   );
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   h.setLatest([1, 2, 3, 4]);
   fireEvent.click(screen.getByRole('button', { name: '새 회차 확인' }));
-  expect(screen.getByRole('dialog')).toHaveTextContent('마지막 검사일:');
-  expect(screen.getByRole('dialog')).toHaveTextContent('마지막 성공:');
+  expect(screen.getByRole('dialog').querySelectorAll('p')).toHaveLength(1);
+  expect(screen.getByRole('dialog')).toHaveTextContent('이 작품의 목차를 최신화해요.');
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
   await screen.findByRole('button', { name: '4화 4화' });
   expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([
+    'n1234aa/2',
     'n1234aa/3',
     'n1234aa/4',
   ]);
@@ -130,6 +134,81 @@ test('화면 왕복과 앱 재시작은 주기 안에 목차를 다시 요청하
   ]);
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   restarted.dispose();
+});
+
+test('번역/목차 진입은 유지하고 실제 읽기 위치 저장 후에는 48시간 이내 배지도 숨긴다', async () => {
+  const h = await fixture();
+  const chapter = toc('n1234aa', [2]).chapters[0]!;
+  await h.library.commitVersion({
+    schemaVersion: 2,
+    versionId: 'read-v1',
+    source: {
+      ...source,
+      workId: chapter.workId,
+      chapterId: chapter.chapterId,
+      canonicalUrl: chapter.canonicalUrl,
+      title: chapter.title,
+    },
+    text: '합성 번역',
+    blocks: [{ id: 'b1', text: '합성 번역' }],
+    createdAt: new Date().toISOString(),
+    provenance: {
+      provider: 'openai-compatible',
+      connectionId: 'test',
+      modelId: 'test',
+      contractVersion: 'plain-v1',
+      promptVersion: 'test',
+      languageDirection: 'ja-ko',
+    },
+  });
+  await h.controller.openLibraryWork('n1234aa');
+  await h.controller.selectChapter(chapter);
+  expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([
+    'n1234aa/2',
+  ]);
+  vi.spyOn(h.library, 'savePosition').mockRejectedValueOnce(new Error('disk full'));
+  await h.controller.savePosition('b1', 0);
+  expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([
+    'n1234aa/2',
+  ]);
+  await h.controller.savePosition('b1', 0);
+  expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([]);
+  await h.controller.checkChapterUpdates('n1234aa');
+  expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([]);
+  h.controller.dispose();
+  const restarted = createRenewalController({
+    library: h.library,
+    source: { getWorkPage: h.getWorkPage, getChapter: vi.fn() },
+  });
+  await restarted.initialize();
+  expect(restarted.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([]);
+  restarted.dispose();
+});
+
+test('48시간 지난 회차는 목록만 갱신하고 완료 토스트를 표시한다', async () => {
+  const h = await fixture();
+  render(<Application controller={h.controller} />);
+  const old = toc('n1234aa', [1, 2, 3]);
+  old.chapters = old.chapters.map((chapter) => ({
+    ...chapter,
+    publishedAt: new Date(Date.now() - 72 * 3_600_000).toISOString(),
+  }));
+  h.getWorkPage.mockResolvedValueOnce(old);
+  const before = h.controller.getSnapshot().chapterUpdates.notice?.id ?? 0;
+  fireEvent.click(screen.getByRole('button', { name: '서재 전체 새 회차 확인' }));
+  fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
+  await waitFor(() =>
+    expect(h.controller.getSnapshot().chapterUpdates.notice?.id).toBeGreaterThan(before),
+  );
+  await waitFor(() =>
+    expect(document.querySelector('.nr-snackbar__text')).toHaveTextContent(
+      '회차 목록을 갱신했어요.',
+    ),
+  );
+  expect(document.querySelectorAll('.nr-new-chapter-badge')).toHaveLength(0);
+  await act(async () => h.controller.openLibraryWork('n1234aa'));
+  expect(document.querySelectorAll('.nr-work-screen ol > li')).toHaveLength(3);
+  h.controller.dispose();
 });
 
 test('실제 lifecycle 복귀도 주기 안에는 네트워크 확인을 반복하지 않는다', async () => {
@@ -163,8 +242,9 @@ test('서재 상단 아이콘은 확인 후 같은 날에도 전체를 갱신하
   h.setLatest([1, 2, 3]);
   fireEvent.click(screen.getByRole('button', { name: '서재 전체 새 회차 확인' }));
   expect(screen.getByRole('dialog', { name: '서재 전체 새 회차를 확인할까요?' })).toHaveTextContent(
-    '모든 작품',
+    '서재에 있는 모든 작품의 목차를 최신화해요.',
   );
+  expect(screen.getByRole('dialog').querySelectorAll('p')).toHaveLength(1);
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
   await screen.findByText('새 회차 2');

@@ -30,6 +30,30 @@ test('independent_saved_lookup', async () => {
   expect(await store.readVersion(value.versionId)).toEqual(value);
   expect(await store.listVersions(source.chapterId)).toEqual([value]);
 });
+
+test('번역 저장은 읽음으로 세지 않고 실제 읽기 위치만 회차별 읽기 기록으로 복원한다', async () => {
+  const memory = new Map<string, string>();
+  const files = {
+    read: async (path: string) => memory.get(path) ?? null,
+    write: async (path: string, text: string) => {
+      memory.set(path, text);
+    },
+  };
+  const store = createLibraryStore(files);
+  await store.commitVersion(value);
+  expect(await store.listReadChapterIds!(source.workId)).toEqual([]);
+  await store.savePosition({
+    workId: source.workId,
+    chapterId: source.chapterId,
+    versionId: value.versionId,
+    blockId: 'b1',
+    offset: 0,
+  });
+  expect(await createLibraryStore(files).listReadChapterIds!(source.workId)).toEqual([
+    source.chapterId,
+  ]);
+  expect(await store.listReadChapterIds!('n5678bb')).toEqual([]);
+});
 test('작품 ID 조회는 전체 등록 순서를 복사본으로 반환한다', async () => {
   const memory = new Map<string, string>();
   const files = {

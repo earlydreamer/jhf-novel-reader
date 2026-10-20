@@ -6,6 +6,8 @@ export type ChapterRef = {
   canonicalUrl: string;
   title: string;
   ordinal: number;
+  /** 원문 최초 등록 시각(UTC ISO). 과거 캐시나 시각 미상인 회차는 생략한다. */
+  publishedAt?: string;
 };
 export type WorkPage = {
   workId: string;
@@ -160,8 +162,9 @@ export interface ProviderSession {
 }
 export interface LibraryStore {
   readWorkUpdates?(): Promise<readonly WorkUpdate[]>;
+  /** 실제 읽기 위치가 저장된 회차. 번역 저장이나 목차/번역 화면 진입만으로는 포함하지 않는다. */
+  listReadChapterIds?(workId: string): Promise<readonly string[]>;
   saveWorkUpdate?(update: WorkUpdate, pages?: readonly WorkPage[]): Promise<void>;
-  acknowledgeChapterUpdate?(workId: string, chapterId: string): Promise<void>;
   saveWorkPage(page: WorkPage): Promise<void>;
   listWorkIds(): Promise<readonly string[]>;
   readWork(workId: string): Promise<readonly WorkPage[]>;
@@ -189,7 +192,7 @@ export interface LibraryStore {
     runtime?: { activeBatchWorkId?: string },
   ): Promise<ChapterRemovalResult>;
 }
-/** 전체 목차를 확인한 기준과 아직 열지 않은 신규 회차. null 기준은 첫 전체 확인 전이다. */
+/** 전체 목차 검사 기록. 신규 표시는 저장된 최초 등록 시각과 현재 시각으로 다시 계산한다. */
 export type WorkUpdate = {
   workId: string;
   /** 실패도 포함한 마지막 검사 날짜. 기기 로컬 달력 기준 YYYY-MM-DD. */

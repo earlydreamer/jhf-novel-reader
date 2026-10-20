@@ -16,7 +16,7 @@ final class DeviceSmokeTests: XCTestCase {
       if let root = windows.compactMap({ $0.rootViewController as? JHFBridgeViewController }).first,
         let web = root.webView,
         let ready = try? await web.evaluateJavaScript(
-          "document.readyState === 'complete' && !!document.querySelector('.nr-library__empty, .nr-library__list, .nr-settings')"),
+          "document.readyState === 'complete' && !!document.querySelector('.nr-library__empty, .nr-library__list, .nr-settings, .nr-work-screen')"),
         ready as? Bool == true
       {
         return web
@@ -163,7 +163,7 @@ return {fixtureRemoved:!!document.querySelector('.nr-library__empty')};
 return await (async()=>{
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const wait=async(fn,label)=>{for(let i=0;i<200;i++){if(await fn())return;await delay(100);}throw Error(label);};
-const click=async text=>{const target=[...document.querySelectorAll('button,[role="menuitem"]')].find(x=>x.textContent.trim()===text||x.getAttribute('aria-label')===text);if(!target)throw Error('Missing '+text);target.click();if(text==='새 회차 확인'||text==='서재 전체 새 회차 확인'){await wait(()=>!!document.querySelector('dialog[open]'),'Check confirmation');const date=document.querySelector('dialog[open] [role="status"]')?.textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0];await wait(()=>[...document.querySelectorAll('dialog[open] button')].some(x=>x.textContent.trim()==='확인하기'&&!x.disabled),'Check ready');[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='확인하기').click();await wait(()=>!document.querySelector('dialog[open]'),'Check submitted');return date;}};
+const click=async text=>{const target=[...document.querySelectorAll('button,[role="menuitem"]')].find(x=>x.textContent.trim()===text||x.getAttribute('aria-label')===text);if(!target)throw Error('Missing '+text);target.click();if(text==='새 회차 확인'||text==='서재 전체 새 회차 확인'){await wait(()=>!!document.querySelector('dialog[open]'),'Check confirmation');await wait(()=>[...document.querySelectorAll('dialog[open] button')].some(x=>x.textContent.trim()==='확인하기'&&!x.disabled),'Check ready');[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='확인하기').click();await wait(()=>!document.querySelector('dialog[open]'),'Check submitted');}};
 document.querySelector('button[aria-label="뒤로 가기"]')?.click();
 await wait(()=>!!document.querySelector('.nr-library__empty'),'Expected empty library');
 const original=Capacitor.nativePromise;
@@ -171,7 +171,7 @@ window.__jhfFixture={count:1,requests:0,original};
 Capacitor.nativePromise=function(plugin,method,options){
  if((plugin==='CapacitorHttp'||plugin==='ReaderHttp')&&method==='request'&&options.url.startsWith('https://ncode.syosetu.com/n1234ab/')){
   const f=window.__jhfFixture;f.requests++;
-  const data='<h1 class="p-novel__title">실기 합성 작품</h1>'+Array.from({length:f.count},(_,i)=>`<div class="p-eplist__sublist"><a href="/n1234ab/${i+1}/">${i+1}화</a></div>`).join('');
+  const data='<h1 class="p-novel__title">실기 합성 작품</h1>'+Array.from({length:f.count},(_,i)=>`<div class="p-eplist__sublist"><a href="/n1234ab/${i+1}/">${i+1}화</a>${i ? '<div class="p-eplist__update">'+new Date(Date.now()-3600000+9*3600000).toISOString().slice(0,16).replaceAll('-','/').replace('T',' ')+'</div>' : ''}</div>`).join('');
   return Promise.resolve({status:200,headers:{'Content-Type':'text/html; charset=utf-8'},data,url:options.url});
  }
  return original.call(this,plugin,method,options);
@@ -182,14 +182,14 @@ document.querySelector('.nr-library__url-form').requestSubmit();
 await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===1,'Initial work');
 await wait(()=>[...document.querySelectorAll('.nr-top-app-bar button')].some(button=>button.getAttribute('aria-label')==='새 회차 확인' && !button.disabled),'Individual check ready');
 document.querySelector('.nr-top-app-bar button[aria-label="새 회차 확인"]').click();
-await wait(()=>/\d{4}-\d{2}-\d{2}/.test(document.querySelector('dialog[open] [role="status"]')?.textContent||''),'Initial check record');
+await wait(()=>document.querySelector('dialog[open] p')?.textContent==='이 작품의 목차를 최신화해요.','Concise confirmation');
 [...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='취소').click();
 await wait(()=>!document.querySelector('dialog[open]'),'Initial check status closed');
 const initialRequests=window.__jhfFixture.requests;
 window.__jhfFixture.count=2;
-const lastDate=await click('새 회차 확인');
-await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===2&&document.querySelector('.nr-new-chapter-badge')?.textContent==='새 회차 1','Individual new badge');
-const report={individualCheck:true,workBadge:true,lastDate};
+await click('새 회차 확인');
+await wait(()=>document.querySelector('.nr-work-screen ol')?.children.length===2&&document.querySelector('.nr-new-chapter-badge')?.textContent==='새 회차','Individual new badge');
+const report={individualCheck:true,workBadge:true};
 document.querySelector('button[aria-label="뒤로 가기"]').click();await wait(()=>!!document.querySelector('.nr-top-app-bar button[aria-label="서재 전체 새 회차 확인"]'),'Home');
 report.libraryBadge=document.querySelector('.nr-library .nr-new-chapter-badge')?.textContent==='새 회차 1';
 window.__jhfFixture.count=3;await click('서재 전체 새 회차 확인');
@@ -218,7 +218,8 @@ return report;
     let cleaned = try await evaluate(cleanup)
     XCTAssertEqual(cleaned["fixtureRemoved"] as? Bool, true)
   }
-  /// Explicit live-service check. No response fixtures and no source body in attachments.
+  /// Real HTTP responses, native persisted metadata and product UI on the physical iPhone.
+  /// Existing translations, reading positions and preferences must remain byte-identical.
   func test06RealNarouWorkAddAndCheck() async throws {
     guard let url = ProcessInfo.processInfo.environment["JHF_REAL_SOURCE_URL"], !url.isEmpty else {
       throw XCTSkip("Pass LiveSourceUrl explicitly to run the real Narou check.")
@@ -228,16 +229,19 @@ return report;
     let script = #"""
 return await (async () => {
   const url = __JHF_LIVE_URL_LITERAL__;
+  const workId = new URL(url).pathname.split('/')[1];
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const wait = async (predicate, label) => {
     for (let n = 0; n < 900; n++) {
-      if (predicate()) return;
+      if (await predicate()) return;
       await sleep(100);
     }
     throw new Error(label);
   };
   const button = label => document.querySelector(`.nr-top-app-bar button[aria-label="${label}"]`);
   const modal = () => document.querySelector('dialog[open]');
+  const toast = () => document.querySelector('.nr-snackbar__text')?.textContent;
+  const refreshed = '회차 목록을 갱신했어요.';
   const clickModal = text => {
     const target = [...modal().querySelectorAll('button')].find(element => element.textContent.trim() === text);
     if (!target || target.disabled) throw new Error('Modal button unavailable: ' + text);
@@ -245,98 +249,197 @@ return await (async () => {
   };
   if (window.__jhfFixture) throw new Error('Synthetic source fixture is active');
   const original = Capacitor.nativePromise;
-  const report = window.__jhfLive = {
-    url, platform: Capacitor.getPlatform(), requests: [], responseReplacement: false,
-    initialLibraryCount: document.querySelectorAll('.nr-library__list > li').length,
+  const native = (plugin, method, options) => original.call(Capacitor, plugin, method, options);
+  const digest = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(n=>n.toString(16).padStart(2,'0')).join('');
+  const readText = async path => (await native('Filesystem','readFile',{path:'narou-reader/'+path,directory:'LIBRARY_NO_CLOUD',encoding:'utf8'})).data;
+  const journal = async path => {
+    const entries = await Promise.all([0,1].map(async slot => {
+      let text;
+      try { text = await readText(`${path}.${slot}.json`); } catch { return null; }
+      const entry = JSON.parse(text);
+      if (await digest(JSON.stringify([1,entry.generation,entry.payload])) !== entry.checksum) throw Error('Journal checksum mismatch');
+      return entry;
+    }));
+    return entries.filter(Boolean).sort((a,b)=>b.generation-a.generation)[0]?.payload;
   };
+  const index = async () => {
+    const value = await journal('library/index');
+    if (!value) throw Error('Library index unavailable');
+    return value;
+  };
+  const protectedSnapshot = async () => {
+    const files = {};
+    // Discover existing directories first; never hide arbitrary native read errors.
+    const roots = (await native('Filesystem','readdir',{path:'narou-reader',directory:'LIBRARY_NO_CLOUD'})).files.map(file=>file.name);
+    for (const directory of ['versions','reading','positions','chapters'].filter(name=>roots.includes(name))) {
+      const entries = (await native('Filesystem','readdir',{path:'narou-reader/'+directory,directory:'LIBRARY_NO_CLOUD'})).files;
+      for (const file of entries.filter(file=>file.type==='file').sort((a,b)=>a.name.localeCompare(b.name))) files[`${directory}/${file.name}`] = await digest(await readText(`${directory}/${file.name}`));
+    }
+    const preferences = {};
+    const {keys} = await native('Preferences','keys',{});
+    for (const key of keys.sort()) preferences[key] = await digest((await native('Preferences','get',{key})).value ?? '');
+    const data = await index();
+    return {files,preferences,workIds:data.workIds,versions:data.versions,recent:data.recent};
+  };
+  const baseline = await protectedSnapshot();
+  const report = window.__jhfLive = {url,platform:Capacitor.getPlatform(),requests:[],responseReplacement:false,initialLibraryCount:baseline.workIds.length};
+  const readingSettings = JSON.parse((await native('Preferences','get',{key:'narou-reader.reading-settings.v2'})).value ?? 'null');
+  report.modelConfigured = !!readingSettings?.selection?.modelId;
+  report.titleToastCount = 0;
+  let toastEvents = 0;
+  const observer = new MutationObserver(records => {
+    for (const record of records) for (const node of record.addedNodes) {
+      if (node.nodeType === 1 && (node.matches?.('.nr-snackbar__text') || node.querySelector?.('.nr-snackbar__text'))) {
+        if (node.textContent.includes(refreshed)) toastEvents++;
+        if (node.textContent.includes('제목을 번역하고 있어요.')) report.titleToastCount++;
+      }
+    }
+  });
+  observer.observe(document.body,{childList:true,subtree:true});
   const openConfirmation = async label => {
     const target = button(label);
-    if (!target || target.disabled || !target.querySelector('[data-icon="refresh"]')) throw new Error('Refresh icon unavailable');
+    if (!target || target.disabled || !target.querySelector('[data-icon="refresh"]')) throw Error('Refresh icon unavailable');
     target.click();
-    await wait(modal, 'Confirmation did not open');
+    await wait(modal,'Confirmation did not open');
+    const expected = label==='새 회차 확인' ? '이 작품의 목차를 최신화해요.' : '서재에 있는 모든 작품의 목차를 최신화해요.';
+    const paragraphs = [...modal().querySelectorAll('p')].map(p=>p.textContent.trim());
+    if (paragraphs.length!==1 || paragraphs[0]!==expected || modal().querySelector('[role="status"]')) throw Error('Confirmation copy is not concise');
+    report[label==='새 회차 확인' ? 'individualCopy' : 'allCopy'] = paragraphs[0];
   };
-  const confirmCheck = async (label, prefix) => {
+  const confirmCheck = async (label,prefix) => {
+    // Dismiss the preceding notification so the next success must create a fresh toast.
+    document.querySelector('.nr-snackbar button')?.click();
+    await wait(()=>!document.querySelector('.nr-snackbar'),'Previous toast did not close');
     const before = report.requests.length;
     await openConfirmation(label);
     await sleep(600);
-    report[prefix + 'BeforeConfirmNoRequest'] = report.requests.length === before;
+    report[prefix+'BeforeConfirmNoRequest'] = report.requests.length===before;
     clickModal('취소');
-    await wait(() => !modal(), 'Cancel did not close confirmation');
+    await wait(()=>!modal(),'Cancel did not close confirmation');
     await sleep(100);
-    report[prefix + 'CancelNoRequest'] = report.requests.length === before;
+    report[prefix+'CancelNoRequest'] = report.requests.length===before;
     await openConfirmation(label);
-    modal().dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
-    await wait(() => !modal(), 'Escape did not close confirmation');
+    modal().dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    await wait(()=>!modal(),'Escape did not close confirmation');
     await sleep(250);
-    report[prefix + 'EscapeNoRequest'] = report.requests.length === before;
+    report[prefix+'EscapeNoRequest'] = report.requests.length===before;
+    const beforeToasts = toastEvents;
     await openConfirmation(label);
     clickModal('확인하기');
-    await wait(() => !modal(), 'Confirmation did not close after submit');
-    await wait(() => report.requests.length > before && report.requests.slice(before).every(request => request.completed) && button(label) && !button(label).disabled, 'Confirmed live check did not finish');
-    report[prefix + 'Requests'] = report.requests.length - before;
-    if (!report[prefix + 'BeforeConfirmNoRequest'] || !report[prefix + 'CancelNoRequest'] || !report[prefix + 'EscapeNoRequest']) throw new Error('Source requested without confirmation');
+    await wait(()=>!modal(),'Confirmation did not close after submit');
+    await wait(()=>report.requests.length>before && report.requests.slice(before).every(request=>request.completed) && button(label) && !button(label).disabled && toast()===refreshed,'Confirmed check and toast did not finish');
+    await sleep(100);
+    report[prefix+'Requests'] = report.requests.length-before;
+    report[prefix+'Toast'] = toast();
+    report[prefix+'ToastCount'] = toastEvents-beforeToasts;
+    if (!report[prefix+'BeforeConfirmNoRequest'] || !report[prefix+'CancelNoRequest'] || !report[prefix+'EscapeNoRequest'] || report[prefix+'ToastCount']!==1) throw Error('Confirmation or single-toast assertions failed');
   };
-  Capacitor.nativePromise = function(plugin, method, options) {
-    if ((plugin === 'CapacitorHttp' || plugin === 'ReaderHttp') && method === 'request' && options.url.startsWith(url)) {
-      const entry = {url: options.url, completed:false};
+  Capacitor.nativePromise = function(plugin,method,options) {
+    if ((plugin==='CapacitorHttp'||plugin==='ReaderHttp') && method==='request' && /^https:\/\/ncode\.syosetu\.com\/n\d+[a-z]+\//.test(options.url)) {
+      const entry = {url:options.url,completed:false};
       report.requests.push(entry);
       const start = Date.now();
-      return original.call(this, plugin, method, options).then(response => {
-        Object.assign(entry, {completed:true, status:response.status, bytes:typeof response.data === 'string' ? new TextEncoder().encode(response.data).length : 0, elapsedMs:Date.now()-start});
+      return original.call(this,plugin,method,options).then(response=>{
+        Object.assign(entry,{completed:true,status:response.status,bytes:typeof response.data==='string'?new TextEncoder().encode(response.data).length:0,elapsedMs:Date.now()-start});
         return response;
-      }, error => { Object.assign(entry, {completed:true, failed:true}); throw error; });
+      },error=>{Object.assign(entry,{completed:true,failed:true});throw error;});
     }
-    return original.call(this, plugin, method, options);
+    return original.call(this,plugin,method,options);
   };
   try {
     document.querySelector('.nr-fab').click();
-    await wait(() => document.querySelector('dialog[open] input[name="url"]'), 'URL dialog not open');
+    await wait(()=>document.querySelector('dialog[open] input[name="url"]'),'URL dialog not open');
     document.querySelector('dialog[open] input[name="url"]').value = url;
     document.querySelector('.nr-library__url-form').requestSubmit();
-    await wait(() => document.querySelectorAll('.nr-work-screen ol > li').length > 0, 'Real work did not render');
-    await wait(() => button('새 회차 확인') && !button('새 회차 확인').disabled, 'Initial check did not settle');
-    await openConfirmation('새 회차 확인');
-    await wait(() => /\d{4}-\d{2}-\d{2}/.test(modal().querySelector('[role="status"]')?.textContent || '') && [...modal().querySelectorAll('button')].some(element => element.textContent.trim() === '확인하기' && !element.disabled), 'Initial check record did not settle');
-    clickModal('취소');
-    await wait(() => !modal(), 'Initial status did not close');
+    await wait(()=>document.querySelectorAll('.nr-work-screen ol > li').length>0,'Real work did not render');
+    await wait(async()=>button('새 회차 확인') && !button('새 회차 확인').disabled && (await index()).workUpdates?.some(update=>update.workId===workId && !update.failed && update.checkedAt),'Initial check did not settle');
     report.importedChapterCount = document.querySelectorAll('.nr-work-screen ol > li').length;
     report.importRequests = report.requests.length;
     report.workBodyControlRemoved = !document.querySelector('.nr-work-screen .nr-chapter-update-control');
-    await confirmCheck('새 회차 확인', 'individual');
-    await openConfirmation('새 회차 확인');
-    report.individualSuccess = !!modal().querySelector('.nr-chapter-update-success') && !modal().querySelector('.nr-library__update-error');
-    report.lastCheckDate = modal().querySelector('[role="status"]').textContent.match(/\d{4}-\d{2}-\d{2}/)?.[0];
-    clickModal('취소');
-    await wait(() => !modal(), 'Status modal did not close');
+    await confirmCheck('새 회차 확인','individual');
+    report.individualSuccess = true;
     report.checkedChapterCount = document.querySelectorAll('.nr-work-screen ol > li').length;
+    const data = await index();
+    const pages = await journal(`works/${workId}`);
+    const readIds = new Set();
+    for (const version of data.versions.filter(version=>version.workId===workId)) {
+      const position = await journal(`reading/${version.versionId}`);
+      if (position) readIds.add(position.chapterId);
+    }
+    const chapters = pages.flatMap(page=>page.chapters);
+    report.workTitle = pages[0].title;
+    report.cachedPageCount = pages.length;
+    report.cachedChapterCount = chapters.length;
+    const now = Date.now();
+    const visibleIds = new Set([...document.querySelectorAll('.nr-work-screen ol > li')].map(row=>`${workId}/${row.value}`));
+    const expected = chapters.filter(chapter=>{
+      const age = now-Date.parse(chapter.publishedAt??'');
+      return visibleIds.has(chapter.chapterId) && age>=0 && age<=48*3600000 && !readIds.has(chapter.chapterId);
+    }).map(chapter=>chapter.chapterId);
+    const actual = [...document.querySelectorAll('.nr-work-screen ol > li')].filter(row=>row.querySelector('.nr-new-chapter-badge')).map(row=>`${workId}/${row.value}`);
+    report.publicationMetadata = chapters.slice(-4).map(chapter=>({chapterId:chapter.chapterId,publishedAt:chapter.publishedAt,read:readIds.has(chapter.chapterId),badge:actual.includes(chapter.chapterId)}));
+    report.expectedBadgeIds = expected;
+    report.actualBadgeIds = actual;
+    report.readChapterIds = [...readIds];
+    report.badgesMatchPublicationAndReading = JSON.stringify(actual)===JSON.stringify(expected);
+    report.chapterBadgesHaveNoNumber = [...document.querySelectorAll('.nr-work-screen .nr-new-chapter-badge')].every(badge=>badge.textContent==='새 회차');
+    if (!report.badgesMatchPublicationAndReading || !report.chapterBadgesHaveNoNumber) throw Error('Publication/read badge assertions failed');
+    const today = new Date();
+    const localDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    report.lastCheckDate = data.workUpdates.find(update=>update.workId===workId).lastCheckDate;
+    report.dateBasedCheck = report.lastCheckDate===localDate;
     document.querySelector('button[aria-label="뒤로 가기"]').click();
-    await wait(() => button('서재 전체 새 회차 확인'), 'Library did not render');
+    await wait(()=>button('서재 전체 새 회차 확인'),'Library did not render');
     report.libraryCount = document.querySelectorAll('.nr-library__list > li').length;
     report.libraryBodyControlRemoved = !document.querySelector('.nr-library__updates');
-    if (report.libraryCount === 1) {
-      const beforeMenu = report.requests.length;
-      document.querySelector('.nr-library__list .nr-menu-anchor > button').click();
-      await wait(() => document.querySelector('[role="menuitem"]'), 'Work menu did not open');
-      [...document.querySelectorAll('[role="menuitem"]')].find(element => element.textContent.trim() === '새 회차 확인').click();
-      await wait(modal, 'Work menu bypassed confirmation');
-      await sleep(600);
-      clickModal('취소');
-      await wait(() => !modal(), 'Work-menu confirmation did not close');
-      report.menuCancelNoRequest = report.requests.length === beforeMenu;
-      if (!report.menuCancelNoRequest) throw new Error('Work-menu request bypassed confirmation');
-      await confirmCheck('서재 전체 새 회차 확인', 'all');
-      report.allSuccess = !document.querySelector('.nr-library__update-error');
-    } else report.allSkippedToPreserveOtherWorks = true;
-    report.newBadgeCount = document.querySelectorAll('.nr-library .nr-new-chapter-badge').length;
-    report.allResponsesSuccessful = report.requests.every(request => request.completed && request.status === 200 && request.bytes > 0);
-    report.keptInLibrary = true;
-    if (!report.workBodyControlRemoved || !report.libraryBodyControlRemoved || !report.individualSuccess || !report.allResponsesSuccessful || report.checkedChapterCount !== report.importedChapterCount) throw new Error('Live refresh assertions failed');
+    // Explicitly requested whole-library refresh: preserve every registered work and record all HTTP results.
+    await confirmCheck('서재 전체 새 회차 확인','all');
+    report.allSuccess = !document.querySelector('.nr-library__update-error');
+    if (pages.length>1) {
+      const openCached = async () => {
+        const target = [...document.querySelectorAll('.nr-library__list .nr-list-item__main')].find(item=>item.querySelector('.nr-list-item__headline')?.textContent===report.workTitle);
+        if (!target) throw Error('Cached work row unavailable');
+        target.click();
+        await wait(()=>document.querySelectorAll('.nr-work-chapters > li').length===pages[0].chapters.length && button('새 회차 확인') && !button('새 회차 확인').disabled,'Cached first page did not render');
+      };
+      const beforePaging = report.requests.length;
+      await openCached();
+      report.pagingRowCounts = [document.querySelectorAll('.nr-work-chapters > li').length];
+      for (let page=1;page<pages.length;page++) {
+        const more = [...document.querySelectorAll('.nr-work-screen button')].find(item=>item.textContent.trim()==='다음 목차 페이지 불러오기');
+        if (!more || more.disabled) throw Error('Next cached page control unavailable');
+        more.click();
+        const expectedCount = pages.slice(0,page+1).reduce((sum,value)=>sum+value.chapters.length,0);
+        await wait(()=>document.querySelectorAll('.nr-work-chapters > li').length===expectedCount && button('새 회차 확인') && !button('새 회차 확인').disabled,'Cached next page did not render');
+        report.pagingRowCounts.push(expectedCount);
+      }
+      document.querySelector('button[aria-label="뒤로 가기"]').click();
+      await wait(()=>button('서재 전체 새 회차 확인'),'Library after paging unavailable');
+      await openCached();
+      report.reopenedFirstPageCount = document.querySelectorAll('.nr-work-chapters > li').length;
+      document.querySelector('button[aria-label="뒤로 가기"]').click();
+      await wait(()=>button('서재 전체 새 회차 확인'),'Library after reopen unavailable');
+      report.cachedPagingWithoutRequests = report.requests.length===beforePaging;
+      if (!report.cachedPagingWithoutRequests) throw Error('Cached paging requested source again');
+    }
+    report.allResponsesSuccessful = report.requests.every(request=>request.completed && request.status===200 && request.bytes>0);
+    const after = await protectedSnapshot();
+    report.protectedFileCount = Object.keys(baseline.files).length;
+    report.savedVersionCount = baseline.versions.length;
+    report.protectedFilesUnchanged = JSON.stringify(baseline.files)===JSON.stringify(after.files);
+    report.preferencesUnchanged = JSON.stringify(baseline.preferences)===JSON.stringify(after.preferences);
+    report.versionsUnchanged = JSON.stringify(baseline.versions)===JSON.stringify(after.versions);
+    report.readingHistoryUnchanged = JSON.stringify(baseline.recent)===JSON.stringify(after.recent);
+    report.existingWorksPreserved = baseline.workIds.every(id=>after.workIds.includes(id));
+    report.keptInLibrary = after.workIds.includes(workId);
+    if (!report.modelConfigured && report.titleToastCount!==0) throw Error('Title toast displayed without a model request');
+    if (!report.workBodyControlRemoved || !report.libraryBodyControlRemoved || !report.allResponsesSuccessful || !report.allSuccess || !report.dateBasedCheck || report.checkedChapterCount!==report.importedChapterCount || !report.protectedFilesUnchanged || !report.preferencesUnchanged || !report.versionsUnchanged || !report.readingHistoryUnchanged || !report.existingWorksPreserved) throw Error('Live refresh/preservation assertions failed');
     return report;
   } catch (error) {
     report.failure = String(error.message);
-    report.errorNotice = document.querySelector('.nr-snackbar')?.textContent?.slice(0, 500);
+    report.errorNotice = document.querySelector('.nr-snackbar')?.textContent?.slice(0,500);
     throw error;
-  } finally { Capacitor.nativePromise = original; }
+  } finally { Capacitor.nativePromise = original; observer.disconnect(); }
 })();
 """#
     let result: [String: Any]
@@ -353,20 +456,22 @@ return await (async () => {
       throw error
     }
     XCTAssertEqual(result["responseReplacement"] as? Bool, false)
-    XCTAssertEqual(result["individualSuccess"] as? Bool, true)
-    XCTAssertEqual(result["allResponsesSuccessful"] as? Bool, true)
+    for key in ["individualSuccess", "allSuccess", "allResponsesSuccessful", "workBodyControlRemoved", "libraryBodyControlRemoved", "individualBeforeConfirmNoRequest", "individualCancelNoRequest", "individualEscapeNoRequest", "allBeforeConfirmNoRequest", "allCancelNoRequest", "allEscapeNoRequest", "badgesMatchPublicationAndReading", "chapterBadgesHaveNoNumber", "dateBasedCheck", "protectedFilesUnchanged", "preferencesUnchanged", "versionsUnchanged", "readingHistoryUnchanged", "existingWorksPreserved", "keptInLibrary"] {
+      XCTAssertEqual(result[key] as? Bool, true, key)
+    }
     XCTAssertGreaterThan(result["importedChapterCount"] as? Int ?? 0, 0)
     XCTAssertEqual(result["importedChapterCount"] as? Int, result["checkedChapterCount"] as? Int)
     XCTAssertGreaterThan(result["individualRequests"] as? Int ?? 0, 0)
-    for key in ["workBodyControlRemoved", "libraryBodyControlRemoved", "individualBeforeConfirmNoRequest", "individualCancelNoRequest", "individualEscapeNoRequest"] {
-      XCTAssertEqual(result[key] as? Bool, true, key)
+    XCTAssertGreaterThan(result["allRequests"] as? Int ?? 0, 0)
+    XCTAssertEqual(result["individualToastCount"] as? Int, 1)
+    XCTAssertEqual(result["allToastCount"] as? Int, 1)
+    if result["modelConfigured"] as? Bool == false {
+      XCTAssertEqual(result["titleToastCount"] as? Int, 0)
     }
-    if result["libraryCount"] as? Int == 1 {
-      for key in ["allBeforeConfirmNoRequest", "allCancelNoRequest", "allEscapeNoRequest", "menuCancelNoRequest"] {
-        XCTAssertEqual(result[key] as? Bool, true, key)
-      }
-      XCTAssertEqual(result["allSuccess"] as? Bool, true)
-      XCTAssertGreaterThan(result["allRequests"] as? Int ?? 0, 0)
+    if (result["cachedPageCount"] as? Int ?? 0) > 1 {
+      XCTAssertEqual(result["cachedPagingWithoutRequests"] as? Bool, true)
+      XCTAssertEqual(result["reopenedFirstPageCount"] as? Int, result["importedChapterCount"] as? Int)
+      XCTAssertEqual((result["pagingRowCounts"] as? [Int])?.last, result["cachedChapterCount"] as? Int)
     }
     let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
     let metadata = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
@@ -374,11 +479,39 @@ return await (async () => {
     metadata.lifetime = .keepAlways
     add(metadata)
     let web = try await webView()
-    try await Task.sleep(nanoseconds: 400_000_000)
-    let attachment = XCTAttachment(image: try await web.takeSnapshot(configuration: nil))
-    attachment.name = "JHF-iPhone-real-Narou-library"
-    attachment.lifetime = .keepAlways
-    add(attachment)
+    let library = XCTAttachment(image: try await web.takeSnapshot(configuration: nil))
+    library.name = "JHF-iPhone-real-Narou-library"
+    library.lifetime = .keepAlways
+    add(library)
+    _ = try await evaluate(#"""
+return await (async()=>{
+  const target=[...document.querySelectorAll('.nr-library__list .nr-list-item__main')].find(item=>item.querySelector('.nr-list-item__headline')?.textContent===window.__jhfLive.workTitle);
+  if(!target)throw Error('Snapshot work unavailable');
+  target.click();
+  for(let i=0;i<200;i++){
+    if(document.querySelectorAll('.nr-work-chapters > li').length && document.querySelector('.nr-top-app-bar button[aria-label="새 회차 확인"]:not(:disabled)')){
+      document.querySelector('.nr-work-chapters .nr-new-chapter-badge')?.closest('li').scrollIntoView({block:'center'});
+      return {ready:true};
+    }
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  throw Error('Snapshot work did not render');
+})();
+"""#)
+    try await Task.sleep(nanoseconds: 300_000_000)
+    let work = XCTAttachment(image: try await web.takeSnapshot(configuration: nil))
+    work.name = "JHF-iPhone-publication-badges"
+    work.lifetime = .keepAlways
+    add(work)
+    _ = try await evaluate("document.querySelector('button[aria-label=\"뒤로 가기\"]').click(); return {home:true};")
+    try await Task.sleep(nanoseconds: 300_000_000)
+    _ = try await evaluate("document.querySelector('.nr-top-app-bar button[aria-label=\"서재 전체 새 회차 확인\"]').click(); return {opened:!!document.querySelector('dialog[open]')};")
+    try await Task.sleep(nanoseconds: 300_000_000)
+    let confirmation = XCTAttachment(image: try await web.takeSnapshot(configuration: nil))
+    confirmation.name = "JHF-iPhone-concise-confirmation"
+    confirmation.lifetime = .keepAlways
+    add(confirmation)
+    _ = try await evaluate("[...document.querySelectorAll('dialog[open] button')].find(b=>b.textContent.trim()==='취소').click(); return {closed:true};")
   }
   func test02PrivateFilesPreferencesAndKeychainRoundTrip() async throws {
     let value = try await evaluate(
