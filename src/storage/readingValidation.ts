@@ -257,7 +257,7 @@ export async function workPage(value: unknown): Promise<WorkPage> {
   check(typeof value.complete === 'boolean' && Array.isArray(value.chapters));
   const ids = new Set<string>();
   for (const ref of value.chapters) {
-    object(ref, ['workId', 'chapterId', 'canonicalUrl', 'title', 'ordinal']);
+    object(ref, ['workId', 'chapterId', 'canonicalUrl', 'title', 'ordinal', 'publishedAt']);
     check(ref.workId === value.workId);
     chapterIdentity(ref.chapterId);
     check(!ids.has(ref.chapterId));
@@ -265,6 +265,11 @@ export async function workPage(value: unknown): Promise<WorkPage> {
     url(ref.canonicalUrl, true);
     text(ref.title);
     integer(ref.ordinal, 1);
+    if (ref.publishedAt !== undefined) {
+      text(ref.publishedAt);
+      check(Number.isFinite(Date.parse(ref.publishedAt)));
+      check(new Date(ref.publishedAt).toISOString() === ref.publishedAt);
+    }
   }
   return value as unknown as WorkPage;
 }

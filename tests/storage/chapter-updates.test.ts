@@ -46,8 +46,29 @@ test('확인 시각과 신규 회차 상태는 재시작과 백업 복원 검증
   expect(await restarted.readWorkUpdates!()).toEqual([update]);
   expect((await restarted.readWork('n1234aa'))[0]?.chapters).toHaveLength(2);
   await validateBackupSnapshot({ paths: [...h.memory.keys()], read: h.files.read, settings: null });
-  await restarted.acknowledgeChapterUpdate!('n1234aa', 'n1234aa/2');
-  expect((await createLibraryStore(h.files).readWorkUpdates!())[0]?.newChapterIds).toEqual([]);
+  expect((await createLibraryStore(h.files).readWorkUpdates!())[0]?.newChapterIds).toEqual([
+    'n1234aa/2',
+  ]);
+});
+
+test('등록 시각이 있는 목차는 저장·백업 검증·재시작 후 보존하고 잘못된 시각은 거부한다', async () => {
+  const h = fixture();
+  const page = toc();
+  page.chapters = page.chapters.map((chapter) => ({
+    ...chapter,
+    publishedAt: '2026-10-20T10:20:00.000Z',
+  }));
+  await h.library.saveWorkPage(page);
+  expect((await createLibraryStore(h.files).readWork(page.workId))[0]).toEqual(page);
+  await validateBackupSnapshot({ paths: [...h.memory.keys()], read: h.files.read, settings: null });
+  for (const publishedAt of ['yesterday', '2026-02-30T10:20:00.000Z']) {
+    await expect(
+      h.library.saveWorkPage({
+        ...page,
+        chapters: page.chapters.map((chapter) => ({ ...chapter, publishedAt })),
+      }),
+    ).rejects.toThrow();
+  }
 });
 
 test('작품 제거는 확인 상태도 함께 제거하고 늦은 확인 결과가 작품을 재등록하지 못한다', async () => {

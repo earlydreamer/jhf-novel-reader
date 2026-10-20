@@ -1,26 +1,25 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { createChapterUpdates, type ChapterUpdatesSnapshot } from '../../src/app/chapterUpdates';
 import { chapterCheckDate, nextChapterCheckAt } from '../../src/app/chapterUpdateSchedule';
+import { NEW_CHAPTER_WINDOW_MS } from '../../src/app/chapterPublication';
 import type { LibraryStore, WorkPage, WorkUpdate } from '../../src/contracts/reading';
 
-import { toc } from '../fixtures/chapterUpdates';
+import { recentToc as toc } from '../fixtures/chapterUpdates';
 
 function harness(initial = [toc()]) {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(2026, 9, 20, 9));
   const pages = new Map(initial.map((page) => [page.workId, [page]]));
   const records = new Map<string, WorkUpdate>();
+  const readIds = new Map<string, string[]>();
   const library: LibraryStore = {
     listWorkIds: vi.fn(async () => [...pages.keys()]),
     readWork: vi.fn(async (id) => structuredClone(pages.get(id) ?? [])),
     readWorkUpdates: vi.fn(async () => structuredClone([...records.values()])),
+    listReadChapterIds: vi.fn(async (id) => readIds.get(id) ?? []),
     saveWorkUpdate: vi.fn(async (record, values) => {
       records.set(record.workId, structuredClone(record));
       if (values) pages.set(record.workId, structuredClone([...values]));
-    }),
-    acknowledgeChapterUpdate: vi.fn(async (id, chapterId) => {
-      const record = records.get(id);
-      if (record) record.newChapterIds = record.newChapterIds.filter((id) => id !== chapterId);
     }),
     saveWorkPage: vi.fn(),
     listRecent: vi.fn(async () => []),
@@ -53,6 +52,7 @@ function harness(initial = [toc()]) {
     create,
     library,
     records,
+    readIds,
     pages,
     getWorkPage,
     updated,
@@ -65,7 +65,125 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-test('전체 목차를 비교하고 새 배지와 마지막 확인 시각을 보존하며 열었던 회차만 해제한다', async () => {
+test('등록 시각 없는 과거 누적 배지는 복원하지 않고 전체 성공 토스트는 한 번만 발행한다', async () => {
+  const h = harness([toc(), toc('n5678bb')]);
+  const now = Date.now();
+  h.records.set('n1234aa', {
+    workId: 'n1234aa',
+    lastCheckDate: chapterCheckDate(now),
+    attemptedAt: now,
+    checkedAt: now,
+    knownChapterIds: ['n1234aa/1'],
+    newChapterIds: ['n1234aa/1'],
+    failed: false,
+  });
+  await h.checks.initialize();
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  expect(h.getWorkPage).not.toHaveBeenCalled();
+  h.checks.setForeground(true);
+  await h.checks.checkAll();
+  expect(h.state().notice).toEqual({ id: 1, text: '회차 목록을 갱신했어요.' });
+  h.checks.dispose();
+});
+
+test('전체 검사 목록을 읽지 못하면 성공 토스트 대신 실패 안내를 발행한다', async () => {
+  const h = harness();
+  await h.checks.initialize();
+  h.checks.setForeground(true);
+  vi.mocked(h.library.listWorkIds).mockRejectedValue(new Error('storage'));
+  await h.checks.checkAll();
+  expect(h.state().notice?.text).toBe('서재를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+  h.checks.dispose();
+});
+
+test('48시간 이내여도 실제 읽기 기록이 있으면 제외하며 기록 전후·재검사·재시작을 구분한다', async () => {
+  const h = harness();
+  h.getWorkPage.mockResolvedValue(toc('n1234aa', [1, 2, 3]));
+  h.readIds.set('n1234aa', ['n1234aa/2']);
+  await h.checks.initialize();
+  h.checks.setForeground(true);
+  await h.checks.checkAll();
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/3']);
+  h.readIds.set('n1234aa', ['n1234aa/2', 'n1234aa/3']);
+  h.checks.readRecorded('n1234aa', 'n1234aa/3');
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  await h.checks.checkAll();
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  h.checks.dispose();
+  const restarted = h.create();
+  await restarted.initialize();
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  restarted.dispose();
+});
+
+test('48시간 경계와 만료는 시각 기준이며 원문 재요청 없이 배지가 사라지고 재시작에도 복원된다', async () => {
+  const h = harness();
+  const now = Date.now();
+  const page = toc('n1234aa', [1, 2, 3, 4, 5]);
+  page.chapters = page.chapters.map((chapter, index) => {
+    const dates = [
+      now - NEW_CHAPTER_WINDOW_MS,
+      now - NEW_CHAPTER_WINDOW_MS - 1,
+      now + 100 * 3_600_000,
+      undefined,
+      now - 3_600_000,
+    ];
+    const { publishedAt: _old, ...ref } = chapter;
+    return dates[index] === undefined
+      ? ref
+      : { ...ref, publishedAt: new Date(dates[index]!).toISOString() };
+  });
+  h.getWorkPage.mockResolvedValue(page);
+  await h.checks.initialize();
+  h.checks.setIntervalDays(365);
+  h.checks.setForeground(true);
+  await h.checks.checkAll();
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/1', 'n1234aa/5']);
+  expect(h.state().notice?.text).toBe('회차 목록을 갱신했어요.');
+  h.getWorkPage.mockClear();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/5']);
+  await vi.advanceTimersByTimeAsync(NEW_CHAPTER_WINDOW_MS - 3_600_000);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  expect(h.getWorkPage).not.toHaveBeenCalled();
+  h.checks.dispose();
+  const restarted = h.create();
+  await restarted.initialize();
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  expect(h.getWorkPage).not.toHaveBeenCalled();
+  restarted.dispose();
+});
+
+test('백그라운드에서 만료된 배지는 복귀 때 지우고 오래된 회차만 갱신해도 완료를 알린다', async () => {
+  const h = harness();
+  await h.checks.initialize();
+  h.checks.setIntervalDays(365);
+  h.checks.setForeground(true);
+  h.getWorkPage.mockResolvedValue(toc('n1234aa', [1, 2]));
+  await h.checks.checkAll();
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/2']);
+  h.checks.setForeground(false);
+  h.getWorkPage.mockClear();
+  await vi.advanceTimersByTimeAsync(49 * 3_600_000);
+  h.checks.setForeground(true);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  expect(h.getWorkPage).not.toHaveBeenCalled();
+  const old = toc('n1234aa', [1, 2, 3]);
+  old.chapters = old.chapters.map((chapter) => ({
+    ...chapter,
+    publishedAt: new Date(Date.now() - 72 * 3_600_000).toISOString(),
+  }));
+  h.getWorkPage.mockResolvedValue(old);
+  const before = h.state().notice?.id;
+  await h.checks.checkWork('n1234aa');
+  expect(h.pages.get('n1234aa')?.[0]?.chapters).toHaveLength(3);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  expect(h.state().notice?.text).toBe('회차 목록을 갱신했어요.');
+  expect(h.state().notice?.id).toBeGreaterThan(before!);
+  h.checks.dispose();
+});
+
+test('전체 목차의 등록 시각으로 배지를 계산하고 재검사와 재시작에도 복원한다', async () => {
   const h = harness();
   await h.checks.initialize();
   h.checks.setForeground(true);
@@ -79,18 +197,17 @@ test('전체 목차를 비교하고 새 배지와 마지막 확인 시각을 보
   ]);
   expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/2', 'n1234aa/3', 'n1234aa/4']);
   const checkedAt = h.state().works.n1234aa?.checkedAt;
-  await h.checks.acknowledge('n1234aa', 'n1234aa/2');
   await h.checks.checkAll();
-  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/3', 'n1234aa/4']);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/2', 'n1234aa/3', 'n1234aa/4']);
   h.checks.dispose();
   const restarted = h.create();
   await restarted.initialize();
   expect(h.state().works.n1234aa?.checkedAt).toBe(checkedAt);
-  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/3', 'n1234aa/4']);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/2', 'n1234aa/3', 'n1234aa/4']);
   restarted.dispose();
 });
 
-test('일부 목차만 가진 작품의 첫 전체 조회는 기준점으로 삼는다', async () => {
+test('일부 목차만 가진 작품도 첫 전체 조회부터 실제 등록 시각으로 배지를 표시한다', async () => {
   const h = harness([toc('n1234aa', [1, 2], 1, true)]);
   await h.checks.initialize();
   h.checks.setForeground(true);
@@ -99,10 +216,15 @@ test('일부 목차만 가진 작품의 첫 전체 조회는 기준점으로 삼
     url.includes('?p=2') ? toc('n1234aa', last, 2) : toc('n1234aa', [1, 2], 1, true),
   );
   await h.checks.checkAll();
-  expect(h.state().works.n1234aa?.newChapterIds).toEqual([]);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/2', 'n1234aa/3', 'n1234aa/4']);
   last = [3, 4, 5];
   await h.checks.checkAll();
-  expect(h.state().works.n1234aa?.newChapterIds).toEqual(['n1234aa/5']);
+  expect(h.state().works.n1234aa?.newChapterIds).toEqual([
+    'n1234aa/2',
+    'n1234aa/3',
+    'n1234aa/4',
+    'n1234aa/5',
+  ]);
   h.checks.dispose();
 });
 

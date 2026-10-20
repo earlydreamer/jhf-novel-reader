@@ -79,6 +79,26 @@ function nextPage(root: DocumentFragment, pageUrl: string): string | null {
   }
 }
 
+/** 목차의 본문 시각은 최초 등록일이다. span의 title에 있는 개정일은 사용하지 않는다. */
+function publishedAt(anchor: Element): string | undefined {
+  const row = anchor.closest('.p-eplist__sublist, .novel_sublist2');
+  const element = row?.querySelector('.p-eplist__update, .long_update');
+  if (!element) return;
+  const dateText = Array.from(element.childNodes)
+    .filter((node) => node.nodeType === 3)
+    .map((node) => node.textContent ?? '')
+    .join(' ')
+    .trim();
+  const match = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(dateText);
+  if (!match) return;
+  const local = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6] ?? '00'}`;
+  const timestamp = Date.parse(`${local}+09:00`);
+  if (!Number.isFinite(timestamp)) return;
+  // Date.parse가 2월 30일 등을 다음 달로 보정한 값도 거부한다.
+  if (new Date(timestamp + 9 * 60 * 60 * 1000).toISOString().slice(0, 19) !== local) return;
+  return new Date(timestamp).toISOString();
+}
+
 export function parseWorkPage(html: string, input: string): WorkPage {
   const pageUrl = normalizeWorkPageUrl(input);
   const canonicalUrl = pageUrl.split('?', 1)[0]!;
@@ -96,12 +116,14 @@ export function parseWorkPage(html: string, input: string): WorkPage {
     if (!target || !name || seen.has(target)) continue;
     seen.add(target);
     const { chapterId, episode } = sourceIdentity(target);
+    const publication = publishedAt(anchor);
     chapters.push({
       workId,
       chapterId,
       canonicalUrl: target,
       title: name,
       ordinal: Number(episode),
+      ...(publication ? { publishedAt: publication } : {}),
     });
   }
   // Presence is metadata only: do not parse or prefetch the short-story body.

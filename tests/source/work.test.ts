@@ -4,6 +4,7 @@ import {
   createRenewalSource,
   normalizeSourceInput,
   normalizeWorkPageUrl,
+  parseWorkPage,
 } from '../../src/source/work';
 import type { SourceTransport } from '../../src/contracts';
 const fixture = () =>
@@ -13,6 +14,34 @@ const workUrl = 'https://ncode.syosetu.com/n1234ab/';
 const chapterUrl = `${workUrl}2/`;
 const toc = `<h1 class="p-novel__title">合成作品</h1><div class="p-eplist__sublist"><a href="/n1234ab/1/">第一話</a></div><div class="p-eplist__sublist"><a href="/n1234ab/2/">第二話</a></div>`;
 const signal = new AbortController().signal;
+
+it('최초 등록 시각을 JST에서 UTC로 변환하며 최근 개정일은 사용하지 않는다', () => {
+  const page = parseWorkPage(
+    `<h1 class="p-novel__title">合成作品</h1>
+    <div class="p-eplist__sublist"><a href="/n1234ab/1/">一</a>
+      <div class="p-eplist__update">2026/10/19 19:20<span title="2026/10/21 12:30 改稿">（改）</span></div>
+    </div>
+    <div class="novel_sublist2"><dd class="subtitle"><a href="/n1234ab/2/">二</a></dd>
+      <dt class="long_update">2026/10/20 00:05<span title="2026/10/21 01:00 改稿">（改）</span></dt>
+    </div>`,
+    workUrl,
+  );
+  expect(page.chapters.map((chapter) => chapter.publishedAt)).toEqual([
+    '2026-10-19T10:20:00.000Z',
+    '2026-10-19T15:05:00.000Z',
+  ]);
+});
+
+it.each(['', '2026/02/30 12:00', '2026/10/21 25:00', '不明'])(
+  '등록일 %s는 추측하지 않고 생략한다',
+  (date) => {
+    const page = parseWorkPage(
+      `<h1 class="p-novel__title">合成作品</h1><div class="p-eplist__sublist"><a href="/n1234ab/1/">一</a><div class="p-eplist__update">${date}<span title="2026/10/21 12:00 改稿">（改）</span></div></div>`,
+      workUrl,
+    );
+    expect(page.chapters[0]).not.toHaveProperty('publishedAt');
+  },
+);
 function source(html: string) {
   const requests: string[] = [];
   const transport: SourceTransport = {

@@ -11,6 +11,7 @@ const chapters = [1, 2].map((ordinal) => ({
   canonicalUrl: `https://ncode.syosetu.com/n1234ab/${ordinal}/`,
   title: `${ordinal}화 제목`,
   ordinal,
+  ...(ordinal === 2 ? { publishedAt: new Date(Date.now() - 3_600_000).toISOString() } : {}),
 }));
 const page: WorkPage = {
   workId: 'n1234ab',
@@ -69,9 +70,6 @@ const controller = createRenewalController({
     readWorkUpdates: async () => [structuredClone(update)],
     saveWorkUpdate: async (value) => {
       update = structuredClone(value);
-    },
-    acknowledgeChapterUpdate: async (_workId, chapterId) => {
-      update.newChapterIds = update.newChapterIds.filter((id) => id !== chapterId);
     },
     saveWorkPage: async () => {},
     listWorkIds: async () => [page.workId],

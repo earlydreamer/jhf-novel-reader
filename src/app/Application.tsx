@@ -559,12 +559,6 @@ export function Application({
     setChapterUpdateRequest(null);
     try {
       await controller.checkChapterUpdates(workId);
-      const latest = controller.getSnapshot();
-      showActionNotice(
-        workId
-          ? (latest.chapterUpdates.works[workId]?.error ?? '새 회차 확인을 마쳤어요.')
-          : (latest.chapterUpdates.message ?? '서재 전체 새 회차 확인을 마쳤어요.'),
-      );
     } catch {
       showActionNotice('새 회차를 확인하지 못했어요. 다시 시도해 주세요.');
     }
@@ -786,6 +780,9 @@ function SnackbarBridge({
   useEffect(() => {
     if (notice) show(notice.text);
   }, [notice, show]);
+  useEffect(() => {
+    if (state.chapterUpdates.notice) show(state.chapterUpdates.notice.text);
+  }, [state.chapterUpdates.notice, show]);
   useEffect(() => {
     if (holdErrors) return;
     if (state.error && state.errorRevision !== last.current.errorRevision) show(state.error);

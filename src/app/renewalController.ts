@@ -471,8 +471,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     chapterUpdatesAvailable: Boolean(
       dependencies.source &&
       dependencies.library?.saveWorkUpdate &&
-      dependencies.library.readWorkUpdates &&
-      dependencies.library.acknowledgeChapterUpdate,
+      dependencies.library.readWorkUpdates,
     ),
     libraryLoaded: !dependencies.library,
     connection: DEFAULT_CONNECTION,
@@ -1828,13 +1827,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       });
       if (version) {
         navigate({ kind: 'reader', versionId: version.versionId });
-        void chapterUpdates?.acknowledge(chapter.workId, chapter.chapterId);
         void checkSourceChange(version, chapter);
         if (titleJob) void stopTitles().then(() => requestTitleTranslation());
         else requestTitleTranslation();
       } else {
         navigate({ kind: 'translation', chapterId: chapter.chapterId });
-        void chapterUpdates?.acknowledge(chapter.workId, chapter.chapterId);
         const routedOperation = selectionOperation;
         // Restore connectivity on demand; cached reading and startup stay offline.
         if (
@@ -1890,7 +1887,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       versionsById.set(version.versionId, version);
       positionsByVersion.set(version.versionId, position);
       publish({ work, chapter, version, position, savedChapterIds });
-      void chapterUpdates?.acknowledge(workId, version.source.chapterId);
       navigate({ kind: 'reader', versionId });
       await loadTitles(version.source.workId);
       void checkSourceChange(version, chapter);
@@ -2843,6 +2839,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           if (removingWorkIds.has(next.workId) || removingChapterIds.has(next.chapterId)) continue;
           try {
             await trackWorkWrite(next.workId, () => dependencies.library!.savePosition(next));
+            chapterUpdates?.readRecorded(next.workId, next.chapterId);
           } catch {
             publish({ error: '읽던 위치를 저장하지 못했어요.' });
           }
@@ -3232,7 +3229,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ) {
         if (livePosition?.chapterId === value.source.chapterId) {
           const block = value.blocks[livePosition.index];
-          if (block && dependencies.library)
+          if (block && dependencies.library) {
             await dependencies.library.savePosition({
               versionId: value.versionId,
               chapterId: value.source.chapterId,
@@ -3240,6 +3237,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
               blockId: block.id,
               offset: livePosition.offset,
             });
+            chapterUpdates?.readRecorded(value.source.workId, value.source.chapterId);
+          }
         }
         await continueReading(value.versionId);
       }
