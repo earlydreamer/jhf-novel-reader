@@ -409,10 +409,18 @@ return await (async () => {
         const more = [...document.querySelectorAll('.nr-work-screen button')].find(item=>item.textContent.trim()==='다음 목차 페이지 불러오기');
         if (!more || more.disabled) throw Error('Next cached page control unavailable');
         more.click();
-        const expectedCount = pages.slice(0,page+1).reduce((sum,value)=>sum+value.chapters.length,0);
-        await wait(()=>document.querySelectorAll('.nr-work-chapters > li').length===expectedCount && button('새 회차 확인') && !button('새 회차 확인').disabled,'Cached next page did not render');
+        const expectedCount = pages[page].chapters.length;
+        const expectedFirst = pages[page].chapters[0].ordinal;
+        await wait(()=>document.querySelectorAll('.nr-work-chapters > li').length===expectedCount && document.querySelector('.nr-work-chapters > li')?.value===expectedFirst && button('새 회차 확인') && !button('새 회차 확인').disabled,'Cached next page did not render');
         report.pagingRowCounts.push(expectedCount);
       }
+      for (let page=pages.length-2;page>=0;page--) {
+        const previous = [...document.querySelectorAll('.nr-work-screen button')].find(item=>item.textContent.trim()==='이전 목차 페이지 불러오기');
+        if (!previous || previous.disabled) throw Error('Previous cached page control unavailable');
+        previous.click();
+        await wait(()=>document.querySelectorAll('.nr-work-chapters > li').length===pages[page].chapters.length && document.querySelector('.nr-work-chapters > li')?.value===pages[page].chapters[0].ordinal && button('새 회차 확인') && !button('새 회차 확인').disabled,'Cached previous page did not render');
+      }
+      report.cachedPreviousPagesVerified = true;
       document.querySelector('button[aria-label="뒤로 가기"]').click();
       await wait(()=>button('서재 전체 새 회차 확인'),'Library after paging unavailable');
       await openCached();
@@ -470,8 +478,9 @@ return await (async () => {
     }
     if (result["cachedPageCount"] as? Int ?? 0) > 1 {
       XCTAssertEqual(result["cachedPagingWithoutRequests"] as? Bool, true)
+      XCTAssertEqual(result["cachedPreviousPagesVerified"] as? Bool, true)
       XCTAssertEqual(result["reopenedFirstPageCount"] as? Int, result["importedChapterCount"] as? Int)
-      XCTAssertEqual((result["pagingRowCounts"] as? [Int])?.last, result["cachedChapterCount"] as? Int)
+      XCTAssertEqual((result["pagingRowCounts"] as? [Int])?.reduce(0, +), result["cachedChapterCount"] as? Int)
     }
     let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
     let metadata = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")

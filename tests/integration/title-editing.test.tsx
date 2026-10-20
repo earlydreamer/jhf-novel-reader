@@ -98,6 +98,80 @@ function harness(automatic = false) {
   };
 }
 afterEach(cleanup);
+
+test('다른 작품으로 이동하면 이전 제목 요청을 취소하고 종료된 뒤 새 작품만 번역한다', async () => {
+  const h = harness(true);
+  let finish!: () => void;
+  h.translateTitles.mockImplementationOnce(async (_selection, _work, inputs) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return inputs.map(() => '이전 작품 응답');
+  });
+  const app = await h.ready();
+  await waitFor(() => expect(h.translateTitles).toHaveBeenCalledTimes(1));
+  const next: WorkPage = {
+    ...work,
+    workId: 'n5678cd',
+    canonicalUrl: 'https://ncode.syosetu.com/n5678cd/',
+    pageUrl: 'https://ncode.syosetu.com/n5678cd/',
+    chapters: [],
+  };
+  h.setPage(next);
+  await app.openWork(next.canonicalUrl);
+  expect(h.translateTitles.mock.calls[0]![3].aborted).toBe(true);
+  expect(h.translateTitles).toHaveBeenCalledTimes(1);
+  finish();
+  await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
+  expect(h.translateTitles.mock.calls.map((call) => call[1])).toEqual([work.workId, next.workId]);
+  expect(app.getSnapshot().titles.some((entry) => entry.target === '이전 작품 응답')).toBe(false);
+  app.dispose();
+});
+
+test('전송 전 기록 저장 중 취소한 제목은 재진입 때 정상 자동 번역한다', async () => {
+  const h = harness(true);
+  const record = h.repo.recordAttempt.bind(h.repo);
+  let finish!: () => void;
+  vi.spyOn(h.repo, 'recordAttempt').mockImplementationOnce(async (workId, inputs) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    await record(workId, inputs);
+  });
+  const app = await h.ready();
+  await waitFor(() => expect(h.repo.recordAttempt).toHaveBeenCalledTimes(1));
+  app.back();
+  finish();
+  await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
+  expect(h.translateTitles).not.toHaveBeenCalled();
+  expect(await h.repo.readAttempts(work.workId)).toEqual([]);
+  await app.openWork(work.canonicalUrl);
+  await waitFor(() => expect(app.getSnapshot().titles).toHaveLength(13));
+  expect(h.translateTitles).toHaveBeenCalledTimes(2);
+  app.dispose();
+});
+
+test('전송하지 않은 오류는 다음 진입에서 복구하고 과거 기록만으로 미완료 오류를 띄우지 않는다', async () => {
+  const h = harness(true);
+  h.translateTitles.mockRejectedValueOnce(new ReaderError('connection', 'not_sent'));
+  const app = await h.ready();
+  await waitFor(() => expect(app.getSnapshot().titlesBusy).toBe(false));
+  expect(await h.repo.readAttempts(work.workId)).toEqual([]);
+  await app.openWork(work.canonicalUrl);
+  await waitFor(() => expect(app.getSnapshot().titles).toHaveLength(13));
+  expect(app.getSnapshot().titlesError).toBeNull();
+  app.dispose();
+});
+
+test('미전송 기록 취소는 같은 키에 새로 기록한 다른 원문을 지우지 않는다', async () => {
+  const h = harness();
+  await h.repo.recordAttempt(work.workId, [{ key: work.workId, source: work.title }]);
+  await h.repo.recordAttempt(work.workId, [{ key: work.workId, source: '冬の物語' }]);
+  await h.repo.forgetAttempts!(work.workId, [{ key: work.workId, source: work.title }]);
+  expect(await h.repo.readAttempts(work.workId)).toEqual([
+    { key: work.workId, source: '冬の物語' },
+  ]);
+});
 test('automatic titles arrive in small batches, cache across reopening and never start a body on the TOC', async () => {
   const h = harness(true);
   const app = await h.ready();
@@ -183,7 +257,8 @@ test.each([false, true])(
     await waitFor(() => expect(h.translateTitles).toHaveBeenCalledTimes(1));
     h.setPage(second);
     await app.loadMoreWorkPage();
-    expect(app.getSnapshot().workViewport?.chapters).toHaveLength(8);
+    expect(app.getSnapshot().workViewport?.chapters).toHaveLength(4);
+    expect(h.translateTitles.mock.calls[0]![3].aborted).toBe(true);
     expect(h.translateTitles).toHaveBeenCalledTimes(1);
     finish();
     await waitFor(() => expect(h.translateTitles).toHaveBeenCalledTimes(2));
@@ -194,7 +269,7 @@ test.each([false, true])(
       'n1234ab/7',
       'n1234ab/8',
     ]);
-    expect(app.getSnapshot().titles).toHaveLength(unknown ? 4 : 9);
+    expect(app.getSnapshot().titles).toHaveLength(4);
     expect(h.startTranslation).not.toHaveBeenCalled();
     app.dispose();
     h.setPage(first);
@@ -277,6 +352,7 @@ test('an unknown request does not replay automatically even after restart, but e
   app.dispose();
   const restarted = await h.ready();
   await waitFor(() => expect(restarted.getSnapshot().titlesBusy).toBe(false));
+  expect(restarted.getSnapshot().titlesError).toBeNull();
   expect(
     h.translateTitles.mock.calls
       .slice(1)

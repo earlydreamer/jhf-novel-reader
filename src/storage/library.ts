@@ -916,15 +916,28 @@ export function createLibraryStore(
       workId: value.source.workId,
       updatedAt: value.createdAt,
     });
-    current.recent = [
-      ...current.recent.filter((v) => v.workId !== value.source.workId),
-      {
-        versionId: value.versionId,
-        chapterId: value.source.chapterId,
-        workId: value.source.workId,
-        updatedAt: value.createdAt,
-      },
-    ];
+    const prior = current.recent.find((entry) => entry.workId === value.source.workId);
+    const priorPosition = prior
+      ? (await journal.load(`reading/${prior.versionId}`, readingPosition))?.value
+      : null;
+    // 새 번역 저장이 실제로 읽던 회차의 위치를 밀어내지 않는다.
+    if (!priorPosition) {
+      current.recent = [
+        ...current.recent.filter((v) => v.workId !== value.source.workId),
+        {
+          versionId: value.versionId,
+          chapterId: value.source.chapterId,
+          workId: value.source.workId,
+          updatedAt: value.createdAt,
+        },
+      ];
+    } else {
+      check(
+        priorPosition.workId === prior!.workId &&
+          priorPosition.chapterId === prior!.chapterId &&
+          priorPosition.versionId === prior!.versionId,
+      );
+    }
     await journal.save('library/index', current, index);
   };
   const savePosition = async (value: ReadingPosition) => {
@@ -1045,6 +1058,31 @@ export function createLibraryStore(
             return true;
           });
       }),
+    listSavedChapterIds: (workId, chapterIds) => {
+      const requested = [...new Set(chapterIds)];
+      return serial(files, async () => {
+        identifier(workId);
+        for (const chapterId of requested) {
+          chapterIdentity(chapterId);
+          check(chapterId.startsWith(`${workId}/`));
+        }
+        const candidates = new Set(requested);
+        const current = await readIndex();
+        const saved = new Set<string>();
+        for (const entry of current.versions) {
+          if (!candidates.has(entry.chapterId)) continue;
+          const value = await readVersion(entry.versionId);
+          check(
+            entry.workId === workId &&
+              value !== null &&
+              value.source.workId === workId &&
+              value.source.chapterId === entry.chapterId,
+          );
+          saved.add(entry.chapterId);
+        }
+        return requested.filter((chapterId) => saved.has(chapterId));
+      });
+    },
     listVersions: (chapterId) =>
       serial(files, async () => {
         chapterIdentity(chapterId);

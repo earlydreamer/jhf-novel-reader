@@ -172,6 +172,8 @@ export interface LibraryStore {
     readonly { workId: string; chapterId: string; versionId: string; updatedAt: string }[]
   >;
   listVersions(chapterId: string): Promise<readonly CompletedTranslation[]>;
+  /** 한 작품의 저장 상태를 인덱스 한 번으로 조회하며 저장본의 무결성과 소유권을 확인한다. */
+  listSavedChapterIds?(workId: string, chapterIds: readonly string[]): Promise<readonly string[]>;
   readVersion(versionId: string): Promise<CompletedTranslation | null>;
   commitVersion(value: CompletedTranslation): Promise<void>;
   savePosition(value: ReadingPosition): Promise<void>;

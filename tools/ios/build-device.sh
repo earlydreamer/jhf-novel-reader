@@ -9,11 +9,18 @@ action="${5:-install}"
 bundle="${6:-dev.earlydreamer.jhfreader}"
 live_url="${7:-}"
 case "$bundle" in dev.earlydreamer.jhfreader|dev.earlydreamer.jhfreader.envcheck) ;; *) exit 2;; esac
+if [ "$action" = test ] && [ "$bundle" = dev.earlydreamer.jhfreader ]; then
+    printf 'XCTest must use the isolated envcheck application.\n' >&2; exit 2
+fi
 base="$HOME/.local/share/jhf-ios"
 . "$base/env.sh"
 owned_lock=0
 finish() {
     status=$?
+    # Failed test installation must still prove that the user's app was untouched.
+    if [ -f "$job/data-before/snapshot.json" ] && [ ! -f "$job/data-preservation.json" ]; then
+        if ! /usr/bin/python3 "$project/tools/ios/preserve-device-data.py" verify "$destination" dev.earlydreamer.jhfreader "$job"; then status=1; fi
+    fi
     if [ "$owned_lock" = 1 ]; then rmdir "$base/iphone-build.lock"; fi
     printf '{"exitCode":%s,"completedAt":"%s"}\n' "$status" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$job/result.json.tmp"
     mv "$job/result.json.tmp" "$job/result.json"
@@ -66,6 +73,8 @@ PY
     args+=("JHF_APP_BUNDLE_ID=$bundle" CODE_SIGN_STYLE=Automatic 'CODE_SIGN_IDENTITY=Apple Development')
 fi
 if [ "$action" = test ]; then
+    # A separate test host must also leave the real user's application untouched.
+    /usr/bin/python3 tools/ios/preserve-device-data.py capture "$destination" dev.earlydreamer.jhfreader "$job"
     live_args=()
     if [ -n "$live_url" ]; then
         export TEST_RUNNER_JHF_REAL_SOURCE_URL="$live_url"
@@ -78,8 +87,14 @@ fi
 app="$derived/Build/Products/Debug-iphoneos/App.app"
 /usr/bin/codesign --verify --deep --strict "$app"
 /usr/bin/python3 tools/ios/write-receipt.py "$app" "$job" "$bundle" signed
+if [ "$bundle" = dev.earlydreamer.jhfreader ]; then
+    /usr/bin/python3 tools/ios/preserve-device-data.py capture "$destination" "$bundle" "$job"
+fi
 xcrun devicectl device install app --timeout 120 --device "$device" "$app" > "$job/install.log" 2>&1
 /usr/bin/python3 tools/ios/write-receipt.py "$app" "$job" "$bundle" installed
 xcrun devicectl device process launch --timeout 60 --device "$device" "$bundle" > "$job/launch.log" 2>&1
+if [ "$bundle" = dev.earlydreamer.jhfreader ] || [ "$action" = test ]; then
+    /usr/bin/python3 tools/ios/preserve-device-data.py verify "$destination" dev.earlydreamer.jhfreader "$job"
+fi
 /usr/bin/python3 tools/ios/write-receipt.py "$app" "$job" "$bundle" launched
 cat "$job/install.log" "$job/launch.log"

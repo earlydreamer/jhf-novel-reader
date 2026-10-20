@@ -112,6 +112,9 @@ function RouteScreen({
           key={state.work.workId}
           titles={titles}
           work={state.workViewport ?? state.work}
+          totalChapterCount={state.work.complete ? state.work.chapters.length : null}
+          previousPageUrl={state.previousWorkPageUrl}
+          onLoadPrevious={() => void controller.loadPreviousWorkPage()}
           updateStatus={state.chapterUpdates.works[state.work.workId]}
           recentStatus={
             state.workRecent?.workId === state.work.workId ? state.workRecent.status : 'loading'
