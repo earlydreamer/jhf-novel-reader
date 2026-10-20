@@ -22,6 +22,8 @@ export interface TitleRepository {
   read(workId: string): Promise<readonly SavedTitle[]>;
   readAttempts(workId: string): Promise<readonly TitleInput[]>;
   recordAttempt(workId: string, inputs: readonly TitleInput[]): Promise<void>;
+  /** 전송하지 않았음이 확인된 시도만 되돌린다. 결과 불명 요청에는 사용하지 않는다. */
+  forgetAttempts?(workId: string, inputs: readonly TitleInput[]): Promise<void>;
   save(workId: string, entries: readonly SavedTitle[]): Promise<readonly SavedTitle[]>;
 }
 export type TitleTranslation = (
@@ -84,6 +86,28 @@ export async function validateTitleRecord(value: unknown): Promise<TitleRecord> 
 export function createTitleRepository(files: PrivateFiles): TitleRepository {
   const journal = new Journal(files);
   return {
+    forgetAttempts(workId, inputs) {
+      identifier(workId);
+      const frozen = structuredClone(inputs);
+      return serial(files, async () => {
+        const old = (await journal.load(`titles/${workId}`, validateTitleRecord))?.value;
+        check(!old || old.workId === workId);
+        if (!old) return;
+        await journal.save(
+          `titles/${workId}`,
+          {
+            ...old,
+            attempted: old.attempted.filter(
+              (input) =>
+                !frozen.some(
+                  (removed) => removed.key === input.key && removed.source === input.source,
+                ),
+            ),
+          },
+          validateTitleRecord,
+        );
+      });
+    },
     readAttempts(workId) {
       identifier(workId);
       return serial(files, async () => {
