@@ -166,6 +166,8 @@ export interface RenewalSnapshot {
   readonly chapterUpdatesAvailable: boolean;
   readonly titles: readonly SavedTitle[];
   readonly titlesBusy: boolean;
+  /** 실제 제목 모델 요청을 시작했을 때만 증가한다. 준비/저장 잠금과 구분한다. */
+  readonly titlesRequestRevision?: number;
   readonly titlesError: string | null;
   readonly titlesAvailable: boolean;
   readonly recentTitles: Readonly<Record<string, string>>;
@@ -597,6 +599,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let titleJob: Promise<void> | null = null;
   let titleSaveJob: Promise<void> | null = null;
   let titleWorkId: string | null = null;
+  let pendingTitleTranslation = false;
   function trackWorkWrite<T>(workId: string, action: () => Promise<T>): Promise<T> {
     if (removingWorkIds.has(workId)) return Promise.reject(new ReaderError('storage'));
     let task: Promise<T>;
@@ -706,8 +709,18 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       snapshot.work &&
       titlesByWork.has(snapshot.work.workId) &&
       ['work', 'reader', 'translation'].includes(snapshot.route.kind)
-    )
+    ) {
+      if (titleJob || titleSaveJob) {
+        pendingTitleTranslation = true;
+        return;
+      }
       void translateTitles(undefined, true);
+    }
+  }
+  function resumePendingTitles() {
+    if (!pendingTitleTranslation) return;
+    pendingTitleTranslation = false;
+    requestTitleTranslation();
   }
   async function stopTitles() {
     titleAbort?.abort();
@@ -781,6 +794,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           batch.forEach((input) =>
             titleAttempts.add(JSON.stringify([workId, input.key, input.source])),
           );
+          // 준비·저장 잠금만으로 번역 중 토스트를 띄우지 않는다.
+          if (cursor === 0)
+            publish({ titlesRequestRevision: (snapshot.titlesRequestRevision ?? 0) + 1 });
           const results = await dependencies.translateTitles!(
             selected,
             workId,
@@ -838,6 +854,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         titleWorkId = null;
         publish({ titlesBusy: false });
         runAutomaticTranslation();
+        resumePendingTitles();
       }
     }
   }
@@ -871,6 +888,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (titleSaveJob === job) {
         titleSaveJob = null;
         titleWorkId = null;
+        resumePendingTitles();
       }
     }
   }

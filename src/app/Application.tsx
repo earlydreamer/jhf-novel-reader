@@ -766,7 +766,7 @@ function SnackbarBridge({
   const last = useRef({
     errorRevision: -1,
     titlesError: null as string | null,
-    titlesBusy: false,
+    titlesRequestRevision: 0,
   });
   useEffect(() => {
     if (notice) show(notice.text);
@@ -779,12 +779,20 @@ function SnackbarBridge({
     if (state.error && state.errorRevision !== last.current.errorRevision) show(state.error);
     if (state.titlesError && state.titlesError !== last.current.titlesError)
       show(state.titlesError);
-    if (state.titlesBusy && !last.current.titlesBusy) show('제목을 번역하고 있어요.');
+    if ((state.titlesRequestRevision ?? 0) !== last.current.titlesRequestRevision)
+      show('제목을 번역하고 있어요.');
     last.current = {
       errorRevision: state.errorRevision,
       titlesError: state.titlesError,
-      titlesBusy: state.titlesBusy,
+      titlesRequestRevision: state.titlesRequestRevision ?? 0,
     };
-  }, [holdErrors, show, state.error, state.errorRevision, state.titlesBusy, state.titlesError]);
+  }, [
+    holdErrors,
+    show,
+    state.error,
+    state.errorRevision,
+    state.titlesRequestRevision,
+    state.titlesError,
+  ]);
   return null;
 }
