@@ -115,6 +115,7 @@ it('전체 검사 캐시가 있어도 첫 페이지만 열고 다음 페이지�
   await library.saveWorkPage(pages[0]!);
   const getWorkPage = vi.fn(async (url: string) => pages.find((page) => page.pageUrl === url)!);
   const versions = vi.spyOn(library, 'listVersions');
+  const savedIds = vi.spyOn(library, 'listSavedChapterIds');
   const controller = createRenewalController({
     library,
     source: { getWorkPage, getChapter: vi.fn() },
@@ -124,12 +125,17 @@ it('전체 검사 캐시가 있어도 첫 페이지만 열고 다음 페이지�
   expect((await library.readWork('n1234aa')).flatMap((page) => page.chapters)).toHaveLength(405);
   render(<Application controller={controller} />);
   versions.mockClear();
+  savedIds.mockClear();
   getWorkPage.mockClear();
   await act(async () => {
     await controller.openLibraryWork('n1234aa');
   });
   expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
-  expect(versions).toHaveBeenCalledTimes(200);
+  expect(versions).not.toHaveBeenCalled();
+  expect(savedIds).toHaveBeenCalledExactlyOnceWith(
+    'n1234aa',
+    pages[0]!.chapters.map((chapter) => chapter.chapterId),
+  );
   expect(controller.getSnapshot().workViewport).toMatchObject({
     complete: false,
     nextPageUrl: pages[1]!.pageUrl,
