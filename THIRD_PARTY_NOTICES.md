@@ -7,6 +7,23 @@
 
 ## 직접 가져온 코드와 자산
 
+### LiteRT-LM Swift (iOS)
+
+- 출처: https://github.com/google-ai-edge/LiteRT-LM/tree/v0.18.0 . iOS 연구 앱의 기기 임베딩에 사용합니다.
+- 배포 바이너리의 제3자 고지 묶음은 `ios/JHFNative/Sources/JHFNative/Resources/third_party_licenses.bundle`에 원문 그대로 보존하고 Swift Package 리소스로 동봉합니다.
+
+### ZIPFoundation (iOS)
+
+- 출처: https://github.com/weichsel/ZIPFoundation/tree/0.9.20 . iOS 백업 ZIP의 생성·제한된 추출에 사용합니다.
+
+### KeychainSwift (iOS)
+
+- 출처: https://github.com/evgenyneu/keychain-swift/tree/21.0.0 . SecureStorage의 iOS Keychain 의존성입니다.
+
+### IONFilesystemLib (iOS)
+
+- 출처: https://github.com/ionic-team/ion-ios-filesystem/tree/2.0.1 . Capacitor Filesystem의 iOS 의존성입니다.
+
 ### LNReader plugins: Syosetu 선택자와 추출 구조
 
 - 출처: https://github.com/LNReader/lnreader-plugins , 고정 커밋 `358388426c0b23674b97760c352ee972b8e4d7b8`, 파일 [`plugins/japanese/Syosetu.ts`](https://github.com/LNReader/lnreader-plugins/blob/358388426c0b23674b97760c352ee972b8e4d7b8/plugins/japanese/Syosetu.ts)
@@ -139,7 +156,7 @@ Capacitor·플러그인 Android 모듈은 위 npm 패키지와 같은 라이선�
 
 ### Apache-2.0
 
-사용 구성 요소: Material Symbols (Outlined, weight 400) 0.47.6, EmbeddingGemma 2 (Google DeepMind) 9be6e8b9, androidx.activity:activity 1.11.0, androidx.activity:activity-ktx 1.11.0, androidx.annotation:annotation 1.8.1, androidx.annotation:annotation-experimental 1.4.1, androidx.annotation:annotation-jvm 1.8.1, androidx.appcompat:appcompat 1.7.1, androidx.appcompat:appcompat-resources 1.7.1, androidx.arch.core:core-common 2.2.0, androidx.arch.core:core-runtime 2.2.0, androidx.collection:collection 1.4.2, androidx.collection:collection-jvm 1.4.2, androidx.concurrent:concurrent-futures 1.1.0, androidx.coordinatorlayout:coordinatorlayout 1.3.0, androidx.core:core 1.17.0, androidx.core:core-ktx 1.17.0, androidx.core:core-splashscreen 1.2.0, androidx.core:core-viewtree 1.0.0, androidx.cursoradapter:cursoradapter 1.0.0, androidx.customview:customview 1.0.0, androidx.drawerlayout:drawerlayout 1.0.0, androidx.emoji2:emoji2 1.3.0, androidx.emoji2:emoji2-views-helper 1.3.0, androidx.fragment:fragment 1.8.9, androidx.interpolator:interpolator 1.0.0, androidx.lifecycle:lifecycle-common 2.6.2, androidx.lifecycle:lifecycle-livedata 2.6.2, androidx.lifecycle:lifecycle-livedata-core 2.6.2, androidx.lifecycle:lifecycle-process 2.6.2, androidx.lifecycle:lifecycle-runtime 2.6.2, androidx.lifecycle:lifecycle-runtime-ktx 2.6.2, androidx.lifecycle:lifecycle-viewmodel 2.6.2, androidx.lifecycle:lifecycle-viewmodel-ktx 2.6.2, androidx.lifecycle:lifecycle-viewmodel-savedstate 2.6.2, androidx.loader:loader 1.0.0, androidx.profileinstaller:profileinstaller 1.4.0, androidx.resourceinspection:resourceinspection-annotation 1.0.1, androidx.savedstate:savedstate 1.2.1, androidx.savedstate:savedstate-ktx 1.2.1, androidx.startup:startup-runtime 1.1.1, androidx.tracing:tracing 1.2.0, androidx.vectordrawable:vectordrawable 1.1.0, androidx.vectordrawable:vectordrawable-animated 1.1.0, androidx.versionedparcelable:versionedparcelable 1.1.1, androidx.viewpager:viewpager 1.0.0, androidx.webkit:webkit 1.14.0, com.google.ai.edge.litertlm:litertlm-android 0.18.0, com.google.code.gson:gson 2.14.0, com.google.errorprone:error_prone_annotations 2.48.0, com.google.guava:listenablefuture 1.0, org.apache.cordova:framework 14.0.1, org.jetbrains.kotlin:kotlin-reflect 2.4.0, org.jetbrains.kotlin:kotlin-stdlib 2.4.0, org.jetbrains.kotlinx:kotlinx-coroutines-android 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm 1.11.0, org.jetbrains:annotations 23.0.0, org.jspecify:jspecify 1.0.0
+사용 구성 요소: LiteRT-LM Swift (iOS) 0.18.0, Material Symbols (Outlined, weight 400) 0.47.6, EmbeddingGemma 2 (Google DeepMind) 9be6e8b9, androidx.activity:activity 1.11.0, androidx.activity:activity-ktx 1.11.0, androidx.annotation:annotation 1.8.1, androidx.annotation:annotation-experimental 1.4.1, androidx.annotation:annotation-jvm 1.8.1, androidx.appcompat:appcompat 1.7.1, androidx.appcompat:appcompat-resources 1.7.1, androidx.arch.core:core-common 2.2.0, androidx.arch.core:core-runtime 2.2.0, androidx.collection:collection 1.4.2, androidx.collection:collection-jvm 1.4.2, androidx.concurrent:concurrent-futures 1.1.0, androidx.coordinatorlayout:coordinatorlayout 1.3.0, androidx.core:core 1.17.0, androidx.core:core-ktx 1.17.0, androidx.core:core-splashscreen 1.2.0, androidx.core:core-viewtree 1.0.0, androidx.cursoradapter:cursoradapter 1.0.0, androidx.customview:customview 1.0.0, androidx.drawerlayout:drawerlayout 1.0.0, androidx.emoji2:emoji2 1.3.0, androidx.emoji2:emoji2-views-helper 1.3.0, androidx.fragment:fragment 1.8.9, androidx.interpolator:interpolator 1.0.0, androidx.lifecycle:lifecycle-common 2.6.2, androidx.lifecycle:lifecycle-livedata 2.6.2, androidx.lifecycle:lifecycle-livedata-core 2.6.2, androidx.lifecycle:lifecycle-process 2.6.2, androidx.lifecycle:lifecycle-runtime 2.6.2, androidx.lifecycle:lifecycle-runtime-ktx 2.6.2, androidx.lifecycle:lifecycle-viewmodel 2.6.2, androidx.lifecycle:lifecycle-viewmodel-ktx 2.6.2, androidx.lifecycle:lifecycle-viewmodel-savedstate 2.6.2, androidx.loader:loader 1.0.0, androidx.profileinstaller:profileinstaller 1.4.0, androidx.resourceinspection:resourceinspection-annotation 1.0.1, androidx.savedstate:savedstate 1.2.1, androidx.savedstate:savedstate-ktx 1.2.1, androidx.startup:startup-runtime 1.1.1, androidx.tracing:tracing 1.2.0, androidx.vectordrawable:vectordrawable 1.1.0, androidx.vectordrawable:vectordrawable-animated 1.1.0, androidx.versionedparcelable:versionedparcelable 1.1.1, androidx.viewpager:viewpager 1.0.0, androidx.webkit:webkit 1.14.0, com.google.ai.edge.litertlm:litertlm-android 0.18.0, com.google.code.gson:gson 2.14.0, com.google.errorprone:error_prone_annotations 2.48.0, com.google.guava:listenablefuture 1.0, org.apache.cordova:framework 14.0.1, org.jetbrains.kotlin:kotlin-reflect 2.4.0, org.jetbrains.kotlin:kotlin-stdlib 2.4.0, org.jetbrains.kotlinx:kotlinx-coroutines-android 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm 1.11.0, org.jetbrains:annotations 23.0.0, org.jspecify:jspecify 1.0.0
 
 ```text
 
@@ -344,6 +361,90 @@ Capacitor·플러그인 Android 모듈은 위 npm 패키지와 같은 라이선�
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+```
+
+### MIT
+
+사용 구성 요소: ZIPFoundation (iOS) 0.9.20
+
+```text
+MIT License
+
+Copyright (c) 2017-2025 Thomas Zoechling (https://www.peakstep.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### MIT
+
+사용 구성 요소: KeychainSwift (iOS) 21.0.0
+
+```text
+The MIT License
+
+Copyright (c) 2015 - 2024 Evgenii Neumerzhitckii
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+### MIT
+
+사용 구성 요소: IONFilesystemLib (iOS) 2.0.1, @capacitor/filesystem 8.1.4, @capacitor/synapse 1.0.4, io.ionic.libs:ionfilesystem-android 1.1.1
+
+```text
+MIT License
+
+Copyright (c) 2025 Ionic
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ### MIT
@@ -994,34 +1095,6 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
 LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
-
-### MIT
-
-사용 구성 요소: @capacitor/filesystem 8.1.4, @capacitor/synapse 1.0.4, io.ionic.libs:ionfilesystem-android 1.1.1
-
-```text
-MIT License
-
-Copyright (c) 2025 Ionic
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 ```
 
 ### MIT

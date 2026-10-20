@@ -25,6 +25,8 @@
 
 ---
 
+`codex/research-ios`에서는 현재 기능을 유지한 iOS 앱을 별도 환경에서 연구합니다. 원격 Mac과 실제 iPhone을 사용하는 빌드·검증 절차는 [iOS 실기 검증 안내](docs/ios-validation.md)에 있습니다. iOS 코드는 `main`과 Android 릴리스에 반영하지 않습니다.
+
 <p align="center">
   <img src="docs/assets/screens/library-empty.png" alt="처음 연 서재 화면" width="260">
   &nbsp;&nbsp;

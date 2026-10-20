@@ -19,7 +19,7 @@ export function createNativeStreamingClient(plugin: StreamPlugin = native): Nati
     async requestStream(options, signal, onData) {
       if (
         plugin === native &&
-        (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
+        (!Capacitor.isNativePlatform() || !['android', 'ios'].includes(Capacitor.getPlatform()))
       )
         throw new ReaderError('connection');
       if (signal.aborted) throw new ReaderError('cancelled', 'not_sent');

@@ -1,0 +1,142 @@
+absl_LICENSE.html/Abseil
+java_android_android_sdk_linux_extras_android_compatibility_annotations_LICENSE.html/AndroidX annotation library
+boost_LICENSE.html/Boost
+openssl_LICENSE.html/BoringSSL
+brotli_LICENSE.html/Brotli
+CRoaring_LICENSE.html/CRoaring
+crunchy_LICENSE.html/Crunchy Crypt
+darts_clone_LICENSE.html/Darts-clone
+DirectX_Headers_LICENSE.html/DirectX_Headers
+darwinn_LICENSE.html/Edge TPU (0)
+darwinn_port_default_port_from_tf_LICENSE.html/Edge TPU (1)
+darwinn_firmware_common_callback_LICENSE.html/Edge TPU firmware callback
+eigen3_LICENSE.html/Eigen 3
+envoy_LICENSE.html/Envoy
+FP16_LICENSE.html/FP16
+FXdiv_LICENSE.html/FXdiv
+flatbuffers_LICENSE.html/FlatBuffers
+halide_LICENSE.html/Halide
+highwayhash_LICENSE.html/HighwayHash
+icu_LICENSE.html/ICU4C
+jsoncpp_LICENSE.html/JsonCpp
+GL_LICENSE.html/Khronos OpenGL headers (0)
+GL_util_LICENSE.html/Khronos OpenGL headers (1)
+kissfft_LICENSE.html/Kiss FFT
+KleidiAI_LICENSE.html/KleidiAI
+kotlin_kotlin_stable_LICENSE.html/Kotlin
+lapack_LICENSE.html/LAPACK
+llvm_LICENSE.html/LLVM
+mediapipe_LICENSE.html/MediaPipe
+mosys_LICENSE.html/Mosys
+fft2d_LICENSE.html/Ooura FFT
+OpenCV_LICENSE.html/OpenCV
+opencensus_LICENSE.html/OpenCensus
+opencensus_proto_LICENSE.html/OpenCensus Proto
+pcg_random_LICENSE.html/PCG Random Number Generator
+protobuf_LICENSE.html/Protocol Buffers
+golang_protobuf_v2_LICENSE.html/Protocol Buffers for Go v2
+java_protobuf_LICENSE.html/Protocol Buffers for Java
+re2_LICENSE.html/RE2
+riegeli_LICENSE.html/Riegeli
+rust_libbz2_rs_sys_v0_2_LICENSE.html/Rust libbzip2 bindings
+rust_libc_v0_2_LICENSE.html/Rust libc
+rust_libz_rs_sys_v0_6_LICENSE.html/Rust libz bindings
+rust_libz_rs_sys_google_LICENSE.html/Rust libz bindings (Google patch)
+swiftshader_LICENSE.html/SwiftShader
+tcmalloc_LICENSE.html/TCMalloc
+tensorflow_LICENSE.html/TensorFlow
+tink_LICENSE.html/Tink
+udpa_LICENSE.html/UDPA
+utf_LICENSE.html/UTF
+Xorg_LICENSE.html/X.Org
+libxcb_LICENSE.html/XCB library
+XNNPACK_LICENSE.html/XNNPACK
+zippy_LICENSE.html/Zippy
+zstdlib_LICENSE.html/Zstandard
+rust_addr2line_v0_24_LICENSE.html/addr2line
+address_sorting_LICENSE.html/address_sorting
+rust_adler2_v2_LICENSE.html/adler2
+angle_LICENSE.html/angle
+array_LICENSE.html/array
+audio_to_tactile_LICENSE.html/audio_to_tactile
+googlesql_LICENSE.html/base
+benchmark_LICENSE.html/benchmark
+bz2lib_LICENSE.html/bzip2
+ares_v1_21_0_LICENSE.html/c-ares
+cblas_LICENSE.html/cblas
+rust_cfg_if_v1_LICENSE.html/cfg_if crate
+cnpy_LICENSE.html/cnpy
+cppitertools_LICENSE.html/cppitertools
+cpu_features_LICENSE.html/cpu_features
+cpuinfo_LICENSE.html/cpuinfo
+rust_cxx_v1_LICENSE.html/cxx
+dawn_LICENSE.html/dawn
+dxc_LICENSE.html/dxc
+ecclesia_LICENSE.html/ecclesia
+emdawnwebgpu_LICENSE.html/emdawnwebgpu
+rust_esaxx_rs_v0_1_LICENSE.html/esaxx_rs
+fast_hash_LICENSE.html/fast_hash
+grpc_LICENSE.html/gRPC
+grpc_proto_LICENSE.html/gRPC Protos
+gfortran_gcc_16_1_0_LICENSE.html/gcc_16_1_0
+gemmlowp_LICENSE.html/gemmlowp
+geographiclib_LICENSE.html/geographiclib
+gif_LICENSE.html/giflib
+rust_gimli_v0_31_LICENSE.html/gimli
+glslang_LICENSE.html/glslang
+half_LICENSE.html/half
+rust_hashbrown_v0_17_LICENSE.html/hashbrown
+rust_hashbrown_v0_16_LICENSE.html/hashbrown crate
+highway_LICENSE.html/highway
+hwloc_LICENSE.html/hwloc
+java_jetbrains_java_annotations_LICENSE.html/java_annotations
+json_LICENSE.html/json
+legacy_libcxx_sort_LICENSE.html/legacy_libcxx_sort
+libelfin_LICENSE.html/libelfin
+libpfm4_LICENSE.html/libpfm4
+liburing_LICENSE.html/liburing
+llama_cpp_latest_LICENSE.html/llama_cpp
+rust_llguidance_v1_LICENSE.html/llguidance
+rust_miniz_oxide_v0_8_LICENSE.html/miniz_oxide
+minizip_LICENSE.html/minizip
+ml_drift_LICENSE.html/ml_drift
+py_ml_dtypes_LICENSE.html/ml_dtypes
+mobstore_LICENSE.html/mobstore
+neon2sse_LICENSE.html/neon2sse
+rust_object_v0_37_LICENSE.html/object
+odml_LICENSE.html/odml
+opencl_headers_LICENSE.html/opencl_headers
+opencl_icd_loader_LICENSE.html/opencl_icd_loader
+perfetto_LICENSE.html/perfetto
+pocl_LICENSE.html/pocl
+program_image_remapper_LICENSE.html/program_image_remapper
+pthreadpool_LICENSE.html/pthreadpool
+perf_data_converter_LICENSE.html/quipper
+gpus_rocm_LICENSE.html/rocm
+rust_rustc_demangle_v0_1_LICENSE.html/rustc_demangle
+ruy_LICENSE.html/ruy
+safertos_addons_LICENSE.html/safertos_addons
+sentencepiece_src_LICENSE.html/sentencepiece
+sha3_LICENSE.html/sha3
+silicon_LICENSE.html/silicon
+spirv_headers_LICENSE.html/spirv_headers
+spirv_llvm_translator_LICENSE.html/spirv_llvm_translator
+splitfile_LICENSE.html/splitfile
+stablehlo_LICENSE.html/stablehlo
+stblib_LICENSE.html/stb
+stc_LICENSE.html/stc
+task_thread_pool_LICENSE.html/task_thread_pool
+tokenizers_cpp_LICENSE.html/tokenizers_cpp
+tz_LICENSE.html/tz database
+utf8_range_LICENSE.html/utf8_range
+protoc_gen_validate_LICENSE.html/validate
+vulkan_headers_LICENSE.html/vulkan_headers
+vulkan_loader_LICENSE.html/vulkan_loader
+vulkan_memory_allocator_LICENSE.html/vulkan_memory_allocator
+vulkan_utility_libraries_LICENSE.html/vulkan_utility_libraries
+vulkan_volk_LICENSE.html/vulkan_volk
+xls_LICENSE.html/xls
+xprof_LICENSE.html/xprof
+xxhash_LICENSE.html/xxhash
+z3_LICENSE.html/z3
+zlib_LICENSE.html/zlib

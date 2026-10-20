@@ -30,7 +30,8 @@ const Native = registerPlugin<BackupPlugin>('Backup');
 export async function recoverBackupBeforeStartup(
   plugin: Pick<BackupPlugin, 'recoverRestore'> = Native,
 ): Promise<void> {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+  if (!Capacitor.isNativePlatform() || !['android', 'ios'].includes(Capacitor.getPlatform()))
+    return;
   const result = await plugin.recoverRestore();
   if (result.ready !== true) throw new StorageError('io');
 }
@@ -68,7 +69,8 @@ export function createBackupPlatform(
   gate: NativeStorageGate = nativeStorageGate,
 ): BackupPlatform {
   return {
-    available: () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android',
+    available: () =>
+      Capacitor.isNativePlatform() && ['android', 'ios'].includes(Capacitor.getPlatform()),
     async exportBackup() {
       try {
         const result = await plugin.export();

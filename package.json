@@ -15,7 +15,9 @@
     "android:sync": "npm run build && cap sync android",
     "postinstall": "node tools/apply-capacitor-patch.mjs",
     "lint": "eslint src tests vite.config.ts capacitor.config.ts --max-warnings 0",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,html}\" \"tools/**/*.{mjs,js,ts}\" \"*.{json,mjs,ts}\" .prettierrc.json"
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,html}\" \"tools/**/*.{mjs,js,ts}\" \"*.{json,mjs,ts}\" .prettierrc.json",
+    "ios:sync": "npm run build && cap sync ios",
+    "capacitor:sync:after": "node tools/configure-ios.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "8.0.1",
@@ -23,6 +25,7 @@
     "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.5.2",
     "@capacitor/filesystem": "8.1.4",
+    "@capacitor/ios": "8.5.2",
     "@capacitor/preferences": "8.0.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
