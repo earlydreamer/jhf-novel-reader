@@ -257,7 +257,8 @@ test.each([false, true])(
     await waitFor(() => expect(h.translateTitles).toHaveBeenCalledTimes(1));
     h.setPage(second);
     await app.loadMoreWorkPage();
-    expect(app.getSnapshot().workViewport?.chapters).toHaveLength(8);
+    expect(app.getSnapshot().workViewport?.chapters).toHaveLength(4);
+    expect(h.translateTitles.mock.calls[0]![3].aborted).toBe(true);
     expect(h.translateTitles).toHaveBeenCalledTimes(1);
     finish();
     await waitFor(() => expect(h.translateTitles).toHaveBeenCalledTimes(2));
@@ -268,7 +269,7 @@ test.each([false, true])(
       'n1234ab/7',
       'n1234ab/8',
     ]);
-    expect(app.getSnapshot().titles).toHaveLength(unknown ? 4 : 9);
+    expect(app.getSnapshot().titles).toHaveLength(4);
     expect(h.startTranslation).not.toHaveBeenCalled();
     app.dispose();
     h.setPage(first);

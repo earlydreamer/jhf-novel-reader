@@ -40,7 +40,11 @@ it('shows the fetched TOC ordinal range without suggesting the first chapter is 
       onLoadMore={() => {}}
     />,
   );
-  expect(screen.getByText('102화까지 확인했어요 · 0화 저장됨')).toBeTruthy();
+  expect(screen.getByText('0화 저장됨')).toBeTruthy();
+  expect(screen.getByRole('navigation', { name: '목차 페이지' }).textContent).toContain(
+    '101–102화',
+  );
+  expect(screen.queryByText(/화까지 확인했어요/)).toBeNull();
   expect(screen.queryByText('선택한 회차')).toBeNull();
   expect(screen.getByRole('heading', { name: '회차 목록' })).toBeTruthy();
   expect(screen.getByRole('button', { name: '이어서 읽기' })).toBeTruthy();
@@ -73,7 +77,7 @@ it('counts unique saved chapters and preserves a partial TOC beginning at ordina
       onLoadMore={() => {}}
     />,
   );
-  expect(screen.getByText('101화까지 확인했어요 · 1화 저장됨')).toBeTruthy();
+  expect(screen.getByText('1화 저장됨')).toBeTruthy();
 });
 it('shows the total chapter count once the whole TOC is loaded', () => {
   render(
