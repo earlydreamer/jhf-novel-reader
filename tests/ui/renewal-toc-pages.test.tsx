@@ -233,6 +233,7 @@ it('읽기 기록이 없으면 첫 페이지를 열고 앞뒤 이동에서도 �
   await library.saveWorkPage(pages[0]!);
   const getWorkPage = vi.fn(async (url: string) => pages.find((page) => page.pageUrl === url)!);
   const versions = vi.spyOn(library, 'listVersions');
+  const savedIds = vi.spyOn(library, 'listSavedChapterIds');
   const controller = createRenewalController({
     library,
     source: { getWorkPage, getChapter: vi.fn() },
@@ -242,6 +243,7 @@ it('읽기 기록이 없으면 첫 페이지를 열고 앞뒤 이동에서도 �
   expect((await library.readWork('n1234aa')).flatMap((page) => page.chapters)).toHaveLength(405);
   render(<Application controller={controller} />);
   versions.mockClear();
+  savedIds.mockClear();
   getWorkPage.mockClear();
   await act(async () => {
     await controller.openLibraryWork('n1234aa');
@@ -249,7 +251,11 @@ it('읽기 기록이 없으면 첫 페이지를 열고 앞뒤 이동에서도 �
   expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
   expect(screen.getByText('전체 405화 · 0화 저장됨')).toBeInTheDocument();
   expect(screen.queryByText(/화까지 확인했어요/)).toBeNull();
-  expect(versions).toHaveBeenCalledTimes(200);
+  expect(versions).not.toHaveBeenCalled();
+  expect(savedIds).toHaveBeenCalledExactlyOnceWith(
+    'n1234aa',
+    pages[0]!.chapters.map((chapter) => chapter.chapterId),
+  );
   expect(controller.getSnapshot().workViewport).toMatchObject({
     complete: false,
     nextPageUrl: pages[1]!.pageUrl,
