@@ -196,6 +196,8 @@ export interface RenewalSnapshot {
   readonly settingsNotice: { id: number; text: string } | null;
   readonly route: Route;
   readonly work: WorkPage | null;
+  /** 전체 캐시와 별도로, 작품 화면에서 사용자가 펼친 목차 범위. */
+  readonly workViewport?: WorkPage | null;
   readonly workRecent: WorkRecentSnapshot | null;
   readonly savedChapterIds: readonly string[];
   readonly chapter: ChapterRef | null;
@@ -504,6 +506,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   const history: Route[] = [];
   const worksById = new Map<string, WorkPage>();
   const pagesByWorkId = new Map<string, Map<string, WorkPage>>();
+  // 전체 검사 캐시와 사용자가 펼친 목차 페이지 수는 별도로 관리한다.
+  const visiblePageCounts = new Map<string, number>();
   const chaptersById = new Map<string, ChapterRef>();
   const savedChaptersByWork = new Map<string, readonly string[]>();
   const versionsById = new Map<string, CompletedTranslation>();
@@ -627,7 +631,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           let work: WorkPage | null = null;
           for (const page of pages) work = rememberWorkPage(page);
           if (!work) return;
-          // 전체 페이지를 확인한 결과를 한 목차로 표시한다.
+          // 전체 캐시는 유지하되 publish에서 펼친 페이지만 화면에 전달한다.
           work = { ...work, complete: true, nextPageUrl: null };
           worksById.set(workId, work);
           const visible = snapshot.work?.workId === workId;
@@ -649,7 +653,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   function titleInputs(): TitleInput[] {
-    const work = snapshot.work;
+    const work = snapshot.route.kind === 'work' ? snapshot.workViewport : snapshot.work;
     if (!work) return [];
     const inputs = workTitleInputs(work);
     if (snapshot.route.kind !== 'work') {
@@ -919,6 +923,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     snapshot = {
       ...snapshot,
       ...update,
+      ...(Object.hasOwn(update, 'work')
+        ? { workViewport: update.work ? visibleWork(update.work) : null }
+        : {}),
       errorRevision:
         Object.hasOwn(update, 'error') && update.error
           ? snapshot.errorRevision + 1
@@ -1106,6 +1113,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       });
       worksById.delete(workId);
       pagesByWorkId.delete(workId);
+      visiblePageCounts.delete(workId);
       savedChaptersByWork.delete(workId);
       titlesByWork.delete(workId);
       for (const [chapterId, chapter] of chaptersById)
@@ -1578,7 +1586,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       let work: WorkPage | null = null;
       for (const page of pages) work = rememberWorkPage(page);
       if (!work) throw new ReaderError('storage');
-      const savedChapterIds = await readSavedChapterIds(work.chapters);
+      visiblePageCounts.set(workId, 1);
+      const savedChapterIds = await readSavedChapterIds(visibleWork(work).chapters);
       if (disposed || operation !== sourceOperation) return;
       savedChaptersByWork.set(workId, savedChapterIds);
       publish({ work, savedChapterIds, busy: false });
@@ -1623,6 +1632,24 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     worksById.set(work.workId, work);
     chapters.forEach((chapter) => chaptersById.set(chapter.chapterId, chapter));
     return work;
+  }
+  function visibleWork(work: WorkPage): WorkPage {
+    const pages = [...(pagesByWorkId.get(work.workId)?.values() ?? [])].sort(
+      (left, right) => (left.chapters[0]?.ordinal ?? 0) - (right.chapters[0]?.ordinal ?? 0),
+    );
+    if (!pages.length) return work;
+    const visible = pages.slice(0, visiblePageCounts.get(work.workId) ?? 1);
+    const last = visible[visible.length - 1]!;
+    const ids = new Set(
+      visible.flatMap((page) => page.chapters.map((chapter) => chapter.chapterId)),
+    );
+    return {
+      ...work,
+      pageUrl: last.pageUrl,
+      chapters: work.chapters.filter((chapter) => ids.has(chapter.chapterId)),
+      nextPageUrl: last.nextPageUrl,
+      complete: work.complete && visible.length === pages.length,
+    };
   }
   function ownsVisibleTranslation(request: ActiveTranslation): boolean {
     return (
@@ -1702,6 +1729,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         (expectedWorkId === page.workId && expectedGeneration !== removalGeneration(page.workId))
       )
         return;
+      visiblePageCounts.set(page.workId, 1);
       const work = rememberWorkPage(page);
       removedWorkIds.delete(page.workId);
       const savedChapterIds = [
@@ -1726,7 +1754,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   async function loadMoreWorkPage(): Promise<void> {
-    const work = snapshot.work;
+    const work = snapshot.workViewport ?? snapshot.work;
     const nextPageUrl = work?.nextPageUrl;
     if (
       !dependencies.source ||
@@ -1743,7 +1771,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     sourceAbort = new AbortController();
     publish({ busy: true, error: null });
     try {
-      const page = await dependencies.source.getWorkPage(nextPageUrl, sourceAbort.signal);
+      const cached = pagesByWorkId.get(work.workId)?.get(nextPageUrl);
+      const page =
+        cached ?? (await dependencies.source.getWorkPage(nextPageUrl, sourceAbort.signal));
       if (
         operation !== sourceOperation ||
         disposed ||
@@ -1751,7 +1781,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         generation !== removalGeneration(work.workId)
       )
         return;
-      if (dependencies.library) await dependencies.library.saveWorkPage(page);
+      if (!cached && dependencies.library) await dependencies.library.saveWorkPage(page);
       const newlySavedChapterIds = await readSavedChapterIds(page.chapters);
       if (
         operation !== sourceOperation ||
@@ -1761,6 +1791,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       )
         return;
       const mergedWork = rememberWorkPage(page);
+      visiblePageCounts.set(work.workId, (visiblePageCounts.get(work.workId) ?? 1) + 1);
       const savedChapterIds = [
         ...new Set([...(savedChaptersByWork.get(work.workId) ?? []), ...newlySavedChapterIds]),
       ];
