@@ -1,4 +1,5 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+import { digest } from '../../src/storage/journal';
 import { createLibraryStore } from '../../src/storage/library';
 import type { CompletedTranslation } from '../../src/contracts';
 import { source } from '../providers/wholeChapterFixture';
@@ -29,6 +30,69 @@ test('independent_saved_lookup', async () => {
   await store.commitVersion(value);
   expect(await store.readVersion(value.versionId)).toEqual(value);
   expect(await store.listVersions(source.chapterId)).toEqual([value]);
+});
+
+test('수백 회차의 저장 상태는 인덱스를 한 번 읽고 요청한 저장본만 검증한다', async () => {
+  const memory = new Map<string, string>();
+  const read = vi.fn(async (path: string) => memory.get(path) ?? null);
+  const files = {
+    read,
+    write: async (path: string, text: string) => {
+      memory.set(path, text);
+    },
+  };
+  const store = createLibraryStore(files);
+  await store.commitVersion(value);
+  await store.commitVersion({ ...value, versionId: 'version-2' });
+  await store.commitVersion({
+    ...value,
+    versionId: 'other-work',
+    source: {
+      ...source,
+      workId: 'n5678bb',
+      chapterId: 'n5678bb/1',
+      canonicalUrl: 'https://ncode.syosetu.com/n5678bb/1/',
+    },
+  });
+  read.mockClear();
+  const ids = Array.from({ length: 405 }, (_, n) => `${source.workId}/${n + 1}`);
+  expect(await createLibraryStore(files).listSavedChapterIds!(source.workId, ids)).toEqual([
+    source.chapterId,
+  ]);
+  expect(read.mock.calls.filter(([path]) => path.startsWith('library/index.'))).toHaveLength(2);
+  expect(read.mock.calls.filter(([path]) => path.startsWith('versions/version-'))).toHaveLength(4);
+  expect(read.mock.calls.some(([path]) => path.startsWith('versions/other-work'))).toBe(false);
+  expect(
+    await store.listSavedChapterIds!(source.workId, [source.chapterId, source.chapterId]),
+  ).toEqual([source.chapterId]);
+  await expect(store.listSavedChapterIds!(source.workId, ['n5678bb/1'])).rejects.toThrow();
+});
+
+test('일괄 저장 상태 조회도 손상된 저장본과 잘못된 인덱스 소유권을 거부한다', async () => {
+  const memory = new Map<string, string>();
+  const files = {
+    read: async (path: string) => memory.get(path) ?? null,
+    write: async (path: string, text: string) => {
+      memory.set(path, text);
+    },
+  };
+  const store = createLibraryStore(files);
+  await store.commitVersion(value);
+  const versionPath = [...memory.keys()].find((path) => path.startsWith('versions/'))!;
+  const original = memory.get(versionPath)!;
+  memory.set(versionPath, 'broken');
+  await expect(store.listSavedChapterIds!(source.workId, [source.chapterId])).rejects.toMatchObject(
+    { reason: 'corrupt' },
+  );
+  memory.set(versionPath, original);
+  for (const [path, raw] of memory) {
+    if (!path.startsWith('library/index.')) continue;
+    const envelope = JSON.parse(raw);
+    envelope.payload.versions[0].workId = 'n5678bb';
+    envelope.checksum = await digest([1, envelope.generation, envelope.payload]);
+    memory.set(path, JSON.stringify(envelope));
+  }
+  await expect(store.listSavedChapterIds!(source.workId, [source.chapterId])).rejects.toThrow();
 });
 
 test('번역 저장은 읽음으로 세지 않고 실제 읽기 위치만 회차별 읽기 기록으로 복원한다', async () => {
