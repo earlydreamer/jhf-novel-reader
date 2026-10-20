@@ -4,6 +4,7 @@ import { HomeScreen } from '../ui/HomeScreen';
 import { WorkScreen } from '../ui/WorkScreen';
 import { ImmersiveReader } from '../ui/ImmersiveReader';
 import { SettingsScreen } from '../ui/SettingsScreen';
+import { ChapterUpdateStatus } from '../ui/ChapterUpdateControl';
 import { useReaderGlossary } from '../ui/readerGlossary';
 import { TopAppBar } from '../ui/components/TopAppBar';
 import { IconButton } from '../ui/components/IconButton';
@@ -21,6 +22,8 @@ import type { RenewalController, RenewalSnapshot } from './renewalController';
 import '../ui/theme/base.css';
 import './application.css';
 
+type ChapterUpdateRequest = { kind: 'all' } | { kind: 'work'; workId: string; title: string };
+
 function RouteScreen({
   controller,
   state,
@@ -29,6 +32,7 @@ function RouteScreen({
   onOpenUrlDialog,
   onCloseUrlDialog,
   onRequestRemove,
+  onRequestChapterUpdates,
   workDialogRequest,
   onWorkDialogRequestHandled,
 }: {
@@ -39,6 +43,7 @@ function RouteScreen({
   onOpenUrlDialog(): void;
   onCloseUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
+  onRequestChapterUpdates(workId?: string): void;
   workDialogRequest: {
     dialog: 'guidance' | 'batch' | 'termScan';
     id: number;
@@ -93,7 +98,7 @@ function RouteScreen({
           onBrowse={(startUrl) => void controller.browse(startUrl)}
           onOpen={(url) => void controller.openWork(url)}
           onOpenLibraryWork={(workId) => void controller.openLibraryWork(workId)}
-          onCheckUpdates={(workId) => void controller.checkChapterUpdates(workId)}
+          onCheckUpdates={onRequestChapterUpdates}
           onRequestRemove={onRequestRemove}
           onContinue={(id) => void controller.continueReading(id)}
           onOpenPendingSave={controller.openPendingSave}
@@ -109,11 +114,6 @@ function RouteScreen({
           titles={titles}
           work={state.work}
           updateStatus={state.chapterUpdates.works[state.work.workId]}
-          onCheckUpdates={
-            state.chapterUpdatesAvailable
-              ? () => void controller.checkChapterUpdates(state.work!.workId)
-              : undefined
-          }
           recentStatus={
             state.workRecent?.workId === state.work.workId ? state.workRecent.status : 'loading'
           }
@@ -388,12 +388,14 @@ function ShellAppBar({
   state,
   onOpenUrlDialog,
   onRequestRemove,
+  onRequestChapterUpdates,
   onOpenWorkDialog,
 }: {
   controller: RenewalController;
   state: RenewalSnapshot;
   onOpenUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
+  onRequestChapterUpdates(workId?: string): void;
   onOpenWorkDialog(dialog: 'guidance' | 'batch' | 'termScan'): void;
 }): JSX.Element | null {
   if (state.route.kind === 'home')
@@ -403,6 +405,19 @@ function ShellAppBar({
         titleAs="span"
         actions={
           <>
+            {state.chapterUpdatesAvailable && state.libraryWorks.length > 0 && (
+              <IconButton
+                icon="refresh"
+                label={
+                  state.chapterUpdates.checkingAll
+                    ? '서재 새 회차 확인 중…'
+                    : '서재 전체 새 회차 확인'
+                }
+                disabled={state.chapterUpdates.checkingAll}
+                aria-busy={state.chapterUpdates.checkingAll}
+                onClick={() => onRequestChapterUpdates()}
+              />
+            )}
             <IconButton icon="link" label="URL로 열기" onClick={onOpenUrlDialog} />
             <IconButton
               icon="settings"
@@ -456,7 +471,24 @@ function ShellAppBar({
       }
       titleAs="span"
       navigation={<IconButton icon="arrow_back" label="뒤로 가기" onClick={controller.back} />}
-      actions={<Menu label="더보기" items={items} />}
+      actions={
+        <>
+          {state.route.kind === 'work' && state.work && state.chapterUpdatesAvailable && (
+            <IconButton
+              icon="refresh"
+              label={
+                state.chapterUpdates.works[state.work.workId]?.checking
+                  ? '새 회차 확인 중…'
+                  : '새 회차 확인'
+              }
+              disabled={state.chapterUpdates.works[state.work.workId]?.checking}
+              aria-busy={state.chapterUpdates.works[state.work.workId]?.checking ?? false}
+              onClick={() => onRequestChapterUpdates(state.work!.workId)}
+            />
+          )}
+          <Menu label="더보기" items={items} />
+        </>
+      }
     />
   );
 }
@@ -476,6 +508,9 @@ export function Application({
     controller.getSnapshot,
   );
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
+  const [chapterUpdateRequest, setChapterUpdateRequest] = useState<ChapterUpdateRequest | null>(
+    null,
+  );
   const [workDialogRequest, setWorkDialogRequest] = useState<{
     dialog: 'guidance' | 'batch' | 'termScan';
     id: number;
@@ -491,8 +526,49 @@ export function Application({
     savedCount: number;
   } | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
-  const [removalNotice, setRemovalNotice] = useState<{ id: number; text: string } | null>(null);
-  const removalNoticeSequence = useRef(0);
+  const [actionNotice, setActionNotice] = useState<{ id: number; text: string } | null>(null);
+  const actionNoticeSequence = useRef(0);
+  const showActionNotice = (text: string) => {
+    actionNoticeSequence.current += 1;
+    setActionNotice({ id: actionNoticeSequence.current, text });
+  };
+  const requestChapterUpdates = (workId?: string) => {
+    if (!state.chapterUpdatesAvailable) return;
+    if (workId) {
+      if (state.chapterUpdates.works[workId]?.checking) return;
+      const work =
+        state.libraryWorks.find((entry) => entry.work.workId === workId)?.work ??
+        (state.work?.workId === workId ? state.work : undefined);
+      if (work)
+        setChapterUpdateRequest({
+          kind: 'work',
+          workId,
+          title: state.recentTitles[workId] ?? work.title,
+        });
+    } else if (!state.chapterUpdates.checkingAll && state.libraryWorks.length > 0) {
+      setChapterUpdateRequest({ kind: 'all' });
+    }
+  };
+  const chapterUpdateBusy =
+    chapterUpdateRequest?.kind === 'work'
+      ? Boolean(state.chapterUpdates.works[chapterUpdateRequest.workId]?.checking)
+      : state.chapterUpdates.checkingAll;
+  const confirmChapterUpdates = async () => {
+    if (!chapterUpdateRequest || chapterUpdateBusy) return;
+    const workId = chapterUpdateRequest.kind === 'work' ? chapterUpdateRequest.workId : undefined;
+    setChapterUpdateRequest(null);
+    try {
+      await controller.checkChapterUpdates(workId);
+      const latest = controller.getSnapshot();
+      showActionNotice(
+        workId
+          ? (latest.chapterUpdates.works[workId]?.error ?? '새 회차 확인을 마쳤어요.')
+          : (latest.chapterUpdates.message ?? '서재 전체 새 회차 확인을 마쳤어요.'),
+      );
+    } catch {
+      showActionNotice('새 회차를 확인하지 못했어요. 다시 시도해 주세요.');
+    }
+  };
   const requestRemove = (workId: string, title: string) => {
     const row = state.libraryWorks.find((entry) => entry.work.workId === workId);
     const savedChapterIds =
@@ -510,8 +586,7 @@ export function Application({
     }
     setRemoveBusy(false);
     setRemoveTarget(null);
-    removalNoticeSequence.current += 1;
-    setRemovalNotice({ id: removalNoticeSequence.current, text: message });
+    showActionNotice(message);
   };
   useEffect(() => {
     void controller.initialize();
@@ -574,7 +649,7 @@ export function Application({
       <SnackbarBridge
         state={state}
         holdErrors={urlDialogOpen && state.route.kind === 'home'}
-        notice={removalNotice ?? state.settingsNotice}
+        notice={actionNotice ?? state.settingsNotice}
       />
       <div className="nr-application" lang="ko">
         <ShellAppBar
@@ -582,6 +657,7 @@ export function Application({
           state={state}
           onOpenUrlDialog={() => setUrlDialogOpen(true)}
           onRequestRemove={requestRemove}
+          onRequestChapterUpdates={requestChapterUpdates}
           onOpenWorkDialog={(dialog) =>
             state.work &&
             setWorkDialogRequest({
@@ -603,10 +679,47 @@ export function Application({
             onOpenUrlDialog={() => setUrlDialogOpen(true)}
             onCloseUrlDialog={() => setUrlDialogOpen(false)}
             onRequestRemove={requestRemove}
+            onRequestChapterUpdates={requestChapterUpdates}
             workDialogRequest={workDialogRequest}
             onWorkDialogRequestHandled={handleWorkDialogRequestHandled}
           />
         </main>
+        <Dialog
+          open={chapterUpdateRequest !== null}
+          title={
+            chapterUpdateRequest?.kind === 'work'
+              ? '이 작품의 새 회차를 확인할까요?'
+              : '서재 전체 새 회차를 확인할까요?'
+          }
+          onClose={() => setChapterUpdateRequest(null)}
+          actions={
+            <>
+              <Button variant="text" onClick={() => setChapterUpdateRequest(null)}>
+                취소
+              </Button>
+              <Button
+                variant="filled"
+                disabled={chapterUpdateBusy}
+                onClick={() => void confirmChapterUpdates()}
+              >
+                확인하기
+              </Button>
+            </>
+          }
+        >
+          <p>
+            {chapterUpdateRequest?.kind === 'work'
+              ? `‘${chapterUpdateRequest.title}’의 목차를 가져와 새 회차를 확인해요.`
+              : '서재에 있는 모든 작품의 목차를 가져와 새 회차를 확인해요.'}
+          </p>
+          <p>마지막 검사일과 관계없이 지금 검사해요. 회차 본문을 가져오거나 번역하지 않아요.</p>
+          {chapterUpdateRequest?.kind === 'work' && (
+            <ChapterUpdateStatus status={state.chapterUpdates.works[chapterUpdateRequest.workId]} />
+          )}
+          {chapterUpdateRequest?.kind === 'all' && state.chapterUpdates.message && (
+            <p role="status">최근 검사 결과: {state.chapterUpdates.message}</p>
+          )}
+        </Dialog>
         <Dialog
           open={!!removeTarget}
           title="서재에서 제거할까요?"
