@@ -36,12 +36,40 @@ final class DeviceSmokeTests: XCTestCase {
   func test01ProductLibraryAndSettingsRender() async throws {
     let web = try await webView()
     let value = try await evaluate(
-      "return {platform: Capacitor.getPlatform(), library: !!document.querySelector('[aria-label=\"서재\"]'), browse: !!document.querySelector('.nr-fab'), url: !!document.querySelector('button[aria-label=\"URL로 열기\"]')};"
+      "return {platform: Capacitor.getPlatform(), library: !!document.querySelector('[aria-label=\"서재\"]'), add: document.querySelector('.nr-fab')?.textContent === '작품 추가', url: !!document.querySelector('button[aria-label=\"URL로 열기\"]')};"
     )
     XCTAssertEqual(value["platform"] as? String, "ios")
     XCTAssertEqual(value["library"] as? Bool, true)
-    XCTAssertEqual(value["browse"] as? Bool, false)
+    XCTAssertEqual(value["add"] as? Bool, true)
     XCTAssertEqual(value["url"] as? Bool, true)
+    let dialog = try await evaluate(
+      """
+      const wait = async predicate => {
+          for (let n=0; n<100; n++) {
+              if (predicate()) return;
+              await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          throw new Error('URL dialog did not reach the expected state');
+      };
+      const open = () => document.querySelector('dialog[open] .nr-library__url-form');
+      const close = () => [...document.querySelectorAll('dialog[open] button')]
+          .find(button => button.textContent.trim() === '닫기').click();
+      document.querySelector('.nr-fab').click();
+      await wait(open);
+      const viaAdd = !!open().querySelector('input[name="url"]');
+      close();
+      await wait(() => !open());
+      document.querySelector('button[aria-label="URL로 열기"]').click();
+      await wait(open);
+      const viaLink = !!open().querySelector('input[name="url"]');
+      const count = document.querySelectorAll('dialog[open] .nr-library__url-form').length;
+      close();
+      await wait(() => !open());
+      return {viaAdd, viaLink, count};
+      """)
+    XCTAssertEqual(dialog["viaAdd"] as? Bool, true)
+    XCTAssertEqual(dialog["viaLink"] as? Bool, true)
+    XCTAssertEqual(dialog["count"] as? Int, 1)
     try await Task.sleep(nanoseconds: 400_000_000)
     let library = try await web.takeSnapshot(configuration: nil)
     let shot = XCTAttachment(image: library)
