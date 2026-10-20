@@ -10,16 +10,14 @@
   vertical-align: middle;
   white-space: nowrap;
 }
-.nr-chapter-update-control,
-.nr-library__updates {
+.nr-chapter-update-control {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-block: 12px;
 }
-.nr-chapter-update-control p,
-.nr-library__updates p {
+.nr-chapter-update-control p {
   flex-basis: 100%;
   margin: 0;
   color: var(--on-surface-variant);

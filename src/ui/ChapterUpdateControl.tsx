@@ -1,5 +1,4 @@
 import type { ChapterUpdateStatus } from '../app/chapterUpdates';
-import { Button } from './components/Button';
 import './chapter-updates.css';
 
 export function NewChapterBadge({ count }: { count: number }) {
@@ -10,18 +9,9 @@ export function NewChapterBadge({ count }: { count: number }) {
   ) : null;
 }
 
-export function ChapterUpdateControl({
-  status,
-  onCheck,
-}: {
-  status?: ChapterUpdateStatus;
-  onCheck(): void;
-}) {
+export function ChapterUpdateStatus({ status }: { status?: ChapterUpdateStatus }) {
   return (
     <div className="nr-chapter-update-control">
-      <Button variant="outlined" disabled={status?.checking} onClick={onCheck}>
-        {status?.checking ? '새 회차 확인 중…' : '새 회차 확인'}
-      </Button>
       <NewChapterBadge count={status?.newChapterIds.length ?? 0} />
       <p role="status">
         {status ? `마지막 검사일: ${status.lastCheckDate}` : '아직 새 회차를 검사하지 않았어요.'}

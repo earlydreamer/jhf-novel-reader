@@ -155,21 +155,6 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
       ) : (
         <section aria-label="작품 목록">
           <h1 className="nr-visually-hidden">서재</h1>
-          {state.chapterUpdatesAvailable && (
-            <div className="nr-library__updates">
-              <Button
-                variant="outlined"
-                disabled={state.chapterUpdates.checkingAll}
-                onClick={() => props.onCheckUpdates?.()}
-              >
-                {state.chapterUpdates.checkingAll
-                  ? '서재 새 회차 확인 중…'
-                  : '서재 전체 새 회차 확인'}
-              </Button>
-              <p>작품별 마지막 검사일에서 {state.chapterUpdateDays}일 뒤 0시부터 자동 검사해요.</p>
-              {state.chapterUpdates.message && <p role="status">{state.chapterUpdates.message}</p>}
-            </div>
-          )}
           <ul className="nr-library__list">
             {state.libraryWorks.map(({ work, savedChapterIds, recent }) => {
               const savedCount = new Set(savedChapterIds).size;
