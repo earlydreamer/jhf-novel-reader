@@ -7,6 +7,8 @@ import { createRenewalController } from '../../src/app/renewalController';
 import type { ChapterRef, WorkPage } from '../../src/contracts/reading';
 import { createLibraryStore } from '../../src/storage/library';
 import { recentToc } from '../fixtures/chapterUpdates';
+import { source as sourceFixture } from '../providers/wholeChapterFixture';
+import { chapterCheckDate } from '../../src/app/chapterUpdateSchedule';
 
 function chapter(ordinal: number): ChapterRef {
   return {
@@ -37,6 +39,122 @@ const secondPage: WorkPage = {
 };
 
 afterEach(cleanup);
+
+it('최근 읽은 250화를 포함한 페이지만 처음 열고 갱신과 앞뒤 이동이 선택 페이지를 보존한다', async () => {
+  const memory = new Map<string, string>();
+  const library = createLibraryStore({
+    read: async (path) => memory.get(path) ?? null,
+    write: async (path, text) => {
+      memory.set(path, text);
+    },
+  });
+  const pages = [
+    recentToc(
+      'n1234ab',
+      Array.from({ length: 100 }, (_, i) => i + 1),
+      1,
+      true,
+    ),
+    recentToc(
+      'n1234ab',
+      Array.from({ length: 100 }, (_, i) => i + 101),
+      2,
+      true,
+    ),
+    recentToc(
+      'n1234ab',
+      Array.from({ length: 100 }, (_, i) => i + 201),
+      3,
+      true,
+    ),
+    recentToc('n1234ab', [301, 302], 4),
+  ];
+  for (const page of pages) await library.saveWorkPage(page);
+  await library.saveWorkUpdate!({
+    workId: 'n1234ab',
+    lastCheckDate: chapterCheckDate(Date.now()),
+    attemptedAt: Date.now(),
+    checkedAt: Date.now(),
+    knownChapterIds: pages.flatMap((page) => page.chapters.map((chapter) => chapter.chapterId)),
+    newChapterIds: [],
+    failed: false,
+  });
+  await library.commitVersion({
+    schemaVersion: 2,
+    versionId: 'recent-page',
+    source: {
+      ...sourceFixture,
+      chapterId: 'n1234ab/250',
+      canonicalUrl: 'https://ncode.syosetu.com/n1234ab/250/',
+    },
+    text: '합성 번역',
+    blocks: [{ id: 'b1', text: '합성 번역' }],
+    createdAt: '2026-10-20T00:00:00Z',
+    provenance: {
+      provider: 'openai-compatible',
+      connectionId: 'fixture',
+      modelId: 'fixture',
+      contractVersion: 'plain-v1',
+      promptVersion: 'fixture-v1',
+      languageDirection: 'ja-ko',
+    },
+  });
+  await library.savePosition({
+    workId: 'n1234ab',
+    chapterId: 'n1234ab/250',
+    versionId: 'recent-page',
+    blockId: 'b1',
+    offset: 0,
+  });
+  const getWorkPage = vi.fn(async (url: string) => pages.find((page) => page.pageUrl === url)!);
+  const scroll = vi.fn();
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: scroll,
+  });
+  const controller = createRenewalController({
+    library,
+    source: { getWorkPage, getChapter: vi.fn() },
+  });
+  try {
+    await controller.initialize();
+    render(<Application controller={controller} />);
+    await act(async () => {
+      await controller.openLibraryWork('n1234ab');
+    });
+    await waitFor(() => expect(controller.getSnapshot().workRecent?.status).toBe('verified'));
+    expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(201);
+    expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(100);
+    expect(screen.getByText('전체 302화 · 1화 저장됨')).toBeInTheDocument();
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(getWorkPage).not.toHaveBeenCalled();
+    await act(async () => {
+      await controller.loadPreviousWorkPage();
+    });
+    expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(101);
+    await act(async () => {
+      await controller.checkChapterUpdates('n1234ab');
+    });
+    expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(101);
+    expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(100);
+    getWorkPage.mockClear();
+    await act(async () => {
+      await controller.loadMoreWorkPage();
+    });
+    expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(201);
+    await act(async () => {
+      controller.back();
+      await controller.openLibraryWork('n1234ab');
+    });
+    expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(201);
+    expect(getWorkPage).not.toHaveBeenCalled();
+  } finally {
+    controller.dispose();
+    if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original);
+    else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  }
+});
 
 it('loads another TOC page and navigates chapters across its boundary', async () => {
   const getWorkPage = vi.fn(async (url: string) =>
@@ -89,7 +207,7 @@ it('loads another TOC page and navigates chapters across its boundary', async ()
   ]);
 });
 
-it('전체 검사 캐시가 있어도 첫 페이지만 열고 다음 페이지는 재요청 없이 펼친다', async () => {
+it('읽기 기록이 없으면 첫 페이지를 열고 앞뒤 이동에서도 한 페이지만 표시하며 캐시를 재사용한다', async () => {
   const memory = new Map<string, string>();
   const library = createLibraryStore({
     read: async (path) => memory.get(path) ?? null,
@@ -129,6 +247,8 @@ it('전체 검사 캐시가 있어도 첫 페이지만 열고 다음 페이지�
     await controller.openLibraryWork('n1234aa');
   });
   expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
+  expect(screen.getByText('전체 405화 · 0화 저장됨')).toBeInTheDocument();
+  expect(screen.queryByText(/화까지 확인했어요/)).toBeNull();
   expect(versions).toHaveBeenCalledTimes(200);
   expect(controller.getSnapshot().workViewport).toMatchObject({
     complete: false,
@@ -144,17 +264,27 @@ it('전체 검사 캐시가 있어도 첫 페이지만 열고 다음 페이지�
   getWorkPage.mockClear();
   fireEvent.click(screen.getByRole('button', { name: '다음 목차 페이지 불러오기' }));
   await waitFor(() =>
-    expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(400),
+    expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200),
+  );
+  await waitFor(() =>
+    expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(201),
   );
   expect(getWorkPage).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: '다음 목차 페이지 불러오기' }));
-  await waitFor(() =>
-    expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(405),
-  );
+  await waitFor(() => expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(5));
   expect(controller.getSnapshot().workViewport).toMatchObject({
     complete: true,
     nextPageUrl: null,
   });
+  expect(getWorkPage).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '이전 목차 페이지 불러오기' }));
+  await waitFor(() =>
+    expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(201),
+  );
+  expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
+  fireEvent.click(screen.getByRole('button', { name: '이전 목차 페이지 불러오기' }));
+  await waitFor(() => expect(controller.getSnapshot().workViewport?.chapters[0]?.ordinal).toBe(1));
+  expect(document.querySelectorAll('.nr-work-chapters > li')).toHaveLength(200);
   expect(getWorkPage).not.toHaveBeenCalled();
   await act(async () => {
     controller.back();

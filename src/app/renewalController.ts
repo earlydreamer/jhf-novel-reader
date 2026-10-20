@@ -200,6 +200,7 @@ export interface RenewalSnapshot {
   readonly work: WorkPage | null;
   /** 전체 캐시와 별도로, 작품 화면에서 사용자가 펼친 목차 범위. */
   readonly workViewport?: WorkPage | null;
+  readonly previousWorkPageUrl?: string | null;
   readonly workRecent: WorkRecentSnapshot | null;
   readonly savedChapterIds: readonly string[];
   readonly chapter: ChapterRef | null;
@@ -385,6 +386,7 @@ export interface RenewalController {
   checkChapterUpdates(workId?: string): Promise<void>;
   openLibraryWork(workId: string): Promise<void>;
   loadMoreWorkPage(): Promise<void>;
+  loadPreviousWorkPage(): Promise<void>;
   selectChapter(chapter: ChapterRef): Promise<void>;
   continueReading(versionId: string): Promise<void>;
   continueReadingFromWork(workId: string): Promise<void>;
@@ -509,7 +511,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   const worksById = new Map<string, WorkPage>();
   const pagesByWorkId = new Map<string, Map<string, WorkPage>>();
   // 전체 검사 캐시와 사용자가 펼친 목차 페이지 수는 별도로 관리한다.
-  const visiblePageCounts = new Map<string, number>();
+  const visiblePageUrls = new Map<string, string>();
   const chaptersById = new Map<string, ChapterRef>();
   const savedChaptersByWork = new Map<string, readonly string[]>();
   const versionsById = new Map<string, CompletedTranslation>();
@@ -942,7 +944,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ...snapshot,
       ...update,
       ...(Object.hasOwn(update, 'work')
-        ? { workViewport: update.work ? visibleWork(update.work) : null }
+        ? {
+            workViewport: update.work ? visibleWork(update.work) : null,
+            previousWorkPageUrl: update.work ? previousWorkPageUrl(update.work) : null,
+          }
         : {}),
       errorRevision:
         Object.hasOwn(update, 'error') && update.error
@@ -1131,7 +1136,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       });
       worksById.delete(workId);
       pagesByWorkId.delete(workId);
-      visiblePageCounts.delete(workId);
+      visiblePageUrls.delete(workId);
       savedChaptersByWork.delete(workId);
       titlesByWork.delete(workId);
       for (const [chapterId, chapter] of chaptersById)
@@ -1604,8 +1609,13 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       let work: WorkPage | null = null;
       for (const page of pages) work = rememberWorkPage(page);
       if (!work) throw new ReaderError('storage');
-      visiblePageCounts.set(workId, 1);
-      const savedChapterIds = await readSavedChapterIds(visibleWork(work).chapters);
+      selectInitialWorkPage(work);
+      const savedChapterIds = [
+        ...new Set([
+          ...(savedChaptersByWork.get(workId) ?? []),
+          ...(await readSavedChapterIds(visibleWork(work).chapters)),
+        ]),
+      ];
       if (disposed || operation !== sourceOperation) return;
       savedChaptersByWork.set(workId, savedChapterIds);
       publish({ work, savedChapterIds, busy: false });
@@ -1651,22 +1661,37 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     chapters.forEach((chapter) => chaptersById.set(chapter.chapterId, chapter));
     return work;
   }
-  function visibleWork(work: WorkPage): WorkPage {
-    const pages = [...(pagesByWorkId.get(work.workId)?.values() ?? [])].sort(
+  function sortedWorkPages(workId: string): WorkPage[] {
+    return [...(pagesByWorkId.get(workId)?.values() ?? [])].sort(
       (left, right) => (left.chapters[0]?.ordinal ?? 0) - (right.chapters[0]?.ordinal ?? 0),
     );
+  }
+  function selectInitialWorkPage(work: WorkPage): void {
+    const pages = sortedWorkPages(work.workId);
+    const recentId = snapshot.recent.find((entry) => entry.workId === work.workId)?.chapterId;
+    const selected =
+      pages.find((page) => page.chapters.some((chapter) => chapter.chapterId === recentId)) ??
+      pages[0];
+    if (selected) visiblePageUrls.set(work.workId, selected.pageUrl);
+  }
+  function previousWorkPageUrl(work: WorkPage): string | null {
+    const pages = sortedWorkPages(work.workId);
+    const current = visiblePageUrls.get(work.workId) ?? pages[0]?.pageUrl;
+    const index = pages.findIndex((page) => page.pageUrl === current);
+    return index > 0 ? pages[index - 1]!.pageUrl : null;
+  }
+  function visibleWork(work: WorkPage): WorkPage {
+    const pages = sortedWorkPages(work.workId);
     if (!pages.length) return work;
-    const visible = pages.slice(0, visiblePageCounts.get(work.workId) ?? 1);
-    const last = visible[visible.length - 1]!;
-    const ids = new Set(
-      visible.flatMap((page) => page.chapters.map((chapter) => chapter.chapterId)),
-    );
+    const page =
+      pages.find((page) => page.pageUrl === visiblePageUrls.get(work.workId)) ?? pages[0]!;
+    const ids = new Set(page.chapters.map((chapter) => chapter.chapterId));
     return {
       ...work,
-      pageUrl: last.pageUrl,
+      pageUrl: page.pageUrl,
       chapters: work.chapters.filter((chapter) => ids.has(chapter.chapterId)),
-      nextPageUrl: last.nextPageUrl,
-      complete: work.complete && visible.length === pages.length,
+      nextPageUrl: page.nextPageUrl,
+      complete: page.nextPageUrl === null,
     };
   }
   function ownsVisibleTranslation(request: ActiveTranslation): boolean {
@@ -1747,8 +1772,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         (expectedWorkId === page.workId && expectedGeneration !== removalGeneration(page.workId))
       )
         return;
-      visiblePageCounts.set(page.workId, 1);
       const work = rememberWorkPage(page);
+      selectInitialWorkPage(work);
       removedWorkIds.delete(page.workId);
       const savedChapterIds = [
         ...new Set([...(savedChaptersByWork.get(page.workId) ?? []), ...newlySavedChapterIds]),
@@ -1772,26 +1797,24 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   }
   async function loadMoreWorkPage(): Promise<void> {
+    await loadWorkPage((snapshot.workViewport ?? snapshot.work)?.nextPageUrl);
+  }
+  async function loadPreviousWorkPage(): Promise<void> {
+    await loadWorkPage(snapshot.previousWorkPageUrl);
+  }
+  async function loadWorkPage(pageUrl: string | null | undefined): Promise<void> {
     const work = snapshot.workViewport ?? snapshot.work;
-    const nextPageUrl = work?.nextPageUrl;
-    if (
-      !dependencies.source ||
-      !work ||
-      !nextPageUrl ||
-      snapshot.busy ||
-      disposed ||
-      removingWorkIds.has(work.workId)
-    )
-      return;
+    if (!work || !pageUrl || snapshot.busy || disposed || removingWorkIds.has(work.workId)) return;
+    const cached = pagesByWorkId.get(work.workId)?.get(pageUrl);
+    if (!cached && !dependencies.source) return;
     const generation = removalGeneration(work.workId);
     const operation = ++sourceOperation;
     sourceAbort?.abort();
     sourceAbort = new AbortController();
+    titleAbort?.abort();
     publish({ busy: true, error: null });
     try {
-      const cached = pagesByWorkId.get(work.workId)?.get(nextPageUrl);
-      const page =
-        cached ?? (await dependencies.source.getWorkPage(nextPageUrl, sourceAbort.signal));
+      const page = cached ?? (await dependencies.source!.getWorkPage(pageUrl, sourceAbort.signal));
       if (
         operation !== sourceOperation ||
         disposed ||
@@ -1809,7 +1832,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       )
         return;
       const mergedWork = rememberWorkPage(page);
-      visiblePageCounts.set(work.workId, (visiblePageCounts.get(work.workId) ?? 1) + 1);
+      visiblePageUrls.set(work.workId, page.pageUrl);
       const savedChapterIds = [
         ...new Set([...(savedChaptersByWork.get(work.workId) ?? []), ...newlySavedChapterIds]),
       ];
@@ -3298,6 +3321,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       Promise.resolve(),
     openLibraryWork: openCachedWork,
     loadMoreWorkPage,
+    loadPreviousWorkPage,
     selectChapter,
     continueReading,
     continueReadingFromWork,
