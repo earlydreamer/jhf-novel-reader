@@ -7,6 +7,7 @@ import { Application } from '../../src/app/Application';
 import { createLibraryStore } from '../../src/storage/library';
 import { createReadingSettingsRepository } from '../../src/storage/settings';
 import { toc } from '../fixtures/chapterUpdates';
+import { runTopBackHandler } from '../../src/ui/shell/backStack';
 
 afterEach(() => {
   cleanup();
@@ -50,20 +51,39 @@ async function fixture() {
   };
 }
 
-test('서재 전체/작품 메뉴/목차 버튼으로 갱신하고 회차를 열면 해당 배지만 해제한다', async () => {
+test('상단 아이콘과 작품 메뉴의 확인 모달로 갱신하고 회차를 열면 해당 배지만 해제한다', async () => {
   const h = await fixture();
   const view = render(<Application controller={h.controller} />);
-  expect(screen.getByRole('button', { name: '서재 전체 새 회차 확인' })).toBeEnabled();
+  const refresh = within(document.querySelector<HTMLElement>('.nr-top-app-bar')!).getByRole(
+    'button',
+    {
+      name: '서재 전체 새 회차 확인',
+    },
+  );
+  expect(refresh).toBeEnabled();
+  expect(refresh.querySelector('[data-icon="refresh"]')).toBeInTheDocument();
+  expect(document.querySelector('.nr-library__updates')).toBeNull();
   expect(screen.getByText('새 회차 1')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'n1234aa 작품 메뉴' }));
   h.setLatest([1, 2, 3]);
+  const beforeMenu = h.getWorkPage.mock.calls.length;
   fireEvent.click(screen.getByRole('menuitem', { name: '새 회차 확인' }));
+  expect(screen.getByRole('dialog', { name: '이 작품의 새 회차를 확인할까요?' })).toHaveTextContent(
+    'n1234aa 작품',
+  );
+  expect(h.getWorkPage).toHaveBeenCalledTimes(beforeMenu);
+  fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
   await screen.findByText('새 회차 2');
   const requests = h.getWorkPage.mock.calls.length;
   fireEvent.click(screen.getByRole('button', { name: /n1234aa 작품.*새 회차 2/ }));
   await screen.findByRole('heading', { name: 'n1234aa 작품' });
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
-  expect(screen.getByRole('button', { name: '새 회차 확인' })).toBeEnabled();
+  expect(
+    within(document.querySelector<HTMLElement>('.nr-top-app-bar')!).getByRole('button', {
+      name: '새 회차 확인',
+    }),
+  ).toBeEnabled();
+  expect(document.querySelector('.nr-work-screen .nr-chapter-update-control')).toBeNull();
   expect(within(screen.getByRole('list')).getAllByText('새 회차 1')).toHaveLength(2);
   await act(async () => {
     await h.controller.selectChapter(toc('n1234aa', [2]).chapters[0]!);
@@ -79,6 +99,10 @@ test('서재 전체/작품 메뉴/목차 버튼으로 갱신하고 회차를 열
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
   h.setLatest([1, 2, 3, 4]);
   fireEvent.click(screen.getByRole('button', { name: '새 회차 확인' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('마지막 검사일:');
+  expect(screen.getByRole('dialog')).toHaveTextContent('마지막 성공:');
+  expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
+  fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
   await screen.findByRole('button', { name: '4화 4화' });
   expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.newChapterIds).toEqual([
     'n1234aa/3',
@@ -132,16 +156,88 @@ test('실제 lifecycle 복귀도 주기 안에는 네트워크 확인을 반복�
   restarted.dispose();
 });
 
-test('서재 전체 검사 버튼은 같은 날에도 명시적으로 갱신하고 배지를 표시한다', async () => {
+test('서재 상단 아이콘은 확인 후 같은 날에도 전체를 갱신하고 배지를 표시한다', async () => {
   const h = await fixture();
   const view = render(<Application controller={h.controller} />);
   const requests = h.getWorkPage.mock.calls.length;
   h.setLatest([1, 2, 3]);
   fireEvent.click(screen.getByRole('button', { name: '서재 전체 새 회차 확인' }));
+  expect(screen.getByRole('dialog', { name: '서재 전체 새 회차를 확인할까요?' })).toHaveTextContent(
+    '모든 작품',
+  );
+  expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
+  fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
   await screen.findByText('새 회차 2');
   expect(h.getWorkPage).toHaveBeenCalledTimes(requests + 1);
   expect(h.controller.getSnapshot().route.kind).toBe('home');
   view.unmount();
+  h.controller.dispose();
+});
+
+test('취소·Escape·뒤로 가기는 모달만 닫고 수동 요청을 보내지 않는다', async () => {
+  const h = await fixture();
+  render(<Application controller={h.controller} />);
+  const requests = h.getWorkPage.mock.calls.length;
+  const refresh = screen.getByRole('button', { name: '서재 전체 새 회차 확인' });
+  fireEvent.click(refresh);
+  fireEvent.click(screen.getByRole('button', { name: '취소' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.click(refresh);
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.click(refresh);
+  act(() => {
+    expect(runTopBackHandler()).toBe(true);
+  });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(h.getWorkPage).toHaveBeenCalledTimes(requests);
+  h.controller.dispose();
+});
+
+test('확인 직후 모달을 닫고 검사 중 아이콘을 비활성화해 요청을 반복하지 않는다', async () => {
+  const h = await fixture();
+  render(<Application controller={h.controller} />);
+  const requests = h.getWorkPage.mock.calls.length;
+  let release!: () => void;
+  h.getWorkPage.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = () => resolve(toc('n1234aa', [1, 2, 3]));
+      }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: '서재 전체 새 회차 확인' }));
+  fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  const busy = await screen.findByRole('button', { name: '서재 새 회차 확인 중…' });
+  expect(busy).toBeDisabled();
+  await waitFor(() => expect(h.getWorkPage).toHaveBeenCalledTimes(requests + 1));
+  fireEvent.click(busy);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(h.getWorkPage).toHaveBeenCalledTimes(requests + 1);
+  await act(async () => {
+    release();
+  });
+  await screen.findByText('새 회차 2');
+  expect(screen.getByRole('button', { name: '서재 전체 새 회차 확인' })).toBeEnabled();
+  h.controller.dispose();
+});
+
+test('작품 검사 실패는 모달을 닫은 뒤에도 스낵바로 알려 준다', async () => {
+  const h = await fixture();
+  await h.controller.openLibraryWork('n1234aa');
+  render(<Application controller={h.controller} />);
+  h.getWorkPage.mockRejectedValueOnce(new Error('network unavailable'));
+  fireEvent.click(screen.getByRole('button', { name: '새 회차 확인' }));
+  fireEvent.click(screen.getByRole('button', { name: '확인하기' }));
+  await waitFor(() =>
+    expect(h.controller.getSnapshot().chapterUpdates.works.n1234aa?.error).toBeTruthy(),
+  );
+  await waitFor(() =>
+    expect(document.querySelector('.nr-snackbar__text')).toHaveTextContent(
+      h.controller.getSnapshot().chapterUpdates.works.n1234aa!.error!,
+    ),
+  );
+  expect(screen.queryByRole('dialog')).toBeNull();
   h.controller.dispose();
 });
 

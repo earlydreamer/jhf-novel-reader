@@ -8,6 +8,7 @@ import moreVert from '../icons/more_vert.svg';
 import settings from '../icons/settings.svg';
 import link from '../icons/link.svg';
 import search from '../icons/search.svg';
+import refresh from '../icons/refresh.svg';
 import './components.css';
 
 // Material Symbols Outlined(Apache-2.0)에서 쓰는 아이콘만 복사해 둔다. 새 아이콘은 같은 방법으로 추가한다.
@@ -20,6 +21,7 @@ const icons = {
   link,
   more_vert: moreVert,
   search,
+  refresh,
   settings,
 } as const;
 export type IconName = keyof typeof icons;

@@ -8,7 +8,7 @@ import { GuidanceDialog } from './GuidanceDialog';
 import { TermScanPanel, type TermScanPanelProps } from './TermScanPanel';
 import { TitleHeading, type TitleControls } from './TitleHeading';
 import { displayedTitle } from '../translation/titles';
-import { ChapterUpdateControl, NewChapterBadge } from './ChapterUpdateControl';
+import { NewChapterBadge } from './ChapterUpdateControl';
 import type { ChapterUpdateStatus } from '../app/chapterUpdates';
 import { BottomSheet, Dialog } from './components/Modal';
 import { Button } from './components/Button';
@@ -52,7 +52,6 @@ export interface WorkScreenProps extends Omit<BatchPanelProps, 'workId'> {
   onSelect(chapter: ChapterRef): void;
   onLoadMore(): void;
   updateStatus?: ChapterUpdateStatus;
-  onCheckUpdates?(): void;
   onContinue?(): void;
   onRetryContinue?(): void;
   guidance?: Omit<GuidancePanelProps, 'workId'>;
@@ -68,7 +67,6 @@ export function WorkScreen({
   onSelect,
   onLoadMore,
   updateStatus,
-  onCheckUpdates,
   recentStatus,
   dialogRequest,
   onDialogRequestHandled,
@@ -300,7 +298,6 @@ export function WorkScreen({
         </div>
       )}
       <h2>회차 목록</h2>
-      {onCheckUpdates && <ChapterUpdateControl status={updateStatus} onCheck={onCheckUpdates} />}
       <ol className="nr-work-chapters" start={work.chapters[0]?.ordinal || 1}>
         {work.chapters.map((chapter) => {
           const saved = savedChapterIds.includes(chapter.chapterId);
