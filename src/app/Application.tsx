@@ -26,6 +26,7 @@ function RouteScreen({
   state,
   backup,
   urlDialogOpen,
+  onOpenUrlDialog,
   onCloseUrlDialog,
   onRequestRemove,
   workDialogRequest,
@@ -35,6 +36,7 @@ function RouteScreen({
   state: RenewalSnapshot;
   backup: BackupPlatform;
   urlDialogOpen: boolean;
+  onOpenUrlDialog(): void;
   onCloseUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
   workDialogRequest: {
@@ -86,6 +88,7 @@ function RouteScreen({
         <HomeScreen
           state={state}
           urlDialogOpen={urlDialogOpen}
+          onOpenUrlDialog={onOpenUrlDialog}
           onCloseUrlDialog={onCloseUrlDialog}
           onBrowse={(startUrl) => void controller.browse(startUrl)}
           onOpen={(url) => void controller.openWork(url)}
@@ -597,6 +600,7 @@ export function Application({
             state={state}
             backup={backup}
             urlDialogOpen={urlDialogOpen}
+            onOpenUrlDialog={() => setUrlDialogOpen(true)}
             onCloseUrlDialog={() => setUrlDialogOpen(false)}
             onRequestRemove={requestRemove}
             workDialogRequest={workDialogRequest}

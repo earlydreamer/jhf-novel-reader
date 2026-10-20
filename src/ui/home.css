@@ -1,5 +1,7 @@
 .nr-library {
   overflow: visible;
+  /* 마지막 작품이 고정된 작품 추가 버튼에 가리지 않을 만큼만 비운다. */
+  padding-block-end: calc(var(--fab) + 16px);
 }
 .nr-library__empty {
   display: grid;
