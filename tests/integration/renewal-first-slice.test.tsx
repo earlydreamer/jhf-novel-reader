@@ -761,16 +761,19 @@ it('cancel during durable save never opens the reader', async () => {
   expect(h.app.getSnapshot().route.kind).toBe('translation');
   h.app.dispose();
 });
-it('trusted Home opens the native discovery action and exposes explicit cancellation', async () => {
+it('서재에서 작품 찾기 버튼 없이 URL로 작품을 열 수 있다', async () => {
   const { render, screen, fireEvent, cleanup } = await import('@testing-library/react');
   const { Application } = await import('../../src/app/Application');
   const h = harness();
+  const browse = vi.spyOn(h.app, 'browse');
   render(<Application controller={h.app} />);
-  await expect.poll(() => h.app.getSnapshot().recent.length).toBe(0);
-  const browse = screen.getByRole('button', { name: '작품 찾기' });
-  expect(browse.hasAttribute('disabled')).toBe(false);
-  fireEvent.click(browse);
+  await expect.poll(() => h.app.getSnapshot().libraryLoaded).toBe(true);
+  expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'URL로 열기' }));
+  fireEvent.change(screen.getByLabelText('작품 또는 회차 URL'), { target: { value: chapterUrl } });
+  fireEvent.click(screen.getByRole('button', { name: '열기' }));
   await expect.poll(() => h.app.getSnapshot().work?.title).toBe('合成作品');
+  expect(browse).not.toHaveBeenCalled();
   cleanup();
   h.app.dispose();
 });
