@@ -23,7 +23,9 @@ def protected_snapshot(library, bundle):
         parts = path.parts
         if 'narou-reader' in parts:
             suffix = parts[parts.index('narou-reader') + 1:]
-            if suffix and suffix[0] in ('versions', 'reading', 'positions', 'chapters'):
+            # Titles, attempts, guidance and queued jobs are user state as well as bodies.
+            # Work pages and the index's update timestamps may refresh during normal launch.
+            if suffix and suffix[0] not in ('works', 'library'):
                 files[relative] = digest(path.read_bytes())
             if len(suffix) == 2 and suffix[0] == 'library' and suffix[1] in ('index.0.json', 'index.1.json'):
                 found_index = True
