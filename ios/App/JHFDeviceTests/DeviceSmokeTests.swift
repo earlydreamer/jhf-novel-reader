@@ -361,10 +361,14 @@ return await (async () => {
       if (position) readIds.add(position.chapterId);
     }
     const chapters = pages.flatMap(page=>page.chapters);
+    report.workTitle = pages[0].title;
+    report.cachedPageCount = pages.length;
+    report.cachedChapterCount = chapters.length;
     const now = Date.now();
+    const visibleIds = new Set([...document.querySelectorAll('.nr-work-screen ol > li')].map(row=>`${workId}/${row.value}`));
     const expected = chapters.filter(chapter=>{
       const age = now-Date.parse(chapter.publishedAt??'');
-      return age>=0 && age<=48*3600000 && !readIds.has(chapter.chapterId);
+      return visibleIds.has(chapter.chapterId) && age>=0 && age<=48*3600000 && !readIds.has(chapter.chapterId);
     }).map(chapter=>chapter.chapterId);
     const actual = [...document.querySelectorAll('.nr-work-screen ol > li')].filter(row=>row.querySelector('.nr-new-chapter-badge')).map(row=>`${workId}/${row.value}`);
     report.publicationMetadata = chapters.slice(-4).map(chapter=>({chapterId:chapter.chapterId,publishedAt:chapter.publishedAt,read:readIds.has(chapter.chapterId),badge:actual.includes(chapter.chapterId)}));
@@ -385,6 +389,33 @@ return await (async () => {
     // Explicitly requested whole-library refresh: preserve every registered work and record all HTTP results.
     await confirmCheck('서재 전체 새 회차 확인','all');
     report.allSuccess = !document.querySelector('.nr-library__update-error');
+    if (pages.length>1) {
+      const openCached = async () => {
+        const target = [...document.querySelectorAll('.nr-library__list .nr-list-item__main')].find(item=>item.querySelector('.nr-list-item__headline')?.textContent===report.workTitle);
+        if (!target) throw Error('Cached work row unavailable');
+        target.click();
+        await wait(()=>document.querySelectorAll('.nr-work-chapters > li').length===pages[0].chapters.length && button('새 회차 확인') && !button('새 회차 확인').disabled,'Cached first page did not render');
+      };
+      const beforePaging = report.requests.length;
+      await openCached();
+      report.pagingRowCounts = [document.querySelectorAll('.nr-work-chapters > li').length];
+      for (let page=1;page<pages.length;page++) {
+        const more = [...document.querySelectorAll('.nr-work-screen button')].find(item=>item.textContent.trim()==='다음 목차 페이지 불러오기');
+        if (!more || more.disabled) throw Error('Next cached page control unavailable');
+        more.click();
+        const expectedCount = pages.slice(0,page+1).reduce((sum,value)=>sum+value.chapters.length,0);
+        await wait(()=>document.querySelectorAll('.nr-work-chapters > li').length===expectedCount && button('새 회차 확인') && !button('새 회차 확인').disabled,'Cached next page did not render');
+        report.pagingRowCounts.push(expectedCount);
+      }
+      document.querySelector('button[aria-label="뒤로 가기"]').click();
+      await wait(()=>button('서재 전체 새 회차 확인'),'Library after paging unavailable');
+      await openCached();
+      report.reopenedFirstPageCount = document.querySelectorAll('.nr-work-chapters > li').length;
+      document.querySelector('button[aria-label="뒤로 가기"]').click();
+      await wait(()=>button('서재 전체 새 회차 확인'),'Library after reopen unavailable');
+      report.cachedPagingWithoutRequests = report.requests.length===beforePaging;
+      if (!report.cachedPagingWithoutRequests) throw Error('Cached paging requested source again');
+    }
     report.allResponsesSuccessful = report.requests.every(request=>request.completed && request.status===200 && request.bytes>0);
     const after = await protectedSnapshot();
     report.protectedFileCount = Object.keys(baseline.files).length;
@@ -427,6 +458,11 @@ return await (async () => {
     XCTAssertGreaterThan(result["allRequests"] as? Int ?? 0, 0)
     XCTAssertEqual(result["individualToastCount"] as? Int, 1)
     XCTAssertEqual(result["allToastCount"] as? Int, 1)
+    if (result["cachedPageCount"] as? Int ?? 0) > 1 {
+      XCTAssertEqual(result["cachedPagingWithoutRequests"] as? Bool, true)
+      XCTAssertEqual(result["reopenedFirstPageCount"] as? Int, result["importedChapterCount"] as? Int)
+      XCTAssertEqual((result["pagingRowCounts"] as? [Int])?.last, result["cachedChapterCount"] as? Int)
+    }
     let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
     let metadata = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
     metadata.name = "JHF-live-source-result-metadata"
@@ -437,6 +473,28 @@ return await (async () => {
     library.name = "JHF-iPhone-real-Narou-library"
     library.lifetime = .keepAlways
     add(library)
+    _ = try await evaluate(#"""
+return await (async()=>{
+  const target=[...document.querySelectorAll('.nr-library__list .nr-list-item__main')].find(item=>item.querySelector('.nr-list-item__headline')?.textContent===window.__jhfLive.workTitle);
+  if(!target)throw Error('Snapshot work unavailable');
+  target.click();
+  for(let i=0;i<200;i++){
+    if(document.querySelectorAll('.nr-work-chapters > li').length && document.querySelector('.nr-top-app-bar button[aria-label="새 회차 확인"]:not(:disabled)')){
+      document.querySelector('.nr-work-chapters .nr-new-chapter-badge')?.closest('li').scrollIntoView({block:'center'});
+      return {ready:true};
+    }
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  throw Error('Snapshot work did not render');
+})();
+"""#)
+    try await Task.sleep(nanoseconds: 300_000_000)
+    let work = XCTAttachment(image: try await web.takeSnapshot(configuration: nil))
+    work.name = "JHF-iPhone-publication-badges"
+    work.lifetime = .keepAlways
+    add(work)
+    _ = try await evaluate("document.querySelector('button[aria-label=\"뒤로 가기\"]').click(); return {home:true};")
+    try await Task.sleep(nanoseconds: 300_000_000)
     _ = try await evaluate("document.querySelector('.nr-top-app-bar button[aria-label=\"서재 전체 새 회차 확인\"]').click(); return {opened:!!document.querySelector('dialog[open]')};")
     try await Task.sleep(nanoseconds: 300_000_000)
     let confirmation = XCTAttachment(image: try await web.takeSnapshot(configuration: nil))
