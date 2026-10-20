@@ -111,7 +111,7 @@ function RouteScreen({
         <WorkScreen
           key={state.work.workId}
           titles={titles}
-          work={state.work}
+          work={state.workViewport ?? state.work}
           updateStatus={state.chapterUpdates.works[state.work.workId]}
           recentStatus={
             state.workRecent?.workId === state.work.workId ? state.workRecent.status : 'loading'
