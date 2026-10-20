@@ -404,11 +404,14 @@ it('새 작품을 URL로 열고 서재로 돌아오면 즉시 목록에 등록�
     'src',
     expect.stringMatching(/\S/),
   );
-  expect(screen.getByText('아래 ‘작품 찾기’나 위의 링크 버튼으로 시작할 수 있어요.')).toBeVisible();
+  expect(screen.getByText('위의 링크 버튼에서 작품 또는 회차 URL을 입력해 주세요.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'URL로 열기' })).toBeEnabled();
   await controller.openWork(added.canonicalUrl);
   await screen.findByRole('heading', { name: added.title });
   controller.back();
   await screen.findByText('새 작품');
+  expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
   expect(library.listWorkIds).toHaveBeenCalled();
   controller.dispose();
 });
@@ -510,37 +513,48 @@ it('URL 입력 실패는 대화상자를 닫은 뒤 snackbar로 알린다', asyn
   controller.dispose();
 });
 
-it('FAB은 source_access 실패 이유를 알리고 서재에서만 snackbar를 FAB 위로 올린다', async () => {
+it('작품의 원문 보기 실패는 기본 높이의 스낵바로 안내한다', async () => {
   const browse = vi.fn(async () => {
     throw new ReaderError('source_access');
   });
-  const controller = createRenewalController({ browse });
+  const cached = work('n1234aa', '원문 보기 작품');
+  const { library } = libraryHarness([cached]);
+  const controller = createRenewalController({ browse, library });
   render(<Application controller={controller} />);
-  fireEvent.click(screen.getByRole('button', { name: '작품 찾기' }));
+  await screen.findByText(cached.title);
+  fireEvent.click(screen.getByRole('button', { name: `${cached.title} 메뉴` }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '원문 사이트에서 보기' }));
   expect(await screen.findByText('원문 탐색을 사용할 수 없어요. URL로 열어 주세요.')).toBeVisible();
+  expect(browse).toHaveBeenCalledWith(cached.canonicalUrl);
   const region = document.querySelector<HTMLElement>('.nr-snackbar-region')!;
-  expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('64px');
+  expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
   fireEvent.click(screen.getByRole('button', { name: '설정' }));
   await screen.findByRole('heading', { name: '설정' });
   expect(region.style.getPropertyValue('--nr-snackbar-offset')).toBe('0px');
   controller.dispose();
 });
 
-it('같은 작품 찾기 오류도 스낵바가 사라진 뒤 다시 알려준다', async () => {
+it('같은 원문 보기 오류도 스낵바가 사라진 뒤 다시 알려준다', async () => {
   vi.useFakeTimers();
-  const controller = createRenewalController();
+  const cached = work('n1234aa', '원문 보기 작품');
+  const { library } = libraryHarness([cached]);
+  const controller = createRenewalController({ library });
+  await controller.initialize();
   render(<Application controller={controller} />);
-  const button = screen.getByRole('button', { name: '작품 찾기' });
+  const openOriginal = () => {
+    fireEvent.click(screen.getByRole('button', { name: `${cached.title} 메뉴` }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '원문 사이트에서 보기' }));
+  };
   const message = '작품 찾기를 아직 사용할 수 없어요. URL로 열어 주세요.';
 
-  fireEvent.click(button);
+  openOriginal();
   expect(screen.getByText(message)).toBeVisible();
   await act(async () => {
     vi.advanceTimersByTime(4000);
   });
   expect(screen.queryByText(message)).toBeNull();
 
-  fireEvent.click(button);
+  openOriginal();
   expect(screen.getByText(message)).toBeVisible();
   controller.dispose();
 });

@@ -567,7 +567,7 @@ export function Application({
     heading.focus({ preventScroll: true });
   }, [routeKey]);
   return (
-    <SnackbarProvider offset={state.route.kind === 'home' ? 64 : 0}>
+    <SnackbarProvider>
       <SnackbarBridge
         state={state}
         holdErrors={urlDialogOpen && state.route.kind === 'home'}

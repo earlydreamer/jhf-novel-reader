@@ -6,7 +6,6 @@ import { Card } from './components/Card';
 import { Dialog } from './components/Modal';
 import { Menu } from './components/Menu';
 import { ListItem } from './components/ListItem';
-import { ExtendedFab } from './components/ExtendedFab';
 import { IconButton } from './components/IconButton';
 import brandLogo from './assets/brand-logo.png';
 import { NewChapterBadge } from './ChapterUpdateControl';
@@ -20,7 +19,7 @@ export interface HomeScreenProps {
   onOpenLibraryWork(workId: string): void;
   onCheckUpdates?(workId?: string): void;
   onRequestRemove(workId: string, title: string): void;
-  onBrowse(startUrl?: string): void;
+  onBrowse(startUrl: string): void;
   onContinue(versionId: string): void;
   onOpenPendingSave(): void;
   onOpenBatch(): void;
@@ -145,9 +144,9 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
               <img className="nr-library__brand" src={brandLogo} alt="" width={160} height={160} />
             </div>
             <h1>읽고 싶은 작품을 찾아보세요</h1>
-            <p>나로우에서 작품을 고르면 서재에 담겨요.</p>
+            <p>나로우 작품의 URL을 입력하면 서재에 담겨요.</p>
             <p className="nr-library__hint">
-              아래 ‘작품 찾기’나 위의 링크 버튼으로 시작할 수 있어요.
+              위의 링크 버튼에서 작품 또는 회차 URL을 입력해 주세요.
             </p>
           </div>
         ) : null
@@ -238,7 +237,6 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
       >
         <UrlForm onClose={props.onCloseUrlDialog} onOpen={props.onOpen} />
       </Dialog>
-      <ExtendedFab icon="search" label="작품 찾기" onClick={() => props.onBrowse()} />
     </section>
   );
 }
