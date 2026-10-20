@@ -7,9 +7,10 @@ import type {
   WorkPage,
   WorkRemovalInventory,
   WorkRemovalResult,
+  WorkUpdate,
 } from '../contracts';
 import { digest, Journal, serial, type PrivateFiles } from './journal';
-import { check, object, snapshot, text } from './validation';
+import { check, integer, object, snapshot, text } from './validation';
 import {
   completedTranslation,
   identifier,
@@ -24,6 +25,7 @@ import { validateTitleRecord } from '../translation/titles';
 import { validateGuidance } from '../translation/guidance';
 import { legacyBodyValidator, legacyPositionRecord } from './store';
 import { createLastChapterRepository } from '../app/lastChapter';
+import { validChapterCheckDate } from '../app/chapterUpdateSchedule';
 import type { PreferenceBackend } from './settings';
 type Index = {
   versions: { versionId: string; chapterId: string; workId: string; updatedAt: string }[];
@@ -32,6 +34,7 @@ type Index = {
   removalInventory?: WorkRemovalInventory[];
   chapterRemovalInventory?: ChapterRemovalInventory[];
   legacyRemovedChapterIds?: string[];
+  workUpdates?: WorkUpdate[];
 };
 async function index(value: unknown): Promise<Index> {
   object(value, [
@@ -41,6 +44,7 @@ async function index(value: unknown): Promise<Index> {
     'removalInventory',
     'chapterRemovalInventory',
     'legacyRemovedChapterIds',
+    'workUpdates',
   ]);
   check(
     Array.isArray(value.versions) && Array.isArray(value.workIds) && Array.isArray(value.recent),
@@ -76,6 +80,15 @@ async function index(value: unknown): Promise<Index> {
   }
   for (const id of value.workIds) identifier(id);
   check(new Set(value.workIds).size === value.workIds.length);
+  if (value.workUpdates !== undefined) {
+    check(Array.isArray(value.workUpdates));
+    const owners = new Set<string>();
+    for (const update of value.workUpdates) {
+      validateWorkUpdate(update);
+      check(value.workIds.includes(update.workId) && !owners.has(update.workId));
+      owners.add(update.workId);
+    }
+  }
   const removalInventory = value.removalInventory ?? [];
   check(Array.isArray(removalInventory));
   for (const entry of removalInventory) {
@@ -139,6 +152,36 @@ async function index(value: unknown): Promise<Index> {
 export async function validateWorkPages(value: unknown): Promise<WorkPage[]> {
   check(Array.isArray(value));
   return Promise.all(value.map(workPage));
+}
+
+function validateWorkUpdate(value: unknown): asserts value is WorkUpdate {
+  object(value, [
+    'workId',
+    'attemptedAt',
+    'lastCheckDate',
+    'checkedAt',
+    'knownChapterIds',
+    'newChapterIds',
+    'failed',
+  ]);
+  identifier(value.workId);
+  integer(value.attemptedAt);
+  check(validChapterCheckDate(value.lastCheckDate));
+  if (value.checkedAt !== null) integer(value.checkedAt);
+  check(typeof value.failed === 'boolean');
+  for (const ids of [value.knownChapterIds, value.newChapterIds]) {
+    if (ids === null) continue;
+    check(Array.isArray(ids) && new Set(ids).size === ids.length);
+    for (const id of ids) {
+      chapterIdentity(id);
+      check(id.startsWith(`${value.workId}/`));
+    }
+  }
+  check(Array.isArray(value.newChapterIds));
+  check(value.knownChapterIds === null || Array.isArray(value.knownChapterIds));
+  check(
+    value.newChapterIds.every((id) => (value.knownChapterIds as string[] | null)?.includes(id)),
+  );
 }
 type RemovalOptions = { preferences?: PreferenceBackend };
 const slotPath = (name: string, slot: number) => `${name}.${slot}.json`;
@@ -515,6 +558,7 @@ async function removeWorkData(
 
   const removedIndex: Index = {
     ...current,
+    workUpdates: current.workUpdates?.filter((entry) => entry.workId !== workId),
     workIds: current.workIds.filter((id) => id !== workId),
     versions: current.versions.filter((entry) => entry.workId !== workId),
     recent: current.recent.filter((entry) => entry.workId !== workId),
@@ -913,6 +957,35 @@ export function createLibraryStore(
     await journal.save('library/index', current, index);
   };
   return {
+    readWorkUpdates: () => serial(files, async () => (await readIndex()).workUpdates ?? []),
+    saveWorkUpdate: (input, inputPages) => {
+      const value = snapshot(input),
+        pages = inputPages && snapshot(inputPages);
+      return serial(files, async () => {
+        validateWorkUpdate(value);
+        const current = await indexForWrite();
+        check(current.workIds.includes(value.workId));
+        check(!(await readRemovalInventory()).some((entry) => entry.workId === value.workId));
+        if (pages) {
+          await validateWorkPages(pages);
+          check(pages.length > 0 && pages.every((page) => page.workId === value.workId));
+          await journal.save(`works/${value.workId}`, pages, validateWorkPages);
+        }
+        current.workUpdates = [
+          ...(current.workUpdates ?? []).filter((entry) => entry.workId !== value.workId),
+          value,
+        ];
+        await journal.save('library/index', current, index);
+      });
+    },
+    acknowledgeChapterUpdate: (workId, chapterId) =>
+      serial(files, async () => {
+        const current = await indexForWrite();
+        const update = current.workUpdates?.find((entry) => entry.workId === workId);
+        if (!update?.newChapterIds.includes(chapterId)) return;
+        update.newChapterIds = update.newChapterIds.filter((id) => id !== chapterId);
+        await journal.save('library/index', current, index);
+      }),
     readLegacyRemovedChapterIds: () => serial(files, readLegacyRemovedChapterIds),
     readChapterRemovalInventory: () => serial(files, readChapterRemovalInventory),
     retryChapterRemoval: (chapterId) =>

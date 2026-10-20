@@ -612,10 +612,28 @@ test('the work editor only applies explicitly saved terms and supports multiple 
 test('the work glossary keeps a failed draft across Back and resets it for another work', async () => {
   const harness = fixture();
   await harness.setup();
+  const readGuidance = harness.app.readGuidance;
+  let releaseGuidanceRead!: () => void;
+  const guidanceReadGate = new Promise<void>((resolve) => {
+    releaseGuidanceRead = resolve;
+  });
+  vi.spyOn(harness.app, 'readGuidance').mockImplementationOnce(async (workId) => {
+    await guidanceReadGate;
+    return readGuidance(workId);
+  });
   render(<Application controller={harness.app} />);
   fireEvent.click(screen.getByRole('button', { name: '더보기' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
   const sourceField = await screen.findByLabelText('이전 이야기 요약 (선택, 이름 없이 400자 이내)');
+  // 필드가 존재해도 읽기가 끝나지 않았으면 사용자 입력·저장을 받지 않는다.
+  expect(sourceField).toBeDisabled();
+  expect(screen.getByRole('button', { name: '저장하기' })).toBeDisabled();
+  await act(async () => releaseGuidanceRead());
+  // 목차 자동 검사가 저장소 대기열을 사용할 때도 용어집 읽기 완료 뒤에 편집한다.
+  await waitFor(() => {
+    expect(sourceField).toBeEnabled();
+    expect(screen.getByRole('button', { name: '저장하기' })).toBeEnabled();
+  });
   fireEvent.change(sourceField, { target: { value: '초안은 저장 실패 뒤에도 남아야 해요.' } });
   harness.failGuidance = true;
   fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
