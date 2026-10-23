@@ -146,7 +146,7 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
               <img className="nr-library__brand" src={brandLogo} alt="" width={160} height={160} />
             </div>
             <h1>읽고 싶은 작품을 찾아보세요</h1>
-            <p>나로우 작품의 URL을 입력하면 서재에 담겨요.</p>
+            <p>나로우·카쿠요무 작품의 URL을 입력하면 서재에 담겨요.</p>
             <p className="nr-library__hint">
               작품 추가 버튼에서 작품 또는 회차 URL을 입력해 주세요.
             </p>

@@ -45,8 +45,9 @@ export function sourceIdentity(url: string) {
   return { workId, episode, chapterId: `${workId}/${episode || 'short'}` };
 }
 
-/** A detached template is inert, including images/iframes: never insert its content into live DOM. */
-export function documentFragment(html: string): DocumentFragment {
+/** A detached template is inert, including images/iframes: never insert its content into live DOM.
+ * 정리 전 단계라 실행하지 않는 구조화 데이터 script를 읽을 수 있다. 본문은 documentFragment로 읽는다. */
+export function inertFragment(html: string): DocumentFragment {
   if (typeof html !== 'string' || html.length > MAX_HTML_LENGTH) throw parseError();
   const template = document.createElement('template');
   try {
@@ -72,6 +73,10 @@ export function documentFragment(html: string): DocumentFragment {
     )
   )
     throw access();
+  return root;
+}
+export function documentFragment(html: string): DocumentFragment {
+  const root = inertFragment(html);
   root
     .querySelectorAll(
       'script,style,iframe,object,embed,svg,math,img,picture,video,audio,source,link,meta,base,template,noscript,input,button,select,textarea,[hidden],[aria-hidden="true"]',
@@ -177,12 +182,15 @@ export function parseWork(html: string, inputUrl: string): WorkIndex {
   if (!title || !chapters.length) throw parseError();
   return { title, workId: sourceIdentity(url).workId, chapters };
 }
-/** Network-free; async only for Web Crypto and shared paragraph IDs. */
-export async function parseChapter(html: string, inputUrl: string): Promise<Chapter> {
-  const canonicalUrl = normalizeSourceUrl(inputUrl);
-  const root = documentFragment(html);
-  const containers = root.querySelectorAll(BODY);
-  const title = plain(root.querySelector(TITLE));
+/** 사이트 어댑터가 고른 본문 컨테이너 하나를 문단·루비·빈 줄 보존 계약으로 읽는다. */
+export async function chapterFromBody(
+  root: DocumentFragment,
+  selectors: { body: string; title: string },
+  identity: { canonicalUrl: string; workId: string; chapterId: string },
+  neighbors: { prevUrl: string | null; nextUrl: string | null },
+): Promise<Chapter> {
+  const containers = root.querySelectorAll(selectors.body);
+  const title = plain(root.querySelector(selectors.title));
   if (!title || containers.length !== 1) throw parseError();
   const container = containers[0]!;
   const elements = Array.from(container.querySelectorAll('p'));
@@ -193,7 +201,7 @@ export async function parseChapter(html: string, inputUrl: string): Promise<Chap
   }
   const values = (elements.length ? elements : [container]).map(readParagraph);
   if (!values.some((p) => p.text.trim())) throw parseError();
-  const { workId, chapterId } = sourceIdentity(canonicalUrl);
+  const { canonicalUrl, workId, chapterId } = identity;
   const paragraphs = await Promise.all(
     values.map(async (p, index) => ({ ...p, id: await createParagraphId(chapterId, index, p) })),
   );
@@ -209,14 +217,20 @@ export async function parseChapter(html: string, inputUrl: string): Promise<Chap
   const sourceHash = Array.from(new Uint8Array(bytes), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
-  return {
-    canonicalUrl,
-    workId,
-    chapterId,
-    title,
-    paragraphs,
-    sourceHash,
-    prevUrl: neighbor(root, canonicalUrl, 'prev'),
-    nextUrl: neighbor(root, canonicalUrl, 'next'),
-  };
+  return { canonicalUrl, workId, chapterId, title, paragraphs, sourceHash, ...neighbors };
+}
+/** Network-free; async only for Web Crypto and shared paragraph IDs. */
+export async function parseChapter(html: string, inputUrl: string): Promise<Chapter> {
+  const canonicalUrl = normalizeSourceUrl(inputUrl);
+  const root = documentFragment(html);
+  const { workId, chapterId } = sourceIdentity(canonicalUrl);
+  return chapterFromBody(
+    root,
+    { body: BODY, title: TITLE },
+    { canonicalUrl, workId, chapterId },
+    {
+      prevUrl: neighbor(root, canonicalUrl, 'prev'),
+      nextUrl: neighbor(root, canonicalUrl, 'next'),
+    },
+  );
 }

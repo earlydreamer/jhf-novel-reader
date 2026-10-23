@@ -16,6 +16,16 @@ public class SourceBrowserPolicyTest {
         assertEquals("https://ncode.syosetu.com/n1234ab/?p=2", SourceBrowserPolicy.selectedUrl("https://ncode.syosetu.com/n1234ab/?p=2"));
         assertNull(SourceBrowserPolicy.selectedUrl("https://ncode.syosetu.com/n1234ab/2/?p=2"));
     }
+    @Test public void kakuyomuWorkAndEpisodeSelectionKeepsDigitStringIds() {
+        assertEquals("https://kakuyomu.jp/works/16816452219389165420", SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/16816452219389165420/#top"));
+        assertEquals("https://kakuyomu.jp/works/16816452219389165420/episodes/16816452219389165999", SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/16816452219389165420/episodes/16816452219389165999"));
+        assertEquals("https://kakuyomu.jp/search?q=%E9%BE%8D", SourceBrowserPolicy.browseUrl("https://kakuyomu.jp/search?q=%E9%BE%8D"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/search?q=x"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/123?utm=x"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/0123"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://cdn-static.kakuyomu.jp/works/123"));
+        assertNull(SourceBrowserPolicy.browseUrl("https://kakuyomu.jp.evil.test/works/123"));
+    }
     @Test public void forgedSchemesHostsAndPathsAreRejectedBeforeRequests() {
         for (String value : new String[] { "http://syosetu.com/", "https://127.0.0.1/", "https://100.64.1.2/", "https://syosetu.com.evil.test/", "https://u:p@syosetu.com/", "https://syosetu.com:443/", "file:///etc/passwd", "content://app/", "javascript:alert(1)", "intent://open", "https://syosetu.com/../secret", "https://syosetu.com/%2e%2e/secret" }) {
             assertNull(value, SourceBrowserPolicy.browseUrl(value));

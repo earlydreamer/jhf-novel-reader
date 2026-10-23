@@ -29,7 +29,7 @@ export interface ApplicationAdapters {
 }
 
 import { createRenewalController, type RenewalController } from './renewalController';
-import { createRenewalSource, normalizeSourceInput } from '../source/work';
+import { createRenewalSource, normalizeSourceInput } from '../source/sites';
 import { createLibraryStore } from '../storage/library';
 import { createV1Migration } from '../storage/migration';
 import { createReadingSettingsRepository } from '../storage/settings';

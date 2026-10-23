@@ -3,6 +3,7 @@ import { check, integer, object, record, text, url } from './validation';
 import { StorageError } from './errors';
 import { secretRef } from './secrets';
 import { validLocalLimits } from '../translation/segments';
+import { isSourceChapterId, isSourceWorkPageUrl } from '../source/sites';
 export function identifier(value: unknown): asserts value is string {
   text(value);
   check(/^[A-Za-z0-9][A-Za-z0-9.-]{0,255}$/.test(value) && !value.includes('..'));
@@ -10,19 +11,12 @@ export function identifier(value: unknown): asserts value is string {
 /** Domain payload identity, never interpolated into a private-file path. */
 export function chapterIdentity(value: unknown): asserts value is string {
   text(value);
-  const match = /^(n[0-9]{4}[a-z]{1,2})\/(short|[1-9][0-9]*)$/.exec(value);
-  check(match !== null && (match[2] === 'short' || Number.isSafeInteger(Number(match[2]))));
+  check(isSourceChapterId(value));
 }
 /** Only TOC page references admit the single positive page parameter. */
 function workPageUrl(value: unknown, workId: string): void {
   text(value);
-  const prefix = `https://ncode.syosetu.com/${workId}/`;
-  check(
-    value === prefix ||
-      (value.startsWith(prefix + '?p=') &&
-        /^[1-9][0-9]*$/.test(value.slice((prefix + '?p=').length)) &&
-        Number.isSafeInteger(Number(value.slice((prefix + '?p=').length)))),
-  );
+  check(isSourceWorkPageUrl(value, workId));
 }
 function date(value: unknown) {
   text(value);

@@ -1,18 +1,12 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { ReaderError } from '../contracts';
-import { normalizeSourceInput } from '../source/work';
+import { SOURCE_SITES, normalizeSourceInput } from '../source/sites';
 
 interface SourceBrowserPlugin {
   open(options: { startUrl: string }): Promise<unknown>;
 }
 const browser = registerPlugin<SourceBrowserPlugin>('SourceBrowser');
-const hosts = new Set([
-  'syosetu.com',
-  'www.syosetu.com',
-  'yomou.syosetu.com',
-  'ncode.syosetu.com',
-  'static.syosetu.com',
-]);
+const hosts = new Set(SOURCE_SITES.flatMap((site) => site.browseHosts));
 
 export function normalizeBrowseStartUrl(input: string): string {
   try {
