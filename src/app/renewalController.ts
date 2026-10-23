@@ -41,6 +41,7 @@ import type {
 import type { Route } from './routes';
 import { limitsForModel } from '../translation/segments';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
+import { sourceWorkId } from '../source/sites';
 import type {
   BatchState,
   BatchTranslation,
@@ -649,14 +650,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         },
       })
     : null;
-  function workIdFromUrl(value: string): string | null {
-    try {
-      const segment = new URL(value).pathname.split('/').filter(Boolean)[0] ?? '';
-      return /^(n[0-9]{4}[a-z]{1,2})$/i.exec(segment)?.[1]?.toLowerCase() ?? null;
-    } catch {
-      return null;
-    }
-  }
+  const workIdFromUrl = sourceWorkId;
   function titleInputs(): TitleInput[] {
     const work = snapshot.route.kind === 'work' ? snapshot.workViewport : snapshot.work;
     if (!work) return [];

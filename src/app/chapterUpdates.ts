@@ -1,5 +1,5 @@
 import type { LibraryStore, RenewalSource, WorkPage, WorkUpdate } from '../contracts/reading';
-import { normalizeWorkPageUrl } from '../source/work';
+import { normalizeWorkPageUrl } from '../source/sites';
 import {
   chapterCheckDate,
   DEFAULT_CHAPTER_UPDATE_DAYS,

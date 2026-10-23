@@ -13,9 +13,12 @@ import java.util.regex.Pattern;
 public final class SourceBrowserPolicy {
     private static final Set<String> HOSTS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
         "syosetu.com", "www.syosetu.com", "yomou.syosetu.com",
-        "ncode.syosetu.com", "static.syosetu.com"
+        "ncode.syosetu.com", "static.syosetu.com",
+        "kakuyomu.jp", "cdn-static.kakuyomu.jp"
     )));
     private static final Pattern WORK = Pattern.compile("^/(n[0-9]{4}[a-z]{1,2})(?:/([1-9][0-9]*))?/?$", Pattern.CASE_INSENSITIVE);
+    // Kakuyomu IDs exceed long precision, so they stay digit strings.
+    private static final Pattern KAKUYOMU_WORK = Pattern.compile("^/works/([1-9][0-9]{0,29})(?:/episodes/([1-9][0-9]{0,29}))?/?$");
     private static final long MAX_SAFE_INTEGER = 9007199254740991L;
 
     private SourceBrowserPolicy() {}
@@ -42,6 +45,7 @@ public final class SourceBrowserPolicy {
         String browsable = browseUrl(input);
         if (browsable == null) return null;
         URI uri = URI.create(browsable);
+        if ("kakuyomu.jp".equals(uri.getHost())) return kakuyomuSelectedUrl(uri);
         if (!"ncode.syosetu.com".equals(uri.getHost())) return null;
         Matcher path = WORK.matcher(uri.getRawPath());
         if (!path.matches()) return null;
@@ -52,6 +56,14 @@ public final class SourceBrowserPolicy {
         return "https://ncode.syosetu.com/" + path.group(1).toLowerCase(Locale.ROOT) + "/"
             + (chapter == null ? "" : chapter + "/")
             + (query == null ? "" : "?" + query);
+    }
+
+    private static String kakuyomuSelectedUrl(URI uri) {
+        if (uri.getRawQuery() != null) return null;
+        Matcher path = KAKUYOMU_WORK.matcher(uri.getRawPath());
+        if (!path.matches()) return null;
+        String episode = path.group(2);
+        return "https://kakuyomu.jp/works/" + path.group(1) + (episode == null ? "" : "/episodes/" + episode);
     }
 
     private static boolean positiveSafeInteger(String input) {
