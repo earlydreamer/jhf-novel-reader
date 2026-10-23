@@ -143,8 +143,8 @@ export function parseKakuyomuWorkPage(html: string, input: string): WorkPage {
     }
   }
   if (!chapters.length) throw parseError();
-  // 공개 회차 수와 목차가 어긋나면 누락된 목차를 완전하다고 표시하지 않는다.
-  if (typeof work.publicEpisodeCount === 'number' && work.publicEpisodeCount !== chapters.length)
+  // 공개 회차 수를 확인할 수 없거나 목차와 어긋나면 완전한 목차로 표시하지 않는다.
+  if (!Number.isSafeInteger(work.publicEpisodeCount) || work.publicEpisodeCount !== chapters.length)
     throw parseError();
   // 차단 화면 검사는 inertFragment에서 끝났다. 남은 HTML은 읽지 않는다.
   return {

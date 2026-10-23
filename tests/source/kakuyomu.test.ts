@@ -130,6 +130,17 @@ describe('카쿠요무 목차', () => {
       },
     ],
     ['공개 회차 수와 다른 목차', (state) => (work(state).publicEpisodeCount = 4)],
+    ['공개 회차 수 누락', (state) => delete work(state).publicEpisodeCount],
+    ['공개 회차 수 null', (state) => (work(state).publicEpisodeCount = null)],
+    ['문자열 공개 회차 수', (state) => (work(state).publicEpisodeCount = '3')],
+    ['논리값 공개 회차 수', (state) => (work(state).publicEpisodeCount = true)],
+    ['소수 공개 회차 수', (state) => (work(state).publicEpisodeCount = 3.5)],
+    ['0인 공개 회차 수', (state) => (work(state).publicEpisodeCount = 0)],
+    ['음수 공개 회차 수', (state) => (work(state).publicEpisodeCount = -1)],
+    [
+      '안전한 정수 범위를 넘는 공개 회차 수',
+      (state) => (work(state).publicEpisodeCount = Number.MAX_SAFE_INTEGER + 1),
+    ],
     ['빈 목차', (state) => (work(state).tableOfContentsV2 = [])],
     ['없는 회차 참조', (state) => delete state[`Episode:${EP[2]}`]],
     [

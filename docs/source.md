@@ -14,7 +14,7 @@ HTTPS `ncode.syosetu.com/nNNNNx[x]/` 작품·단편 주소와 `/nNNNNx[x]/<posit
 
 HTTPS `kakuyomu.jp/works/<ID>` 작품 주소와 `/works/<ID>/episodes/<ID>` 회차 주소를 지원합니다(#371). 끝 슬래시와 fragment를 제거하고, 쿼리·인증 정보·비기본 포트·다른 호스트·점 경로·이스케이프 경로는 거부합니다. 작품·회차 ID가 `Number.MAX_SAFE_INTEGER`를 넘을 수 있어 `Number`로 바꾸지 않고 숫자 문자열로 유지합니다. 저장 기록의 작품 ID는 `kakuyomu-<작품 ID>`, 회차 ID는 `kakuyomu-<작품 ID>/<회차 ID>`이며 나로우 형식과 겹치지 않습니다.
 
-목차는 작품 페이지 한 장의 `__NEXT_DATA__` Apollo 상태에서 실행 없이 JSON으로 읽습니다. `Work.tableOfContentsV2` 그룹 순서와 각 그룹의 `episodeUnions` 순서를 따르고, 읽는 순번 `ordinal`은 목차 위치(1부터)로 정합니다. 사이트 ID와 순번은 서로 대신하지 않습니다. 회차 중복, 없는 참조, 다른 작품의 상태, 빈 목차, `publicEpisodeCount`와 목차 회차 수의 불일치는 `source_parse`로 거부합니다. 목차 그룹 제목은 아직 회차 제목에 붙이지 않습니다.
+목차는 작품 페이지 한 장의 `__NEXT_DATA__` Apollo 상태에서 실행 없이 JSON으로 읽습니다. `Work.tableOfContentsV2` 그룹 순서와 각 그룹의 `episodeUnions` 순서를 따르고, 읽는 순번 `ordinal`은 목차 위치(1부터)로 정합니다. 사이트 ID와 순번은 서로 대신하지 않습니다. 회차 중복, 없는 참조, 다른 작품의 상태, 빈 목차는 `source_parse`로 거부합니다. `publicEpisodeCount`는 필수이며, 양의 안전한 정수이고 목차 회차 수와 일치해야 합니다. 누락되거나 잘못된 형식이면 완전한 목차로 저장하지 않습니다. 목차 그룹 제목은 아직 회차 제목에 붙이지 않습니다.
 
 본문은 `.widget-episodeBody`의 문단, 제목은 `.widget-episodeTitle`, 이전·다음 회차는 `#contentMain-readPreviousEpisode`·`#contentMain-readNextEpisode`에서 읽습니다. 빈 줄 문단 `<p class="blank"><br></p>`와 `<rb>` 루비는 나로우와 같은 계약으로 보존합니다.
 
