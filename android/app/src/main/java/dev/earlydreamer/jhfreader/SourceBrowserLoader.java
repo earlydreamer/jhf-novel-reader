@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 import javax.net.ssl.HttpsURLConnection;
 
 /**
- * Anonymous browser GETs only. No model transport, auth headers, cookie store or automatic redirects.
+ * Anonymous browser GETs only. No model transport, auth headers, cookies or automatic redirects.
  * Page scripts run, so every final response carries the site profile CSP that keeps page connections inside this loader.
  */
 public final class SourceBrowserLoader {
@@ -49,6 +49,8 @@ public final class SourceBrowserLoader {
 
     public SourceBrowserLoader(String userAgent) {
         this((uri, headers) -> fetchHttps(uri, userAgent, headers));
+        // HttpURLConnection would otherwise read and store cookies through the app-wide CookieHandler.
+        SourceBrowserCookies.isolate();
     }
 
     SourceBrowserLoader(Fetcher fetcher) {
