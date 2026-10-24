@@ -14,7 +14,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.HttpsURLConnection;
 
-/** Anonymous browser GETs only. No model transport, auth headers, cookie store or automatic redirects. */
+/**
+ * Anonymous browser GETs only. No model transport, auth headers, cookie store or automatic redirects.
+ * Page scripts run, so every final response carries the site profile CSP that keeps page connections inside this loader.
+ */
 public final class SourceBrowserLoader {
     private static final int MAX_RESOURCE_BYTES = 8 * 1024 * 1024;
     private static final int MAX_REDIRECTS = 5;
@@ -22,7 +25,8 @@ public final class SourceBrowserLoader {
     private final Fetcher fetcher;
 
     interface Fetcher {
-        Resource fetch(URI uri) throws IOException;
+        /** requestHeaders는 사이트 프로필이 허용한 페이지 헤더뿐이다. */
+        Resource fetch(URI uri, Map<String, String> requestHeaders) throws IOException;
     }
 
     static final class Resource {
@@ -44,7 +48,7 @@ public final class SourceBrowserLoader {
     }
 
     public SourceBrowserLoader(String userAgent) {
-        this(uri -> fetchHttps(uri, userAgent));
+        this((uri, headers) -> fetchHttps(uri, userAgent, headers));
     }
 
     SourceBrowserLoader(Fetcher fetcher) {
@@ -52,15 +56,23 @@ public final class SourceBrowserLoader {
     }
 
     Resource load(URI input, String method) throws IOException {
+        return load(input, method, Collections.emptyMap());
+    }
+
+    Resource load(URI input, String method, Map<String, String> pageHeaders) throws IOException {
         if (!"GET".equals(method)) return denied(input);
+        SourceSites.Site origin = SourceSites.forHost(input.getHost());
         URI current = input;
         Set<String> visited = new HashSet<>();
         for (int redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
             String safe = SourceBrowserPolicy.browseUrl(current.toString());
             if (safe == null || !visited.add(safe)) return denied(current);
             current = URI.create(safe);
-            Resource result = fetcher.fetch(current);
-            if (result.status < 300 || result.status >= 400) return result;
+            // A redirect into another site profile drops the page headers instead of re-filtering them.
+            SourceSites.Site site = SourceSites.forHost(current.getHost());
+            Map<String, String> forwarded = site != null && site == origin ? site.forwardHeaders(pageHeaders) : Collections.emptyMap();
+            Resource result = fetcher.fetch(current, forwarded);
+            if (result.status < 300 || result.status >= 400) return finalResponse(result);
             if (redirects == MAX_REDIRECTS || !isRedirectStatus(result.status)) return denied(current);
             String location = header(result.headers, "Location");
             if (location == null) return denied(current);
@@ -76,7 +88,21 @@ public final class SourceBrowserLoader {
     }
 
     static Resource denied(URI uri) {
-        return new Resource(uri, 403, "text/plain", "UTF-8", Collections.singletonMap("Cache-Control", "no-store"), "이 주소나 요청 방식은 앱 안 탐색에서 지원하지 않아요.".getBytes(StandardCharsets.UTF_8));
+        return new Resource(uri, 403, "text/plain", "UTF-8", responseHeaders(uri, null), "이 주소나 요청 방식은 앱 안 탐색에서 지원하지 않아요.".getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Only no-store, the profile CSP and the origin server's CORS allowance reach the WebView. */
+    private static Resource finalResponse(Resource result) {
+        return new Resource(result.uri, result.status, result.mimeType, result.encoding,
+            responseHeaders(result.uri, header(result.headers, "Access-Control-Allow-Origin")), result.body);
+    }
+
+    private static Map<String, String> responseHeaders(URI uri, String allowOrigin) {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", "no-store");
+        headers.put("Content-Security-Policy", SourceSites.csp(uri));
+        if (allowOrigin != null) headers.put("Access-Control-Allow-Origin", allowOrigin);
+        return headers;
     }
 
     private static String header(Map<String, String> headers, String name) {
@@ -86,7 +112,7 @@ public final class SourceBrowserLoader {
         return null;
     }
 
-    private static Resource fetchHttps(URI uri, String userAgent) throws IOException {
+    private static Resource fetchHttps(URI uri, String userAgent, Map<String, String> requestHeaders) throws IOException {
         HttpsURLConnection connection = (HttpsURLConnection) uri.toURL().openConnection();
         connection.setInstanceFollowRedirects(false);
         connection.setRequestMethod("GET");
@@ -95,14 +121,14 @@ public final class SourceBrowserLoader {
         connection.setReadTimeout(30000);
         connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,image/*,text/css,*/*;q=0.8");
         connection.setRequestProperty("User-Agent", userAgent);
+        for (Map.Entry<String, String> header : requestHeaders.entrySet()) connection.setRequestProperty(header.getKey(), header.getValue());
         try {
             int status = connection.getResponseCode();
             Map<String, String> headers = new HashMap<>();
             String location = connection.getHeaderField("Location");
             if (location != null) headers.put("Location", location);
-            headers.put("Cache-Control", "no-store");
-            // Disallow page code even if a future WebView configuration regression enables JS.
-            headers.put("Content-Security-Policy", "script-src 'none'; connect-src 'none'; worker-src 'none'; object-src 'none'");
+            String allowOrigin = connection.getHeaderField("Access-Control-Allow-Origin");
+            if (allowOrigin != null) headers.put("Access-Control-Allow-Origin", allowOrigin);
             String contentType = connection.getContentType();
             String mime = contentType == null ? "application/octet-stream" : contentType.split(";", 2)[0].trim();
             Matcher charset = CHARSET.matcher(contentType == null ? "" : contentType);

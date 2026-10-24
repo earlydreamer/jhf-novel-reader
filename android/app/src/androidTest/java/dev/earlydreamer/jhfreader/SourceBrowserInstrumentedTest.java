@@ -106,7 +106,7 @@ public class SourceBrowserInstrumentedTest {
         };
         for (String destination : unsupported) {
             List<String> requests = new CopyOnWriteArrayList<>();
-            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
                 requests.add(uri.toString());
                 if (!workUrl.equals(uri.toString())) return SourceBrowserLoader.denied(uri);
                 return fixturePage(uri, "Valid work fixture", "<a href=\"" + destination + "\">Unsupported destination</a>");
@@ -159,7 +159,7 @@ public class SourceBrowserInstrumentedTest {
         String workUrl = "https://ncode.syosetu.com/n1234ab/2/";
         String unsupported = workUrl + "?p=2";
         List<String> requests = new CopyOnWriteArrayList<>();
-        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
             requests.add(uri.toString());
             if (uri.toString().equals(workUrl)) {
                 return fixturePage(uri, "Valid work fixture", "<a href='" + unsupported + "'>Invalid episode query</a>");
@@ -188,7 +188,7 @@ public class SourceBrowserInstrumentedTest {
 
     @Test public void htmlSearchRankingLinksAndNativeBackKeepTheirHistory() throws Exception {
         List<String> requests = new CopyOnWriteArrayList<>();
-        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
             requests.add(uri.toString());
             String title;
             String body;
@@ -251,7 +251,7 @@ public class SourceBrowserInstrumentedTest {
             String deniedPageIcon = "https://yomou.syosetu.com/favicon.ico";
             String forbidden = "https://127.0.0.1:" + target.port() + "/model";
             List<String> requests = new CopyOnWriteArrayList<>();
-            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
                 requests.add(uri.toString());
                 if (uri.toString().equals(home)) {
                     return fixturePage(uri, "Main redirect fixture", "<a href='" + redirect + "'>Redirected page</a>");
@@ -294,7 +294,7 @@ public class SourceBrowserInstrumentedTest {
             String frame = "https://yomou.syosetu.com/fixture/redirected-frame";
             String forbidden = "https://127.0.0.1:" + target.port() + "/model";
             List<String> requests = new CopyOnWriteArrayList<>();
-            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
                 requests.add(uri.toString());
                 if (uri.toString().equals(workUrl)) {
                     return fixturePage(uri, "Subresource redirect fixture", "<img src='" + image + "'><iframe src='" + frame + "'></iframe>");
@@ -421,7 +421,7 @@ public class SourceBrowserInstrumentedTest {
         String search = "https://yomou.syosetu.com/search.php?word=syntheticword";
         String work = "https://ncode.syosetu.com/n1234ab/";
         List<String> requests = new CopyOnWriteArrayList<>();
-        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
             requests.add(uri.toString());
             if (search.equals(uri.toString())) return fixturePage(uri, "Search fixture",
                 "<a target='_blank' href='" + work + "'>Work result</a>");
