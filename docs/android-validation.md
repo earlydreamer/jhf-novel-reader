@@ -52,6 +52,8 @@ node tests/e2e/verify-apk.mjs
 
 WebView는 HTTPS localhost를 사용하며 혼합 콘텐츠, 외부 이동 허용 목록, 원격 `server.url`을 사용하지 않습니다. 운영 CSP는 번들 스크립트·스타일, 리더에 필요한 인라인 스타일, 로컬/data 이미지를 허용하고 브라우저 연결·프레임·객체·폼·기본 URL 변경을 차단합니다. Vite 개발 환경은 React 초기 코드와 HMR을 사용합니다. CSP는 브라우저 콘텐츠를 제어하며 직접 네이티브 브리지 HTTP를 제어하지는 않습니다.
 
+앱 안 원문 브라우저는 별도 WebView이며 위 운영 CSP를 쓰지 않습니다. 사이트 스크립트를 실행하는 대신 `SourceBrowserLoader`가 모든 응답에 사이트 프로필 CSP(`connect-src` 허용 호스트, `worker-src 'none'`, `object-src 'none'`)를 붙입니다. 원문 브라우저가 열리면 프로세스 전역 `ServiceWorkerClient`가 모든 서비스 워커 요청을 403으로 막습니다. 이 client는 Capacitor Bridge가 등록한 client를 대체하므로, 앱 본체가 서비스 워커를 쓰게 되면 이 설계를 다시 검토해야 합니다. 경계와 감수한 WebRTC 위험은 [원문 조회와 파싱](source.md#원문-브라우저)에 있습니다. `SourceBrowserInstrumentedTest`는 페이지 스크립트의 브리지 부재, 금지 대상 연결(WebSocket 포함) 부재, 서비스 워커 등록 거부를 기기에서 확인합니다.
+
 Capacitor 8.5.2는 문자 그대로의 `<head>` 바로 뒤, meta CSP 앞에 신뢰된 인라인 초기 코드를 삽입합니다. 나머지 스크립트에는 `unsafe-inline`·`unsafe-eval`을 허용하지 않습니다. 버전을 올릴 때 이 순서를 다시 확인합니다. 응답 헤더 CSP를 사용하려면 별도의 nonce·해시 해법이 필요합니다. `CapacitorHttp.enabled=false`는 fetch/XHR 패치를 끄며 명시적 네이티브 요청을 끄지는 않습니다.
 
 [Android 네트워크 보안](https://developer.android.com/privacy-and-security/security-config), [로컬 네트워크 권한](https://developer.android.com/privacy-and-security/local-network-permission), [Capacitor 설정](https://capacitorjs.com/docs/config), [CSP meta 규칙](https://www.w3.org/TR/CSP/#meta-element)을 참고합니다. target 36의 LAN 연결은 `INTERNET`을 사용합니다. target SDK를 올리기 전에 권한을 재검토합니다. `INTERNET`은 실행 중 동의창이 아니므로 앱이 요청하지 않는 권한의 거부 시험을 꾸며내지 않습니다.
