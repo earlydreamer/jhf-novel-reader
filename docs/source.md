@@ -49,7 +49,7 @@ loader 경계는 다음과 같습니다.
 
 두 경로 모두 실행 주체는 허용 호스트의 자체 스크립트이며, 광고·분석 스크립트는 허용 호스트가 아니라서 받지 않습니다. 원문 브라우저에는 로그인과 앱 데이터가 없고, loader는 쿠키를 보내지 않습니다. 페이지 스크립트가 `document.cookie`나 IndexedDB에 남긴 값은 WebView 저장소에 남을 수 있습니다.
 
-2026-10-24 KEY2(Android 8.1, WebView 121) 실험에서 이 경계 없이 JS를 켜면 WebSocket·서비스 워커·WebRTC가 loader를 우회했습니다. CSP와 서비스 워커 client를 적용하자 외부 호스트 WebSocket과 서비스 워커는 막혔고 WebRTC는 남았습니다. 프로필 호스트로 가는 WebSocket은 측정하지 않았으며, 재측정에서 실제 연결 여부를 기록합니다. 최신 WebView 기기의 확인은 #377의 완료 조건입니다.
+2026-10-24 KEY2(Android 8.1, WebView 121) 실험에서 이 경계 없이 JS를 켜면 WebSocket·서비스 워커·WebRTC가 loader를 우회했습니다. CSP와 서비스 워커 client를 적용하자 외부 호스트 WebSocket과 서비스 워커는 막혔고 WebRTC는 남았습니다. 같은 기기의 재측정에서는 프로필 호스트로 가는 `wss://syosetu.com/`도 CSP가 막았습니다(WebView 121). 다른 WebView 버전에서는 허용될 수 있으므로 잔여 위험 항목은 유지합니다. 최신 WebView 기기의 확인은 #377의 완료 조건입니다.
 
 로그인, POST가 필요한 기능(팔로우·북마크·리뷰), 쿠키나 `localStorage`가 필요한 기능(검색 이력 등)은 지원하지 않습니다.
 
