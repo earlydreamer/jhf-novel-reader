@@ -37,14 +37,19 @@ loader 경계는 다음과 같습니다.
 - 리디렉션은 단계마다 사이트 프로필의 허용 호스트인지 검사합니다.
 - 응답에는 `Cache-Control: no-store`, CSP, 원 서버의 `Access-Control-Allow-Origin`만 남깁니다.
 - CSP는 `connect-src <모든 프로필 호스트>; worker-src 'none'; object-src 'none'`입니다. 스크립트를 허용하지 않는 프로필과 프로필 밖 응답에는 `script-src 'none'`을 덧붙입니다.
-  - `connect-src`는 프로필 밖 호스트로 가는 WebSocket을 막습니다. CSP 규칙상 `https://호스트`는 같은 호스트의 `wss:`도 허용하므로, 프로필 호스트로 가는 WebSocket은 loader를 거치지 않고 WebView 네트워크와 쿠키 저장소로 연결될 수 있습니다. 이 경로의 처리는 #377에서 결정합니다.
+  - `connect-src`는 프로필 밖 호스트로 가는 WebSocket을 막습니다. CSP 규칙상 `https://호스트`는 같은 호스트의 `wss:`도 허용하므로, 프로필 호스트로 가는 WebSocket은 loader를 거치지 않고 WebView 네트워크와 쿠키 저장소로 연결될 수 있습니다. 이 경로는 아래 잔여 위험으로 감수했습니다.
   - `worker-src 'none'`은 서비스 워커와 워커 생성을 막습니다.
 - 서비스 워커 요청은 `WebViewClient`가 아니라 프로세스 전역 client로 갑니다. 원문 브라우저는 열릴 때 모든 서비스 워커 요청을 403으로 막는 client를 등록합니다. 이 client는 Capacitor Bridge가 등록한 client를 대체하며, 앱 본체는 서비스 워커를 쓰지 않습니다.
 - 페이지 요청 헤더는 그 사이트 프로필의 허용 목록에 있는 이름·값만 전달합니다. 다른 프로필로 리디렉션되면 버립니다. `Cookie`·`Authorization`은 허용 목록에 넣을 수 없습니다.
 
-WebRTC는 loader 밖에서 UDP로 통신할 수 있고, CSP나 WebView 설정으로 막을 수 없습니다. 이 위험은 감수했습니다. 실행 주체는 허용 호스트의 자체 스크립트이며, 광고·분석 스크립트는 허용 호스트가 아니라서 받지 않습니다. 원문 브라우저에는 로그인과 앱 데이터가 없고, loader는 쿠키를 보내지 않습니다. 페이지 스크립트가 `document.cookie`나 IndexedDB에 남긴 값은 WebView 저장소에 남을 수 있습니다.
+다음 두 경로는 loader를 거치지 않으며 2026-10-24에 잔여 위험으로 감수했습니다.
 
-2026-10-24 KEY2(Android 8.1, WebView 121) 실험에서 이 경계 없이 JS를 켜면 WebSocket·서비스 워커·WebRTC가 loader를 우회했습니다. CSP와 서비스 워커 client를 적용하자 외부 호스트 WebSocket과 서비스 워커는 막혔고 WebRTC는 남았습니다. 프로필 호스트로 가는 WebSocket은 측정하지 않았습니다. 최신 WebView 기기의 확인은 #377의 완료 조건입니다.
+- **WebRTC:** loader 밖에서 UDP로 통신할 수 있고, CSP나 WebView 설정으로 막을 수 없습니다.
+- **프로필 호스트로 가는 WebSocket:** CSP는 `https:`와 `wss:`를 나눠 허용할 수 없습니다. `connect-src`를 막으면 사이트의 fetch·XHR(카쿠요무 GraphQL 등)까지 막혀 탐색이 깨집니다. 연결 상대는 프로필 호스트로 한정되며, WebView 쿠키 저장소의 해당 사이트 쿠키(페이지가 직접 만든 값)가 함께 전송될 수 있습니다.
+
+두 경로 모두 실행 주체는 허용 호스트의 자체 스크립트이며, 광고·분석 스크립트는 허용 호스트가 아니라서 받지 않습니다. 원문 브라우저에는 로그인과 앱 데이터가 없고, loader는 쿠키를 보내지 않습니다. 페이지 스크립트가 `document.cookie`나 IndexedDB에 남긴 값은 WebView 저장소에 남을 수 있습니다.
+
+2026-10-24 KEY2(Android 8.1, WebView 121) 실험에서 이 경계 없이 JS를 켜면 WebSocket·서비스 워커·WebRTC가 loader를 우회했습니다. CSP와 서비스 워커 client를 적용하자 외부 호스트 WebSocket과 서비스 워커는 막혔고 WebRTC는 남았습니다. 프로필 호스트로 가는 WebSocket은 측정하지 않았으며, 재측정에서 실제 연결 여부를 기록합니다. 최신 WebView 기기의 확인은 #377의 완료 조건입니다.
 
 로그인, POST가 필요한 기능(팔로우·북마크·리뷰), 쿠키나 `localStorage`가 필요한 기능(검색 이력 등)은 지원하지 않습니다.
 
