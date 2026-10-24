@@ -245,9 +245,11 @@ public final class SourceBrowserActivity extends AppCompatActivity {
                 open.setEnabled(false);
             }
             @Override public void onPageFinished(WebView view, String url) {
-                selectedUrl = SourceBrowserPolicy.selectedUrl(view.getUrl());
-                open.setEnabled(selectedUrl != null);
-                back.setEnabled(view.canGoBack());
+                refreshSelection(view);
+            }
+            // Script-driven sites change the URL with pushState without a new page load.
+            @Override public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                if (view.getProgress() == 100) refreshSelection(view);
             }
             @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) { handler.cancel(); }
             @Override public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler, String host, String realm) { handler.cancel(); }
@@ -271,6 +273,12 @@ public final class SourceBrowserActivity extends AppCompatActivity {
     private WebResourceResponse blockedResponse() {
         SourceBrowserLoader.Resource denied = SourceBrowserLoader.denied(URI.create("https://syosetu.com/"));
         return new WebResourceResponse(denied.mimeType, denied.encoding, 403, "Blocked", denied.headers, new ByteArrayInputStream(denied.body));
+    }
+
+    private void refreshSelection(WebView view) {
+        selectedUrl = SourceBrowserPolicy.selectedUrl(view.getUrl());
+        open.setEnabled(selectedUrl != null);
+        back.setEnabled(view.canGoBack());
     }
 
     private void selectCurrentWork() {

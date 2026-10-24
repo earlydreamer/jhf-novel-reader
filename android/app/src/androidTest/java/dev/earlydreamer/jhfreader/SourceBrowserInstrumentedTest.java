@@ -94,6 +94,42 @@ public class SourceBrowserInstrumentedTest {
         }
     }
 
+    /** Real network: proves the platform HTTP stack would hand the app cookie jar to the source loader. */
+    @Test public void productionLoaderNeverReadsOrWritesTheAppCookieJar() throws Exception {
+        java.net.CookieHandler original = java.net.CookieHandler.getDefault();
+        List<String> touched = new CopyOnWriteArrayList<>();
+        java.net.CookieHandler.setDefault(new java.net.CookieHandler() {
+            @Override public Map<String, List<String>> get(URI uri, Map<String, List<String>> requestHeaders) {
+                touched.add("get " + uri.getHost());
+                return Collections.singletonMap("Cookie", Collections.singletonList("jhf_probe=1"));
+            }
+            @Override public void put(URI uri, Map<String, List<String>> responseHeaders) {
+                touched.add("put " + uri.getHost());
+            }
+        });
+        try {
+            SourceBrowserLoader.Resource result = new SourceBrowserLoader("jhf-instrumented-test").load(URI.create("https://syosetu.com/"), "GET");
+            assertTrue("A real response is needed for this check: " + result.status, result.status > 0);
+            assertEquals(Collections.emptyList(), touched);
+        } finally {
+            java.net.CookieHandler.setDefault(original);
+        }
+    }
+
+    /** Script-driven sites (Next.js and similar) change the URL with pushState and never finish a new page load. */
+    @Test public void sameDocumentNavigationToAWorkEnablesImport() throws Exception {
+        String fixtureUrl = "https://ncode.syosetu.com/fixture/";
+        String workUrl = "https://ncode.syosetu.com/n1234ab/";
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> fixtureUrl.equals(uri.toString())
+            ? fixturePage(uri, "Push fixture", "<script>setTimeout(function(){history.pushState(null,'','/n1234ab/');document.title='pushed';},300)</script>")
+            : SourceBrowserLoader.denied(uri));
+        try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
+            installFixture(scenario, fixtureLoader, fixtureUrl);
+            awaitTitle(scenario, "pushed");
+            awaitBrowserState(scenario, workUrl, true);
+        }
+    }
+
     @Test public void serviceWorkerRegistrationIsRefused() throws Exception {
         String fixtureUrl = "https://syosetu.com/fixture/";
         List<String> requests = new CopyOnWriteArrayList<>();
