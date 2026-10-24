@@ -8,13 +8,13 @@ describe('browse site list', () => {
       'android/app/src/main/java/dev/earlydreamer/jhfreader/SourceSites.java',
       'utf8',
     );
-    const native = [...java.matchAll(/new Site\(\s*"([^"]+)",\s*"([^"]+)",\s*hosts\(([^)]*)\)/g)].map(
-      (m) => ({
-        id: m[1],
-        startUrl: m[2],
-        hosts: [...m[3]!.matchAll(/"([^"]+)"/g)].map((h) => h[1]).sort(),
-      }),
-    );
+    const native = [
+      ...java.matchAll(/new Site\(\s*"([^"]+)",\s*"([^"]+)",\s*hosts\(([^)]*)\)/g),
+    ].map((m) => ({
+      id: m[1],
+      startUrl: m[2],
+      hosts: [...m[3]!.matchAll(/"([^"]+)"/g)].map((h) => h[1]).sort(),
+    }));
     expect(native.length).toBeGreaterThan(0);
     expect(
       BROWSE_SITES.map(({ id, startUrl, hosts }) => ({ id, startUrl, hosts: [...hosts].sort() })),
