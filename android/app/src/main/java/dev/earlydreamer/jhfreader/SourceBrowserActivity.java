@@ -18,6 +18,8 @@ import android.webkit.ClientCertRequest;
 import android.webkit.GeolocationPermissions;
 import android.webkit.HttpAuthHandler;
 import android.webkit.PermissionRequest;
+import android.webkit.ServiceWorkerClient;
+import android.webkit.ServiceWorkerController;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -41,7 +43,10 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 
-/** A standalone WebView, never a BridgeActivity. Site content cannot invoke app plugins. */
+/**
+ * A standalone WebView, never a BridgeActivity. Site content cannot invoke app plugins.
+ * Site scripts run so search, sorting and filters work; every page request still goes through SourceBrowserLoader.
+ */
 public final class SourceBrowserActivity extends AppCompatActivity {
     static final int BROWSER_ID = View.generateViewId();
     static final int OPEN_ID = View.generateViewId();
@@ -92,7 +97,7 @@ public final class SourceBrowserActivity extends AppCompatActivity {
         status.setPadding(dp(16), dp(8), dp(16), dp(8));
         status.setTextColor(theme.onSurfaceVariant);
         status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        status.setText("작품을 찾은 뒤 ‘이 작품 열기’를 눌러 주세요. 사이트 스크립트와 로그인은 지원하지 않아요.");
+        status.setText("작품을 찾은 뒤 ‘이 작품 열기’를 눌러 주세요. 로그인과 북마크 같은 계정 기능은 지원하지 않아요.");
         screen.addView(status);
         View divider = new View(this);
         divider.setBackgroundColor(theme.outlineVariant);
@@ -109,6 +114,7 @@ public final class SourceBrowserActivity extends AppCompatActivity {
         setContentView(screen);
         ViewCompat.requestApplyInsets(screen);
         applySystemBars();
+        blockServiceWorkers();
         configureBrowser();
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() { goBack(); }
@@ -180,7 +186,8 @@ public final class SourceBrowserActivity extends AppCompatActivity {
     @SuppressWarnings("deprecation") // Explicitly disable legacy file-origin privileges on supported WebViews.
     private void configureBrowser() {
         WebSettings settings = browser.getSettings();
-        settings.setJavaScriptEnabled(false);
+        // Scripts may only reach the network through shouldInterceptRequest; the loader's CSP covers WebSocket and workers.
+        settings.setJavaScriptEnabled(true);
         settings.setBlockNetworkLoads(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
@@ -215,7 +222,7 @@ public final class SourceBrowserActivity extends AppCompatActivity {
                 try { input = URI.create(request.getUrl().toString()); }
                 catch (IllegalArgumentException invalid) { return blockedResponse(); }
                 try {
-                    SourceBrowserLoader.Resource resource = loader.load(input, request.getMethod());
+                    SourceBrowserLoader.Resource resource = loader.load(input, request.getMethod(), request.getRequestHeaders());
                     if (request.isForMainFrame() && resource.status >= 200 && resource.status < 300 && !resource.uri.equals(input)) {
                         // WebResourceResponse cannot express 3xx. Restart only a validated final main URL,
                         // so relative links and the trusted toolbar use the actual destination.
@@ -245,6 +252,19 @@ public final class SourceBrowserActivity extends AppCompatActivity {
             @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) { handler.cancel(); }
             @Override public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler, String host, String realm) { handler.cancel(); }
             @Override public void onReceivedClientCertRequest(WebView view, ClientCertRequest request) { request.cancel(); }
+        });
+    }
+
+    /**
+     * Service worker requests bypass WebViewClient and go to the process-wide client. Capacitor's Bridge
+     * registers one in MainActivity.onCreate that sends unknown hosts to the network, so replace it here,
+     * after the Bridge exists. The app itself does not use service workers.
+     */
+    private static void blockServiceWorkers() {
+        ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient() {
+            @Override public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
+                return new WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", java.util.Collections.singletonMap("Cache-Control", "no-store"), new ByteArrayInputStream(new byte[0]));
+            }
         });
     }
 
