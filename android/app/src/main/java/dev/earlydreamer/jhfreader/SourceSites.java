@@ -76,6 +76,22 @@ final class SourceSites {
             SourceSites::narouSelection)
     ));
 
+    /** Built once from ALL; profiles are fixed at class load, so per-request rebuilding is unnecessary. */
+    private static final Set<String> ALL_HOSTS = collectHosts();
+    private static final String BASE_CSP = baseCsp();
+
+    private static Set<String> collectHosts() {
+        Set<String> all = new HashSet<>();
+        for (Site site : ALL) all.addAll(site.hosts);
+        return Collections.unmodifiableSet(all);
+    }
+
+    private static String baseCsp() {
+        StringBuilder connect = new StringBuilder("connect-src");
+        for (String host : new TreeSet<>(ALL_HOSTS)) connect.append(" https://").append(host);
+        return connect + "; worker-src 'none'; object-src 'none'";
+    }
+
     private SourceSites() {}
 
     private static Set<String> hosts(String... values) {
@@ -96,18 +112,13 @@ final class SourceSites {
     }
 
     static Set<String> allHosts() {
-        Set<String> all = new HashSet<>();
-        for (Site site : ALL) all.addAll(site.hosts);
-        return all;
+        return ALL_HOSTS;
     }
 
     /** 응답에 붙일 CSP. 페이지 통신을 loader가 보는 출처로만 묶고, 스크립트를 허용하지 않는 응답은 실행도 막는다. */
     static String csp(URI uri) {
-        StringBuilder connect = new StringBuilder("connect-src");
-        for (String host : new TreeSet<>(allHosts())) connect.append(" https://").append(host);
         Site site = forHost(uri == null ? null : uri.getHost());
-        String policy = connect + "; worker-src 'none'; object-src 'none'";
-        return site != null && site.scripts ? policy : policy + "; script-src 'none'";
+        return site != null && site.scripts ? BASE_CSP : BASE_CSP + "; script-src 'none'";
     }
 
     private static String narouSelection(URI uri) {
