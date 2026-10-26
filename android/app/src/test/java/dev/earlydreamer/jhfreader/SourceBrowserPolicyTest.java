@@ -130,4 +130,11 @@ public class SourceBrowserPolicyTest {
         assertEquals(Collections.singletonMap("apollo-require-preflight", "true"), sent.get(0));
         assertEquals(Collections.emptyMap(), sent.get(1));
     }
+
+    @Test public void deniedResponsesAreNeverSniffedAsActiveContent() {
+        assertEquals("nosniff", SourceBrowserLoader.denied(URI.create("https://syosetu.com/")).headers.get("X-Content-Type-Options"));
+    }
+    @Test public void deniedResponseWithoutAnAddressIsScriptless() {
+        assertTrue(SourceBrowserLoader.denied(null).headers.get("Content-Security-Policy").endsWith("; script-src 'none'"));
+    }
 }

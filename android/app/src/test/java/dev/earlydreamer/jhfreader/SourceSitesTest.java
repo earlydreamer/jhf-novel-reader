@@ -80,4 +80,15 @@ public class SourceSitesTest {
         assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/search?q=x"));
         assertNull(SourceBrowserPolicy.selectedUrl("https://cdn-static.kakuyomu.jp/works/1"));
     }
+
+    @Test public void protocolAndCredentialHeadersCanNeverBeAllowlisted() {
+        for (String name : new String[] { "Proxy-Authorization", "Cookie2", "Host", "Accept", "User-Agent" }) {
+            try {
+                new SourceSites.Site("x", "https://x.test/", Collections.singleton("x.test"), Collections.singletonMap(name, SourceSites.defaultValue()), true, uri -> null);
+                fail(name + " must not be forwardable");
+            } catch (IllegalArgumentException expected) {
+                // 자격 증명·프로토콜 헤더와 loader가 정하는 헤더는 페이지가 바꿀 수 없다.
+            }
+        }
+    }
 }

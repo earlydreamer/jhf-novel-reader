@@ -89,8 +89,11 @@ public final class SourceBrowserLoader {
         return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
     }
 
+    /** uri may be null for an unparseable request; the CSP then denies scripts. */
     static Resource denied(URI uri) {
-        return new Resource(uri, 403, "text/plain", "UTF-8", responseHeaders(uri, null), "이 주소나 요청 방식은 앱 안 탐색에서 지원하지 않아요.".getBytes(StandardCharsets.UTF_8));
+        Map<String, String> headers = responseHeaders(uri, null);
+        headers.put("X-Content-Type-Options", "nosniff");
+        return new Resource(uri, 403, "text/plain", "UTF-8", headers, "이 주소나 요청 방식은 앱 안 탐색에서 지원하지 않아요.".getBytes(StandardCharsets.UTF_8));
     }
 
     /** Only no-store, the profile CSP and the origin server's CORS allowance reach the WebView. */
