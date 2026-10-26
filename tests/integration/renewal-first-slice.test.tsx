@@ -768,7 +768,7 @@ it('서재의 작품 추가와 상단 링크 버튼은 같은 URL 입력창을 �
   const browse = vi.spyOn(h.app, 'browse');
   render(<Application controller={h.app} />);
   await expect.poll(() => h.app.getSnapshot().libraryLoaded).toBe(true);
-  expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+  expect(screen.getByRole('button', { name: '작품 찾기' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'URL로 열기' }));
   expect(screen.getByRole('dialog', { name: 'URL로 열기' }).hasAttribute('open')).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: '닫기' }));

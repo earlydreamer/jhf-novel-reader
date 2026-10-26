@@ -6,6 +6,7 @@ import { ImmersiveReader } from '../ui/ImmersiveReader';
 import { SettingsScreen } from '../ui/SettingsScreen';
 import { useReaderGlossary } from '../ui/readerGlossary';
 import { TopAppBar } from '../ui/components/TopAppBar';
+import { BROWSE_SITES } from '../platform/browseSites';
 import { IconButton } from '../ui/components/IconButton';
 import { Menu } from '../ui/components/Menu';
 import type { MenuItem } from '../ui/components/Menu';
@@ -420,6 +421,14 @@ function ShellAppBar({
                 onClick={() => onRequestChapterUpdates()}
               />
             )}
+            <Menu
+              label="작품 찾기"
+              icon="search"
+              items={BROWSE_SITES.map((site) => ({
+                label: site.label,
+                onSelect: () => void controller.browse(site.startUrl),
+              }))}
+            />
             <IconButton icon="link" label="URL로 열기" onClick={onOpenUrlDialog} />
             <IconButton
               icon="settings"

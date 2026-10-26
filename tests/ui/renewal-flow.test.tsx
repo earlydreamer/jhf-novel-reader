@@ -970,7 +970,7 @@ describe('renewal controller boundaries', () => {
   it('production is unavailable rather than fabricated source or catalog data', async () => {
     const controller = manualController();
     render(<Application controller={controller} />);
-    expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+    expect(screen.getByRole('button', { name: '작품 찾기' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'URL로 열기' }));
     fireEvent.change(screen.getByLabelText('작품 또는 회차 URL'), {
       target: { value: page.canonicalUrl },
