@@ -404,15 +404,19 @@ it('새 작품을 URL로 열고 서재로 돌아오면 즉시 목록에 등록�
     'src',
     expect.stringMatching(/\S/),
   );
-  expect(screen.getByText('작품 추가 버튼에서 작품 또는 회차 URL을 입력해 주세요.')).toBeVisible();
-  expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+  expect(
+    screen.getByText(
+      '위의 돋보기 버튼으로 작품을 찾거나, 작품 추가 버튼에 작품 또는 회차 URL을 입력해 주세요.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: '작품 찾기' })).toBeEnabled();
   expect(screen.getByRole('button', { name: '작품 추가' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'URL로 열기' })).toBeEnabled();
   await controller.openWork(added.canonicalUrl);
   await screen.findByRole('heading', { name: added.title });
   controller.back();
   await screen.findByText('새 작품');
-  expect(screen.queryByRole('button', { name: '작품 찾기' })).toBeNull();
+  expect(screen.getByRole('button', { name: '작품 찾기' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '작품 추가' })).toBeEnabled();
   expect(library.listWorkIds).toHaveBeenCalled();
   controller.dispose();
@@ -483,6 +487,20 @@ it('서재에 남아 있을 때 번역 저장이 끝나면 저장 화수와 이�
 
   await waitFor(() => expect(row.closest('button')).toHaveTextContent('1화 저장'));
   expect(screen.getByRole('button', { name: /이어서 읽기/ })).toHaveTextContent('완료 대기 작품');
+  controller.dispose();
+});
+
+it('작품 찾기는 사이트 목록을 펼치고 고른 사이트의 시작 주소로 탐색을 연다', async () => {
+  const { library } = libraryHarness([]);
+  const browse = vi.fn(async () => null);
+  const controller = createRenewalController({ library, browse });
+  render(<Application controller={controller} />);
+  await screen.findByRole('heading', { name: '읽고 싶은 작품을 찾아보세요' });
+  expect(screen.queryByRole('menuitem', { name: '나로우' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '작품 찾기' }));
+  expect(browse).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('menuitem', { name: '나로우' }));
+  await waitFor(() => expect(browse).toHaveBeenCalledExactlyOnceWith('https://syosetu.com/'));
   controller.dispose();
 });
 
