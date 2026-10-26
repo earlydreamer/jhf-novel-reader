@@ -18,6 +18,16 @@ public class SourceBrowserPolicyTest {
         assertEquals("https://ncode.syosetu.com/n1234ab/?p=2", SourceBrowserPolicy.selectedUrl("https://ncode.syosetu.com/n1234ab/?p=2"));
         assertNull(SourceBrowserPolicy.selectedUrl("https://ncode.syosetu.com/n1234ab/2/?p=2"));
     }
+    @Test public void kakuyomuWorkAndEpisodeSelectionKeepsDigitStringIds() {
+        assertEquals("https://kakuyomu.jp/works/16816452219389165420", SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/16816452219389165420/#top"));
+        assertEquals("https://kakuyomu.jp/works/16816452219389165420/episodes/16816452219389165999", SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/16816452219389165420/episodes/16816452219389165999"));
+        assertEquals("https://kakuyomu.jp/search?q=%E9%BE%8D", SourceBrowserPolicy.browseUrl("https://kakuyomu.jp/search?q=%E9%BE%8D"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/search?q=x"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/123?utm=x"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/0123"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://cdn-static.kakuyomu.jp/works/123"));
+        assertNull(SourceBrowserPolicy.browseUrl("https://kakuyomu.jp.evil.test/works/123"));
+    }
     @Test public void forgedSchemesHostsAndPathsAreRejectedBeforeRequests() {
         for (String value : new String[] { "http://syosetu.com/", "https://127.0.0.1/", "https://100.64.1.2/", "https://syosetu.com.evil.test/", "https://u:p@syosetu.com/", "https://syosetu.com:443/", "file:///etc/passwd", "content://app/", "javascript:alert(1)", "intent://open", "https://syosetu.com/../secret", "https://syosetu.com/%2e%2e/secret" }) {
             assertNull(value, SourceBrowserPolicy.browseUrl(value));
@@ -107,6 +117,18 @@ public class SourceBrowserPolicyTest {
         page.put("Authorization", "Bearer x");
         loader.load(URI.create("https://syosetu.com/"), "GET", page);
         assertEquals(Collections.emptyMap(), sent.get());
+    }
+
+    @Test public void redirectIntoAnotherSiteProfileDropsPageHeaders() throws Exception {
+        java.util.List<Map<String, String>> sent = new java.util.ArrayList<>();
+        SourceBrowserLoader loader = new SourceBrowserLoader((uri, headers) -> {
+            sent.add(headers);
+            if (uri.getHost().equals("kakuyomu.jp")) return new SourceBrowserLoader.Resource(uri, 302, "text/html", "UTF-8", Collections.singletonMap("Location", "https://syosetu.com/"), new byte[0]);
+            return new SourceBrowserLoader.Resource(uri, 200, "text/html", "UTF-8", Collections.emptyMap(), new byte[0]);
+        });
+        loader.load(URI.create("https://kakuyomu.jp/graphql?operationName=A"), "GET", Collections.singletonMap("apollo-require-preflight", "true"));
+        assertEquals(Collections.singletonMap("apollo-require-preflight", "true"), sent.get(0));
+        assertEquals(Collections.emptyMap(), sent.get(1));
     }
 
     @Test public void deniedResponsesAreNeverSniffedAsActiveContent() {

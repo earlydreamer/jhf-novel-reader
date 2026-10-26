@@ -1,11 +1,10 @@
-import { ReaderError, type SourceTransport } from '../contracts';
-import type { ChapterRef, RenewalSource, SourceSnapshot, WorkPage } from '../contracts/reading';
+import { ReaderError } from '../contracts';
+import type { ChapterRef, WorkPage } from '../contracts/reading';
 import {
   BODY,
   TITLE,
   documentFragment,
   normalizeSourceUrl,
-  parseChapter,
   plain,
   safeChapterLink,
   sourceIdentity,
@@ -140,54 +139,5 @@ export function parseWorkPage(html: string, input: string): WorkPage {
     pageUrl,
     nextPageUrl,
     complete: nextPageUrl === null && Number(new URL(pageUrl).searchParams.get('p') || 1) === 1,
-  };
-}
-
-function checkCancelled(signal: AbortSignal): void {
-  if (signal.aborted) throw new ReaderError('cancelled');
-}
-
-export function createRenewalSource(transport: SourceTransport): RenewalSource {
-  async function getHtml(url: string, signal: AbortSignal): Promise<string> {
-    checkCancelled(signal);
-    const response = await transport.get(url, signal);
-    checkCancelled(signal);
-    if (response.status !== 200)
-      throw new ReaderError('source_access', 'received', response.status);
-    const contentType =
-      Object.entries(response.headers).find(
-        ([name]) => name.toLowerCase() === 'content-type',
-      )?.[1] || '';
-    if (
-      response.url !== url ||
-      !/^text\/html(?:\s*;|\s*$)/i.test(contentType) ||
-      typeof response.data !== 'string'
-    )
-      throw access();
-    return response.data;
-  }
-  return {
-    async getWorkPage(input, signal): Promise<WorkPage> {
-      const { workUrl } = normalizeSourceInput(input);
-      const html = await getHtml(workUrl, signal);
-      const page = parseWorkPage(html, workUrl);
-      checkCancelled(signal);
-      return page;
-    },
-    async getChapter(ref, signal): Promise<SourceSnapshot> {
-      const canonicalUrl = normalizeSourceUrl(ref.canonicalUrl);
-      const { workId, chapterId, episode } = sourceIdentity(canonicalUrl);
-      if (
-        ref.workId !== workId ||
-        ref.chapterId !== chapterId ||
-        ref.ordinal !== (episode ? Number(episode) : 1)
-      )
-        throw access();
-      const rawHtml = await getHtml(canonicalUrl, signal);
-      const fetchedAt = new Date().toISOString();
-      const chapter = await parseChapter(rawHtml, canonicalUrl);
-      checkCancelled(signal);
-      return { ...chapter, captureKind: 'fetched', fetchedAt, rawHtml };
-    },
   };
 }

@@ -11,6 +11,12 @@
           "textId": "MIT-3c47a184"
         },
         {
+          "name": "LNReader plugins: Kakuyomu 본문 선택자",
+          "version": "67dce30db9dc",
+          "license": "MIT",
+          "textId": "MIT-3c47a184"
+        },
+        {
           "name": "Pretendard Variable",
           "version": "1.3.9",
           "license": "OFL-1.1",

@@ -1,11 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createRenewalSource,
-  normalizeSourceInput,
-  normalizeWorkPageUrl,
-  parseWorkPage,
-} from '../../src/source/work';
+import { normalizeSourceInput, normalizeWorkPageUrl, parseWorkPage } from '../../src/source/work';
+import { createRenewalSource } from '../../src/source/sites';
 import type { SourceTransport } from '../../src/contracts';
 const fixture = () =>
   '<h1 class="p-novel__title">合成の題</h1><div class="p-novel__body"><div class="p-novel__text"><p>本文</p></div></div>';

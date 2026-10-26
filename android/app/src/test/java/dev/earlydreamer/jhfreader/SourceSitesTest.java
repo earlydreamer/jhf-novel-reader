@@ -16,13 +16,14 @@ public class SourceSitesTest {
         assertEquals("narou", narou.id);
         assertEquals("https://syosetu.com/", narou.startUrl);
         assertTrue(narou.scripts);
-        assertEquals(new HashSet<>(Arrays.asList("syosetu.com", "www.syosetu.com", "yomou.syosetu.com", "ncode.syosetu.com", "static.syosetu.com")), SourceSites.allHosts());
+        assertEquals(new HashSet<>(Arrays.asList("syosetu.com", "www.syosetu.com", "yomou.syosetu.com", "ncode.syosetu.com", "static.syosetu.com", "kakuyomu.jp", "cdn-static.kakuyomu.jp")), SourceSites.allHosts());
         assertNull(SourceSites.forHost("api.syosetu.com"));
     }
 
     @Test public void cspListsEveryProfileHostAndLimitsScriptsOutsideProfiles() {
         String narou = SourceSites.csp(URI.create("https://yomou.syosetu.com/rank/top/"));
-        assertEquals("connect-src https://ncode.syosetu.com https://static.syosetu.com https://syosetu.com https://www.syosetu.com https://yomou.syosetu.com; worker-src 'none'; object-src 'none'", narou);
+        assertEquals("connect-src https://cdn-static.kakuyomu.jp https://kakuyomu.jp https://ncode.syosetu.com https://static.syosetu.com https://syosetu.com https://www.syosetu.com https://yomou.syosetu.com; worker-src 'none'; object-src 'none'", narou);
+        assertEquals(narou, SourceSites.csp(URI.create("https://kakuyomu.jp/works/1")));
         assertTrue(SourceSites.csp(URI.create("https://evil.test/")).endsWith("; script-src 'none'"));
     }
 
@@ -49,6 +50,35 @@ public class SourceSitesTest {
         assertFalse(value.matcher("").matches());
         assertFalse(value.matcher("a\r\nb").matches());
         assertFalse(value.matcher(new String(new char[129]).replace('\0', 'a')).matches());
+    }
+
+    @Test public void kakuyomuProfileForwardsOnlyItsGraphqlPreflightHeaders() {
+        SourceSites.Site kakuyomu = SourceSites.forHost("kakuyomu.jp");
+        assertEquals("kakuyomu", kakuyomu.id);
+        assertEquals("https://kakuyomu.jp/", kakuyomu.startUrl);
+        assertTrue(kakuyomu.scripts);
+        assertSame(kakuyomu, SourceSites.forHost("cdn-static.kakuyomu.jp"));
+        Map<String, String> page = new HashMap<>();
+        page.put("content-type", "application/json");
+        page.put("apollo-require-preflight", "true");
+        page.put("x-apollo-operation-name", "SelectSearchConditionsModal");
+        page.put("Cookie", "a=b");
+        page.put("Accept", "text/html");
+        Map<String, String> forwarded = kakuyomu.forwardHeaders(page);
+        assertEquals("application/json", forwarded.get("Content-Type"));
+        assertEquals("true", forwarded.get("apollo-require-preflight"));
+        assertEquals("SelectSearchConditionsModal", forwarded.get("x-apollo-operation-name"));
+        assertEquals(3, forwarded.size());
+        assertEquals(Collections.emptyMap(), kakuyomu.forwardHeaders(Collections.singletonMap("Content-Type", "text/plain")));
+        assertEquals("application/json;\tcharset=utf-8", kakuyomu.forwardHeaders(Collections.singletonMap("Content-Type", "application/json;\tcharset=utf-8")).get("Content-Type"));
+    }
+
+    @Test public void kakuyomuSelectionKeepsDigitStringIdsWithoutQueries() {
+        assertEquals("https://kakuyomu.jp/works/16816452219601895000", SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/16816452219601895000"));
+        assertEquals("https://kakuyomu.jp/works/16816452219601895000/episodes/16816452219601895001", SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/16816452219601895000/episodes/16816452219601895001/"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/works/16816452219601895000?page=2"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://kakuyomu.jp/search?q=x"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://cdn-static.kakuyomu.jp/works/1"));
     }
 
     @Test public void protocolAndCredentialHeadersCanNeverBeAllowlisted() {

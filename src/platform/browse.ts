@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { ReaderError } from '../contracts';
-import { normalizeSourceInput } from '../source/work';
+import { normalizeSourceInput } from '../source/sites';
 import { BROWSE_SITES } from './browseSites';
 
 interface SourceBrowserPlugin {

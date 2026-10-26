@@ -25,13 +25,32 @@ describe('trusted native browse boundary', () => {
     native.open.mockResolvedValue({ selectedUrl: null });
     expect(await openSourceBrowser('https://syosetu.com/')).toBeNull();
   });
-  it('forwards a work canonical URL as the browser start URL', async () => {
-    native.open.mockResolvedValue({ selectedUrl: null });
-    await openSourceBrowser('https://ncode.syosetu.com/n1234ab/');
-    expect(native.open).toHaveBeenCalledExactlyOnceWith({
-      startUrl: 'https://ncode.syosetu.com/n1234ab/',
+  it.each([
+    [
+      'https://kakuyomu.jp/works/16816452219389165420/',
+      'https://kakuyomu.jp/works/16816452219389165420',
+    ],
+    [
+      'https://kakuyomu.jp/works/16816452219389165420/episodes/16816452219389165421/#p1',
+      'https://kakuyomu.jp/works/16816452219389165420/episodes/16816452219389165421',
+    ],
+  ])('canonicalizes the selected Kakuyomu URL %s', async (selectedUrl, canonicalUrl) => {
+    native.open.mockResolvedValue({ selectedUrl });
+    expect(await openSourceBrowser('https://kakuyomu.jp/')).toEqual({
+      selectedUrl: canonicalUrl,
     });
+    expect(native.open).toHaveBeenCalledExactlyOnceWith({ startUrl: 'https://kakuyomu.jp/' });
   });
+  it.each(['https://ncode.syosetu.com/n1234ab/', 'https://kakuyomu.jp/works/16816452219389165420'])(
+    'forwards the canonical work URL %s as the browser start URL',
+    async (startUrl) => {
+      native.open.mockResolvedValue({ selectedUrl: null });
+      await openSourceBrowser(startUrl);
+      expect(native.open).toHaveBeenCalledExactlyOnceWith({
+        startUrl,
+      });
+    },
+  );
   it.each([
     'http://syosetu.com/',
     'https://127.0.0.1/',
@@ -49,6 +68,8 @@ describe('trusted native browse boundary', () => {
   it.each([
     { selectedUrl: 'https://evil.test/n1234ab/' },
     { selectedUrl: 'https://ncode.syosetu.com/n1234ab/2/?p=2' },
+    { selectedUrl: 'https://kakuyomu.jp/works/16816452219389165420?secret=1' },
+    { selectedUrl: 'https://kakuyomu.jp.evil.test/works/16816452219389165420' },
     { selectedUrl: 42 },
     {},
     null,

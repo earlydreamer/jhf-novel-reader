@@ -9,6 +9,7 @@ import type {
 import { digest, Journal, serial, type PrivateFiles } from '../storage/journal';
 import { check, object, record } from '../storage/validation';
 import { chapterIdentity, identifier } from '../storage/readingValidation';
+import { sourceWorkUrl } from '../source/sites';
 import { appliedGuidance, streamingGuidanceContext, type GuidanceRepository } from './guidance';
 
 export type TitleInput = { key: string; source: string };
@@ -195,7 +196,7 @@ export function createTitleTranslation(
     const source: SourceSnapshot = {
       workId,
       chapterId: `${workId}/short`,
-      canonicalUrl: `https://ncode.syosetu.com/${workId}/`,
+      canonicalUrl: sourceWorkUrl(workId),
       title: inputs[0]!.source,
       paragraphs: inputs.map((entry, index) => ({
         id: `title-${index}`,

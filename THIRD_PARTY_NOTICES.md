@@ -15,6 +15,14 @@
 - 변경: Cheerio와 플러그인 fetch를 분리된 비활성 브라우저 템플릿과 주입된 SourceTransport로 바꿨습니다. HTML 대신 구조화된 문단·ruby를 출력합니다. URL·내비게이션 검증, 결정적 SHA-256 식별자, 접근 페이지 감지, 제한된 파싱, 취소 검사, 이전 선택자를 추가했습니다. 랭킹·검색·필터·표지·user-agent 위장·플러그인 런타임·전체 페이지 수집은 제거했습니다.
 - 주의: 파싱 로직만 재사용합니다. 업스트림 소설 픽스처나 본문은 포함하지 않습니다. 업스트림 코드 라이선스는 소설 본문에 대한 권리나 자동 접근 허가를 주지 않습니다. 이 앱 자체 코드는 MIT 라이선스(저장소의 LICENSE)이며, 그것이 소설 본문에 대한 권리를 주지 않는 것도 같습니다.
 
+### LNReader plugins: Kakuyomu 본문 선택자
+
+- 출처: https://github.com/LNReader/lnreader-plugins , 고정 커밋 `67dce30db9dc730345b095f3da04f0fac087cb48`, 파일 [`plugins/japanese/kakuyomu.ts`](https://github.com/LNReader/lnreader-plugins/blob/67dce30db9dc730345b095f3da04f0fac087cb48/plugins/japanese/kakuyomu.ts)
+- 라이선스: MIT, Copyright (c) 2021 Rajarshee Chatterjee. 변경 없는 전체 원문은 아래 "라이선스 원문"에 있습니다.
+- 적용 위치: `src/source/kakuyomu.ts`(본문·회차 제목 선택자 `BODY`·`TITLE`, 작품 페이지의 `__NEXT_DATA__` Apollo 상태 사용).
+- 변경: 목차는 Apollo 객체 나열 순서 대신 `Work.tableOfContentsV2`와 각 그룹의 `episodeUnions` 순서로 읽고, 중복·누락·공개 회차 수 불일치를 거부합니다. 구조화 데이터는 실행하지 않고 JSON으로만 읽습니다. 본문은 나로우와 같은 비활성 템플릿·문단·ruby 계약으로 읽습니다. 랭킹·검색·필터·표지·장르·작가 정보는 가져오지 않았습니다.
+- 주의: 파싱 구조만 참고합니다. 업스트림 소설 픽스처나 본문은 포함하지 않습니다. 업스트림 코드 라이선스는 소설 본문에 대한 권리나 자동 접근 허가를 주지 않습니다.
+
 ### Pretendard Variable
 
 - 출처: https://github.com/orioncactus/pretendard (npm `pretendard@1.3.9`)
@@ -348,7 +356,7 @@ Capacitor·플러그인 Android 모듈은 위 npm 패키지와 같은 라이선�
 
 ### MIT
 
-사용 구성 요소: LNReader plugins: Syosetu 선택자와 추출 구조 358388426c0b
+사용 구성 요소: LNReader plugins: Syosetu 선택자와 추출 구조 358388426c0b, LNReader plugins: Kakuyomu 본문 선택자 67dce30db9dc
 
 ```text
 MIT License
