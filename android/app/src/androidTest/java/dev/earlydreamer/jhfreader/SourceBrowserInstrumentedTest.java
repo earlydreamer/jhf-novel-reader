@@ -47,34 +47,34 @@ public class SourceBrowserInstrumentedTest {
         return ActivityScenario.launch(new Intent(context, SourceBrowserActivity.class));
     }
 
-    @Test public void isolatedWebViewHasNoPageBridgeOrLocalAccess() throws Exception {
+    @Test public void pageScriptsRunWithoutAppBridgeOrLocalAccess() throws Exception {
+        String fixtureUrl = "https://syosetu.com/fixture/";
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> fixtureUrl.equals(uri.toString())
+            ? fixturePage(uri, "Fixture", "<script>document.title='page-script-executed';</script><iframe srcdoc=\"<script>parent.Capacitor.Plugins.SourceBrowser.open({})</script>\"></iframe>")
+            : SourceBrowserLoader.denied(uri));
         try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
             AtomicReference<WebView> browser = new AtomicReference<>();
             scenario.onActivity(activity -> {
                 WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
                 browser.set(view);
-                assertFalse(view.getSettings().getJavaScriptEnabled());
+                // Site scripts run; isolation comes from the missing bridge and the loader-only network path.
+                assertTrue(view.getSettings().getJavaScriptEnabled());
                 assertTrue(view.getSettings().getBlockNetworkLoads());
+                assertFalse(view.getSettings().getDomStorageEnabled());
                 assertFalse(view.getSettings().getAllowFileAccess());
                 assertFalse(view.getSettings().getAllowContentAccess());
                 assertFalse(view.getSettings().getAllowFileAccessFromFileURLs());
                 assertFalse(view.getSettings().getAllowUniversalAccessFromFileURLs());
                 assertEquals(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW, view.getSettings().getMixedContentMode());
-                view.loadDataWithBaseURL("https://syosetu.com/fixture/", "<html><head><title>Fixture</title></head><body><script>document.title='page-script-executed';</script><iframe srcdoc=\"<script>parent.Capacitor.Plugins.SourceBrowser.open({})</script>\"></iframe></body></html>", "text/html", "UTF-8", null);
             });
-            awaitTitle(scenario, "Fixture");
+            installFixture(scenario, fixtureLoader, fixtureUrl);
+            awaitTitle(scenario, "page-script-executed");
             AtomicReference<String> bridge = new AtomicReference<>();
             CountDownLatch inspected = new CountDownLatch(1);
-            scenario.onActivity(activity -> {
-                // Instrumentation temporarily enables evaluation only after confirming that page
-                // scripts did not execute. Production never enables JavaScript or evaluates code.
-                browser.get().getSettings().setJavaScriptEnabled(true);
-                browser.get().evaluateJavascript("JSON.stringify([typeof Capacitor,typeof capacitor,typeof cordova,typeof Android,typeof window.webkit])", value -> {
-                    bridge.set(value);
-                    browser.get().getSettings().setJavaScriptEnabled(false);
-                    inspected.countDown();
-                });
-            });
+            scenario.onActivity(activity -> browser.get().evaluateJavascript("JSON.stringify([typeof Capacitor,typeof capacitor,typeof cordova,typeof Android,typeof window.webkit])", value -> {
+                bridge.set(value);
+                inspected.countDown();
+            }));
             assertTrue(inspected.await(3, TimeUnit.SECONDS));
             assertEquals("\"[\\\"undefined\\\",\\\"undefined\\\",\\\"undefined\\\",\\\"undefined\\\",\\\"undefined\\\"]\"", bridge.get());
         }
@@ -83,15 +83,67 @@ public class SourceBrowserInstrumentedTest {
     @Test public void forbiddenSubresourcesAndPageScriptsSendNoConnectionToControlledTarget() throws Exception {
         try (ConnectionCounter target = new ConnectionCounter(); ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
             target.positiveControl();
+            String fixtureUrl = "https://syosetu.com/fixture/";
             String destination = "https://127.0.0.1:" + target.port() + "/model";
-            String html = "<html><head><title>Forbidden fixture</title></head><body><img src='" + destination + "'><iframe src='" + destination + "'></iframe><script>fetch('" + destination + "');new WebSocket('wss://127.0.0.1:" + target.port() + "/model');</script></body></html>";
-            scenario.onActivity(activity -> {
-                WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
-                view.loadDataWithBaseURL("https://syosetu.com/fixture/", html, "text/html", "UTF-8", null);
-            });
-            awaitTitle(scenario, "Forbidden fixture");
-            Thread.sleep(500);
-            assertEquals("Forbidden target received a connection", 1, target.count.get());
+            // Served through the production loader so the profile CSP applies, exactly as on a real site.
+            String body = "<img src='" + destination + "'><iframe src='" + destination + "'></iframe><script>fetch('" + destination + "');new WebSocket('wss://127.0.0.1:" + target.port() + "/model');document.title='Forbidden fixture ran';</script>";
+            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> fixtureUrl.equals(uri.toString()) ? fixturePage(uri, "Forbidden fixture", body) : SourceBrowserLoader.denied(uri));
+            installFixture(scenario, fixtureLoader, fixtureUrl);
+            awaitTitle(scenario, "Forbidden fixture ran");
+            target.assertNoConnectionsAfterControl();
+        }
+    }
+
+    /** Real network: proves the platform HTTP stack would hand the app cookie jar to the source loader. */
+    @Test public void productionLoaderNeverReadsOrWritesTheAppCookieJar() throws Exception {
+        java.net.CookieHandler original = java.net.CookieHandler.getDefault();
+        List<String> touched = new CopyOnWriteArrayList<>();
+        java.net.CookieHandler.setDefault(new java.net.CookieHandler() {
+            @Override public Map<String, List<String>> get(URI uri, Map<String, List<String>> requestHeaders) {
+                touched.add("get " + uri.getHost());
+                return Collections.singletonMap("Cookie", Collections.singletonList("jhf_probe=1"));
+            }
+            @Override public void put(URI uri, Map<String, List<String>> responseHeaders) {
+                touched.add("put " + uri.getHost());
+            }
+        });
+        try {
+            SourceBrowserLoader.Resource result = new SourceBrowserLoader("jhf-instrumented-test").load(URI.create("https://syosetu.com/"), "GET");
+            assertTrue("A real response is needed for this check: " + result.status, result.status > 0);
+            assertEquals(Collections.emptyList(), touched);
+        } finally {
+            java.net.CookieHandler.setDefault(original);
+        }
+    }
+
+    /** Script-driven sites (Next.js and similar) change the URL with pushState and never finish a new page load. */
+    @Test public void sameDocumentNavigationToAWorkEnablesImport() throws Exception {
+        String fixtureUrl = "https://ncode.syosetu.com/fixture/";
+        String workUrl = "https://ncode.syosetu.com/n1234ab/";
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> fixtureUrl.equals(uri.toString())
+            ? fixturePage(uri, "Push fixture", "<script>setTimeout(function(){history.pushState(null,'','/n1234ab/');document.title='pushed';},300)</script>")
+            : SourceBrowserLoader.denied(uri));
+        try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
+            installFixture(scenario, fixtureLoader, fixtureUrl);
+            awaitTitle(scenario, "pushed");
+            awaitBrowserState(scenario, workUrl, true);
+        }
+    }
+
+    @Test public void serviceWorkerRegistrationIsRefused() throws Exception {
+        String fixtureUrl = "https://syosetu.com/fixture/";
+        List<String> requests = new CopyOnWriteArrayList<>();
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
+            requests.add(uri.toString());
+            if (fixtureUrl.equals(uri.toString())) return fixturePage(uri, "SW fixture", "<script>navigator.serviceWorker.register('/fixture/sw.js').then(function(){document.title='sw-registered'},function(){document.title='sw-blocked'})</script>");
+            if ((fixtureUrl + "sw.js").equals(uri.toString())) return new SourceBrowserLoader.Resource(uri, 200, "application/javascript", "UTF-8", Collections.emptyMap(), "self.addEventListener('install',function(){})".getBytes(StandardCharsets.UTF_8));
+            return SourceBrowserLoader.denied(uri);
+        });
+        try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
+            installFixture(scenario, fixtureLoader, fixtureUrl);
+            awaitTitle(scenario, "sw-blocked");
+            // worker-src 'none' refuses before any script request reaches the transport.
+            assertFalse(requests.contains(fixtureUrl + "sw.js"));
         }
     }
 
@@ -100,13 +152,14 @@ public class SourceBrowserInstrumentedTest {
         String[] unsupported = {
             "file:///etc/passwd",
             "content://dev.earlydreamer.jhfreader/private",
-            "javascript:document.title='forged'",
+            // javascript: links are not listed: site scripts run by design, so such a link has no more power than
+            // page script. Selection safety for scripted pages is covered by the selectedUrl re-validation.
             "intent://open",
             "https://ncode.syosetu.com.evil.test/n1234ab/"
         };
         for (String destination : unsupported) {
             List<String> requests = new CopyOnWriteArrayList<>();
-            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
                 requests.add(uri.toString());
                 if (!workUrl.equals(uri.toString())) return SourceBrowserLoader.denied(uri);
                 return fixturePage(uri, "Valid work fixture", "<a href=\"" + destination + "\">Unsupported destination</a>");
@@ -120,7 +173,7 @@ public class SourceBrowserInstrumentedTest {
                 }
                 InstrumentationRegistry.getInstrumentation().waitForIdleSync();
                 // No unsupported native network/file request may reach the fixture transport.
-                assertEquals(Collections.singletonList(workUrl), requests);
+                assertEquals(destination, Collections.singletonList(workUrl), requests);
                 AtomicReference<Boolean> retainedWork = new AtomicReference<>();
                 scenario.onActivity(activity -> {
                     WebView view = activity.findViewById(SourceBrowserActivity.BROWSER_ID);
@@ -159,7 +212,7 @@ public class SourceBrowserInstrumentedTest {
         String workUrl = "https://ncode.syosetu.com/n1234ab/2/";
         String unsupported = workUrl + "?p=2";
         List<String> requests = new CopyOnWriteArrayList<>();
-        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
             requests.add(uri.toString());
             if (uri.toString().equals(workUrl)) {
                 return fixturePage(uri, "Valid work fixture", "<a href='" + unsupported + "'>Invalid episode query</a>");
@@ -188,7 +241,7 @@ public class SourceBrowserInstrumentedTest {
 
     @Test public void htmlSearchRankingLinksAndNativeBackKeepTheirHistory() throws Exception {
         List<String> requests = new CopyOnWriteArrayList<>();
-        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
             requests.add(uri.toString());
             String title;
             String body;
@@ -251,7 +304,7 @@ public class SourceBrowserInstrumentedTest {
             String deniedPageIcon = "https://yomou.syosetu.com/favicon.ico";
             String forbidden = "https://127.0.0.1:" + target.port() + "/model";
             List<String> requests = new CopyOnWriteArrayList<>();
-            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
                 requests.add(uri.toString());
                 if (uri.toString().equals(home)) {
                     return fixturePage(uri, "Main redirect fixture", "<a href='" + redirect + "'>Redirected page</a>");
@@ -294,7 +347,7 @@ public class SourceBrowserInstrumentedTest {
             String frame = "https://yomou.syosetu.com/fixture/redirected-frame";
             String forbidden = "https://127.0.0.1:" + target.port() + "/model";
             List<String> requests = new CopyOnWriteArrayList<>();
-            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+            SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
                 requests.add(uri.toString());
                 if (uri.toString().equals(workUrl)) {
                     return fixturePage(uri, "Subresource redirect fixture", "<img src='" + image + "'><iframe src='" + frame + "'></iframe>");
@@ -392,15 +445,16 @@ public class SourceBrowserInstrumentedTest {
 
     private void cancelExternalDialog(String destination) throws Exception {
         // Inspect the actual active dialog, independently of ActivityScenario's result host.
+        String appPackage = InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageName();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         do {
             AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
                 .getUiAutomation().getRootInActiveWindow();
-            if (root != null && "dev.earlydreamer.jhfreader".contentEquals(root.getPackageName())
+            if (root != null && appPackage.contentEquals(root.getPackageName())
                 && !root.findAccessibilityNodeInfosByText("외부 브라우저에서 열까요?").isEmpty()
                 && !root.findAccessibilityNodeInfosByText(destination).isEmpty()) {
                 for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText("닫기")) {
-                    if ("dev.earlydreamer.jhfreader".contentEquals(node.getPackageName())
+                    if (appPackage.contentEquals(node.getPackageName())
                         && "닫기".contentEquals(node.getText()) && node.isEnabled() && node.isClickable()) {
                         assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK));
                         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
@@ -421,7 +475,7 @@ public class SourceBrowserInstrumentedTest {
         String search = "https://yomou.syosetu.com/search.php?word=syntheticword";
         String work = "https://ncode.syosetu.com/n1234ab/";
         List<String> requests = new CopyOnWriteArrayList<>();
-        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader(uri -> {
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
             requests.add(uri.toString());
             if (search.equals(uri.toString())) return fixturePage(uri, "Search fixture",
                 "<a target='_blank' href='" + work + "'>Work result</a>");

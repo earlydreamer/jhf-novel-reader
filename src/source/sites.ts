@@ -19,8 +19,6 @@ import {
 
 /** 사이트별 URL 정규화·작품과 회차 식별·목차와 본문 추출의 경계. */
 export interface SourceSite {
-  /** 작품·회차 추출과 별개인 원문 탐색 허용 호스트. */
-  readonly browseHosts: readonly string[];
   ownsUrl(url: URL): boolean;
   ownsWorkId(workId: string): boolean;
   /** 저장 기록의 회차 ID 형식. 파일 경로에 넣지 않는다. */
@@ -43,13 +41,6 @@ const NAROU_WORK_ID = /^n[0-9]{4}[a-z]{1,2}$/;
 const NAROU_CHAPTER_ID = /^(n[0-9]{4}[a-z]{1,2})\/(short|[1-9][0-9]*)$/;
 
 const narou: SourceSite = {
-  browseHosts: [
-    'syosetu.com',
-    'www.syosetu.com',
-    'yomou.syosetu.com',
-    'ncode.syosetu.com',
-    'static.syosetu.com',
-  ],
   ownsUrl: (url) => url.hostname === 'ncode.syosetu.com',
   ownsWorkId: (workId) => NAROU_WORK_ID.test(workId),
   ownsChapterId(chapterId) {
@@ -86,7 +77,6 @@ const narou: SourceSite = {
 };
 
 const kakuyomu: SourceSite = {
-  browseHosts: ['kakuyomu.jp', 'cdn-static.kakuyomu.jp'],
   ownsUrl: (url) => url.hostname === 'kakuyomu.jp',
   ownsWorkId: (workId) => KAKUYOMU_WORK_ID.test(workId),
   ownsChapterId: (chapterId) => KAKUYOMU_CHAPTER_ID.test(chapterId),
