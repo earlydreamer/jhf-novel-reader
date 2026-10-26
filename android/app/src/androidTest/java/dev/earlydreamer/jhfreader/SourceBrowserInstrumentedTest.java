@@ -130,6 +130,35 @@ public class SourceBrowserInstrumentedTest {
         }
     }
 
+    @Test public void blockedMainFrameExplainsTheSiteRefusalAndRecovers() throws Exception {
+        String blockedUrl = "https://syosetu.com/";
+        String okUrl = "https://syosetu.com/ok/";
+        SourceBrowserLoader fixtureLoader = new SourceBrowserLoader((uri, headers) -> {
+            if (blockedUrl.equals(uri.toString())) return new SourceBrowserLoader.Resource(uri, 403, "text/html", "UTF-8", Collections.emptyMap(), "<html><head><link rel='icon' href='data:,'><title>Blocked fixture</title></head><body>blocked</body></html>".getBytes(StandardCharsets.UTF_8));
+            if (okUrl.equals(uri.toString())) return fixturePage(uri, "Ok fixture", "ok");
+            return SourceBrowserLoader.denied(uri);
+        });
+        try (ActivityScenario<SourceBrowserActivity> scenario = launchWithoutNetwork()) {
+            installFixture(scenario, fixtureLoader, blockedUrl);
+            awaitTitle(scenario, "Blocked fixture");
+            awaitStatus(scenario, SourceBrowserPolicy.SITE_UNAVAILABLE);
+            scenario.onActivity(activity -> ((WebView) activity.findViewById(SourceBrowserActivity.BROWSER_ID)).loadUrl(okUrl));
+            awaitTitle(scenario, "Ok fixture");
+            awaitStatus(scenario, SourceBrowserActivity.DEFAULT_STATUS);
+        }
+    }
+
+    private void awaitStatus(ActivityScenario<SourceBrowserActivity> scenario, String wanted) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        AtomicReference<String> text = new AtomicReference<>();
+        do {
+            scenario.onActivity(activity -> text.set(((android.widget.TextView) activity.findViewById(SourceBrowserActivity.STATUS_ID)).getText().toString()));
+            if (wanted.equals(text.get())) return;
+            Thread.sleep(20);
+        } while (System.nanoTime() < deadline);
+        fail("Status line did not show: " + wanted + "; observed " + text.get());
+    }
+
     @Test public void serviceWorkerRegistrationIsRefused() throws Exception {
         String fixtureUrl = "https://syosetu.com/fixture/";
         List<String> requests = new CopyOnWriteArrayList<>();
