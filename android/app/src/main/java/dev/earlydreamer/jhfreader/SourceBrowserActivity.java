@@ -52,6 +52,8 @@ public final class SourceBrowserActivity extends AppCompatActivity {
     static final int OPEN_ID = View.generateViewId();
     static final int BACK_ID = View.generateViewId();
     static final int CLOSE_ID = View.generateViewId();
+    static final int STATUS_ID = View.generateViewId();
+    static final String DEFAULT_STATUS = "작품을 찾은 뒤 ‘이 작품 열기’를 눌러 주세요. 로그인과 북마크 같은 계정 기능은 지원하지 않아요.";
     public static final String START_URL = "startUrl";
     public static final String SELECTED_URL = "selectedUrl";
     private WebView browser;
@@ -94,10 +96,11 @@ public final class SourceBrowserActivity extends AppCompatActivity {
         toolbar.addView(close);
         screen.addView(toolbar);
         status = new TextView(this);
+        status.setId(STATUS_ID);
         status.setPadding(dp(16), dp(8), dp(16), dp(8));
         status.setTextColor(theme.onSurfaceVariant);
         status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        status.setText("작품을 찾은 뒤 ‘이 작품 열기’를 눌러 주세요. 로그인과 북마크 같은 계정 기능은 지원하지 않아요.");
+        status.setText(DEFAULT_STATUS);
         screen.addView(status);
         View divider = new View(this);
         divider.setBackgroundColor(theme.outlineVariant);
@@ -230,6 +233,10 @@ public final class SourceBrowserActivity extends AppCompatActivity {
                             if (!isFinishing() && !isDestroyed() && input.toString().equals(view.getUrl())) view.loadUrl(resource.uri.toString());
                         });
                         return blockedResponse();
+                    }
+                    if (request.isForMainFrame()) {
+                        String notice = SourceBrowserPolicy.mainFrameNotice(resource.uri, resource.status);
+                        view.post(() -> status.setText(notice != null ? notice : DEFAULT_STATUS));
                     }
                     return new WebResourceResponse(resource.mimeType, resource.encoding,
                         resource.status, resource.status >= 400 ? "Unavailable" : "OK", resource.headers,
