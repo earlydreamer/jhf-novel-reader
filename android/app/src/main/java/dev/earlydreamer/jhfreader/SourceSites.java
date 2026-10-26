@@ -20,7 +20,9 @@ import java.util.regex.Pattern;
  */
 final class SourceSites {
     private static final Pattern DEFAULT_VALUE = Pattern.compile("[\\x20-\\x7e]{1,128}");
-    private static final Set<String> CREDENTIAL_HEADERS = new HashSet<>(Arrays.asList("cookie", "authorization"));
+    /** Credentials, protocol headers and the loader's own Accept/User-Agent are never page-controlled. */
+    private static final Set<String> CREDENTIAL_HEADERS = new HashSet<>(Arrays.asList(
+        "cookie", "cookie2", "authorization", "proxy-authorization", "host", "accept", "user-agent"));
     private static final Pattern NAROU_WORK = Pattern.compile("^/(n[0-9]{4}[a-z]{1,2})(?:/([1-9][0-9]*))?/?$", Pattern.CASE_INSENSITIVE);
     private static final long MAX_SAFE_INTEGER = 9007199254740991L;
 
