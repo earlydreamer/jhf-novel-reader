@@ -18,6 +18,8 @@
 
 저장소에서 [README의 연결 안내](../README.md#개인정보와-연결)는 확인했습니다. 별도 정식 방침·앱 내 방침 링크·외부 게시 위치는 검색에서 찾지 못했습니다. 저장소 밖의 원본이 없다는 결론은 아닙니다.
 
+현재 README의 “앱 전용 저장소에만 있습니다”, “앱이 연결하는 곳은 다음이 전부입니다”는 6절에서 쓰지 않기로 한 문구 유형에 해당합니다. README 표에는 카쿠요무·Hugging Face의 CDN 호스트, 수동 백업 ZIP의 외부 저장, 번역 요청의 요약·참고자료·이전 문맥이 빠져 있습니다. README 수정은 이 자료와 분리해 근거를 붙여 따로 확인받습니다.
+
 ## 2. 현행 데이터 흐름과 확인 근거
 
 다음 표의 전송은 개발자 서버 수집과 구분합니다. 연결 상대는 통신 과정에서 IP·요청 시각·User-Agent 등 접속 정보를 관측할 수 있지만, 각 서버의 실제 로그 항목과 보관 기간까지 이 코드로 확인할 수는 없습니다.
@@ -25,14 +27,14 @@
 | 기능 | 기기 저장·처리 | 기기 밖으로 나가는 항목과 수신자 | 코드 근거·한계 |
 | --- | --- | --- | --- |
 | 서재·독서 | 원문, 번역, 제목, 용어·참고자료, 읽기 위치와 설정을 앱 저장소에서 관리합니다. | 저장 자체에 개발자 서버 업로드 경로를 두지 않습니다. 다른 기능에서 선택된 내용이 전송되는 경우는 아래와 같습니다. | [저장소 설명](storage.md), [저장 구현](../src/storage). 저장 파일 전체의 암호화를 주장하지 않습니다. |
-| 원문 브라우저·가져오기 | 사이트 응답을 표시하고 작품·회차를 저장합니다. | 나로우·카쿠요무 및 허용 CDN으로 URL·요청 헤더가 전송됩니다. 사이트 내 브라우저 동작과 쿠키는 사이트 처리도 포함합니다. | [사이트 목록](../src/platform/browseSites.ts), [HTTP](../src/platform/http/index.ts), [SourceBrowserLoader](../android/app/src/main/java/dev/earlydreamer/jhfreader/SourceBrowserLoader.java). 열린 웹 탐색과 앱이 제어하는 추출 요청은 스토어 판정에서 나눠 검토합니다. |
-| 번역·제목·용어 생성 | 결과와 관련 상태를 로컬에 저장합니다. | 선택한 OpenAI 호환 서버에 모델 식별자, 원문·번역 지시, 조건에 따라 요약·필요한 표기·참고자료·제한된 이전 문맥을 보냅니다. 설정한 인증값은 요청 헤더에 사용합니다. | [localStreaming](../src/providers/localStreaming.ts), [제목 번역](../src/translation/titles.ts), [endpoint](../src/providers/endpoint.ts). 매번 전체 용어집을 전송한다는 뜻은 아닙니다. 서버가 외부에 있으면 원문도 기기 밖으로 나갑니다. |
-| 용어 조회 | 검색 결과를 참고자료로 처리합니다. | Wikipedia·Wikidata·Namu에 조회할 용어·이름이 포함된 검색 요청을 보냅니다. | [lookup](../src/translation/lookup.ts), HTTP의 목적지 제한. 소설 전문 전송과 구분합니다. |
-| 임베딩 모델 | 내려받은 모델로 기기 안에서 텍스트 임베딩을 계산합니다. | Hugging Face 및 허용 CDN에 모델 파일 다운로드 요청을 보냅니다. 이 계산용 텍스트를 모델 다운로드 요청에 싣는 경로는 아닙니다. | [OnDeviceEmbeddingPlugin](../android/app/src/main/java/dev/earlydreamer/jhfreader/OnDeviceEmbeddingPlugin.java). 다운로드와 로컬 추론을 구분합니다. |
-| 인증값 | Android/iOS 네이티브 보안 저장소를 사용하고 일반 설정에는 참조를 둡니다. 웹 평문 저장은 차단합니다. | 사용자가 설정한 제공자 요청의 인증에 사용합니다. | [secrets](../src/storage/secrets.ts). 장치 한정 Keychain·동기화 비활성 설정입니다. 모든 OS·기기 변경의 실제 동작을 이번에 재검증하지는 않았습니다. |
+| 원문 브라우저·가져오기 | 사이트 응답을 표시하고 작품·회차를 저장합니다. | 나로우·카쿠요무 및 허용 CDN(`cdn-static.kakuyomu.jp`)으로 URL·요청 헤더가 전송됩니다. 사이트 내 브라우저 동작과 쿠키는 사이트 처리도 포함합니다. | [사이트 목록](../src/platform/browseSites.ts), [HTTP](../src/platform/http/index.ts), [SourceBrowserLoader](../android/app/src/main/java/dev/earlydreamer/jhfreader/SourceBrowserLoader.java). 원문 요청은 HTTPS만 허용하고 [네트워크 설정](../android/app/src/main/res/xml/network_security_config.xml)도 두 사이트의 평문 통신을 막습니다. 열린 웹 탐색과 앱이 제어하는 추출 요청은 스토어 판정에서 나눠 검토합니다. |
+| 번역·제목·용어 생성 | 결과와 관련 상태를 로컬에 저장합니다. | 선택한 OpenAI 호환 서버에 모델 식별자, 원문·번역 지시, 조건에 따라 줄거리 요약(최대 400자)·필요한 표기·참고자료·제한된 이전 문맥을 보냅니다. 설정한 인증값은 `Authorization` 요청 헤더에 사용합니다. | [localStreaming](../src/providers/localStreaming.ts), [제목 번역](../src/translation/titles.ts), [endpoint](../src/providers/endpoint.ts). 매번 전체 용어집을 전송한다는 뜻은 아닙니다. 서버가 외부에 있으면 원문도 기기 밖으로 나갑니다. [네트워크 설정](../android/app/src/main/res/xml/network_security_config.xml)이 원문 사이트 외 평문 통신을 앱 전체에서 허용하므로, `http://` 서버를 지정하면 원문·인증 헤더가 암호화 없이 전송됩니다. |
+| 용어 조회 | 검색 결과를 참고자료로 처리합니다. | Wikipedia·Wikidata·Namu에 조회할 용어·이름이 포함된 HTTPS 검색 요청을 보냅니다. 요청의 User-Agent에 앱 이름·버전·저장소 URL이 들어갑니다. | [lookup](../src/translation/lookup.ts), [HTTP](../src/platform/http/index.ts)의 목적지 제한과 `LOOKUP_USER_AGENT`. 소설 전문 전송과 구분합니다. |
+| 임베딩 모델 | 내려받은 모델로 기기 안에서 텍스트 임베딩을 계산합니다. | Hugging Face 및 허용 CDN(`*.huggingface.co`, `*.hf.co`)에 모델 파일 다운로드 요청을 보냅니다. 이 계산용 텍스트를 모델 다운로드 요청에 싣는 경로는 아닙니다. | [OnDeviceEmbeddingPlugin](../android/app/src/main/java/dev/earlydreamer/jhfreader/OnDeviceEmbeddingPlugin.java). 다운로드와 로컬 추론을 구분합니다. |
+| 인증값 | 네이티브 보안 저장소를 사용하고 일반 설정에는 참조를 둡니다. 웹 평문 저장은 차단합니다. 코드는 Android·iOS를 모두 다루지만 현행 main에는 iOS 플랫폼 프로젝트가 없어 배포 대상은 Android입니다. | 사용자가 설정한 제공자 요청의 인증에 사용합니다. | [secrets](../src/storage/secrets.ts). 장치 한정 Keychain·동기화 비활성 설정입니다. Android는 [백업 규칙](../android/app/src/main/res/xml/backup_rules.xml)과 [추출 규칙](../android/app/src/main/res/xml/data_extraction_rules.xml)이 클라우드 백업과 기기 간 이전 모두에서 앱 저장 영역 전체를 제외하므로, 코드 기준으로 기기 변경 시 자동 이전되지 않습니다. 실기기 이전 동작은 이번에 재검증하지 않았습니다. |
 | 수동 백업 | 서재 루트와 읽기 설정을 ZIP으로 내보냅니다. | 사용자가 고른 문서 저장 위치로 기록하며, OS 문서 제공자가 클라우드일 수 있습니다. 설정에는 서버 주소·모델·인증 참조가 포함될 수 있습니다. | [BackupPlugin](../android/app/src/main/java/dev/earlydreamer/jhfreader/BackupPlugin.java), [BackupArchive](../android/app/src/main/java/dev/earlydreamer/jhfreader/BackupArchive.java). 네이티브 인증 저장소는 해당 서재 루트와 별도입니다. ZIP 암호화나 임의 본문에 비밀이 없음을 보증하지 않습니다. |
 
-Android의 `allowBackup=false`는 [Manifest](../android/app/src/main/AndroidManifest.xml)의 시스템 백업 설정입니다. 수동 ZIP·사용자가 보관한 사본까지 금지하거나 삭제하지는 않습니다. [Capacitor 설정](../capacitor.config.ts)의 로그 비활성화도 모든 플러그인·제공자·OS 로그 부재의 증명이 아닙니다. 이번 검토는 관련 코드와 목적지 검색이며 전체 SDK·패킷·릴리스 바이너리 감사는 아닙니다.
+Android의 `allowBackup=false`는 [Manifest](../android/app/src/main/AndroidManifest.xml)의 시스템 백업 설정입니다. 수동 ZIP·사용자가 보관한 사본까지 금지하거나 삭제하지는 않습니다. [Capacitor 설정](../capacitor.config.ts)의 로그 비활성화도 모든 플러그인·제공자·OS 로그 부재의 증명이 아닙니다. npm 런타임 의존성에는 분석·진단 SDK가 없습니다. [Android 빌드 설정](../android/app/build.gradle)의 `google-services` 플러그인은 Capacitor 템플릿 기본값이며 `google-services.json`이 없어 적용되지 않습니다. LiteRT-LM은 기기 내 임베딩에만 쓰이지만 SDK 자체의 네트워크 동작은 확인하지 않았습니다. 이번 검토는 관련 코드와 목적지 검색이며 전체 SDK·패킷·릴리스 바이너리 감사는 아닙니다.
 
 Gemini의 [기존 전체 회차 요청 코드](../src/providers/gemini/wholeChapter.ts)는 본문과 지시를 Google에 보내는 경로입니다. 현재 UI에서 숨겨진 과거 구현이며, 이번 검토로 기능을 활성화하지 않습니다.
 
@@ -98,11 +100,11 @@ SiwC의 `store:false`를 무로그·무학습·즉시 전체 삭제로 번역하
 
 ### 현재 배포판의 짧은 설명 후보
 
-> JHF Novel Reader는 독서 자료와 설정을 기기에 저장합니다. 개발자는 앱의 원문·번역·읽기 기록·인증정보를 직접 수집하는 서버를 운영하지 않습니다. 원문을 가져오거나 외부 모델로 번역하고 용어를 조회하면, 해당 기능에 필요한 내용이 기기에서 해당 사이트나 선택한 서버로 직접 전송됩니다. 외부 서비스의 보관·이용 조건은 해당 운영자의 정책을 확인해야 합니다.
+> JHF Novel Reader는 독서 자료와 설정을 기기에 저장합니다. 개발자는 앱의 원문·번역·읽기 기록·인증정보를 직접 수집하는 서버를 운영하지 않습니다. 원문을 가져오거나, 선택한 서버로 번역하거나, 용어를 조회하거나, 기기 내 판정 모델을 내려받으면 해당 기능에 필요한 내용이 기기에서 해당 사이트나 서버로 직접 전송됩니다. 백업 파일을 만들면 사용자가 고른 저장 위치에 기록됩니다. 외부 서비스의 보관·이용 조건은 해당 운영자의 정책을 확인해야 합니다.
 
 영문 대응 초안:
 
-> JHF Novel Reader stores reading data and settings on your device. The developer does not operate a server that collects your novel text, translations, reading history, or credentials from the app. Fetching source text, translating with an external model, and looking up terms send the information needed for those features directly from your device to the relevant site or selected server. Check the external operator's policy for its retention and use of that information.
+> JHF Novel Reader stores reading data and settings on your device. The developer does not operate a server that collects your novel text, translations, reading history, or credentials from the app. Fetching source text, translating with a server you select, looking up terms, and downloading the on-device model send the information needed for those features directly from your device to the relevant site or server. Creating a backup writes a file to the storage location you choose. Check the external operator's policy for its retention and use of that information.
 
 “개인정보를 전혀 처리하지 않습니다”, “모든 데이터가 항상 기기에만 있습니다”, “어떤 제3자에게도 전송하지 않습니다”는 현재 네트워크 기능을 설명하는 문구로 사용하지 않습니다.
 
@@ -113,7 +115,7 @@ SiwC의 `store:false`를 무로그·무학습·즉시 전체 삭제로 번역하
 | 적용 범위·책임자 | 앱 이름·지원 플랫폼·배포판·운영자 공개 명칭·연락처·효력일을 명시합니다. GitHub 이슈 공개 제보와 비공개 개인정보 문의 창구를 구별합니다. 현재 미확정 값은 채워야 합니다. |
 | 처리 목적·항목 | 2절의 표를 이용자 언어로 줄이고 로컬 독서, 원문 사이트, 모델 번역, 선택 조회·모델 다운로드를 구분합니다. 개발자가 보유하지 않는 원문을 보유한다고 쓰지 않습니다. |
 | 보관·삭제 | 로컬 자료는 기기의 앱 저장소에 남습니다. 작품 삭제·앱 데이터 삭제·앱 제거가 지우는 항목은 플랫폼별 실제 동작으로 확인해야 합니다. 내보낸 ZIP은 사용자가 별도로 삭제하며 개발자가 회수할 수 없습니다. 외부 서버 보관은 제공자별로 기재합니다. |
-| 인증·안전조치 | 네이티브 보안 저장소와 일반 설정의 차이, 백업 제외 범위를 설명합니다. 현재 허용하는 HTTP 연결까지 모두 전송 암호화된다고 약속하지 않습니다. 기기 전체·ZIP 암호화를 제공한다고 쓰지 않습니다. |
+| 인증·안전조치 | 네이티브 보안 저장소와 일반 설정의 차이, 백업 제외 범위를 설명합니다. 현재 번역 서버에 허용하는 `http://` 연결(2절)까지 모두 전송 암호화된다고 약속하지 않습니다. 기기 전체·ZIP 암호화를 제공한다고 쓰지 않습니다. |
 | 외부 처리·국외 이전 | 실제 수신자·목적·항목·시점·방법·보관·국가와 적용 근거를 확인합니다. 사용자 지정 주소의 운영자·국가를 개발자가 일괄 보증하지 않습니다. 불명확한 제공자를 지원할 때의 제한은 도입 결정에 포함합니다. |
 | 이용자 권리·지원 | 앱이 관리하는 로컬 자료와 제공자가 관리하는 계정·서버 자료의 요청 경로를 나눕니다. 개발자가 보유하지 않는 서버 자료를 대신 삭제했다고 답하지 않습니다. 자발적으로 받은 이메일·첨부·GitHub 제보는 수신 시스템·처리 목적·보관·삭제를 별도로 정합니다. |
 | 연령·지역 | 실제 배포 국가와 연령을 선택하고 아동 대상 여부·제공자 자격·스토어 등급을 각각 확인합니다. 소설 등급, 모델 서비스 이용 최소 연령과 개인정보 동의 연령은 같은 개념이 아닙니다. |
@@ -134,7 +136,7 @@ ChatGPT를 채택할 경우에는 이 안내와 별도로 제공자 로그인, �
 | 흐름 | 검토할 데이터 유형 후보 | 확정할 근거 |
 | --- | --- | --- |
 | 로컬 서재·독서 위치 | 기기 내 콘텐츠·사용 상태 | 자동 업로드·진단·플러그인 전송이 없는지 해당 릴리스에서 확인합니다. 로컬 처리만이면 각 스토어의 로컬 제외 정의와 대조합니다. |
-| 외부 모델 번역 | 사용자 콘텐츠·문서/텍스트, 요청에 포함되는 식별·인증 항목 | 실제 전송 필드와 수신자 보관, 계정 연결 여부, 목적, 필수/선택, 전송 암호화를 확인합니다. 개인 식별과 무관한 텍스트인지도 따집니다. |
+| 외부 모델 번역 | 사용자 콘텐츠·문서/텍스트, 요청에 포함되는 식별·인증 항목 | 실제 전송 필드와 수신자 보관, 계정 연결 여부, 목적, 필수/선택을 확인합니다. 현재는 `http://` 서버 지정을 허용하므로 “전송 중 암호화” 답을 일괄 “예”로 하지 않습니다. HTTPS 강제 또는 평문 경고를 둘지 먼저 정합니다. 개인 식별과 무관한 텍스트인지도 따집니다. |
 | 용어 조회·원문 탐색 | 검색어·탐색 내용·접속 정보 | 제어된 요청과 열린 웹 탐색을 구분합니다. IP로 위치를 추론하는지 등은 실제 제공자 처리에 따라 판단합니다. |
 | ChatGPT 후보 | 계정/사용자 식별자·호스트 식별자·토큰·콘텐츠 | 토큰 값을 수집 공시에 그대로 공개하지 않습니다. SDK·계약·보관·계정 연결과 한도 처리를 확인한 후 유형을 정합니다. |
 | 백업·사용자 공유·제보 | 선택한 파일·지원 첨부 | 사용자가 고른 시스템 문서 제공자와 개발자 수신을 구분하고, 공유 예외와 양식 요구를 검토합니다. |
@@ -163,5 +165,7 @@ ChatGPT를 채택할 경우에는 이 안내와 별도로 제공자 로그인, �
 ## 9. 이번 자료의 검증 범위
 
 변경한 문서 3개의 로컬 링크 41개가 존재하는 경로를 가리키는지 확인하고 `git diff --check`를 통과했습니다. 외부 링크 33개는 조사 과정의 공식 페이지·스토어·연결 방침과 대조했으며, 접근 제한과 전문 미열람은 해당 절에 표시했습니다. 모든 외부 URL에 대한 자동 상태 검사나 각 제공자 운영 실사는 수행하지 않았습니다.
+
+같은 날 교차검토에서 main `39714b4`의 네트워크 보안 설정·백업 규칙·조회 User-Agent·CDN 허용 호스트·빌드 의존성을 다시 대조해 1·2·6·7절에 반영했습니다. 반영 후 이 문서의 상대 경로 링크 23개(중복 포함)가 모두 존재하는 경로를 가리키는지 다시 확인했습니다. 외부 링크와 법령 시행일·스토어 공시는 교차검토에서 다시 열지 않았습니다.
 
 제품 소스 변경이 없어 앱 테스트·APK 빌드·기기 설치를 반복하지 않았습니다. 이번 결과는 코드 기반 데이터 흐름 검토와 문서 조사이며 실제 계정 로그인·모델 호출·외부 문의·정식 방침 게시의 증거가 아닙니다.
