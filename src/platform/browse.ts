@@ -1,18 +1,13 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { ReaderError } from '../contracts';
 import { normalizeSourceInput } from '../source/work';
+import { BROWSE_SITES } from './browseSites';
 
 interface SourceBrowserPlugin {
   open(options: { startUrl: string }): Promise<unknown>;
 }
 const browser = registerPlugin<SourceBrowserPlugin>('SourceBrowser');
-const hosts = new Set([
-  'syosetu.com',
-  'www.syosetu.com',
-  'yomou.syosetu.com',
-  'ncode.syosetu.com',
-  'static.syosetu.com',
-]);
+const hosts = new Set(BROWSE_SITES.flatMap((site) => site.hosts));
 
 export function normalizeBrowseStartUrl(input: string): string {
   try {
@@ -41,7 +36,7 @@ export function normalizeBrowseStartUrl(input: string): string {
 
 /** Trusted UI entry only. The native activity exposes no page-to-app bridge. */
 export async function openSourceBrowser(
-  startUrl = 'https://syosetu.com/',
+  startUrl = BROWSE_SITES[0]!.startUrl,
 ): Promise<{ selectedUrl: string } | null> {
   const url = normalizeBrowseStartUrl(startUrl);
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')

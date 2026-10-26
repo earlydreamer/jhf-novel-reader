@@ -41,6 +41,7 @@ import { createProviderSession } from '../providers/plainText';
 import { listModels } from '../providers/catalog';
 import { createGeminiProviderSession, listGeminiModels } from '../providers/gemini/wholeChapter';
 import { openSourceBrowser } from '../platform/browse';
+import { BROWSE_SITES } from '../platform/browseSites';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import { ReaderError } from '../contracts';
@@ -197,6 +198,6 @@ export function createNativeRenewalApplication(): RenewalController {
     preferences: createNativePreferences(),
     secrets: createNativeSecretStore(),
     lifecycle: capacitorLifecycle,
-    browse: (startUrl = 'https://syosetu.com/') => openSourceBrowser(startUrl),
+    browse: (startUrl = BROWSE_SITES[0]!.startUrl) => openSourceBrowser(startUrl),
   });
 }
