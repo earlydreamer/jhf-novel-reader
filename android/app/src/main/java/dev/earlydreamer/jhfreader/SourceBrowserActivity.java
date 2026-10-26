@@ -223,7 +223,7 @@ public final class SourceBrowserActivity extends AppCompatActivity {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 URI input;
                 try { input = URI.create(request.getUrl().toString()); }
-                catch (IllegalArgumentException invalid) { return blockedResponse(); }
+                catch (IllegalArgumentException invalid) { return blockedResponse(null); }
                 try {
                     SourceBrowserLoader.Resource resource = loader.load(input, request.getMethod(), request.getRequestHeaders());
                     if (request.isForMainFrame() && resource.status >= 200 && resource.status < 300 && !resource.uri.equals(input)) {
@@ -232,7 +232,7 @@ public final class SourceBrowserActivity extends AppCompatActivity {
                         view.post(() -> {
                             if (!isFinishing() && !isDestroyed() && input.toString().equals(view.getUrl())) view.loadUrl(resource.uri.toString());
                         });
-                        return blockedResponse();
+                        return blockedResponse(input);
                     }
                     if (request.isForMainFrame()) {
                         String notice = SourceBrowserPolicy.mainFrameNotice(resource.uri, resource.status);
@@ -244,7 +244,7 @@ public final class SourceBrowserActivity extends AppCompatActivity {
                 } catch (Exception unavailable) {
                     // Never fall through to WebView's unfiltered network loader after failure.
                     if (request.isForMainFrame()) view.post(() -> status.setText("페이지를 불러오지 못했어요. 뒤로 가거나 탐색을 다시 열어 주세요."));
-                    return blockedResponse();
+                    return blockedResponse(input);
                 }
             }
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
@@ -277,8 +277,9 @@ public final class SourceBrowserActivity extends AppCompatActivity {
         });
     }
 
-    private WebResourceResponse blockedResponse() {
-        SourceBrowserLoader.Resource denied = SourceBrowserLoader.denied(URI.create("https://syosetu.com/"));
+    /** The request's own address decides the CSP, so blocked responses follow the same profile rule. */
+    private WebResourceResponse blockedResponse(URI request) {
+        SourceBrowserLoader.Resource denied = SourceBrowserLoader.denied(request);
         return new WebResourceResponse(denied.mimeType, denied.encoding, 403, "Blocked", denied.headers, new ByteArrayInputStream(denied.body));
     }
 
