@@ -22,6 +22,8 @@ final class SourceSites {
     private static final Pattern DEFAULT_VALUE = Pattern.compile("[\\x20-\\x7e]{1,128}");
     private static final Set<String> CREDENTIAL_HEADERS = new HashSet<>(Arrays.asList("cookie", "authorization"));
     private static final Pattern NAROU_WORK = Pattern.compile("^/(n[0-9]{4}[a-z]{1,2})(?:/([1-9][0-9]*))?/?$", Pattern.CASE_INSENSITIVE);
+    // Kakuyomu IDs exceed long precision, so they stay digit strings.
+    private static final Pattern KAKUYOMU_WORK = Pattern.compile("^/works/([1-9][0-9]{0,29})(?:/episodes/([1-9][0-9]{0,29}))?/?$");
     private static final long MAX_SAFE_INTEGER = 9007199254740991L;
 
     static final class Site {
@@ -71,13 +73,29 @@ final class SourceSites {
             hosts("syosetu.com", "www.syosetu.com", "yomou.syosetu.com", "ncode.syosetu.com", "static.syosetu.com"),
             Collections.emptyMap(),
             true,
-            SourceSites::narouSelection)
+            SourceSites::narouSelection),
+        new Site(
+            "kakuyomu",
+            "https://kakuyomu.jp/",
+            hosts("kakuyomu.jp", "cdn-static.kakuyomu.jp"),
+            kakuyomuHeaders(),
+            true,
+            SourceSites::kakuyomuSelection)
     ));
 
     private SourceSites() {}
 
     private static Set<String> hosts(String... values) {
         return new HashSet<>(Arrays.asList(values));
+    }
+
+    /** Page GraphQL GETs are refused (HTTP 400) without Apollo's CSRF-preflight headers. */
+    private static Map<String, Pattern> kakuyomuHeaders() {
+        Map<String, Pattern> rules = new LinkedHashMap<>();
+        rules.put("Content-Type", Pattern.compile("application/json(?:;\\s*charset=[A-Za-z0-9-]+)?", Pattern.CASE_INSENSITIVE));
+        rules.put("apollo-require-preflight", DEFAULT_VALUE);
+        rules.put("x-apollo-operation-name", DEFAULT_VALUE);
+        return rules;
     }
 
     static Pattern defaultValue() {
@@ -119,6 +137,14 @@ final class SourceSites {
         return "https://ncode.syosetu.com/" + path.group(1).toLowerCase(Locale.ROOT) + "/"
             + (chapter == null ? "" : chapter + "/")
             + (query == null ? "" : "?" + query);
+    }
+
+    private static String kakuyomuSelection(URI uri) {
+        if (!"kakuyomu.jp".equals(uri.getHost()) || uri.getRawQuery() != null) return null;
+        Matcher path = KAKUYOMU_WORK.matcher(uri.getRawPath());
+        if (!path.matches()) return null;
+        String episode = path.group(2);
+        return "https://kakuyomu.jp/works/" + path.group(1) + (episode == null ? "" : "/episodes/" + episode);
     }
 
     private static boolean positiveSafeInteger(String input) {

@@ -118,4 +118,16 @@ public class SourceBrowserPolicyTest {
         loader.load(URI.create("https://syosetu.com/"), "GET", page);
         assertEquals(Collections.emptyMap(), sent.get());
     }
+
+    @Test public void redirectIntoAnotherSiteProfileDropsPageHeaders() throws Exception {
+        java.util.List<Map<String, String>> sent = new java.util.ArrayList<>();
+        SourceBrowserLoader loader = new SourceBrowserLoader((uri, headers) -> {
+            sent.add(headers);
+            if (uri.getHost().equals("kakuyomu.jp")) return new SourceBrowserLoader.Resource(uri, 302, "text/html", "UTF-8", Collections.singletonMap("Location", "https://syosetu.com/"), new byte[0]);
+            return new SourceBrowserLoader.Resource(uri, 200, "text/html", "UTF-8", Collections.emptyMap(), new byte[0]);
+        });
+        loader.load(URI.create("https://kakuyomu.jp/graphql?operationName=A"), "GET", Collections.singletonMap("apollo-require-preflight", "true"));
+        assertEquals(Collections.singletonMap("apollo-require-preflight", "true"), sent.get(0));
+        assertEquals(Collections.emptyMap(), sent.get(1));
+    }
 }

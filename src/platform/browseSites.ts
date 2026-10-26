@@ -19,4 +19,10 @@ export const BROWSE_SITES: readonly BrowseSite[] = [
       'static.syosetu.com',
     ],
   },
+  {
+    id: 'kakuyomu',
+    label: '카쿠요무',
+    startUrl: 'https://kakuyomu.jp/',
+    hosts: ['kakuyomu.jp', 'cdn-static.kakuyomu.jp'],
+  },
 ];

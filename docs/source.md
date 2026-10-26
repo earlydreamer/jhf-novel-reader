@@ -18,6 +18,8 @@ HTTPS `kakuyomu.jp/works/<ID>` 작품 주소와 `/works/<ID>/episodes/<ID>` 회�
 
 본문은 `.widget-episodeBody`의 문단, 제목은 `.widget-episodeTitle`, 이전·다음 회차는 `#contentMain-readPreviousEpisode`·`#contentMain-readNextEpisode`에서 읽습니다. 빈 줄 문단 `<p class="blank"><br></p>`와 `<rb>` 루비는 나로우와 같은 계약으로 보존합니다.
 
+원문 브라우저 프로필(`SourceSites`)의 허용 호스트는 `kakuyomu.jp`와 `cdn-static.kakuyomu.jp`입니다. 카쿠요무 페이지 스크립트는 검색 조건·정렬 화면에서 GraphQL을 GET으로 부릅니다. 이 요청은 Apollo의 CSRF 방지 헤더가 없으면 400을 받습니다(2026-10-24 확인). 그래서 요청 헤더 허용 목록에 `Content-Type`(`application/json`만), `apollo-require-preflight`, `x-apollo-operation-name`을 둡니다.
+
 ### 목차 연결
 
 범위·전체 회차 번역은 목차 페이지를 연결해 대상을 확인합니다. 순환·중복·누락·다른 작품 링크는 거부합니다. 초기 구현의 “목차 첫 페이지만 조회하며 페이지 이동은 없음”이라는 제한은 현재 일괄 번역에 적용되지 않습니다. [일괄 번역](renewal/batch-translation.md)을 확인합니다.
