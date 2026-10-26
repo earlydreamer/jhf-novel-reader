@@ -297,7 +297,10 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         else element.scrollTop = 0;
         pendingOriginalIndex.current = null;
       } else {
-        element.scrollTop = translatedScrollPosition(element, translationAnchor.current);
+        restoreScrollPosition(
+          element,
+          translatedScrollPosition(element, translationAnchor.current),
+        );
       }
       pendingSwitch.current = null;
       previousScrollTop.current = element.scrollTop;
@@ -329,7 +332,10 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     if (index >= 0) {
       translationAnchor.current = { index, offset: props.position.offset };
       if (!props.showOriginal && body.current) {
-        body.current.scrollTop = translatedScrollPosition(body.current, translationAnchor.current);
+        restoreScrollPosition(
+          body.current,
+          translatedScrollPosition(body.current, translationAnchor.current),
+        );
         previousScrollTop.current = body.current.scrollTop;
       }
     }
@@ -751,6 +757,29 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       ),
   ];
   const hasNotices = notices.some(Boolean);
+  // 복원 뒤 제목이나 안내가 늦게 도착해도 현재 문단 안 위치를 유지한다.
+  // 사용자가 스크롤했다면 처음 저장 위치 대신 새로 읽는 위치를 따른다.
+  useLayoutEffect(() => {
+    if (!version || props.showOriginal || livePreview !== undefined || !translationAnchor.current)
+      return;
+    const element = body.current;
+    if (!element) return;
+    const target = translatedScrollPosition(element, translationAnchor.current);
+    if (element.scrollTop !== target) restoreScrollPosition(element, target);
+    previousScrollTop.current = element.scrollTop;
+  }, [
+    version,
+    props.showOriginal,
+    livePreview,
+    title,
+    hasNotices,
+    props.sourceChange,
+    props.busy,
+    props.catalogStatus,
+    props.route,
+    props.fontSize,
+    props.lineHeight,
+  ]);
   const actionKey = `${chapter.chapterId}:${actionNotices
     .flatMap((notice) => (notice ? [notice.key] : []))
     .join('|')}`;
@@ -1406,4 +1435,12 @@ function translatedScrollPosition(body: HTMLElement, anchor: ParagraphAnchor | n
   if (!anchor) return 0;
   const row = body.querySelector<HTMLElement>(`[data-reader-index="${anchor.index}"]`);
   return row ? row.offsetTop + anchor.offset : anchor.offset;
+}
+
+/** 복원 중간 좌표가 저장되거나 늦은 레이아웃 변경에 밀리지 않도록 즉시 이동한다. */
+function restoreScrollPosition(element: HTMLElement, top: number): void {
+  const behavior = element.style.scrollBehavior;
+  element.style.scrollBehavior = 'auto';
+  element.scrollTop = top;
+  element.style.scrollBehavior = behavior;
 }

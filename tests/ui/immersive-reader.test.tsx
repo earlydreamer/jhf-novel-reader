@@ -1040,6 +1040,90 @@ test('회차 이동 버튼은 화살표 대신 이전 화·다음 화 글자를 
   expect(buttons[buttons.length - 1]!.textContent).toBe('다음 화');
 });
 
+test('저장 위치 복원 뒤 제목과 원문 확인 안내가 늦게 도착해도 같은 문단 위치를 유지한다', () => {
+  const rowTop = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.hasAttribute('data-reader-index')
+      ? 100 +
+          Number(this.dataset.readerIndex) * 100 +
+          (document.querySelector('.nr-reader-original-title') ? 20 : 0) +
+          (document.querySelector('.nr-reader-notices') ? 48 : 0)
+      : 0;
+  });
+  const position = {
+    workId: chapter.workId,
+    chapterId: chapter.chapterId,
+    versionId: 'saved-v1',
+    blockId: 'b2',
+    offset: 15,
+  };
+  const value = completed();
+  const titles = {
+    entries: [
+      {
+        key: chapter.chapterId,
+        source: source.title,
+        target: '늦게 읽은 번역 제목',
+        origin: 'model' as const,
+        updatedAt: '2026-10-26T00:00:00Z',
+      },
+    ],
+    busy: false,
+  };
+  try {
+    const view = render(<ImmersiveReader {...props({ version: value, position })} />);
+    const article = screen.getByRole('article', { name: '번역 본문' });
+    expect(article.scrollTop).toBe(215);
+    view.rerender(<ImmersiveReader {...props({ version: value, position, titles })} />);
+    expect(article.scrollTop).toBe(235);
+    view.rerender(
+      <ImmersiveReader
+        {...props({ version: value, position, titles, sourceChange: 'checking' })}
+      />,
+    );
+    expect(article.scrollTop).toBe(283);
+    // 사용자가 옮긴 뒤에는 처음 저장 위치가 아니라 새 문단 안 위치를 보존한다.
+    article.scrollTop = 310;
+    fireEvent.scroll(article);
+    view.rerender(<ImmersiveReader {...props({ version: value, position, titles })} />);
+    expect(article.scrollTop).toBe(262);
+  } finally {
+    rowTop.mockRestore();
+  }
+});
+
+test('저장 위치 복원은 smooth scroll을 사용하지 않고 기존 스크롤 스타일을 보존한다', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop')!;
+  const behaviorAtAssignment: string[] = [];
+  const setScroll = vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation(function (
+    this: HTMLElement,
+    value: number,
+  ) {
+    behaviorAtAssignment.push(this.style.scrollBehavior);
+    descriptor.set!.call(this, value);
+  });
+  try {
+    render(
+      <ImmersiveReader
+        {...props({
+          position: {
+            workId: chapter.workId,
+            chapterId: chapter.chapterId,
+            versionId: 'saved-v1',
+            blockId: 'b2',
+            offset: 15,
+          },
+        })}
+      />,
+    );
+    expect(behaviorAtAssignment).toContain('auto');
+    expect(screen.getByRole('article', { name: '번역 본문' }).style.scrollBehavior).toBe('');
+  } finally {
+    setScroll.mockRestore();
+  }
+});
+
 test('상단바 제목은 본문 머리와 같은 번역 제목을 쓰고 원문 보기면 원문 제목을 쓴다(#159)', () => {
   const titles = {
     entries: [
