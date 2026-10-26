@@ -108,4 +108,11 @@ public class SourceBrowserPolicyTest {
         loader.load(URI.create("https://syosetu.com/"), "GET", page);
         assertEquals(Collections.emptyMap(), sent.get());
     }
+
+    @Test public void deniedResponsesAreNeverSniffedAsActiveContent() {
+        assertEquals("nosniff", SourceBrowserLoader.denied(URI.create("https://syosetu.com/")).headers.get("X-Content-Type-Options"));
+    }
+    @Test public void deniedResponseWithoutAnAddressIsScriptless() {
+        assertTrue(SourceBrowserLoader.denied(null).headers.get("Content-Security-Policy").endsWith("; script-src 'none'"));
+    }
 }
