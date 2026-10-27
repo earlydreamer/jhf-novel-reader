@@ -269,6 +269,8 @@ const EMBEDDING_VERIFY_MESSAGE = '내려받은 판정 모델이 올바르지 않
 const EMBEDDING_NETWORK_MESSAGE =
   '판정 모델을 내려받지 못했어요. 연결을 확인하고 다시 시도해 주세요.';
 const EMBEDDING_REMOVE_MESSAGE = '판정 모델을 지우지 못했어요. 다시 시도해 주세요.';
+export const SOURCE_UNSUPPORTED_MESSAGE =
+  '로그인이 필요하거나 성인·일본어 외 작품이라 열 수 없어요.';
 /** 사용자가 중단했거나 끈 경우는 오류가 아니므로 undefined를 돌려준다. */
 function embeddingFailure(error: unknown): string | undefined {
   if (error instanceof EmbeddingError) {
@@ -1828,11 +1830,14 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       });
       await loadTitles(work.workId);
       requestTitleTranslation();
-    } catch {
+    } catch (error) {
       if (operation === sourceOperation)
         publish({
           busy: false,
-          error: '작품 제목과 목차를 불러오지 못했어요. 원문 주소를 확인하고 다시 시도해 주세요.',
+          error:
+            error instanceof ReaderError && error.code === 'source_unsupported'
+              ? SOURCE_UNSUPPORTED_MESSAGE
+              : '작품 제목과 목차를 불러오지 못했어요. 원문 주소를 확인하고 다시 시도해 주세요.',
         });
     }
   }

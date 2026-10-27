@@ -352,6 +352,44 @@ test('잘못된 페이지 순환/작품 변경은 저장하지 않는다', async
   h.checks.dispose();
 });
 
+test('pixiv 단독 작품이 시리즈로 바뀌면 갱신하지 않고 기존 목차를 보존한다', async () => {
+  const show = 'https://www.pixiv.net/novel/show.php?id=7';
+  const single: WorkPage = {
+    workId: 'pixiv-n7',
+    canonicalUrl: show,
+    pageUrl: show,
+    title: '단독',
+    complete: true,
+    nextPageUrl: null,
+    chapters: [
+      {
+        workId: 'pixiv-n7',
+        chapterId: 'pixiv-n7/7',
+        ordinal: 1,
+        canonicalUrl: show,
+        title: '단독',
+      },
+    ],
+  };
+  const series = 'https://www.pixiv.net/novel/series/1';
+  const h = harness([single]);
+  await h.checks.initialize();
+  h.checks.setForeground(true);
+  h.getWorkPage.mockResolvedValueOnce({
+    ...single,
+    workId: 'pixiv-s1',
+    canonicalUrl: series,
+    pageUrl: series,
+    chapters: [{ ...single.chapters[0]!, workId: 'pixiv-s1', chapterId: 'pixiv-s1/7' }],
+  });
+  await h.checks.checkAll();
+  expect(h.getWorkPage).toHaveBeenCalledWith(show, expect.anything());
+  expect(h.updated).not.toHaveBeenCalled();
+  expect(h.state().works['pixiv-n7']?.error).toBeTruthy();
+  expect(h.pages.get('pixiv-n7')).toEqual([single]);
+  h.checks.dispose();
+});
+
 test('N일 설정은 마지막 검사일에서 달력 날짜를 더하고 설정 변경도 즉시 반영한다', async () => {
   const h = harness();
   await h.checks.initialize();

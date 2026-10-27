@@ -29,7 +29,11 @@ export interface ApplicationAdapters {
 }
 
 import { createRenewalController, type RenewalController } from './renewalController';
-import { createRenewalSource, normalizeSourceInput } from '../source/sites';
+import {
+  SOURCE_HOST_MIN_INTERVAL_MS,
+  createRenewalSource,
+  normalizeSourceInput,
+} from '../source/sites';
 import { createLibraryStore } from '../storage/library';
 import { createV1Migration } from '../storage/migration';
 import { createReadingSettingsRepository } from '../storage/settings';
@@ -192,7 +196,10 @@ export function createNativeRenewalApplication(): RenewalController {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android')
     return createRenewalController();
   return createRenewalApplication({
-    sourceTransport: createSourceTransport(capacitorHttpClient, { minIntervalMs: 1000 }),
+    sourceTransport: createSourceTransport(capacitorHttpClient, {
+      minIntervalMs: 1000,
+      hostMinIntervalMs: SOURCE_HOST_MIN_INTERVAL_MS,
+    }),
     modelTransport: createModelTransport(capacitorHttpClient, createNativeStreamingClient()),
     files: createNativePrivateFiles(),
     preferences: createNativePreferences(),

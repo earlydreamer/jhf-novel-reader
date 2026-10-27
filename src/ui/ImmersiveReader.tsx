@@ -108,6 +108,7 @@ const translationFailureMessages: Partial<Record<ErrorCode, string>> = {
   connection: '서버에 연결하지 못했어요. 주소와 서버 상태를 확인해 주세요.',
   source_access: '선택한 회차에 접근하지 못했어요. 원문 주소와 접근 상태를 다시 확인해 주세요.',
   source_parse: '선택한 회차의 본문을 읽지 못했어요. 원문 페이지가 바뀌었는지 확인해 주세요.',
+  source_unsupported: '로그인이 필요하거나 성인·일본어 외 회차라 번역할 수 없어요.',
   input_limit:
     '선택한 모델의 입력 한도를 넘었어요. 용어집·말투 항목을 줄이거나 다른 모델을 선택해 주세요.',
   output_limit: '응답이 출력 길이 제한에 도달해 완성본으로 저장하지 않았어요.',

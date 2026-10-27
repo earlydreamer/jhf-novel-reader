@@ -9,6 +9,17 @@ import {
   readPixivNovel,
   readPixivSeries,
 } from '../../src/source/pixiv';
+import {
+  SOURCE_HOST_MIN_INTERVAL_MS,
+  createRenewalSource,
+  isSourceWorkPageUrl,
+  normalizeSourceInput,
+  sourceWorkId,
+  sourceWorkUrl,
+} from '../../src/source/sites';
+import { createLibraryStore } from '../../src/storage/library';
+import { chapterIdentity, workPage } from '../../src/storage/readingValidation';
+import type { CompletedTranslation, SourceTransport } from '../../src/contracts';
 import type { ChapterRef } from '../../src/contracts/reading';
 
 const show = (id: string) => `https://www.pixiv.net/novel/show.php?id=${id}`;
@@ -215,5 +226,184 @@ describe('pixiv 규칙', () => {
     expect(isPixivChapterId('pixiv-n5/6')).toBe(false);
     expect(isPixivChapterId('pixiv-s01/5')).toBe(false);
     expect(isPixivChapterId('kakuyomu-1/2')).toBe(false);
+  });
+});
+
+const signal = new AbortController().signal;
+const api = (path: string) => `https://www.pixiv.net/ajax/novel/${path}`;
+function jsonTransport(responses: Record<string, unknown>, contentType = 'application/json') {
+  const requests: string[] = [];
+  const transport: SourceTransport = {
+    async get(url) {
+      requests.push(url);
+      if (!(url in responses))
+        return { status: 404, url, headers: {} as Record<string, string>, data: '' };
+      return {
+        status: 200,
+        url,
+        headers: { 'Content-Type': `${contentType}; charset=utf-8` },
+        data: responses[url],
+      };
+    },
+  };
+  return { transport, requests };
+}
+const seriesResponses = {
+  [api('5')]: novelJson(),
+  [api('series/1')]: seriesJson(),
+  [api('series/1/content_titles')]: titlesJson(),
+};
+
+describe('원문 경로', () => {
+  it('시리즈 회차 주소는 시리즈를 열고 그 회차를 고른다', async () => {
+    const { transport, requests } = jsonTransport(seriesResponses);
+    const input = normalizeSourceInput('https://www.pixiv.net/novel/show.php?id=5');
+    expect(input).toEqual({ workUrl: show('5'), chapterUrl: show('5') });
+    const page = await createRenewalSource(transport).getWorkPage(input.chapterUrl!, signal);
+    expect(requests).toEqual([api('5'), api('series/1'), api('series/1/content_titles')]);
+    expect(page.workId).toBe('pixiv-s1');
+    expect(page.chapters.find((chapter) => chapter.canonicalUrl === show('5'))?.chapterId).toBe(
+      'pixiv-s1/5',
+    );
+  });
+
+  it('시리즈 주소는 시리즈 정보와 목차만 요청한다', async () => {
+    const { transport, requests } = jsonTransport(seriesResponses);
+    const page = await createRenewalSource(transport).getWorkPage(seriesUrl('1'), signal);
+    expect(requests).toEqual([api('series/1'), api('series/1/content_titles')]);
+    expect(page.chapters.map((chapter) => chapter.ordinal)).toEqual([1, 2, 3]);
+  });
+
+  it('단독 작품은 요청 한 번으로 한 화짜리 작품이 된다', async () => {
+    const { transport, requests } = jsonTransport({
+      [api('7')]: novelJson({ id: '7', seriesNavData: null }),
+    });
+    const page = await createRenewalSource(transport).getWorkPage(show('7'), signal);
+    expect(requests).toEqual([api('7')]);
+    expect(page.workId).toBe('pixiv-n7');
+    expect(page.chapters).toHaveLength(1);
+  });
+
+  it('위조된 회차 참조는 요청하지 않고 맞는 참조만 본문을 받는다', async () => {
+    const { transport, requests } = jsonTransport(seriesResponses);
+    const source = createRenewalSource(transport);
+    const first = (await source.getWorkPage(seriesUrl('1'), signal)).chapters[0]!;
+    requests.length = 0;
+    for (const forged of [
+      { ...first, workId: 'pixiv-s2' },
+      { ...first, chapterId: 'pixiv-s2/5' },
+      { ...first, chapterId: 'pixiv-s1/6' },
+      { ...first, ordinal: 0 },
+      { ...first, canonicalUrl: seriesUrl('1') },
+    ])
+      await expect(source.getChapter(forged, signal)).rejects.toMatchObject({
+        code: 'source_access',
+      });
+    expect(requests).toEqual([]);
+    const snapshot = await source.getChapter(first, signal);
+    expect(requests).toEqual([api('5')]);
+    expect(snapshot).toMatchObject({ chapterId: 'pixiv-s1/5', captureKind: 'fetched' });
+    expect(JSON.parse(snapshot.rawHtml!)).toEqual(novelJson());
+  });
+
+  it('HTML이나 다른 형식의 응답은 거부한다', async () => {
+    const { transport } = jsonTransport(seriesResponses, 'text/html');
+    await expect(
+      createRenewalSource(transport).getWorkPage(show('5'), signal),
+    ).rejects.toMatchObject({ code: 'source_access' });
+  });
+
+  it('없는 작품은 접근 오류로 끝난다', async () => {
+    const { transport } = jsonTransport({});
+    await expect(
+      createRenewalSource(transport).getWorkPage(show('9'), signal),
+    ).rejects.toMatchObject({ code: 'source_access', status: 404 });
+  });
+
+  it('pixiv 원문 요청 간격은 2초다', () => {
+    expect(SOURCE_HOST_MIN_INTERVAL_MS['www.pixiv.net']).toBe(2000);
+  });
+
+  it('pixiv.net 주소도 같은 작품으로 연다', () => {
+    expect(normalizeSourceInput('https://pixiv.net/novel/series/1')).toEqual({
+      workUrl: seriesUrl('1'),
+    });
+  });
+});
+
+describe('pixiv 저장 호환', () => {
+  it('회차 ID와 목차가 저장 검증을 통과하고 다른 사이트 형식과 섞이지 않는다', async () => {
+    expect(() => chapterIdentity('pixiv-s1/5')).not.toThrow();
+    expect(() => chapterIdentity('pixiv-n7/7')).not.toThrow();
+    for (const value of ['pixiv-n7/8', 'pixiv-s1', 'pixiv-x1/5'])
+      expect(() => chapterIdentity(value)).toThrow();
+    const page = pixivSeriesPage(readPixivSeries(seriesJson(), titlesJson()));
+    await expect(workPage(structuredClone(page))).resolves.toEqual(page);
+    const single = pixivSinglePage(readPixivNovel(novelJson({ id: '7', seriesNavData: null })));
+    await expect(workPage(structuredClone(single))).resolves.toEqual(single);
+    // 쿼리는 사이트가 정규화한 주소와 정확히 같을 때만 허용한다.
+    for (const canonicalUrl of [
+      `${show('5')}&x=1`,
+      'https://kakuyomu.jp/works/1?x=1',
+      'https://pixiv.net/novel/show.php?id=5',
+    ])
+      await expect(
+        workPage({ ...page, chapters: [{ ...page.chapters[0]!, canonicalUrl }] }),
+      ).rejects.toThrow();
+    expect(isSourceWorkPageUrl(seriesUrl('1'), 'pixiv-s1')).toBe(true);
+    expect(isSourceWorkPageUrl(show('1'), 'pixiv-s1')).toBe(false);
+    expect(sourceWorkId(show('5'))).toBeNull();
+    expect(sourceWorkId(seriesUrl('1'))).toBe('pixiv-s1');
+    expect(sourceWorkUrl('pixiv-n7')).toBe(show('7'));
+    expect(sourceWorkUrl('pixiv-s1')).toBe(seriesUrl('1'));
+  });
+
+  it('완성 번역·읽기 위치·목차가 재시작 뒤에도 같은 ID로 유지된다', async () => {
+    const memory = new Map<string, string>();
+    const files = {
+      read: async (path: string) => memory.get(path) ?? null,
+      write: async (path: string, text: string) => {
+        memory.set(path, text);
+      },
+    };
+    const page = pixivSeriesPage(readPixivSeries(seriesJson(), titlesJson()));
+    const chapter = await pixivChapter(readPixivNovel(novelJson()), page.chapters[0]!);
+    const version: CompletedTranslation = {
+      schemaVersion: 2,
+      versionId: 'version-1',
+      source: {
+        ...chapter,
+        captureKind: 'fetched',
+        rawHtml: JSON.stringify(novelJson()),
+        fetchedAt: '2026-10-27T00:00:00Z',
+      },
+      text: '번역',
+      blocks: [{ id: 'block-1', text: '번역' }],
+      createdAt: '2026-10-27T00:00:00Z',
+      provenance: {
+        provider: 'openai-compatible',
+        connectionId: 'local',
+        modelId: 'synthetic',
+        contractVersion: 'plain-v1',
+        promptVersion: 'hymt2-ko-v1',
+        languageDirection: 'ja-ko',
+      },
+    };
+    const store = createLibraryStore(files);
+    await store.saveWorkPage(page);
+    await store.commitVersion(version);
+    await store.savePosition({
+      workId: chapter.workId,
+      chapterId: chapter.chapterId,
+      versionId: version.versionId,
+      blockId: 'block-1',
+      offset: 1,
+    });
+    const restarted = createLibraryStore(files);
+    expect(await restarted.listVersions(chapter.chapterId)).toEqual([version]);
+    expect((await restarted.readPosition(version.versionId))?.chapterId).toBe(chapter.chapterId);
+    expect((await restarted.readWork(chapter.workId))[0]?.chapters.map((c) => c.ordinal)).toEqual([
+      1, 2, 3,
+    ]);
   });
 });
