@@ -200,7 +200,16 @@ export async function chapterFromBody(
     if (remainder.textContent?.trim()) throw parseError();
   }
   const values = (elements.length ? elements : [container]).map(readParagraph);
-  if (!values.some((p) => p.text.trim())) throw parseError();
+  return chapterFromParagraphs(values, title, identity, neighbors);
+}
+/** 사이트가 읽은 문단에 ID와 원문 해시를 붙인다. HTML이 아닌 원문도 같은 계약을 쓴다. */
+export async function chapterFromParagraphs(
+  values: readonly Omit<Paragraph, 'id'>[],
+  title: string,
+  identity: { canonicalUrl: string; workId: string; chapterId: string },
+  neighbors: { prevUrl: string | null; nextUrl: string | null },
+): Promise<Chapter> {
+  if (!title || !values.some((p) => p.text.trim())) throw parseError();
   const { canonicalUrl, workId, chapterId } = identity;
   const paragraphs = await Promise.all(
     values.map(async (p, index) => ({ ...p, id: await createParagraphId(chapterId, index, p) })),
