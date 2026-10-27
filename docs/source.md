@@ -1,6 +1,6 @@
 # 원문 조회와 파싱
 
-현재 원문 경로의 진입점은 `src/source/sites.ts`의 `createRenewalSource`, `normalizeSourceInput`, `normalizeWorkPageUrl`입니다. 이 모듈의 `SourceSite` 경계가 사이트별 URL 정규화, 작품·회차 식별, 목차·본문 추출, 저장 기록의 회차 ID·목차 주소 검증을 나눕니다. 나로우 구현은 `src/source/work.ts`와 `src/source/parse.ts`, 카쿠요무 구현은 `src/source/kakuyomu.ts`에 있습니다. 초기 이슈 #2의 `src/source/index.ts`·`NarouSourceAdapter`는 현재 진입점이 아닙니다.
+현재 원문 경로의 진입점은 `src/source/sites.ts`의 `createRenewalSource`, `normalizeSourceInput`, `normalizeWorkPageUrl`입니다. 이 모듈의 `SourceSite` 경계가 사이트별 URL 정규화, 작품·회차 식별, 목차·본문 추출, 저장 기록의 회차 ID·목차 주소 검증을 나눕니다. 나로우 구현은 `src/source/work.ts`와 `src/source/parse.ts`, 카쿠요무 구현은 `src/source/kakuyomu.ts`, pixiv 구현은 `src/source/pixiv.ts`와 `src/source/pixivText.ts`에 있습니다. 초기 이슈 #2의 `src/source/index.ts`·`NarouSourceAdapter`는 현재 진입점이 아닙니다.
 
 ## 지원 주소와 목차
 
@@ -19,6 +19,54 @@ HTTPS `kakuyomu.jp/works/<ID>` 작품 주소와 `/works/<ID>/episodes/<ID>` 회�
 본문은 `.widget-episodeBody`의 문단, 제목은 `.widget-episodeTitle`, 이전·다음 회차는 `#contentMain-readPreviousEpisode`·`#contentMain-readNextEpisode`에서 읽습니다. 빈 줄 문단 `<p class="blank"><br></p>`와 `<rb>` 루비는 나로우와 같은 계약으로 보존합니다.
 
 원문 브라우저 프로필(`SourceSites`)의 허용 호스트는 `kakuyomu.jp`와 `cdn-static.kakuyomu.jp`입니다. 카쿠요무 페이지 스크립트는 검색 조건·정렬 화면에서 GraphQL을 GET으로 부릅니다. 이 요청은 Apollo의 CSRF 방지 헤더가 없으면 400을 받습니다(2026-10-24 확인). 그래서 요청 헤더 허용 목록에 `Content-Type`(`application/json`만), `apollo-require-preflight`, `x-apollo-operation-name`을 둡니다.
+
+### pixiv
+
+로그인 없이 읽히는 일본어 작품만 지원합니다(#390). 주소는 두 가지입니다.
+
+- 시리즈: HTTPS `www.pixiv.net/novel/series/<ID>`
+- 회차·단독 작품: `www.pixiv.net/novel/show.php?id=<ID>`
+
+`pixiv.net`도 같은 주소로 정규화합니다. 끝 슬래시와 fragment는 제거합니다. `id` 외의 쿼리, 0으로 시작하는 ID, 인증 정보, 포트, 점 경로, 이스케이프 경로는 거부합니다. 정규 주소에 쿼리가 들어가는 사이트라서, 저장 검증은 사이트가 정규 주소로 인정한 쿼리 주소만 받습니다(`isQueryCanonicalUrl`).
+
+식별자는 다음과 같습니다. 시리즈 번호와 소설 번호가 겹칠 수 있어서 작품 ID에 `s`·`n`을 붙여 나눕니다.
+
+- 시리즈 작품 ID: `pixiv-s<시리즈 ID>`
+- 단독 작품 ID: `pixiv-n<소설 ID>`
+- 회차 ID: `<작품 ID>/<소설 ID>`
+
+`show.php` 주소만 보고는 단독 작품인지 시리즈 회차인지 알 수 없습니다. 그래서 작품을 열 때 본문 API를 먼저 조회하고, 시리즈에 속하면 시리즈를 열어 그 회차를 선택합니다. 조회 전에는 `sourceWorkId`가 `null`을 돌려줍니다.
+
+작품 페이지는 본문이 없는 SPA라서 다음 JSON API를 읽습니다.
+
+- 본문: `/ajax/novel/<ID>`
+- 시리즈 정보: `/ajax/novel/series/<ID>`
+- 시리즈 목차: `/ajax/novel/series/<ID>/content_titles`
+
+응답은 상태 200, 최종 URL 일치, `application/json`이어야 합니다. 원문 보관 필드 `rawHtml`에는 받은 JSON을 담습니다.
+
+목차 개수가 `publishedContentCount`와 다르거나 ID가 중복되면 완전한 목차로 저장하지 않습니다. `available: false` 회차는 목차에서 빼고, 공개 회차에 1부터 빈칸 없는 순번을 매깁니다.
+
+다음은 `source_unsupported`로 거부하고 전용 안내를 보여 줍니다.
+
+- `isLoginOnly` 작품
+- `xRestrict`·`maxXRestrict`가 0이 아닌 작품
+- `language`가 `ja`가 아닌 작품
+
+없는 작품은 404 JSON(`error: true`)이 와서 `source_access`로 처리합니다. 회차의 시리즈가 저장된 참조와 다르면 `source_parse`로 거부합니다. 회차가 다른 시리즈로 옮겨졌거나 단독 작품이 시리즈에 들어간 경우가 여기에 해당합니다.
+
+본문 마크업은 줄마다 문단 하나로 바꾸고, 빈 줄은 빈 문단으로 남깁니다.
+
+- `[[rb:본문 > 읽기]]`는 루비가 됩니다.
+- `[newpage]`는 빈 문단이 됩니다.
+- `[chapter:제목]`은 제목 문단이 됩니다.
+- `[jumpuri:제목 > URL]`은 제목만 남깁니다.
+- `[jump:N]`과 삽화 태그는 제거합니다.
+- 깨지거나 모르는 태그는 글자 그대로 둡니다.
+
+pixiv 원문 요청 사이에는 최소 2초 간격을 둡니다(`SOURCE_HOST_MIN_INTERVAL_MS`). 원문 전송은 요청을 한 줄로 세워 보내고, 공통 1초와 호스트별 간격 중 긴 쪽을 직전 요청 시각부터 잽니다. 한 화 번역, 일괄 번역, 용어 후보 스캔, 새 회차 확인에 모두 적용됩니다. pixiv 브랜드 가이드라인이 크롤러 같은 프로그램으로 작품을 수집하는 행위와 서버에 극단적인 부하를 주는 행위를 금지하기 때문입니다.
+
+원문 브라우저 프로필의 허용 호스트는 `www.pixiv.net`, `s.pximg.net`, `i.pximg.net`, `embed.pixiv.net`입니다. 요청 헤더 허용 목록은 비어 있습니다. 가이드라인에 따라 설정의 오픈소스 라이선스 화면에 "pixiv가 만들거나 배포한 앱이 아님"을 표기합니다.
 
 ### 목차 연결
 
