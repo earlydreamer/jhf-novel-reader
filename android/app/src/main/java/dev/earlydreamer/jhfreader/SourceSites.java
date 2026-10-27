@@ -26,6 +26,9 @@ final class SourceSites {
     private static final Pattern NAROU_WORK = Pattern.compile("^/(n[0-9]{4}[a-z]{1,2})(?:/([1-9][0-9]*))?/?$", Pattern.CASE_INSENSITIVE);
     // Kakuyomu IDs exceed long precision, so they stay digit strings.
     private static final Pattern KAKUYOMU_WORK = Pattern.compile("^/works/([1-9][0-9]{0,29})(?:/episodes/([1-9][0-9]{0,29}))?/?$");
+    // pixiv IDs stay digit strings like the app's pixiv-s<ID>/pixiv-n<ID> work IDs.
+    private static final Pattern PIXIV_SERIES = Pattern.compile("^/novel/series/([1-9][0-9]{0,19})/?$");
+    private static final Pattern PIXIV_SHOW_QUERY = Pattern.compile("^id=([1-9][0-9]{0,19})$");
     private static final long MAX_SAFE_INTEGER = 9007199254740991L;
 
     static final class Site {
@@ -82,7 +85,14 @@ final class SourceSites {
             hosts("kakuyomu.jp", "cdn-static.kakuyomu.jp"),
             kakuyomuHeaders(),
             true,
-            SourceSites::kakuyomuSelection)
+            SourceSites::kakuyomuSelection),
+        new Site(
+            "pixiv",
+            "https://www.pixiv.net/novel",
+            hosts("www.pixiv.net", "s.pximg.net", "i.pximg.net", "embed.pixiv.net"),
+            Collections.emptyMap(),
+            true,
+            SourceSites::pixivSelection)
     ));
 
     /** Built once from ALL; profiles are fixed at class load, so per-request rebuilding is unnecessary. */
@@ -158,6 +168,18 @@ final class SourceSites {
         if (!path.matches()) return null;
         String episode = path.group(2);
         return "https://kakuyomu.jp/works/" + path.group(1) + (episode == null ? "" : "/episodes/" + episode);
+    }
+
+    /** 소설 회차·단독 작품(show.php)과 시리즈 주소만 앱으로 가져간다. 단독인지 시리즈 회차인지는 앱이 조회로 판별한다. */
+    private static String pixivSelection(URI uri) {
+        if (!"www.pixiv.net".equals(uri.getHost())) return null;
+        String path = uri.getRawPath();
+        String query = uri.getRawQuery();
+        Matcher series = PIXIV_SERIES.matcher(path);
+        if (series.matches()) return query == null ? "https://www.pixiv.net/novel/series/" + series.group(1) : null;
+        if (!"/novel/show.php".equals(path) || query == null) return null;
+        Matcher novel = PIXIV_SHOW_QUERY.matcher(query);
+        return novel.matches() ? "https://www.pixiv.net/novel/show.php?id=" + novel.group(1) : null;
     }
 
     private static boolean positiveSafeInteger(String input) {

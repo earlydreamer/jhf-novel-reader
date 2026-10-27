@@ -137,4 +137,17 @@ public class SourceBrowserPolicyTest {
     @Test public void deniedResponseWithoutAnAddressIsScriptless() {
         assertTrue(SourceBrowserLoader.denied(null).headers.get("Content-Security-Policy").endsWith("; script-src 'none'"));
     }
+
+    @Test public void pixivSelectionAcceptsOnlyNovelAndSeries() {
+        assertEquals("https://www.pixiv.net/novel/show.php?id=5", SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/show.php?id=5#top"));
+        assertEquals("https://www.pixiv.net/novel/series/9", SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/series/9/"));
+        assertEquals("https://www.pixiv.net/novel/series/12345678901234567890", SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/series/12345678901234567890"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/show.php?id=5&x=1"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/show.php?id=05"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/series/123456789012345678901"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/artworks/5"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/"));
+        assertNull(SourceBrowserPolicy.selectedUrl("https://i.pximg.net/novel/series/9"));
+        assertEquals("https://www.pixiv.net/tags/%E9%BE%8D/novels", SourceBrowserPolicy.browseUrl("https://www.pixiv.net/tags/%E9%BE%8D/novels"));
+    }
 }

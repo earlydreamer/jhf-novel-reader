@@ -16,13 +16,13 @@ public class SourceSitesTest {
         assertEquals("narou", narou.id);
         assertEquals("https://syosetu.com/", narou.startUrl);
         assertTrue(narou.scripts);
-        assertEquals(new HashSet<>(Arrays.asList("syosetu.com", "www.syosetu.com", "yomou.syosetu.com", "ncode.syosetu.com", "static.syosetu.com", "kakuyomu.jp", "cdn-static.kakuyomu.jp")), SourceSites.allHosts());
+        assertEquals(new HashSet<>(Arrays.asList("syosetu.com", "www.syosetu.com", "yomou.syosetu.com", "ncode.syosetu.com", "static.syosetu.com", "kakuyomu.jp", "cdn-static.kakuyomu.jp", "www.pixiv.net", "s.pximg.net", "i.pximg.net", "embed.pixiv.net")), SourceSites.allHosts());
         assertNull(SourceSites.forHost("api.syosetu.com"));
     }
 
     @Test public void cspListsEveryProfileHostAndLimitsScriptsOutsideProfiles() {
         String narou = SourceSites.csp(URI.create("https://yomou.syosetu.com/rank/top/"));
-        assertEquals("connect-src https://cdn-static.kakuyomu.jp https://kakuyomu.jp https://ncode.syosetu.com https://static.syosetu.com https://syosetu.com https://www.syosetu.com https://yomou.syosetu.com; worker-src 'none'; object-src 'none'", narou);
+        assertEquals("connect-src https://cdn-static.kakuyomu.jp https://embed.pixiv.net https://i.pximg.net https://kakuyomu.jp https://ncode.syosetu.com https://s.pximg.net https://static.syosetu.com https://syosetu.com https://www.pixiv.net https://www.syosetu.com https://yomou.syosetu.com; worker-src 'none'; object-src 'none'", narou);
         assertEquals(narou, SourceSites.csp(URI.create("https://kakuyomu.jp/works/1")));
         assertTrue(SourceSites.csp(URI.create("https://evil.test/")).endsWith("; script-src 'none'"));
     }
@@ -90,5 +90,15 @@ public class SourceSitesTest {
                 // 자격 증명·프로토콜 헤더와 loader가 정하는 헤더는 페이지가 바꿀 수 없다.
             }
         }
+    }
+
+    @Test public void pixivProfileAllowsScriptsWithoutForwardedHeaders() {
+        SourceSites.Site pixiv = SourceSites.forHost("www.pixiv.net");
+        assertEquals("pixiv", pixiv.id);
+        assertEquals("https://www.pixiv.net/novel", pixiv.startUrl);
+        assertTrue(pixiv.scripts);
+        assertSame(pixiv, SourceSites.forHost("i.pximg.net"));
+        assertEquals(Collections.emptyMap(), pixiv.forwardHeaders(Collections.singletonMap("Content-Type", "application/json")));
+        assertNull(SourceSites.forHost("pixiv.net"));
     }
 }

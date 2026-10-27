@@ -8,5 +8,7 @@
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">syosetu.com</domain>
         <domain includeSubdomains="true">kakuyomu.jp</domain>
+        <domain includeSubdomains="true">pixiv.net</domain>
+        <domain includeSubdomains="true">pximg.net</domain>
     </domain-config>
 </network-security-config>
