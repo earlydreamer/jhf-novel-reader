@@ -48,6 +48,7 @@ describe('shared contracts', () => {
       'output_limit',
       'blocked',
       'guidance_unsupported',
+      'source_unsupported',
     ]);
     expect(DEFAULT_PREFERENCES.prefetchEnabled).toBe(false);
   });
