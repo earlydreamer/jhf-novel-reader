@@ -104,6 +104,8 @@ adb shell am start -W -n dev.earlydreamer.jhfreader/.MainActivity
 
 pixiv의 원문 브라우저 탐색·실제 모델 번역·저장·재시작 재개·원문 요청 간격과 기존 데이터 보존은 [2026-10-28 Android 검증 기록](validation/2026-10-28-pixiv-android.md)에 정리했습니다.
 
+pixiv 태그 목록을 위한 원문 브라우저 메모리 저장소는 [메모리 저장소 검증 기록](validation/2026-10-28-pixiv-storage-android.md)에 정리했습니다.
+
 ### 수동 점검표
 
 실제 기기에서 아래 동작을 확인하고, 실행하지 않은 항목은 미실행으로 표시합니다.
