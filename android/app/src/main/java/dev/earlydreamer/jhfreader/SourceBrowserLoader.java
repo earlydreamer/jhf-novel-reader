@@ -96,6 +96,26 @@ public final class SourceBrowserLoader {
         return new Resource(uri, 403, "text/plain", "UTF-8", headers, "이 주소나 요청 방식은 앱 안 탐색에서 지원하지 않아요.".getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * WebResourceResponse cannot express 3xx. A main-frame load that ended at another validated address answers with a
+     * scriptless page that replaces itself with that address, so relative links and the trusted toolbar use the actual
+     * destination. The page is this navigation's own response, so a superseded load never replaces a later page.
+     * Returns null when the response should be served as is, including fragment-only differences from history navigation.
+     */
+    static Resource mainFrameRedirect(URI request, Resource loaded) {
+        if (loaded.status < 200 || loaded.status >= 300) return null;
+        String destination = SourceBrowserPolicy.browseUrl(loaded.uri.toString());
+        if (destination == null || destination.equals(SourceBrowserPolicy.browseUrl(request.toString()))) return null;
+        Map<String, String> headers = responseHeaders(null, null);
+        headers.put("X-Content-Type-Options", "nosniff");
+        String page = "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0;url=" + escapeHtml(destination) + "\">";
+        return new Resource(request, 200, "text/html", "UTF-8", headers, page.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String escapeHtml(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
+    }
+
     /** Only no-store, the profile CSP and the origin server's CORS allowance reach the WebView. */
     private static Resource finalResponse(Resource result) {
         return new Resource(result.uri, result.status, result.mimeType, result.encoding,

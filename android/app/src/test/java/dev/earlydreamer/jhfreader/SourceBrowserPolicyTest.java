@@ -152,6 +152,42 @@ public class SourceBrowserPolicyTest {
         assertTrue(SourceBrowserLoader.denied(null).headers.get("Content-Security-Policy").endsWith("; script-src 'none'"));
     }
 
+    @Test public void redirectedMainFrameReplacesItselfWithTheValidatedDestination() throws Exception {
+        SourceBrowserLoader loader = new SourceBrowserLoader((uri, headers) -> {
+            if (uri.getPath().equals("/search")) return new SourceBrowserLoader.Resource(uri, 302, "text/html", "UTF-8", Collections.singletonMap("Location", "/tags/%E5%86%92%E9%99%BA/novels"), new byte[0]);
+            return new SourceBrowserLoader.Resource(uri, 200, "text/html", "UTF-8", Collections.emptyMap(), "tags".getBytes(StandardCharsets.UTF_8));
+        });
+        URI request = URI.create("https://www.pixiv.net/search?q=%E5%86%92%E9%99%BA&type=novel");
+        SourceBrowserLoader.Resource redirect = SourceBrowserLoader.mainFrameRedirect(request, loader.load(request, "GET"));
+        assertNotNull(redirect);
+        assertEquals(request, redirect.uri);
+        assertEquals(200, redirect.status);
+        assertEquals("text/html", redirect.mimeType);
+        assertEquals("no-store", redirect.headers.get("Cache-Control"));
+        assertTrue(redirect.headers.get("Content-Security-Policy").endsWith("; script-src 'none'"));
+        assertTrue(new String(redirect.body, StandardCharsets.UTF_8).contains(
+            "<meta http-equiv=\"refresh\" content=\"0;url=https://www.pixiv.net/tags/%E5%86%92%E9%99%BA/novels\">"));
+    }
+    @Test public void redirectDestinationIsEscapedInsideThePage() {
+        SourceBrowserLoader.Resource loaded = new SourceBrowserLoader.Resource(URI.create("https://www.pixiv.net/tags/a/novels?x=1&y='z'"), 200, "text/html", "UTF-8", Collections.emptyMap(), new byte[0]);
+        String page = new String(SourceBrowserLoader.mainFrameRedirect(URI.create("https://www.pixiv.net/search?q=a"), loaded).body, StandardCharsets.UTF_8);
+        assertTrue(page.contains("url=https://www.pixiv.net/tags/a/novels?x=1&amp;y=&#39;z&#39;\""));
+    }
+    @Test public void fragmentAndNormalizationDifferencesAreNotRedirects() {
+        // History navigation asks for the address with its fragment; the loader answers for the address without it.
+        assertNull(SourceBrowserLoader.mainFrameRedirect(URI.create("https://www.pixiv.net/novel#discover"), loaded("https://www.pixiv.net/novel", 200)));
+        assertNull(SourceBrowserLoader.mainFrameRedirect(URI.create("https://SYOSETU.com"), loaded("https://syosetu.com/", 200)));
+        assertNull(SourceBrowserLoader.mainFrameRedirect(URI.create("https://kakuyomu.jp/works/1"), loaded("https://kakuyomu.jp/works/1", 200)));
+    }
+    @Test public void unsuccessfulFinalResponsesAreServedInPlace() {
+        URI request = URI.create("https://syosetu.com/");
+        assertNull(SourceBrowserLoader.mainFrameRedirect(request, loaded("https://yomou.syosetu.com/missing", 404)));
+        assertNull(SourceBrowserLoader.mainFrameRedirect(request, SourceBrowserLoader.denied(URI.create("https://127.0.0.1/"))));
+    }
+    private static SourceBrowserLoader.Resource loaded(String uri, int status) {
+        return new SourceBrowserLoader.Resource(URI.create(uri), status, "text/html", "UTF-8", Collections.emptyMap(), new byte[0]);
+    }
+
     @Test public void pixivSelectionAcceptsOnlyNovelAndSeries() {
         assertEquals("https://www.pixiv.net/novel/show.php?id=5", SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/show.php?id=5#top"));
         assertEquals("https://www.pixiv.net/novel/series/9", SourceBrowserPolicy.selectedUrl("https://www.pixiv.net/novel/series/9/"));

@@ -97,6 +97,7 @@ loader 경계는 다음과 같습니다.
 - GET만 보냅니다. 쿠키와 인증값은 보내지 않습니다.
   - Capacitor는 WebView 쿠키 저장소를 쓰는 전역 `CookieHandler`를 항상 등록하고, `HttpURLConnection`은 이를 사용합니다. loader는 생성될 때 이 handler를 `SourceBrowserCookies`로 감쌉니다. 그래서 프로필 호스트 요청은 쿠키를 읽거나 저장하지 않습니다. 앱 본체의 다른 요청은 기존 handler를 그대로 씁니다.
 - 리디렉션은 단계마다 사이트 프로필의 허용 호스트인지 검사합니다.
+  - WebView 응답은 3xx를 표현할 수 없습니다. 메인 프레임 요청이 다른 주소에서 끝나면, 그 요청의 응답으로 스크립트 없는 페이지를 돌려줍니다. 이 페이지는 지연 0초 `meta refresh`로 최종 주소를 열고, 이 이동도 loader를 거칩니다. 응답이 그 내비게이션에 속하므로 늦게 끝난 이전 요청이 현재 페이지를 바꾸지 않습니다. 프래그먼트만 다른 요청(뒤로 가기의 `/novel#discover` 등)은 리디렉션으로 보지 않습니다.
 - 응답에는 `Cache-Control: no-store`, CSP, 원 서버의 `Access-Control-Allow-Origin`만 남깁니다.
 - CSP는 `connect-src <모든 프로필 호스트>; worker-src 'none'; object-src 'none'`입니다. 스크립트를 허용하지 않는 프로필과 프로필 밖 응답에는 `script-src 'none'`을 덧붙입니다.
   - `connect-src`는 프로필 밖 호스트로 가는 WebSocket을 막습니다. CSP 규칙상 `https://호스트`는 같은 호스트의 `wss:`도 허용하므로, 프로필 호스트로 가는 WebSocket은 loader를 거치지 않고 WebView 네트워크와 쿠키 저장소로 연결될 수 있습니다. 이 경로는 아래 잔여 위험으로 감수했습니다.
