@@ -61,6 +61,8 @@ public final class SourceBrowserActivity extends AppCompatActivity {
     private Button back;
     private TextView status;
     private String selectedUrl;
+    /** onPageStarted~onPageFinished. Same-document pushState never starts a page load. */
+    private boolean loadingPage;
     private SourceBrowserLoader loader;
     private SourceBrowserTheme theme;
 
@@ -248,15 +250,18 @@ public final class SourceBrowserActivity extends AppCompatActivity {
                 }
             }
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+                loadingPage = true;
                 selectedUrl = null;
                 open.setEnabled(false);
             }
             @Override public void onPageFinished(WebView view, String url) {
+                loadingPage = false;
                 refreshSelection(view);
             }
-            // Script-driven sites change the URL with pushState without a new page load.
+            // Script-driven sites change the URL with pushState without a new page load. That can happen
+            // while the page's own fetches keep progress below 100, so only a real page load defers the refresh.
             @Override public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
-                if (view.getProgress() == 100) refreshSelection(view);
+                if (!loadingPage) refreshSelection(view);
             }
             @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) { handler.cancel(); }
             @Override public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler, String host, String realm) { handler.cancel(); }
