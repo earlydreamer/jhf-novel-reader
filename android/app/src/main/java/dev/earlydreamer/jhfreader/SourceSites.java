@@ -90,7 +90,7 @@ final class SourceSites {
             "pixiv",
             "https://www.pixiv.net/novel",
             hosts("www.pixiv.net", "s.pximg.net", "i.pximg.net", "embed.pixiv.net"),
-            Collections.emptyMap(),
+            pixivHeaders(),
             true,
             SourceSites::pixivSelection)
     ));
@@ -124,6 +124,11 @@ final class SourceSites {
         rules.put("apollo-require-preflight", DEFAULT_VALUE);
         rules.put("x-apollo-operation-name", DEFAULT_VALUE);
         return rules;
+    }
+
+    /** i.pximg.net images return 403 without a pixiv Referer; only the origin value is forwarded, never a page path. */
+    private static Map<String, Pattern> pixivHeaders() {
+        return Collections.singletonMap("Referer", Pattern.compile(Pattern.quote("https://www.pixiv.net/")));
     }
 
     static Pattern defaultValue() {

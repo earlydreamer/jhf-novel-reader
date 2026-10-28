@@ -131,6 +131,20 @@ public class SourceBrowserPolicyTest {
         assertEquals(Collections.emptyMap(), sent.get(1));
     }
 
+    /** i.pximg.net은 Referer 없는 이미지 요청에 403을 준다(2026-10-28 측정). */
+    @Test public void pixivImageRequestKeepsTheOriginReferer() throws Exception {
+        AtomicReference<Map<String, String>> sent = new AtomicReference<>();
+        SourceBrowserLoader loader = new SourceBrowserLoader((uri, headers) -> {
+            sent.set(headers);
+            return new SourceBrowserLoader.Resource(uri, 200, "image/jpeg", null, Collections.emptyMap(), new byte[0]);
+        });
+        Map<String, String> page = new HashMap<>();
+        page.put("Referer", "https://www.pixiv.net/");
+        page.put("Cookie", "a=b");
+        loader.load(URI.create("https://i.pximg.net/c/240x480_80/novel-cover-master/img/1.jpg"), "GET", page);
+        assertEquals(Collections.singletonMap("Referer", "https://www.pixiv.net/"), sent.get());
+    }
+
     @Test public void deniedResponsesAreNeverSniffedAsActiveContent() {
         assertEquals("nosniff", SourceBrowserLoader.denied(URI.create("https://syosetu.com/")).headers.get("X-Content-Type-Options"));
     }

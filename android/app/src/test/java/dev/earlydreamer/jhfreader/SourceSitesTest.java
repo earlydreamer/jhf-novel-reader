@@ -92,13 +92,20 @@ public class SourceSitesTest {
         }
     }
 
-    @Test public void pixivProfileAllowsScriptsWithoutForwardedHeaders() {
+    @Test public void pixivProfileForwardsOnlyItsOriginReferer() {
         SourceSites.Site pixiv = SourceSites.forHost("www.pixiv.net");
         assertEquals("pixiv", pixiv.id);
         assertEquals("https://www.pixiv.net/novel", pixiv.startUrl);
         assertTrue(pixiv.scripts);
         assertSame(pixiv, SourceSites.forHost("i.pximg.net"));
-        assertEquals(Collections.emptyMap(), pixiv.forwardHeaders(Collections.singletonMap("Content-Type", "application/json")));
+        Map<String, String> page = new HashMap<>();
+        page.put("referer", "https://www.pixiv.net/");
+        page.put("Cookie", "a=b");
+        page.put("Content-Type", "application/json");
+        assertEquals(Collections.singletonMap("Referer", "https://www.pixiv.net/"), pixiv.forwardHeaders(page));
+        // 페이지 경로·검색어가 담긴 전체 주소와 다른 출처는 보내지 않는다.
+        assertEquals(Collections.emptyMap(), pixiv.forwardHeaders(Collections.singletonMap("Referer", "https://www.pixiv.net/novel/show.php?id=5")));
+        assertEquals(Collections.emptyMap(), pixiv.forwardHeaders(Collections.singletonMap("Referer", "https://example.test/")));
         assertNull(SourceSites.forHost("pixiv.net"));
     }
 }
