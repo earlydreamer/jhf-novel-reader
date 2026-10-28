@@ -36,15 +36,18 @@ final class SourceSites {
         final String startUrl;
         final Set<String> hosts;
         final boolean scripts;
+        /** DOM 저장소는 끈 채로 페이지에 메모리 localStorage를 준다. 값은 문서가 바뀌면 사라진다. */
+        final boolean memoryStorage;
         /** 소문자 헤더 이름 → 원래 표기와 허용 값. */
         private final Map<String, Map.Entry<String, Pattern>> headerRules = new LinkedHashMap<>();
         private final Function<URI, String> selection;
 
-        Site(String id, String startUrl, Set<String> hosts, Map<String, Pattern> headerRules, boolean scripts, Function<URI, String> selection) {
+        Site(String id, String startUrl, Set<String> hosts, Map<String, Pattern> headerRules, boolean scripts, boolean memoryStorage, Function<URI, String> selection) {
             this.id = id;
             this.startUrl = startUrl;
             this.hosts = Collections.unmodifiableSet(new HashSet<>(hosts));
             this.scripts = scripts;
+            this.memoryStorage = memoryStorage;
             this.selection = selection;
             for (Map.Entry<String, Pattern> rule : headerRules.entrySet()) {
                 String key = rule.getKey().toLowerCase(Locale.ROOT);
@@ -78,6 +81,7 @@ final class SourceSites {
             hosts("syosetu.com", "www.syosetu.com", "yomou.syosetu.com", "ncode.syosetu.com", "static.syosetu.com"),
             Collections.emptyMap(),
             true,
+            false,
             SourceSites::narouSelection),
         new Site(
             "kakuyomu",
@@ -85,6 +89,7 @@ final class SourceSites {
             hosts("kakuyomu.jp", "cdn-static.kakuyomu.jp"),
             kakuyomuHeaders(),
             true,
+            false,
             SourceSites::kakuyomuSelection),
         new Site(
             "pixiv",
@@ -92,17 +97,29 @@ final class SourceSites {
             hosts("www.pixiv.net", "s.pximg.net", "i.pximg.net", "embed.pixiv.net"),
             pixivHeaders(),
             true,
+            // Tag lists (pixiv-web-next) call localStorage.getItem at startup and stop on null.
+            true,
             SourceSites::pixivSelection)
     ));
 
     /** Built once from ALL; profiles are fixed at class load, so per-request rebuilding is unnecessary. */
     private static final Set<String> ALL_HOSTS = collectHosts();
+    private static final Set<String> MEMORY_STORAGE_ORIGINS = collectMemoryStorageOrigins();
     private static final String BASE_CSP = baseCsp();
 
     private static Set<String> collectHosts() {
         Set<String> all = new HashSet<>();
         for (Site site : ALL) all.addAll(site.hosts);
         return Collections.unmodifiableSet(all);
+    }
+
+    private static Set<String> collectMemoryStorageOrigins() {
+        Set<String> origins = new HashSet<>();
+        for (Site site : ALL) {
+            if (!site.memoryStorage) continue;
+            for (String host : site.hosts) origins.add("https://" + host);
+        }
+        return Collections.unmodifiableSet(origins);
     }
 
     private static String baseCsp() {
@@ -146,6 +163,11 @@ final class SourceSites {
 
     static Set<String> allHosts() {
         return ALL_HOSTS;
+    }
+
+    /** 메모리 localStorage를 받을 문서 출처. 문서 시작 스크립트의 허용 출처 규칙으로 쓴다. */
+    static Set<String> memoryStorageOrigins() {
+        return MEMORY_STORAGE_ORIGINS;
     }
 
     /** 응답에 붙일 CSP. 페이지 통신을 loader가 보는 출처로만 묶고, 스크립트를 허용하지 않는 응답은 실행도 막는다. */
