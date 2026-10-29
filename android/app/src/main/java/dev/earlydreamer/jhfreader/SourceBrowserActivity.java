@@ -248,15 +248,10 @@ public final class SourceBrowserActivity extends AppCompatActivity {
                 catch (IllegalArgumentException invalid) { return blockedResponse(null); }
                 try {
                     SourceBrowserLoader.Resource resource = loader.load(input, request.getMethod(), request.getRequestHeaders());
-                    if (request.isForMainFrame() && resource.status >= 200 && resource.status < 300 && !resource.uri.equals(input)) {
-                        // WebResourceResponse cannot express 3xx. Restart only a validated final main URL,
-                        // so relative links and the trusted toolbar use the actual destination.
-                        view.post(() -> {
-                            if (!isFinishing() && !isDestroyed() && input.toString().equals(view.getUrl())) view.loadUrl(resource.uri.toString());
-                        });
-                        return blockedResponse(input);
-                    }
-                    if (request.isForMainFrame()) {
+                    SourceBrowserLoader.Resource redirect = request.isForMainFrame() ? SourceBrowserLoader.mainFrameRedirect(input, resource) : null;
+                    // The destination's own main-frame load sets the status line.
+                    if (redirect != null) resource = redirect;
+                    else if (request.isForMainFrame()) {
                         String notice = SourceBrowserPolicy.mainFrameNotice(resource.uri, resource.status);
                         view.post(() -> status.setText(notice != null ? notice : DEFAULT_STATUS));
                     }
