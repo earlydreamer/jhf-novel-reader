@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { useBackHandler } from '../shell/backStack';
+import { ExtendedFab } from './ExtendedFab';
 import { Icon, type IconName } from './Icon';
 import { IconButton } from './IconButton';
 import './components.css';
@@ -23,11 +24,14 @@ export function Menu({
   label,
   items,
   icon = 'more_vert',
+  fab = false,
   onOpenChange,
 }: {
   label: string;
   items: readonly MenuItem[];
   icon?: IconName;
+  /** 열기 버튼을 화면 하단의 ExtendedFab으로 그린다. 목록은 버튼 위로 펼친다. */
+  fab?: boolean;
   onOpenChange?(open: boolean): void;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
@@ -78,28 +82,40 @@ export function Menu({
       close();
     } else if (event.key === 'Tab') close(false);
   }
+  const toggle = () => {
+    if (open) close();
+    else {
+      setOpen(true);
+      onOpenChange?.(true);
+    }
+  };
   return (
-    <div className="nr-menu-anchor">
-      <IconButton
-        ref={trigger}
-        icon={icon}
-        label={label}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => {
-          if (open) close();
-          else {
-            setOpen(true);
-            onOpenChange?.(true);
-          }
-        }}
-      />
+    <div className={`nr-menu-anchor${fab ? ' nr-menu-anchor--fab' : ''}`}>
+      {fab ? (
+        <ExtendedFab
+          ref={trigger}
+          icon={icon}
+          label={label}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={toggle}
+        />
+      ) : (
+        <IconButton
+          ref={trigger}
+          icon={icon}
+          label={label}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={toggle}
+        />
+      )}
       {open && (
         <div
           ref={list}
           role="menu"
           aria-label={label}
-          className={`nr-menu${upward ? ' nr-menu--up' : ''}`}
+          className={`nr-menu${upward || fab ? ' nr-menu--up' : ''}`}
           onKeyDown={onKeyDown}
         >
           {items.map((item) => (

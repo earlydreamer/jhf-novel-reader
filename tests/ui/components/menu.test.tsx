@@ -118,3 +118,19 @@ it('Escape on a menu inside a dialog closes only the menu', () => {
   expect(screen.getByRole('dialog', { name: '작품 B를 서재에서 제거할까요?' })).toBeInTheDocument();
   expect(onClose).not.toHaveBeenCalled();
 });
+
+it('FAB 열기 버튼은 보이는 이름표를 쓰고 목록을 위로 펼친다', () => {
+  const pick = vi.fn();
+  render(
+    <Menu fab label="작품 찾기" icon="search" items={[{ label: '나로우', onSelect: pick }]} />,
+  );
+  const trigger = screen.getByRole('button', { name: '작품 찾기' });
+  expect(trigger).toHaveClass('nr-fab');
+  expect(trigger.closest('.nr-menu-anchor')).toHaveClass('nr-menu-anchor--fab');
+  fireEvent.click(trigger);
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('menu', { name: '작품 찾기' })).toHaveClass('nr-menu--up');
+  fireEvent.click(screen.getByRole('menuitem', { name: '나로우' }));
+  expect(pick).toHaveBeenCalledTimes(1);
+  expect(trigger).toHaveFocus();
+});

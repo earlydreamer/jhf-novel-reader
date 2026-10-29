@@ -6,7 +6,6 @@ import { ImmersiveReader } from '../ui/ImmersiveReader';
 import { SettingsScreen } from '../ui/SettingsScreen';
 import { useReaderGlossary } from '../ui/readerGlossary';
 import { TopAppBar } from '../ui/components/TopAppBar';
-import { BROWSE_SITES } from '../platform/browseSites';
 import { IconButton } from '../ui/components/IconButton';
 import { Menu } from '../ui/components/Menu';
 import type { MenuItem } from '../ui/components/Menu';
@@ -29,7 +28,6 @@ function RouteScreen({
   state,
   backup,
   urlDialogOpen,
-  onOpenUrlDialog,
   onCloseUrlDialog,
   onRequestRemove,
   onRequestChapterUpdates,
@@ -40,7 +38,6 @@ function RouteScreen({
   state: RenewalSnapshot;
   backup: BackupPlatform;
   urlDialogOpen: boolean;
-  onOpenUrlDialog(): void;
   onCloseUrlDialog(): void;
   onRequestRemove(workId: string, title: string): void;
   onRequestChapterUpdates(workId?: string): void;
@@ -93,7 +90,6 @@ function RouteScreen({
         <HomeScreen
           state={state}
           urlDialogOpen={urlDialogOpen}
-          onOpenUrlDialog={onOpenUrlDialog}
           onCloseUrlDialog={onCloseUrlDialog}
           onBrowse={(startUrl) => void controller.browse(startUrl)}
           onOpen={(url) => void controller.openWork(url)}
@@ -421,14 +417,6 @@ function ShellAppBar({
                 onClick={() => onRequestChapterUpdates()}
               />
             )}
-            <Menu
-              label="작품 찾기"
-              icon="search"
-              items={BROWSE_SITES.map((site) => ({
-                label: site.label,
-                onSelect: () => void controller.browse(site.startUrl),
-              }))}
-            />
             <IconButton icon="link" label="URL로 열기" onClick={onOpenUrlDialog} />
             <IconButton
               icon="settings"
@@ -680,7 +668,6 @@ export function Application({
             state={state}
             backup={backup}
             urlDialogOpen={urlDialogOpen}
-            onOpenUrlDialog={() => setUrlDialogOpen(true)}
             onCloseUrlDialog={() => setUrlDialogOpen(false)}
             onRequestRemove={requestRemove}
             onRequestChapterUpdates={requestChapterUpdates}
