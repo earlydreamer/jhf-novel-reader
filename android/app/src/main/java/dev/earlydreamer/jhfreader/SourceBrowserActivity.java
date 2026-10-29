@@ -40,6 +40,8 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 
@@ -56,6 +58,20 @@ public final class SourceBrowserActivity extends AppCompatActivity {
     static final String DEFAULT_STATUS = "작품을 찾은 뒤 ‘이 작품 열기’를 눌러 주세요. 로그인과 북마크 같은 계정 기능은 지원하지 않아요.";
     public static final String START_URL = "startUrl";
     public static final String SELECTED_URL = "selectedUrl";
+    /**
+     * Stand-in for the disabled DOM storage on memoryStorage profiles. Values live in this document only,
+     * so nothing reaches the WebView profile on disk.
+     */
+    private static final String MEMORY_STORAGE_SCRIPT =
+        "(function(){try{if(window.localStorage)return;}catch(e){}"
+        + "var m=new Map();"
+        + "var s={getItem:function(k){k=String(k);return m.has(k)?m.get(k):null;},"
+        + "setItem:function(k,v){m.set(String(k),String(v));},"
+        + "removeItem:function(k){m.delete(String(k));},"
+        + "clear:function(){m.clear();},"
+        + "key:function(i){var keys=Array.from(m.keys());return i>=0&&i<keys.length?keys[i]:null;},"
+        + "get length(){return m.size;}};"
+        + "try{Object.defineProperty(window,'localStorage',{value:s,configurable:true});}catch(e){}})();";
     private WebView browser;
     private Button open;
     private Button back;
@@ -204,6 +220,10 @@ public final class SourceBrowserActivity extends AppCompatActivity {
         settings.setGeolocationEnabled(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        // DOM storage stays off. Older WebViews without document-start scripts keep the plain null localStorage.
+        if (!SourceSites.memoryStorageOrigins().isEmpty() && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(browser, MEMORY_STORAGE_SCRIPT, SourceSites.memoryStorageOrigins());
+        }
         browser.removeJavascriptInterface("searchBoxJavaBridge_");
         browser.removeJavascriptInterface("accessibility");
         browser.removeJavascriptInterface("accessibilityTraversal");

@@ -29,12 +29,12 @@ public class SourceSitesTest {
 
     @Test public void headerRulesRejectCredentialsAndFilterCaseInsensitively() {
         try {
-            new SourceSites.Site("x", "https://x.test/", Collections.singleton("x.test"), Collections.singletonMap("Cookie", SourceSites.defaultValue()), true, uri -> null);
+            new SourceSites.Site("x", "https://x.test/", Collections.singleton("x.test"), Collections.singletonMap("Cookie", SourceSites.defaultValue()), true, false, uri -> null);
             fail("Cookie must never be forwardable");
         } catch (IllegalArgumentException expected) {
             // 자격 증명 헤더는 허용 목록에 넣을 수 없다.
         }
-        SourceSites.Site site = new SourceSites.Site("x", "https://x.test/", Collections.singleton("x.test"), Collections.singletonMap("Content-Type", Pattern.compile("application/json")), true, uri -> null);
+        SourceSites.Site site = new SourceSites.Site("x", "https://x.test/", Collections.singleton("x.test"), Collections.singletonMap("Content-Type", Pattern.compile("application/json")), true, false, uri -> null);
         Map<String, String> page = new HashMap<>();
         page.put("content-type", "application/json");
         page.put("Cookie", "a=b");
@@ -84,7 +84,7 @@ public class SourceSitesTest {
     @Test public void protocolAndCredentialHeadersCanNeverBeAllowlisted() {
         for (String name : new String[] { "Proxy-Authorization", "Cookie2", "Host", "Accept", "User-Agent" }) {
             try {
-                new SourceSites.Site("x", "https://x.test/", Collections.singleton("x.test"), Collections.singletonMap(name, SourceSites.defaultValue()), true, uri -> null);
+                new SourceSites.Site("x", "https://x.test/", Collections.singleton("x.test"), Collections.singletonMap(name, SourceSites.defaultValue()), true, false, uri -> null);
                 fail(name + " must not be forwardable");
             } catch (IllegalArgumentException expected) {
                 // 자격 증명·프로토콜 헤더와 loader가 정하는 헤더는 페이지가 바꿀 수 없다.
@@ -107,5 +107,13 @@ public class SourceSitesTest {
         assertEquals(Collections.emptyMap(), pixiv.forwardHeaders(Collections.singletonMap("Referer", "https://www.pixiv.net/novel/show.php?id=5")));
         assertEquals(Collections.emptyMap(), pixiv.forwardHeaders(Collections.singletonMap("Referer", "https://example.test/")));
         assertNull(SourceSites.forHost("pixiv.net"));
+    }
+
+    /** pixiv 태그 목록은 시작할 때 localStorage를 읽는다. DOM 저장소는 끈 채로 pixiv 출처에만 메모리 저장소를 준다. */
+    @Test public void memoryStorageIsOnlyForPixivOrigins() {
+        assertTrue(SourceSites.forHost("www.pixiv.net").memoryStorage);
+        assertFalse(SourceSites.forHost("ncode.syosetu.com").memoryStorage);
+        assertFalse(SourceSites.forHost("kakuyomu.jp").memoryStorage);
+        assertEquals(new HashSet<>(Arrays.asList("https://www.pixiv.net", "https://s.pximg.net", "https://i.pximg.net", "https://embed.pixiv.net")), SourceSites.memoryStorageOrigins());
     }
 }
