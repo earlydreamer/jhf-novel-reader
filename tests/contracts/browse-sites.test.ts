@@ -40,6 +40,6 @@ describe('browse site list', () => {
   });
 
   it('labels every site for the library picker', () => {
-    expect(BROWSE_SITES.map((site) => site.label)).toEqual(['나로우', '카쿠요무', 'pixiv']);
+    expect(BROWSE_SITES.map((site) => site.label)).toEqual(['소설가가 되자', '카쿠요무', 'pixiv']);
   });
 });

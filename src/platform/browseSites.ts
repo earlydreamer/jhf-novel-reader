@@ -9,7 +9,7 @@ export interface BrowseSite {
 export const BROWSE_SITES: readonly BrowseSite[] = [
   {
     id: 'narou',
-    label: '나로우',
+    label: '소설가가 되자',
     startUrl: 'https://syosetu.com/',
     hosts: [
       'syosetu.com',

@@ -1,10 +1,10 @@
 # 원문 조회와 파싱
 
-현재 원문 경로의 진입점은 `src/source/sites.ts`의 `createRenewalSource`, `normalizeSourceInput`, `normalizeWorkPageUrl`입니다. 이 모듈의 `SourceSite` 경계가 사이트별 URL 정규화, 작품·회차 식별, 목차·본문 추출, 저장 기록의 회차 ID·목차 주소 검증을 나눕니다. 나로우 구현은 `src/source/work.ts`와 `src/source/parse.ts`, 카쿠요무 구현은 `src/source/kakuyomu.ts`, pixiv 구현은 `src/source/pixiv.ts`와 `src/source/pixivText.ts`에 있습니다. 초기 이슈 #2의 `src/source/index.ts`·`NarouSourceAdapter`는 현재 진입점이 아닙니다.
+현재 원문 경로의 진입점은 `src/source/sites.ts`의 `createRenewalSource`, `normalizeSourceInput`, `normalizeWorkPageUrl`입니다. 이 모듈의 `SourceSite` 경계가 사이트별 URL 정규화, 작품·회차 식별, 목차·본문 추출, 저장 기록의 회차 ID·목차 주소 검증을 나눕니다. 소설가가 되자 구현은 `src/source/work.ts`와 `src/source/parse.ts`, 카쿠요무 구현은 `src/source/kakuyomu.ts`, pixiv 구현은 `src/source/pixiv.ts`와 `src/source/pixivText.ts`에 있습니다. 초기 이슈 #2의 `src/source/index.ts`·`NarouSourceAdapter`는 현재 진입점이 아닙니다.
 
 ## 지원 주소와 목차
 
-### 나로우
+### 소설가가 되자
 
 HTTPS `ncode.syosetu.com/nNNNNx[x]/` 작품·단편 주소와 `/nNNNNx[x]/<positive-safe-integer>/` 회차 주소를 지원합니다. 호스트·작품 코드의 대소문자와 끝 슬래시를 정규화하고 fragment를 제거합니다. 인증 정보, 비기본 포트, 점 경로, 이스케이프 경로, 공백·제어 문자, 다른 프로토콜·호스트와 성인용 호스트는 거부합니다. 작품 정보 페이지 `/novelview/infotop/` 대신 작품의 정규 주소를 사용합니다.
 
@@ -12,11 +12,11 @@ HTTPS `ncode.syosetu.com/nNNNNx[x]/` 작품·단편 주소와 `/nNNNNx[x]/<posit
 
 ### 카쿠요무
 
-HTTPS `kakuyomu.jp/works/<ID>` 작품 주소와 `/works/<ID>/episodes/<ID>` 회차 주소를 지원합니다(#371). 끝 슬래시와 fragment를 제거하고, 쿼리·인증 정보·비기본 포트·다른 호스트·점 경로·이스케이프 경로는 거부합니다. 작품·회차 ID가 `Number.MAX_SAFE_INTEGER`를 넘을 수 있어 `Number`로 바꾸지 않고 숫자 문자열로 유지합니다. 저장 기록의 작품 ID는 `kakuyomu-<작품 ID>`, 회차 ID는 `kakuyomu-<작품 ID>/<회차 ID>`이며 나로우 형식과 겹치지 않습니다.
+HTTPS `kakuyomu.jp/works/<ID>` 작품 주소와 `/works/<ID>/episodes/<ID>` 회차 주소를 지원합니다(#371). 끝 슬래시와 fragment를 제거하고, 쿼리·인증 정보·비기본 포트·다른 호스트·점 경로·이스케이프 경로는 거부합니다. 작품·회차 ID가 `Number.MAX_SAFE_INTEGER`를 넘을 수 있어 `Number`로 바꾸지 않고 숫자 문자열로 유지합니다. 저장 기록의 작품 ID는 `kakuyomu-<작품 ID>`, 회차 ID는 `kakuyomu-<작품 ID>/<회차 ID>`이며 소설가가 되자 형식과 겹치지 않습니다.
 
 목차는 작품 페이지 한 장의 `__NEXT_DATA__` Apollo 상태에서 실행 없이 JSON으로 읽습니다. `Work.tableOfContentsV2` 그룹 순서와 각 그룹의 `episodeUnions` 순서를 따르고, 읽는 순번 `ordinal`은 목차 위치(1부터)로 정합니다. 사이트 ID와 순번은 서로 대신하지 않습니다. 회차 중복, 없는 참조, 다른 작품의 상태, 빈 목차는 `source_parse`로 거부합니다. `publicEpisodeCount`는 필수이며, 양의 안전한 정수이고 목차 회차 수와 일치해야 합니다. 누락되거나 잘못된 형식이면 완전한 목차로 저장하지 않습니다. 목차 그룹 제목은 아직 회차 제목에 붙이지 않습니다.
 
-본문은 `.widget-episodeBody`의 문단, 제목은 `.widget-episodeTitle`, 이전·다음 회차는 `#contentMain-readPreviousEpisode`·`#contentMain-readNextEpisode`에서 읽습니다. 빈 줄 문단 `<p class="blank"><br></p>`와 `<rb>` 루비는 나로우와 같은 계약으로 보존합니다.
+본문은 `.widget-episodeBody`의 문단, 제목은 `.widget-episodeTitle`, 이전·다음 회차는 `#contentMain-readPreviousEpisode`·`#contentMain-readNextEpisode`에서 읽습니다. 빈 줄 문단 `<p class="blank"><br></p>`와 `<rb>` 루비는 소설가가 되자와 같은 계약으로 보존합니다.
 
 원문 브라우저 프로필(`SourceSites`)의 허용 호스트는 `kakuyomu.jp`와 `cdn-static.kakuyomu.jp`입니다. 카쿠요무 페이지 스크립트는 검색 조건·정렬 화면에서 GraphQL을 GET으로 부릅니다. 이 요청은 Apollo의 CSRF 방지 헤더가 없으면 400을 받습니다(2026-10-24 확인). 그래서 요청 헤더 허용 목록에 `Content-Type`(`application/json`만), `apollo-require-preflight`, `x-apollo-operation-name`을 둡니다.
 
