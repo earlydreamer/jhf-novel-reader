@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { parseChapter, parseWork, normalizeSourceUrl } from '../../src/source/parse';
+import {
+  chapterFromParagraphs,
+  parseChapter,
+  parseWork,
+  normalizeSourceUrl,
+} from '../../src/source/parse';
 import { createParagraphId } from '../../src/contracts';
 export const url = 'https://ncode.syosetu.com/n1234ab/2/';
 export const fixture = (
@@ -93,5 +98,33 @@ it('supports multiple ruby base-reading pairs without including fallback punctua
 it('rejects oversized HTML before parsing', async () => {
   await expect(parseChapter('x'.repeat(2_000_001), url)).rejects.toMatchObject({
     code: 'source_parse',
+  });
+});
+describe('chapterFromParagraphs', () => {
+  const identity = { canonicalUrl: url, workId: 'n1234ab', chapterId: 'n1234ab/2' };
+  const neighbors = { prevUrl: url.replace('/2/', '/1/'), nextUrl: url.replace('/2/', '/3/') };
+  it('chapterFromParagraphs gives the same ids and hash as chapterFromBody', async () => {
+    const fromBody = await parseChapter(fixture(), url);
+    const fromParagraphs = await chapterFromParagraphs(
+      [
+        { text: '　光と空。', ruby: [{ start: 3, end: 4, reading: 'そら' }] },
+        { text: '', ruby: [] },
+        { text: '二行\n続き & 三', ruby: [] },
+      ],
+      '合成の題',
+      identity,
+      neighbors,
+    );
+    expect(fromParagraphs).toEqual(fromBody);
+  });
+  it('rejects when no paragraph has text', async () => {
+    await expect(
+      chapterFromParagraphs([{ text: '', ruby: [] }], '題', identity, neighbors),
+    ).rejects.toMatchObject({ code: 'source_parse' });
+  });
+  it('rejects an empty title', async () => {
+    await expect(
+      chapterFromParagraphs([{ text: '本文', ruby: [] }], '', identity, neighbors),
+    ).rejects.toMatchObject({ code: 'source_parse' });
   });
 });

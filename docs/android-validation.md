@@ -102,6 +102,8 @@ adb shell am start -W -n dev.earlydreamer.jhfreader/.MainActivity
 
 이 검증에서 관찰한 읽기 위치 차이는 반복 재개에서 누적되는 결함으로 재현했습니다. 원인·수정과 실제 기기 반복 검증은 [저장본 재개 위치 검증 기록](validation/2026-10-26-reader-resume.md)에 정리했습니다.
 
+pixiv의 원문 브라우저 탐색·실제 모델 번역·저장·재시작 재개·원문 요청 간격과 기존 데이터 보존은 [2026-10-28 Android 검증 기록](validation/2026-10-28-pixiv-android.md)에 정리했습니다.
+
 ### 수동 점검표
 
 실제 기기에서 아래 동작을 확인하고, 실행하지 않은 항목은 미실행으로 표시합니다.

@@ -3,7 +3,7 @@ import { check, integer, object, record, text, url } from './validation';
 import { StorageError } from './errors';
 import { secretRef } from './secrets';
 import { validLocalLimits } from '../translation/segments';
-import { isSourceChapterId, isSourceWorkPageUrl } from '../source/sites';
+import { isCanonicalSourceUrl, isSourceChapterId, isSourceWorkPageUrl } from '../source/sites';
 export function identifier(value: unknown): asserts value is string {
   text(value);
   check(/^[A-Za-z0-9][A-Za-z0-9.-]{0,255}$/.test(value) && !value.includes('..'));
@@ -12,6 +12,12 @@ export function identifier(value: unknown): asserts value is string {
 export function chapterIdentity(value: unknown): asserts value is string {
   text(value);
   check(isSourceChapterId(value));
+}
+/** 쿼리가 정규 주소의 일부인 사이트(pixiv show.php)만 쿼리를 허용하고, 나머지는 기존 검사를 그대로 거친다. */
+function sourceUrl(value: unknown): void {
+  text(value);
+  if (value.includes('?') && isCanonicalSourceUrl(value)) return;
+  url(value, true);
 }
 /** Only TOC page references admit the single positive page parameter. */
 function workPageUrl(value: unknown, workId: string): void {
@@ -79,11 +85,11 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
   const source = value.source;
   identifier(source.workId);
   chapterIdentity(source.chapterId);
-  url(source.canonicalUrl, true);
+  sourceUrl(source.canonicalUrl);
   text(source.title);
   text(source.sourceHash);
   for (const neighbor of [source.prevUrl, source.nextUrl])
-    if (neighbor !== null) url(neighbor, true);
+    if (neighbor !== null) sourceUrl(neighbor);
   if (source.captureKind === 'fetched') {
     check(typeof source.rawHtml === 'string');
     date(source.fetchedAt);
@@ -244,7 +250,7 @@ export async function workPage(value: unknown): Promise<WorkPage> {
     'complete',
   ]);
   identifier(value.workId);
-  url(value.canonicalUrl, true);
+  sourceUrl(value.canonicalUrl);
   workPageUrl(value.pageUrl, value.workId);
   if (value.nextPageUrl !== null) workPageUrl(value.nextPageUrl, value.workId);
   text(value.title);
@@ -256,7 +262,7 @@ export async function workPage(value: unknown): Promise<WorkPage> {
     chapterIdentity(ref.chapterId);
     check(!ids.has(ref.chapterId));
     ids.add(ref.chapterId);
-    url(ref.canonicalUrl, true);
+    sourceUrl(ref.canonicalUrl);
     text(ref.title);
     integer(ref.ordinal, 1);
     if (ref.publishedAt !== undefined) {

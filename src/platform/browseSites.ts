@@ -25,4 +25,10 @@ export const BROWSE_SITES: readonly BrowseSite[] = [
     startUrl: 'https://kakuyomu.jp/',
     hosts: ['kakuyomu.jp', 'cdn-static.kakuyomu.jp'],
   },
+  {
+    id: 'pixiv',
+    label: 'pixiv',
+    startUrl: 'https://www.pixiv.net/novel',
+    hosts: ['www.pixiv.net', 's.pximg.net', 'i.pximg.net', 'embed.pixiv.net'],
+  },
 ];

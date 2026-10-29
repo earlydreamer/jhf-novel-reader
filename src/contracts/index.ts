@@ -44,6 +44,8 @@ export const ERROR_CODES = [
   'output_limit',
   'blocked',
   'guidance_unsupported',
+  /** 로그인 전용·성인·지원하지 않는 언어처럼 앱이 열지 않기로 한 원문. */
+  'source_unsupported',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 export type RequestOutcome = 'not_sent' | 'unknown' | 'received';
