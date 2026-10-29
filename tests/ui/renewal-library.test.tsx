@@ -496,10 +496,10 @@ it('작품 찾기는 사이트 목록을 펼치고 고른 사이트의 시작 �
   const controller = createRenewalController({ library, browse });
   render(<Application controller={controller} />);
   await screen.findByRole('heading', { name: '읽고 싶은 작품을 찾아보세요' });
-  expect(screen.queryByRole('menuitem', { name: '나로우' })).toBeNull();
+  expect(screen.queryByRole('menuitem', { name: '소설가가 되자' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '작품 찾기' }));
   expect(browse).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('menuitem', { name: '나로우' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '소설가가 되자' }));
   await waitFor(() => expect(browse).toHaveBeenCalledExactlyOnceWith('https://syosetu.com/'));
   controller.dispose();
 });

@@ -52,7 +52,7 @@ node tests/e2e/verify-apk.mjs
 
 WebView는 HTTPS localhost를 사용하며 혼합 콘텐츠, 외부 이동 허용 목록, 원격 `server.url`을 사용하지 않습니다. 운영 CSP는 번들 스크립트·스타일, 리더에 필요한 인라인 스타일, 로컬/data 이미지를 허용하고 브라우저 연결·프레임·객체·폼·기본 URL 변경을 차단합니다. Vite 개발 환경은 React 초기 코드와 HMR을 사용합니다. CSP는 브라우저 콘텐츠를 제어하며 직접 네이티브 브리지 HTTP를 제어하지는 않습니다.
 
-앱 안 원문 브라우저는 별도 WebView이며 위 운영 CSP를 쓰지 않습니다. 사이트 스크립트를 실행하므로 `SourceBrowserLoader`가 모든 응답에 사이트 프로필 CSP(`connect-src` 허용 호스트, `worker-src 'none'`, `object-src 'none'`)를 붙입니다. 원문 브라우저가 열리면 프로세스 전역 `ServiceWorkerClient`가 모든 서비스 워커 요청을 403으로 막습니다. 이 client는 Capacitor Bridge가 등록한 client를 대체하므로, 앱 본체가 서비스 워커를 쓰게 되면 이 설계를 다시 검토해야 합니다. loader는 Capacitor가 등록한 전역 `CookieHandler`를 `SourceBrowserCookies`로 감싸서, 원문 사이트 요청에서만 쿠키를 읽거나 저장하지 않습니다. 경계와 감수한 잔여 위험(WebRTC, 프로필 호스트 WebSocket)은 [원문 조회와 파싱](source.md#원문-브라우저)에 있습니다. `SourceBrowserInstrumentedTest`는 페이지 스크립트의 브리지 부재, 금지 대상 연결(WebSocket 포함) 부재, 서비스 워커 등록 거부, 실제 나로우 요청에서 앱 쿠키 저장소를 쓰지 않는지, pushState로 바뀐 작품 주소의 선택을 기기에서 확인합니다. 쿠키 검사는 인터넷 연결이 필요합니다.
+앱 안 원문 브라우저는 별도 WebView이며 위 운영 CSP를 쓰지 않습니다. 사이트 스크립트를 실행하므로 `SourceBrowserLoader`가 모든 응답에 사이트 프로필 CSP(`connect-src` 허용 호스트, `worker-src 'none'`, `object-src 'none'`)를 붙입니다. 원문 브라우저가 열리면 프로세스 전역 `ServiceWorkerClient`가 모든 서비스 워커 요청을 403으로 막습니다. 이 client는 Capacitor Bridge가 등록한 client를 대체하므로, 앱 본체가 서비스 워커를 쓰게 되면 이 설계를 다시 검토해야 합니다. loader는 Capacitor가 등록한 전역 `CookieHandler`를 `SourceBrowserCookies`로 감싸서, 원문 사이트 요청에서만 쿠키를 읽거나 저장하지 않습니다. 경계와 감수한 잔여 위험(WebRTC, 프로필 호스트 WebSocket)은 [원문 조회와 파싱](source.md#원문-브라우저)에 있습니다. `SourceBrowserInstrumentedTest`는 페이지 스크립트의 브리지 부재, 금지 대상 연결(WebSocket 포함) 부재, 서비스 워커 등록 거부, 실제 소설가가 되자 요청에서 앱 쿠키 저장소를 쓰지 않는지, pushState로 바뀐 작품 주소의 선택을 기기에서 확인합니다. 쿠키 검사는 인터넷 연결이 필요합니다.
 
 Capacitor 8.5.2는 문자 그대로의 `<head>` 바로 뒤, meta CSP 앞에 신뢰된 인라인 초기 코드를 삽입합니다. 나머지 스크립트에는 `unsafe-inline`·`unsafe-eval`을 허용하지 않습니다. 버전을 올릴 때 이 순서를 다시 확인합니다. 응답 헤더 CSP를 사용하려면 별도의 nonce·해시 해법이 필요합니다. `CapacitorHttp.enabled=false`는 fetch/XHR 패치를 끄며 명시적 네이티브 요청을 끄지는 않습니다.
 
@@ -98,7 +98,7 @@ adb shell am start -W -n dev.earlydreamer.jhfreader/.MainActivity
 
 공유 검증 결과에는 앱 커밋·APK 해시와 실행한 검사, 통과·실패·미실행 범위를 기록합니다. 개인 기기·연결 환경과 원시 실행 로그는 `/.local-work-records/`처럼 Git에서 제외한 공간에 보관합니다. 인증값·전체 원문·사설 주소·원시 플러그인 인자를 공유 로그에 넣지 않습니다. 디버그 APK는 허가된 개발 시험용이며 공개 배포용이 아닙니다.
 
-카쿠요무의 실제 모델 번역·저장·재시작 재개와 기존 나로우 데이터 보존은 [2026-10-26 Android 검증 기록](validation/2026-10-26-kakuyomu-android.md)에 정리했습니다. 해당 기록의 설치 APK 소스와 이후 문서 커밋을 구분합니다.
+카쿠요무의 실제 모델 번역·저장·재시작 재개와 기존 소설가가 되자 데이터 보존은 [2026-10-26 Android 검증 기록](validation/2026-10-26-kakuyomu-android.md)에 정리했습니다. 해당 기록의 설치 APK 소스와 이후 문서 커밋을 구분합니다.
 
 이 검증에서 관찰한 읽기 위치 차이는 반복 재개에서 누적되는 결함으로 재현했습니다. 원인·수정과 실제 기기 반복 검증은 [저장본 재개 위치 검증 기록](validation/2026-10-26-reader-resume.md)에 정리했습니다.
 
@@ -121,5 +121,5 @@ pixiv 태그 목록을 위한 원문 브라우저 메모리 저장소는 [메모
 - 보안 저장소, 백업·복원, 리디렉션과 TLS 오류에서 인증 보호 정책이 유지되는지 확인합니다.
 - 합성 확인값으로 앱·브리지 로그를 검사하고, 검사를 마친 뒤 테스트 값을 삭제합니다.
 
-운영 원문 어댑터는 [지원 주소](source.md)의 나로우·카쿠요무 경로만 받습니다. 시험 서버를 연결하려고 DNS·TLS를 가로채거나 정책을 넓히지 않습니다. 전체 네이티브 원문 시험은 허가된 지원 원문 또는 별도 검토한 테스트 전용 경로가 필요합니다.
+운영 원문 어댑터는 [지원 주소](source.md)의 소설가가 되자·카쿠요무 경로만 받습니다. 시험 서버를 연결하려고 DNS·TLS를 가로채거나 정책을 넓히지 않습니다. 전체 네이티브 원문 시험은 허가된 지원 원문 또는 별도 검토한 테스트 전용 경로가 필요합니다.
 

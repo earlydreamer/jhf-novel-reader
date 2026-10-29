@@ -20,7 +20,7 @@
 - 출처: https://github.com/LNReader/lnreader-plugins , 고정 커밋 `67dce30db9dc730345b095f3da04f0fac087cb48`, 파일 [`plugins/japanese/kakuyomu.ts`](https://github.com/LNReader/lnreader-plugins/blob/67dce30db9dc730345b095f3da04f0fac087cb48/plugins/japanese/kakuyomu.ts)
 - 라이선스: MIT, Copyright (c) 2021 Rajarshee Chatterjee. 변경 없는 전체 원문은 아래 "라이선스 원문"에 있습니다.
 - 적용 위치: `src/source/kakuyomu.ts`(본문·회차 제목 선택자 `BODY`·`TITLE`, 작품 페이지의 `__NEXT_DATA__` Apollo 상태 사용).
-- 변경: 목차는 Apollo 객체 나열 순서 대신 `Work.tableOfContentsV2`와 각 그룹의 `episodeUnions` 순서로 읽고, 중복·누락·공개 회차 수 불일치를 거부합니다. 구조화 데이터는 실행하지 않고 JSON으로만 읽습니다. 본문은 나로우와 같은 비활성 템플릿·문단·ruby 계약으로 읽습니다. 랭킹·검색·필터·표지·장르·작가 정보는 가져오지 않았습니다.
+- 변경: 목차는 Apollo 객체 나열 순서 대신 `Work.tableOfContentsV2`와 각 그룹의 `episodeUnions` 순서로 읽고, 중복·누락·공개 회차 수 불일치를 거부합니다. 구조화 데이터는 실행하지 않고 JSON으로만 읽습니다. 본문은 소설가가 되자와 같은 비활성 템플릿·문단·ruby 계약으로 읽습니다. 랭킹·검색·필터·표지·장르·작가 정보는 가져오지 않았습니다.
 - 주의: 파싱 구조만 참고합니다. 업스트림 소설 픽스처나 본문은 포함하지 않습니다. 업스트림 코드 라이선스는 소설 본문에 대한 권리나 자동 접근 허가를 주지 않습니다.
 
 ### Pretendard Variable
