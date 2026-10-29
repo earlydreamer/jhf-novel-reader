@@ -120,7 +120,16 @@ HTTP 주소를 쓰면 회차 원문과 서버 인증값이 암호화되지 않�
 
 ## 라이선스
 
-앱 코드는 [MIT 라이선스](LICENSE)를 따릅니다. 소설 원문과 번역의 권리는 각 작품의 저작권자에게 있습니다. 포함된 오픈소스는 앱의 **설정 → 오픈소스 라이선스**와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에서 볼 수 있습니다. 소설가가 되자 페이지 해석에는 [LNReader](https://github.com/LNReader/lnreader-plugins)의 Syosetu 플러그인 구조를 참고했습니다(MIT). 이 앱은 pixiv가 만들거나 배포한 앱이 아닙니다.
+앱 코드는 [MIT 라이선스](LICENSE)를 따릅니다. 소설 원문과 번역의 권리는 각 작품의 저작권자에게 있습니다. 포함된 오픈소스는 앱의 **설정 → 오픈소스 라이선스**와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에서 볼 수 있습니다. 소설가가 되자 페이지 해석에는 [LNReader](https://github.com/LNReader/lnreader-plugins)의 Syosetu 플러그인 구조를 참고했습니다(MIT).
+
+## 비공식 앱 안내
+
+- JHF Novel Reader는 비공식 앱입니다.
+- 소설가가 되자, 카쿠요무, pixiv의 운영사가 만들거나 배포한 앱이 아닙니다.
+- 각 운영사와 관계가 없습니다.
+- 사이트 사양이 바뀌면 일부 기능이 동작하지 않을 수 있습니다.
+- 「小説家になろう」는 주식회사 히나프로젝트의 등록상표입니다.
+- pixiv는 ピクシブ株式会社의 등록상표입니다.
 
 [release-shield]: https://img.shields.io/badge/release-v1.0.1-5B5BD6?style=flat-square
 [release-url]: https://github.com/earlydreamer/jhf-novel-reader/releases

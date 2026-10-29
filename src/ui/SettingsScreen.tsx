@@ -951,10 +951,18 @@ export function SettingsScreen({
         fullScreen
         onClose={() => setLicensesOpen(false)}
       >
-        {/* pixiv 브랜드 가이드라인: pixiv 플랫폼을 쓰는 앱은 pixiv가 만든 앱이 아님을 표기한다. */}
+        {/* 비공식 앱 안내. pixiv 상표 가이드라인은 pixiv가 만든 앱이 아님을, 소설가가 되자 상표 안내는 권리 표기를 요청한다. */}
         <p>
-          pixiv 작품은 pixiv에 공개된 정보를 읽어 표시해요. 이 앱은 pixiv가 만들거나 배포한 앱이
-          아니에요.
+          JHF Novel Reader는 비공식 앱이에요. 소설가가 되자, 카쿠요무, pixiv의 운영사가 만들거나
+          배포한 앱이 아니에요. 각 운영사와 관계가 없어요.
+        </p>
+        <p>
+          pixiv 작품은 pixiv에 공개된 정보를 읽어 표시해요. 사이트 사양이 바뀌면 일부 기능이
+          동작하지 않을 수 있어요.
+        </p>
+        <p>
+          「小説家になろう」는 주식회사 히나프로젝트의 등록상표예요. pixiv는 ピクシブ株式会社의
+          등록상표예요.
         </p>
         <LicensesList />
       </Dialog>
