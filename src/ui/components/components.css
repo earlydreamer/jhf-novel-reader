@@ -478,6 +478,21 @@ label.nr-list-item__main:has(> input:disabled)::before {
   inset-block-start: auto;
   inset-block-end: 100%;
 }
+/* FAB이 여는 목록: 고정 위치는 anchor가 맡고, 목록은 FAB 오른쪽 끝에 맞춰 위로 펼친다. */
+.nr-menu-anchor--fab {
+  position: fixed;
+  z-index: 20;
+  inset-inline-end: max(16px, calc(16px + var(--inset-right)));
+  inset-block-end: calc(16px + var(--inset-bottom));
+}
+.nr-menu-anchor--fab > .nr-fab {
+  position: relative;
+  inset: auto;
+}
+.nr-menu-anchor--fab > .nr-menu {
+  inset-inline-end: 0;
+  margin-block-end: 8px;
+}
 .nr-menu__item {
   display: flex;
   align-items: center;

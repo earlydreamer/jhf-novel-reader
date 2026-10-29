@@ -761,7 +761,7 @@ it('cancel during durable save never opens the reader', async () => {
   expect(h.app.getSnapshot().route.kind).toBe('translation');
   h.app.dispose();
 });
-it('서재의 작품 추가와 상단 링크 버튼은 같은 URL 입력창을 연다', async () => {
+it('서재의 URL 입력창은 상단 링크 버튼 하나로 연다', async () => {
   const { render, screen, fireEvent, cleanup } = await import('@testing-library/react');
   const { Application } = await import('../../src/app/Application');
   const h = harness();
@@ -771,9 +771,7 @@ it('서재의 작품 추가와 상단 링크 버튼은 같은 URL 입력창을 �
   expect(screen.getByRole('button', { name: '작품 찾기' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'URL로 열기' }));
   expect(screen.getByRole('dialog', { name: 'URL로 열기' }).hasAttribute('open')).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: '닫기' }));
-  fireEvent.click(screen.getByRole('button', { name: '작품 추가' }));
-  expect(screen.getAllByRole('dialog', { name: 'URL로 열기' })).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: '작품 추가' })).toBeNull();
   fireEvent.change(screen.getByLabelText('작품 또는 회차 URL'), { target: { value: chapterUrl } });
   fireEvent.click(screen.getByRole('button', { name: '열기' }));
   await expect.poll(() => h.app.getSnapshot().work?.title).toBe('合成作品');
