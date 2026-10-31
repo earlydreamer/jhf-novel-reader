@@ -169,20 +169,6 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('오픈소스 라이선스 화면에 pixiv 비공식 앱 표기를 보여 준다(#390)', async () => {
-    const value = await setup();
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: '오픈소스 라이선스 포함된 오픈소스와 라이선스',
-      }),
-    );
-    expect(screen.getByRole('dialog', { name: '오픈소스 라이선스' })).toHaveTextContent(
-      'pixiv 작품은 pixiv에 공개된 정보를 읽어 표시해요. 이 앱은 pixiv가 만들거나 배포한 앱이 아니에요.',
-    );
-    value.controller.dispose();
-  });
-
   it('대화상자로 이어지는 행만 › 표시와 강조색 값으로 구분하고 정보 행은 그대로 둔다(#140)', async () => {
     const value = await setup();
 

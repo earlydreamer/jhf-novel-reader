@@ -951,11 +951,6 @@ export function SettingsScreen({
         fullScreen
         onClose={() => setLicensesOpen(false)}
       >
-        {/* pixiv 브랜드 가이드라인: pixiv 플랫폼을 쓰는 앱은 pixiv가 만든 앱이 아님을 표기한다. */}
-        <p>
-          pixiv 작품은 pixiv에 공개된 정보를 읽어 표시해요. 이 앱은 pixiv가 만들거나 배포한 앱이
-          아니에요.
-        </p>
         <LicensesList />
       </Dialog>
     </section>
