@@ -10,7 +10,7 @@ function controllerWith(saved: ReadingSettings) {
   return { controller, saveReadingSettings };
 }
 
-it('시스템 테마와 기본 읽기 화면으로 시작해요', async () => {
+it('시스템 테마와 기본 읽기 화면으로 시작한다', async () => {
   const { controller } = controllerWith({ schemaVersion: 2, selection: null, fontSize: 18 });
   await controller.initialize();
   expect(controller.getSnapshot()).toMatchObject({
@@ -21,7 +21,7 @@ it('시스템 테마와 기본 읽기 화면으로 시작해요', async () => {
   controller.dispose();
 });
 
-it('저장한 테마를 복원하고 기본값 키는 생략해요', async () => {
+it('저장한 테마를 복원하고 기본값 키는 생략한다', async () => {
   const { controller, saveReadingSettings } = controllerWith({
     schemaVersion: 2,
     selection: null,
@@ -40,7 +40,7 @@ it('저장한 테마를 복원하고 기본값 키는 생략해요', async () =>
   controller.dispose();
 });
 
-it('허용하지 않은 테마 값은 적용하거나 저장하지 않아요', async () => {
+it('허용하지 않은 테마 값은 적용하거나 저장하지 않는다', async () => {
   const { controller, saveReadingSettings } = controllerWith({
     schemaVersion: 2,
     selection: null,
@@ -59,7 +59,7 @@ it('허용하지 않은 테마 값은 적용하거나 저장하지 않아요', a
   controller.dispose();
 });
 
-it('테마 저장에 실패하면 다시 시도하라는 오류를 보여 줘요', async () => {
+it('테마 저장에 실패하면 다시 시도하라는 오류를 보여 준다', async () => {
   const controller = createRenewalController({
     settings: {
       readReadingSettings: async () => ({ schemaVersion: 2, selection: null, fontSize: 18 }),
@@ -78,7 +78,7 @@ it('테마 저장에 실패하면 다시 시도하라는 오류를 보여 줘요
   controller.dispose();
 });
 
-it('기존 홀수 글자 크기를 보존하고 명시한 2픽셀 조정만 저장해요', async () => {
+it('기존 홀수 글자 크기를 보존하고 명시한 2픽셀 조정만 저장한다', async () => {
   let persisted: ReadingSettings = { schemaVersion: 2, selection: null, fontSize: 19 };
   const saveReadingSettings = vi.fn(async (value: ReadingSettings) => {
     persisted = value;

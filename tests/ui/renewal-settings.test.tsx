@@ -121,7 +121,7 @@ afterEach(() => {
 });
 
 describe('Android 목록형 설정', () => {
-  it('네 섹션과 웹 버전·실제 오픈소스 고지를 정보 행으로 보여 줘요', async () => {
+  it('네 섹션과 웹 버전·실제 오픈소스 고지를 정보 행으로 보여 준다', async () => {
     const value = await setup();
 
     for (const name of ['번역 서버', '번역 방식', '화면', '정보']) {
@@ -148,7 +148,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('오픈소스 라이선스 전체 화면에 실제 구성 요소와 원문을 지연 로드해 보여 줘요(#142)', async () => {
+  it('오픈소스 라이선스 전체 화면에 실제 구성 요소와 원문을 지연 로드해 보여 준다(#142)', async () => {
     const value = await setup();
 
     fireEvent.click(
@@ -169,7 +169,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('오픈소스 라이선스 화면에 pixiv 비공식 앱 표기를 보여 줘요(#390)', async () => {
+  it('오픈소스 라이선스 화면에 pixiv 비공식 앱 표기를 보여 준다(#390)', async () => {
     const value = await setup();
 
     fireEvent.click(
@@ -183,7 +183,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('대화상자로 이어지는 행만 › 표시와 강조색 값으로 구분하고 정보 행은 그대로 둬요(#140)', async () => {
+  it('대화상자로 이어지는 행만 › 표시와 강조색 값으로 구분하고 정보 행은 그대로 둔다(#140)', async () => {
     const value = await setup();
 
     const rowOf = (name: string) =>
@@ -204,7 +204,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('정보 섹션에는 오픈소스 라이선스만 남기고 최근 번역 시간은 번역 방식에 둬요(#143)', async () => {
+  it('정보 섹션에는 오픈소스 라이선스만 남기고 최근 번역 시간은 번역 방식에 둔다(#143)', async () => {
     const value = await setup();
 
     const info = screen.getByRole('region', { name: '정보' });
@@ -219,7 +219,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('설정 섹션의 목록 항목이 아닌 내용만 같은 왼쪽 선 규칙에 걸려요(#270)', async () => {
+  it('설정 섹션의 목록 항목이 아닌 내용만 같은 왼쪽 선 규칙에 걸린다(#270)', async () => {
     const value = await setup();
 
     const root = screen.getByRole('region', { name: '설정' });
@@ -247,7 +247,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('자동 재번역은 검증 재시도의 비용과 결과 불명 요청의 중단을 알려요(#300)', async () => {
+  it('자동 재번역은 검증 재시도의 비용과 결과 불명 요청의 중단을 알린다(#300)', async () => {
     const value = await setup();
 
     expect(
@@ -258,7 +258,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('설정 끝 브랜드 footer에 로고와 앱 이름, 웹 버전을 정보 섹션 뒤에 보여 줘요(#143)', async () => {
+  it('설정 끝 브랜드 footer에 로고와 앱 이름, 웹 버전을 정보 섹션 뒤에 보여 준다(#143)', async () => {
     const value = await setup();
 
     const footer = document.querySelector('.nr-settings-footer') as HTMLElement;
@@ -271,7 +271,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('네이티브 앱에서는 footer에 앱 버전과 빌드 번호를 보여 줘요(#143)', async () => {
+  it('네이티브 앱에서는 footer에 앱 버전과 빌드 번호를 보여 준다(#143)', async () => {
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
     vi.mocked(App.getInfo).mockResolvedValue({
       name: 'JHF Novel Reader',
@@ -286,7 +286,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('설정 행의 접근성 이름에 현재 값을 포함해요', async () => {
+  it('설정 행의 접근성 이름에 현재 값을 포함한다', async () => {
     const value = await setup();
 
     expect(
@@ -295,7 +295,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('웹에서는 자동 설정 스위치를 유지하고 로컬 번역 방식만 숨겨요', async () => {
+  it('웹에서는 자동 설정 스위치를 유지하고 로컬 번역 방식만 숨긴다', async () => {
     const value = await setup({ streamingAvailable: false });
 
     expect(screen.getAllByRole('switch')).toHaveLength(4);
@@ -304,7 +304,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('저장된 제공자가 Gemini면 로컬 기본 연결로 되돌리고 한 번 안내해요(#280)', async () => {
+  it('저장된 제공자가 Gemini면 로컬 기본 연결로 되돌리고 한 번 안내한다(#280)', async () => {
     const value = await setup({
       saved: {
         schemaVersion: 2,
@@ -334,7 +334,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('같은 번역 방식을 다시 골라도 revision을 올리거나 저장하지 않아요', async () => {
+  it('같은 번역 방식을 다시 골라도 revision을 올리거나 저장하지 않는다', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     value.saveReadingSettings.mockClear();
     const before = value.controller.getSnapshot().connection.revision;
@@ -346,7 +346,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('같은 모델을 다시 골라도 상태를 바꾸거나 저장과 자동 요청을 반복하지 않아요', async () => {
+  it('같은 모델을 다시 골라도 상태를 바꾸거나 저장과 자동 요청을 반복하지 않는다', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
     await screen.findByRole('button', { name: '모델 Generation model' });
@@ -365,7 +365,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('모델 대화상자에서 생성 불가 모델을 비활성화하고 현재 선택을 유지해요', async () => {
+  it('모델 대화상자에서 생성 불가 모델을 비활성화하고 현재 선택을 유지한다', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
     await screen.findByRole('button', { name: '모델 Generation model' });
@@ -380,7 +380,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('미저장 인증값은 연결 확인 직전에 DOM에서 지우고 실패 뒤에도 노출하지 않아요', async () => {
+  it('미저장 인증값은 연결 확인 직전에 DOM에서 지우고 실패 뒤에도 노출하지 않는다', async () => {
     const catalog = vi.fn(async () => {
       throw new Error('synthetic connection failure');
     });
@@ -397,7 +397,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('저장한 인증값의 변경 취소와 빈 확인은 기존 참조를 보존해요', async () => {
+  it('저장한 인증값의 변경 취소와 빈 확인은 기존 참조를 보존한다', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     expect(screen.getByRole('button', { name: '인증값 저장됨' })).toHaveTextContent('저장됨');
 
@@ -419,7 +419,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('주소가 비어 있으면 인증값 입력과 저장하기를 비활성으로 둬요', async () => {
+  it('주소가 비어 있으면 인증값 입력과 저장하기를 비활성으로 둔다', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     fireEvent.click(screen.getByRole('button', { name: '인증값 저장됨' }));
     fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '' } });
@@ -429,7 +429,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('저장된 인증값을 바꿀 때 비워 두면 기존 인증값을 유지한다고 안내해요', async () => {
+  it('저장된 인증값을 바꿀 때 비워 두면 기존 인증값을 유지한다고 안내한다', async () => {
     const value = await setup({ saved: savedSettings('provider.existing') });
     fireEvent.click(screen.getByRole('button', { name: '인증값 저장됨' }));
 
@@ -443,7 +443,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('인증값이 없을 때 인증값 입력은 비워 두라는 안내를 설명으로 연결해요', async () => {
+  it('인증값이 없을 때 인증값 입력은 비워 두라는 안내를 설명으로 연결한다', async () => {
     const value = await setup();
     const input = screen.getByLabelText('인증값 (선택)');
 
@@ -453,7 +453,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('번역 방식 대화상자에서 저장본 호환성을 안내해요', async () => {
+  it('번역 방식 대화상자에서 저장본 호환성을 안내한다', async () => {
     const value = await setup();
     fireEvent.click(screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' }));
 
@@ -461,7 +461,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('현재 테마를 다시 누르면 선택 대화상자를 닫아요', async () => {
+  it('현재 테마를 다시 누르면 선택 대화상자를 닫는다', async () => {
     const value = await setup();
     fireEvent.click(screen.getByRole('button', { name: '테마 시스템 설정 따르기' }));
 
@@ -471,7 +471,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('스위치와 테마 선택을 v2 설정에 저장하고 재시작 뒤 복원해요', async () => {
+  it('스위치와 테마 선택을 v2 설정에 저장하고 재시작 뒤 복원한다', async () => {
     const value = await setup();
     fireEvent.click(screen.getByRole('switch', { name: '저장본이 없으면 자동으로 번역 시작' }));
     fireEvent.click(screen.getByRole('switch', { name: '실패한 문단 자동으로 다시 번역' }));
@@ -490,7 +490,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('대화상자는 Esc와 시스템 Back으로 닫히고 연 버튼으로 포커스를 돌려줘요', async () => {
+  it('대화상자는 Esc와 시스템 Back으로 닫히고 연 버튼으로 포커스를 돌려준다', async () => {
     const value = await setup();
     const row = screen.getByRole('button', { name: '로컬 번역 방식 기존 묶음 방식' });
     row.focus();
@@ -521,7 +521,7 @@ function savedAddress(baseUrl: string): ReadingSettings {
 }
 
 describe('OpenAI 호환 서버 주소 프리셋', () => {
-  it('저장 주소가 없으면 서버 주소와 포트 입력과 안내를 보여 줘요', async () => {
+  it('저장 주소가 없으면 서버 주소와 포트 입력과 안내를 보여 준다', async () => {
     const value = await setup();
 
     expect(screen.getByLabelText('서버 주소')).toHaveAttribute('placeholder', '192.168.0.10');
@@ -534,7 +534,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     value.controller.dispose();
   });
 
-  it('서버 주소와 포트를 입력하면 완성 주소를 저장하고 보여 줘요', async () => {
+  it('서버 주소와 포트를 입력하면 완성 주소를 저장하고 보여 준다', async () => {
     const value = await setup();
 
     fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.168.0.10' } });
@@ -545,7 +545,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     value.controller.dispose();
   });
 
-  it('자주 쓰는 포트 칩을 누르면 포트를 채우고 선택 상태를 보여 줘요', async () => {
+  it('자주 쓰는 포트 칩을 누르면 포트를 채우고 선택 상태를 보여 준다', async () => {
     const value = await setup();
     fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.168.0.10' } });
 
@@ -560,7 +560,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     value.controller.dispose();
   });
 
-  it('llama.cpp 8080 칩을 누르면 포트를 채우고 선택 상태를 보여 줘요', async () => {
+  it('llama.cpp 8080 칩을 누르면 포트를 채우고 선택 상태를 보여 준다', async () => {
     const value = await setup();
     fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '100.73.103.1' } });
 
@@ -575,7 +575,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     value.controller.dispose();
   });
 
-  it('포트 칸에는 숫자만 남기고 다섯 자리까지만 받아요', async () => {
+  it('포트 칸에는 숫자만 남기고 다섯 자리까지만 받는다', async () => {
     const value = await setup();
 
     fireEvent.change(screen.getByLabelText('포트'), { target: { value: '12a34' } });
@@ -584,7 +584,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     value.controller.dispose();
   });
 
-  it('저장 주소를 해석할 수 있으면 서버 주소와 포트 칸에 나눠 보여 줘요', async () => {
+  it('저장 주소를 해석할 수 있으면 서버 주소와 포트 칸에 나눠 보여 준다', async () => {
     const value = await setup({ saved: savedAddress('http://100.64.1.2:1234/v1') });
 
     expect(screen.getByLabelText('서버 주소')).toHaveValue('100.64.1.2');
@@ -593,7 +593,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     value.controller.dispose();
   });
 
-  it('해석할 수 없는 저장 주소는 스위치를 켜고 전체 주소 칸에 그대로 보여 줘요', async () => {
+  it('해석할 수 없는 저장 주소는 스위치를 켜고 전체 주소 칸에 그대로 보여 준다', async () => {
     const value = await setup({ saved: savedAddress('https://proxy.example/api/v1') });
 
     expect(screen.getByRole('switch', { name: '전체 주소 직접 입력' })).toBeChecked();
@@ -603,7 +603,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
     value.controller.dispose();
   });
 
-  it('전체 주소 직접 입력에서는 입력한 주소를 그대로 저장해요', async () => {
+  it('전체 주소 직접 입력에서는 입력한 주소를 그대로 저장한다', async () => {
     const value = await setup();
 
     fireEvent.click(screen.getByRole('switch', { name: '전체 주소 직접 입력' }));
@@ -617,7 +617,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
 });
 
 describe('OpenAI 호환 주소 조합과 해석', () => {
-  it('포트 없는 주소와 끝 슬래시를 해석해요', () => {
+  it('포트 없는 주소와 끝 슬래시를 해석한다', () => {
     expect(parsePresetAddress('http://192.168.0.10/v1')).toEqual({
       host: '192.168.0.10',
       port: '',
@@ -628,14 +628,14 @@ describe('OpenAI 호환 주소 조합과 해석', () => {
     });
   });
 
-  it('대문자 스킴도 해석해요', () => {
+  it('대문자 스킴도 해석한다', () => {
     expect(parsePresetAddress('HTTP://192.168.0.10:1234/v1')).toEqual({
       host: '192.168.0.10',
       port: '1234',
     });
   });
 
-  it('주소·포트 형식이 아니면 null을 돌려줘요', () => {
+  it('주소·포트 형식이 아니면 null을 돌려준다', () => {
     for (const address of [
       'https://proxy.example/api/v1',
       'http://192.168.0.10:1234/api/v1',
@@ -647,7 +647,7 @@ describe('OpenAI 호환 주소 조합과 해석', () => {
     }
   });
 
-  it('주소와 포트로 기본 주소를 만들고 주소가 비면 빈 문자열이에요', () => {
+  it('주소와 포트로 기본 주소를 만들고 주소가 비면 빈 문자열이다', () => {
     expect(composePresetAddress(' 192.168.0.10 ', ' 1234 ')).toBe('http://192.168.0.10:1234/v1');
     expect(composePresetAddress('192.168.0.10', '')).toBe('http://192.168.0.10/v1');
     expect(composePresetAddress('   ', '1234')).toBe('');
@@ -691,7 +691,7 @@ describe('연결 확인 결과 알림', () => {
     await waitFor(() => expect(connectionStatusText()).toBe(message));
   }
 
-  it('성공하면 번역에 쓸 수 있는 생성 모델 수를 스낵바로 알려요', async () => {
+  it('성공하면 번역에 쓸 수 있는 생성 모델 수를 스낵바로 알린다', async () => {
     const value = await checkWith(
       vi.fn(async (connection: ConnectionConfig) => ({
         connection,
@@ -707,7 +707,7 @@ describe('연결 확인 결과 알림', () => {
     value.controller.dispose();
   });
 
-  it('주소 형식이 틀리면 정확한 안내를 스낵바와 연결 상태에 보여 줘요', async () => {
+  it('주소 형식이 틀리면 정확한 안내를 스낵바와 연결 상태에 보여 준다', async () => {
     const value = await checkWith(
       vi.fn(async () => {
         throw new ReaderError('connection');
@@ -718,7 +718,7 @@ describe('연결 확인 결과 알림', () => {
     value.controller.dispose();
   });
 
-  it('서버에 닿지 못하면 네트워크 안내를 보여 줘요', async () => {
+  it('서버에 닿지 못하면 네트워크 안내를 보여 준다', async () => {
     const value = await checkWith(
       vi.fn(async () => {
         throw new ReaderError('timeout_unknown', 'unknown');
@@ -729,7 +729,7 @@ describe('연결 확인 결과 알림', () => {
     value.controller.dispose();
   });
 
-  it('HTTP 404와 503은 상태 코드를 포함한 안내를 보여 줘요', async () => {
+  it('HTTP 404와 503은 상태 코드를 포함한 안내를 보여 준다', async () => {
     const notFound = await checkWith(
       vi.fn(async () => {
         throw new ReaderError('connection', 'received', 404);
@@ -748,7 +748,7 @@ describe('연결 확인 결과 알림', () => {
     serverError.controller.dispose();
   });
 
-  it('응답 주소가 요청과 달라 2xx가 막히면 리다이렉트 안내를 괄호 없이 보여 줘요', async () => {
+  it('응답 주소가 요청과 달라 2xx가 막히면 리다이렉트 안내를 괄호 없이 보여 준다', async () => {
     const value = await checkWith(
       vi.fn(async () => {
         throw new ReaderError('connection', 'received', 200);
@@ -759,7 +759,7 @@ describe('연결 확인 결과 알림', () => {
     value.controller.dispose();
   });
 
-  it('인증 거부는 상태 코드를 포함한 안내를 보여 줘요', async () => {
+  it('인증 거부는 상태 코드를 포함한 안내를 보여 준다', async () => {
     const value = await checkWith(
       vi.fn(async () => {
         throw new ReaderError('auth', 'received', 401);
@@ -770,7 +770,7 @@ describe('연결 확인 결과 알림', () => {
     value.controller.dispose();
   });
 
-  it('인증값 저장 확인도 같은 방식으로 실패 이유를 알려요', async () => {
+  it('인증값 저장 확인도 같은 방식으로 실패 이유를 알린다', async () => {
     const value = await setup({
       saved: savedSettings('provider.existing'),
       catalog: vi.fn(async () => {
@@ -784,7 +784,7 @@ describe('연결 확인 결과 알림', () => {
     value.controller.dispose();
   });
 
-  it('응답이 모델 목록 형식이 아니면 응답 형식 안내를 보여 줘요', async () => {
+  it('응답이 모델 목록 형식이 아니면 응답 형식 안내를 보여 준다', async () => {
     const value = await checkWith(
       vi.fn(async () => {
         throw new ReaderError('model_list', 'received');
@@ -795,7 +795,7 @@ describe('연결 확인 결과 알림', () => {
     value.controller.dispose();
   });
 
-  it('확인 중 예외가 나도 스낵바로 알리고 처리되지 않은 rejection을 남기지 않아요', async () => {
+  it('확인 중 예외가 나도 스낵바로 알리고 처리되지 않은 rejection을 남기지 않는다', async () => {
     const base = createRenewalController().getSnapshot();
     const state = {
       ...base,
@@ -817,7 +817,7 @@ describe('연결 확인 결과 알림', () => {
     expect(onCheck).toHaveBeenCalledTimes(1);
   });
 
-  it('미리 번역 중이면 확인을 건너뛰고 그 이유를 스낵바로 알려요', async () => {
+  it('미리 번역 중이면 확인을 건너뛰고 그 이유를 스낵바로 알린다', async () => {
     const base = createRenewalController().getSnapshot();
     const state = {
       ...base,
@@ -836,7 +836,7 @@ describe('연결 확인 결과 알림', () => {
     await waitFor(() => expect(snackbarText()).toBe(messages.busy));
   });
 
-  it('확인하는 동안 버튼 문구를 확인하는 중으로 바꾸고 끝나면 되돌려요', async () => {
+  it('확인하는 동안 버튼 문구를 확인하는 중으로 바꾸고 끝나면 되돌린다', async () => {
     let release!: () => void;
     const catalog = vi.fn(
       (connection: ConnectionConfig) =>
@@ -909,14 +909,14 @@ describe('설정 모델 행 (#176)', () => {
   );
   const snackbarText = () => document.querySelector('.nr-snackbar__text')?.textContent;
 
-  it('목록이 비어도 저장된 모델의 읽을 수 있는 이름을 보여 주고 행을 활성으로 둬요', () => {
+  it('목록이 비어도 저장된 모델의 읽을 수 있는 이름을 보여 주고 행을 활성으로 둔다', () => {
     const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => ({ kind: 'superseded' }));
     render(ui(snapshot({ selectedModelId: gguf, models: [] }), onCheck));
 
     expect(screen.getByRole('button', { name: `모델 ${readable}` })).toBeEnabled();
   });
 
-  it('Windows 경로 모델 ID도 마지막 조각을 이름으로 보여 줘요', () => {
+  it('Windows 경로 모델 ID도 마지막 조각을 이름으로 보여 준다', () => {
     const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => ({ kind: 'superseded' }));
     render(
       ui(snapshot({ selectedModelId: 'C:\\models\\qwen3-8b-Q4_K_M.gguf', models: [] }), onCheck),
@@ -925,7 +925,7 @@ describe('설정 모델 행 (#176)', () => {
     expect(screen.getByRole('button', { name: '모델 qwen3-8b-Q4_K_M' })).toBeEnabled();
   });
 
-  it('목록 없이 행을 누르면 연결을 한 번 확인하고 생성 모델이 오면 모델 선택 창을 열어요', async () => {
+  it('목록 없이 행을 누르면 연결을 한 번 확인하고 생성 모델이 오면 모델 선택 창을 연다', async () => {
     const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => ({
       kind: 'done',
       status: 'connected',
@@ -951,7 +951,7 @@ describe('설정 모델 행 (#176)', () => {
     expect(await screen.findByRole('dialog', { name: '모델 선택' })).toBeVisible();
   });
 
-  it('연결 확인이 실패해 목록이 계속 비면 모델 선택 창을 열지 않고 실패를 알려요', async () => {
+  it('연결 확인이 실패해 목록이 계속 비면 모델 선택 창을 열지 않고 실패를 알린다', async () => {
     const onCheck = vi.fn(async (): Promise<ConnectionCheckResult> => {
       throw new Error('synthetic check failure');
     });
@@ -968,7 +968,7 @@ describe('설정 모델 행 (#176)', () => {
     expect(screen.queryByRole('dialog', { name: '모델 선택' })).not.toBeInTheDocument();
   });
 
-  it('목록에 표시 이름이 있으면 파일 경로 대신 그 이름을 써요', () => {
+  it('목록에 표시 이름이 있으면 파일 경로 대신 그 이름을 쓴다', () => {
     render(
       ui(
         snapshot({
@@ -983,7 +983,7 @@ describe('설정 모델 행 (#176)', () => {
     expect(screen.getByRole('button', { name: '모델 보기 좋은 이름' })).toBeEnabled();
   });
 
-  it('선택한 모델도 목록도 없으면 모델 행을 비활성으로 둬요', () => {
+  it('선택한 모델도 목록도 없으면 모델 행을 비활성으로 둔다', () => {
     render(
       ui(
         snapshot({ selectedModelId: null, models: [] }),
@@ -1001,7 +1001,7 @@ describe('번역 전 용어집 자동 생성 스위치 (#192)', () => {
     return { ...state, connection: { ...state.connection, provider } };
   }
 
-  it('OpenAI 호환 서버에서 켜진 상태로 보이고 누르면 끄기를 알려요', () => {
+  it('OpenAI 호환 서버에서 켜진 상태로 보이고 누르면 끄기를 알린다', () => {
     const onAutoGlossary = vi.fn();
     render(
       <SettingsScreen
@@ -1152,7 +1152,7 @@ describe('백업 설정 섹션(#269)', () => {
     return { onExport, onRestore, onReload, unmount: view.unmount };
   }
 
-  it('쓸 수 있을 때만 백업 제목·두 항목·API 키 안내를 정보 앞에 보여 줘요', () => {
+  it('쓸 수 있을 때만 백업 제목·두 항목·API 키 안내를 정보 앞에 보여 준다', () => {
     renderBackup();
     const headings = screen
       .getAllByRole('heading', { level: 2 })
@@ -1178,7 +1178,7 @@ describe('백업 설정 섹션(#269)', () => {
     expect(screen.queryByRole('button', { name: EXPORT_ROW })).toBeNull();
   });
 
-  it('백업 파일 만들기는 저장하면 담은 파일 수를 알려 주고 취소하면 조용해요', async () => {
+  it('백업 파일 만들기는 저장하면 담은 파일 수를 알려 주고 취소하면 아무것도 알리지 않는다', async () => {
     const saved = renderBackup({ onExport: async () => ({ kind: 'saved', files: 12 }) });
     fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
     expect(saved.onExport).toHaveBeenCalledTimes(1);
@@ -1193,7 +1193,7 @@ describe('백업 설정 섹션(#269)', () => {
     expect(screen.queryByText(/백업 파일을 저장|만들지 못했어요/)).toBeNull();
   });
 
-  it('만들기에 실패하면 저장 공간을 확인하라고 알려요', async () => {
+  it('만들기에 실패하면 저장 공간을 확인하라고 알린다', async () => {
     renderBackup({ onExport: async () => ({ kind: 'failed' }) });
     fireEvent.click(screen.getByRole('button', { name: EXPORT_ROW }));
     expect(
@@ -1201,7 +1201,7 @@ describe('백업 설정 섹션(#269)', () => {
     ).toBeVisible();
   });
 
-  it('진행하는 동안에는 두 항목이 막혀요', async () => {
+  it('진행하는 동안에는 두 항목을 막는다', async () => {
     let finish: (value: BackupResult) => void = () => {};
     const { onExport } = renderBackup({
       onExport: () => new Promise<BackupResult>((resolve) => (finish = resolve)),
@@ -1215,7 +1215,7 @@ describe('백업 설정 섹션(#269)', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeEnabled());
   });
 
-  it('복원은 확인 창에서 파일 고르기를 눌러야 시작하고 취소하면 아무 일도 없어요', async () => {
+  it('복원은 확인 창에서 파일 고르기를 눌러야 시작하고 취소하면 아무 일도 하지 않는다', async () => {
     const { onRestore } = renderBackup({ onRestore: async () => ({ kind: 'invalid' }) });
     fireEvent.click(screen.getByRole('button', { name: RESTORE_ROW }));
     expect(screen.getByText('백업으로 바꿀까요?')).toBeVisible();
@@ -1238,7 +1238,7 @@ describe('백업 설정 섹션(#269)', () => {
     ).toBeVisible();
   });
 
-  it('복원에 실패하면 지금 데이터가 그대로라고 알리고 앱을 다시 불러오지 않아요', async () => {
+  it('복원에 실패하면 지금 데이터가 그대로라고 알리고 앱을 다시 불러오지 않는다', async () => {
     vi.useFakeTimers();
     try {
       const { onReload } = renderBackup({ onRestore: async () => ({ kind: 'failed' }) });
@@ -1256,7 +1256,7 @@ describe('백업 설정 섹션(#269)', () => {
     }
   });
 
-  it('잠겨 있으면 두 항목을 눌러도 아무 일도 없고 잠금 문구를 보여 줘요', () => {
+  it('잠겨 있으면 두 항목을 눌러도 아무 일도 하지 않고 잠금 문구를 보여 준다', () => {
     const { onExport, onRestore } = renderBackup({ locked: true });
     expect(screen.getByText('번역이나 스캔이 끝난 뒤에 백업할 수 있어요.')).toBeVisible();
     expect(screen.getByRole('button', { name: EXPORT_ROW })).toBeDisabled();
@@ -1268,7 +1268,7 @@ describe('백업 설정 섹션(#269)', () => {
     expect(onRestore).not.toHaveBeenCalled();
   });
 
-  it('복원하면 안내를 보여 주고 1초 뒤 앱을 다시 불러오며 그동안 항목을 막아요', async () => {
+  it('복원하면 안내를 보여 주고 1초 뒤 앱을 다시 불러오며 그동안 항목을 막는다', async () => {
     vi.useFakeTimers();
     try {
       const { onReload } = renderBackup({
@@ -1295,7 +1295,7 @@ describe('백업 설정 섹션(#269)', () => {
     }
   });
 
-  it('교체 결과가 불확실하면 그대로라고 말하지 않고 다시 불러올 수 있어요', async () => {
+  it('교체 결과가 불확실하면 그대로라고 말하지 않고 다시 불러올 수 있게 한다', async () => {
     vi.useFakeTimers();
     try {
       const { onReload } = renderBackup({ onRestore: async () => ({ kind: 'reload_required' }) });
@@ -1344,7 +1344,7 @@ describe('백업 설정 섹션(#269)', () => {
       }
     },
   );
-  it('앱 화면은 주입한 백업 기능을 설정에 연결해요', async () => {
+  it('앱 화면은 주입한 백업 기능을 설정에 연결한다', async () => {
     const backup: BackupPlatform = {
       available: () => true,
       exportBackup: vi.fn(async (): Promise<BackupResult> => ({ kind: 'saved', files: 4 })),
