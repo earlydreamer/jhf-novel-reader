@@ -41,7 +41,7 @@ describe('SettingsScreen theme section', () => {
     expect(onTheme).toHaveBeenCalledWith('dark');
   });
 
-  it('새 테마를 라디오 클릭으로 고르면 onTheme을 한 번만 불러요', () => {
+  it('새 테마를 라디오 클릭으로 고르면 onTheme을 한 번만 부른다', () => {
     const state = createRenewalController().getSnapshot();
     const onTheme = vi.fn();
     render(
@@ -59,7 +59,7 @@ describe('SettingsScreen theme section', () => {
     expect(onTheme).toHaveBeenLastCalledWith('dark');
   });
 
-  it('새 테마를 라벨 텍스트 클릭으로 고르면 onTheme을 한 번만 불러요', () => {
+  it('새 테마를 라벨 텍스트 클릭으로 고르면 onTheme을 한 번만 부른다', () => {
     const state = createRenewalController().getSnapshot();
     const onTheme = vi.fn();
     render(
@@ -77,7 +77,7 @@ describe('SettingsScreen theme section', () => {
     expect(onTheme).toHaveBeenLastCalledWith('light');
   });
 
-  it('이미 선택된 테마를 다시 누르면 onTheme을 한 번 부르고 대화상자를 닫아요', () => {
+  it('이미 선택된 테마를 다시 누르면 onTheme을 한 번 부르고 대화상자를 닫는다', () => {
     const state = createRenewalController().getSnapshot();
     const onTheme = vi.fn();
     render(

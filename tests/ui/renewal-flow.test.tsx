@@ -1567,7 +1567,7 @@ describe('reading background follows the reader color scheme (#173)', () => {
     return { ...value, bars };
   }
 
-  it('검정 독서 배경은 앱 테마가 밝아도 리더에서 다크 체계를 쓰고 목차로 나가면 앱 테마로 돌아와요', async () => {
+  it('검정 독서 배경은 앱 테마가 밝아도 리더에서 다크 체계를 쓰고 목차로 나가면 앱 테마로 돌아온다', async () => {
     const value = await openSavedChapter('light', 'black');
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(value.bars).toHaveBeenLastCalledWith('dark');
@@ -1579,13 +1579,13 @@ describe('reading background follows the reader color scheme (#173)', () => {
     expect(value.bars).toHaveBeenLastCalledWith('light');
   });
 
-  it('세피아 독서 배경은 앱 테마가 어두워도 리더에서 라이트 체계를 써요', async () => {
+  it('세피아 독서 배경은 앱 테마가 어두워도 리더에서 라이트 체계를 쓴다', async () => {
     const value = await openSavedChapter('dark', 'sepia');
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(value.bars).toHaveBeenLastCalledWith('light');
   });
 
-  it('theme 독서 배경은 리더에서도 앱 테마를 그대로 써요', async () => {
+  it('theme 독서 배경은 리더에서도 앱 테마를 그대로 쓴다', async () => {
     const value = await openSavedChapter('dark', 'theme');
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(value.bars).toHaveBeenLastCalledWith('dark');
