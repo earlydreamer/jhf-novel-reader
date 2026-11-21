@@ -32,11 +32,16 @@ export type GuidanceDraft = {
   terms: GuidanceTerm[];
   voices: GuidanceVoice[];
   plotSummary?: string;
+  excludedSharedTerms?: string[];
 };
 export type WorkGuidance = GuidanceDraft & { schemaVersion: 1; workId: string; hash: string };
+// Source work IDs have site-specific formats. This key shares the guidance backup directory.
+export const SHARED_GLOSSARY_ID = 'app-shared-glossary';
 export interface GuidanceRepository {
   read(workId: string): Promise<WorkGuidance | null>;
   save(workId: string, draft: GuidanceDraft, expectedHash?: string | null): Promise<WorkGuidance>;
+  readShared?(): Promise<WorkGuidance | null>;
+  saveShared?(terms: GuidanceTerm[], expectedHash: string | null): Promise<WorkGuidance>;
 }
 /** 편집을 시작한 뒤 다른 작업이 용어집을 저장했다. 초안을 보존하고 다시 읽어야 한다. */
 export class GuidanceConflictError extends ReaderError {
@@ -77,18 +82,9 @@ function parses(value: string): boolean {
     return false;
   }
 }
-export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
-  record(value);
-  if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 1)
-    throw new StorageError('unsupported_schema');
-  object(value, ['schemaVersion', 'workId', 'hash', 'terms', 'voices', 'plotSummary']);
-  if (value.plotSummary !== undefined) string(value.plotSummary, 400);
-  check(value.schemaVersion === 1);
-  identifier(value.workId);
-  // 저장 개수 상한은 두지 않는다. 주입이 구간 등장분만이라 저장량이 입력 예산을 쓰지 않는다.
-  check(Array.isArray(value.terms));
-  check(Array.isArray(value.voices));
-  for (const term of value.terms) {
+function validateTerms(terms: unknown): asserts terms is GuidanceTerm[] {
+  check(Array.isArray(terms));
+  for (const term of terms) {
     object(term, ['source', 'target', 'aliases', 'category', 'note', 'origin', 'evidence']);
     check(
       term.origin === undefined ||
@@ -107,56 +103,111 @@ export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
     string(term.category, 40);
     string(term.note, 300);
   }
+}
+export function validateSharedTerms(terms: unknown): asserts terms is GuidanceTerm[] {
+  validateTerms(terms);
+  check(terms.every((term) => !isMachineTerm(term)));
+  duplicateFree({ terms, voices: [] });
+}
+function guidanceDigest(workId: string, draft: GuidanceDraft): Promise<string> {
+  return digest([
+    workId,
+    draft.terms,
+    draft.voices,
+    ...(draft.plotSummary === undefined ? [] : [draft.plotSummary]),
+    ...(draft.excludedSharedTerms ? [draft.excludedSharedTerms] : []),
+  ]);
+}
+export async function validateGuidance(value: unknown): Promise<WorkGuidance> {
+  record(value);
+  if (typeof value.schemaVersion === 'number' && value.schemaVersion !== 1)
+    throw new StorageError('unsupported_schema');
+  object(value, [
+    'schemaVersion',
+    'workId',
+    'hash',
+    'terms',
+    'voices',
+    'plotSummary',
+    'excludedSharedTerms',
+  ]);
+  if (value.plotSummary !== undefined) string(value.plotSummary, 400);
+  check(value.schemaVersion === 1);
+  identifier(value.workId);
+  // 저장 개수 상한은 두지 않는다. 주입이 구간 등장분만이라 저장량이 입력 예산을 쓰지 않는다.
+  validateTerms(value.terms);
+  check(Array.isArray(value.voices));
   for (const voice of value.voices) {
     object(voice, ['name', 'aliases', 'instruction']);
     string(voice.name, 80, true);
     aliases(voice.aliases);
     string(voice.instruction, 400, true);
   }
-  check(
-    value.hash ===
-      (await digest([
-        value.workId,
-        value.terms,
-        value.voices,
-        ...(value.plotSummary === undefined ? [] : [value.plotSummary]),
-      ])),
-  );
-  return value as unknown as WorkGuidance;
+  if (value.excludedSharedTerms !== undefined) {
+    check(Array.isArray(value.excludedSharedTerms) && value.excludedSharedTerms.length > 0);
+    value.excludedSharedTerms.forEach((term) => string(term, 80, true));
+    check(
+      new Set(value.excludedSharedTerms.map(nameKey)).size === value.excludedSharedTerms.length,
+    );
+  }
+  if (value.workId === SHARED_GLOSSARY_ID) {
+    validateSharedTerms(value.terms);
+    check(
+      !value.voices.length &&
+        value.plotSummary === undefined &&
+        value.excludedSharedTerms === undefined,
+    );
+  }
+  const guidance = value as unknown as WorkGuidance;
+  check(guidance.hash === (await guidanceDigest(guidance.workId, guidance)));
+  return guidance;
 }
 export function createGuidanceRepository(files: PrivateFiles): GuidanceRepository {
   const journal = new Journal(files);
-  return {
-    read(workId) {
-      identifier(workId);
-      return serial(files, async () => {
-        const record = (await journal.load(`guidance/${workId}`, validateGuidance))?.value ?? null;
-        check(!record || record.workId === workId);
-        return record;
-      });
-    },
-    async save(workId, draft, expectedHash) {
-      duplicateFree(draft);
+  const read = (workId: string) => {
+    identifier(workId);
+    return serial(files, async () => {
+      const record = (await journal.load(`guidance/${workId}`, validateGuidance))?.value ?? null;
+      check(!record || record.workId === workId);
+      return record;
+    });
+  };
+  const save = (workId: string, draft: GuidanceDraft, expectedHash?: string | null) => {
+    identifier(workId);
+    const { excludedSharedTerms, ...frozen } = structuredClone(draft);
+    duplicateFree(frozen);
+    return serial(files, async () => {
+      const path = `guidance/${workId}`;
+      const current = (
+        await (expectedHash === undefined
+          ? journal.loadForWrite(path, validateGuidance)
+          : journal.load(path, validateGuidance))
+      )?.value;
+      check(!current || current.workId === workId);
+      if (expectedHash !== undefined && (current?.hash ?? null) !== expectedHash)
+        throw new GuidanceConflictError();
+      // Term scanning and single-term edits only update work terms. An explicit empty list clears exclusions.
+      const exclusions = excludedSharedTerms ?? current?.excludedSharedTerms;
+      const next = {
+        ...frozen,
+        ...(exclusions?.length ? { excludedSharedTerms: exclusions } : {}),
+      };
       const value: WorkGuidance = {
-        ...structuredClone(draft),
+        ...next,
         schemaVersion: 1,
         workId,
-        hash: await digest([
-          workId,
-          draft.terms,
-          draft.voices,
-          ...(draft.plotSummary === undefined ? [] : [draft.plotSummary]),
-        ]),
+        hash: await guidanceDigest(workId, next),
       };
-      await serial(files, async () => {
-        if (expectedHash !== undefined) {
-          const current = (await journal.load(`guidance/${workId}`, validateGuidance))?.value;
-          if ((current?.hash ?? null) !== expectedHash) throw new GuidanceConflictError();
-        }
-        await journal.save(`guidance/${workId}`, value, validateGuidance);
-      });
+      await journal.save(path, value, validateGuidance);
       return value;
-    },
+    });
+  };
+  return {
+    read,
+    save,
+    readShared: () => read(SHARED_GLOSSARY_ID),
+    saveShared: (terms, expectedHash) =>
+      save(SHARED_GLOSSARY_ID, { terms, voices: [] }, expectedHash),
   };
 }
 /** 전각·반각 차이 등을 같게 보는 이름 비교 키. */
@@ -176,7 +227,11 @@ export function isMachineTerm(term: GuidanceTerm): boolean {
   return term.origin !== undefined;
 }
 export function guidanceHash(value: WorkGuidance | null | undefined): string | undefined {
-  return value && (value.terms.length || value.voices.length || value.plotSummary?.trim())
+  return value &&
+    (value.terms.length ||
+      value.voices.length ||
+      value.plotSummary?.trim() ||
+      value.excludedSharedTerms?.length)
     ? value.hash
     : undefined;
 }
@@ -237,6 +292,25 @@ type AppliedGuidance = {
   terms: { term: GuidanceTerm; names: string[]; candidateNames: string[] }[];
   voices: GuidanceVoice[];
 };
+export function referenceTermsForWork(
+  guidance: WorkGuidance | null,
+  referenceTerms: readonly GuidanceTerm[],
+): GuidanceTerm[] {
+  const workTerms = (guidance?.terms ?? []).filter((term) => term.origin !== 'auto');
+  const workKeys = new Set(
+    workTerms.flatMap((term) => [term.source, ...term.aliases]).map(nameKey),
+  );
+  const excluded = new Set(guidance?.excludedSharedTerms?.map(nameKey));
+  return referenceTerms.flatMap((term) => {
+    if (
+      workKeys.has(nameKey(term.source)) ||
+      [term.source, ...term.aliases].some((name) => excluded.has(nameKey(name)))
+    )
+      return [];
+    const aliases = term.aliases.filter((name) => !workKeys.has(nameKey(name)));
+    return [aliases.length === term.aliases.length ? term : { ...term, aliases }];
+  });
+}
 /**
  * 입력에 실제로 등장한 용어(등장한 이름 포함)와 말투만 고른다. 주입 형식과 적용 해시가 같은 매칭을 쓴다.
  * decision이 있으면 후보 이름을 확정(names)하거나 제외(candidateNames에서 뺌)한다. 해시에는 쓰지 않는다.
@@ -250,14 +324,7 @@ export function appliedGuidance(
 ): AppliedGuidance | null {
   if (value && value.workId !== workId) throw new ReaderError('storage');
   const workTerms = (value?.terms ?? []).filter((term) => term.origin !== 'auto');
-  const workKeys = new Set(
-    workTerms.flatMap((term) => [term.source, ...term.aliases]).map(nameKey),
-  );
-  // 작품 용어가 같은 원문을 가지면 프리셋 항목 대신 작품 항목을 쓴다.
-  const candidates = [
-    ...workTerms,
-    ...preset.filter((term) => !workKeys.has(nameKey(term.source))),
-  ];
+  const candidates = [...workTerms, ...referenceTermsForWork(value, preset)];
   const voiceList = value?.voices ?? [];
   // 용어와 말투는 따로 가린다. 같은 인물의 용어 별칭(긴 이름)이 말투 이름(짧은 이름)을 가리면 말투 지시가 빠진다.
   // 용어 이름은 글자 종류 경계로 확정·후보를 가르고, 한 글자·짧은 히라가나 이름은 찾지 않는다(findTermMatches).

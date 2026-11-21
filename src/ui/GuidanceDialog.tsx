@@ -35,7 +35,7 @@ export function GuidanceDialog({
       <Dialog
         open={open}
         keepMounted
-        title="작품 용어집"
+        title={panel.shared ? '공용 용어집' : '작품 용어집'}
         onClose={requestClose}
         fullScreen={{
           confirmLabel: '저장하기',

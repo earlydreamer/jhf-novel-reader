@@ -1,5 +1,5 @@
 import type { SelectedModel } from '../contracts/reading';
-import type { GuidanceTerm } from './guidance';
+import type { GuidanceRepository, GuidanceTerm } from './guidance';
 
 const entry = (source: string, target: string, category: string, note = ''): GuidanceTerm => ({
   source,
@@ -28,6 +28,19 @@ export const UNIVERSAL_PRESET: readonly GuidanceTerm[] = [
   entry('カブトムシ', '장수풍뎅이', '곤충'),
 ];
 
+// These are editable initial values. Saving the list replaces the defaults, including removed entries.
+export const DEFAULT_SHARED_TERMS: readonly GuidanceTerm[] = [
+  ...UNIVERSAL_PRESET,
+  entry('異世界', '이세계', '이세계'),
+  entry('冒険者ギルド', '모험가 길드', '조직'),
+  entry('魔法陣', '마법진', '마법'),
+  { ...entry('魔道具', '마도구', '마법'), aliases: ['魔導具'] },
+  entry('魔導書', '마도서', '마법'),
+  entry('召喚獣', '소환수', '마법'),
+  entry('錬金術', '연금술', '마법'),
+  entry('治癒魔法', '치유 마법', '마법'),
+];
+
 /**
  * 프리셋은 구간 번역(로컬 모델) 경로에서만 쓴다. 사용자가 승인한 작품 용어집과 달리
  * 지원하지 않는 제공자에서 번역을 막을 이유가 없으므로 조용히 생략한다.
@@ -36,6 +49,19 @@ export function referencePreset(selection: SelectedModel): readonly GuidanceTerm
   return selection.connection.provider === 'openai-compatible' && selection.limits
     ? UNIVERSAL_PRESET
     : [];
+}
+
+export async function readReferenceTerms(
+  selection: SelectedModel,
+  guidance?: GuidanceRepository,
+): Promise<readonly GuidanceTerm[]> {
+  if (
+    !guidance?.readShared ||
+    selection.connection.provider !== 'openai-compatible' ||
+    (!selection.limits && selection.translationMode !== 'stream')
+  )
+    return referencePreset(selection);
+  return (await guidance.readShared())?.terms ?? DEFAULT_SHARED_TERMS;
 }
 
 /** 숫자로 쓴 「N月」 뒤에 기간 표현이 오면 달력의 월이 아니라 N개월이다. */

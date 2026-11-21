@@ -17,6 +17,7 @@ import { useResolvedTheme } from '../ui/theme/theme';
 import { capacitorBackup, type BackupPlatform } from '../platform/backup';
 import { capacitorShell, type ShellPlatform } from '../platform/shell';
 import type { WorkRemovalResult } from '../contracts/reading';
+import type { GuidanceDraft } from '../translation/guidance';
 import type { RenewalController, RenewalSnapshot } from './renewalController';
 import '../ui/theme/base.css';
 import './application.css';
@@ -56,6 +57,11 @@ function RouteScreen({
         ? (state.version?.source.workId ?? null)
         : null;
   const [guidanceRevision, setGuidanceRevision] = useState(0);
+  const saveSharedGuidance = useCallback(
+    (_scope: string, draft: GuidanceDraft, expectedHash?: string | null) =>
+      controller.saveSharedGuidance!(draft, expectedHash ?? null),
+    [controller],
+  );
   const guidanceLocked =
     state.busy ||
     state.translationActive ||
@@ -64,6 +70,7 @@ function RouteScreen({
   const readerGuidance = state.guidanceAvailable
     ? {
         locked: guidanceLocked,
+        allowSharedExclusions: Boolean(controller.readSharedGuidance),
         onRead: controller.readGuidance,
         onSave: controller.saveGuidance,
         onSaved: () => setGuidanceRevision((value) => value + 1),
@@ -133,6 +140,7 @@ function RouteScreen({
             state.guidanceAvailable
               ? {
                   locked: guidanceLocked,
+                  allowSharedExclusions: Boolean(controller.readSharedGuidance),
                   onRead: controller.readGuidance,
                   onSave: controller.saveGuidance,
                 }
@@ -337,6 +345,15 @@ function RouteScreen({
           onAutoTranslate={controller.changeAutoTranslate}
           onAutoRetryFailed={controller.changeAutoRetryFailed}
           onAutoGlossary={controller.changeAutoGlossary}
+          sharedGuidance={
+            controller.readSharedGuidance && controller.saveSharedGuidance
+              ? {
+                  onRead: controller.readSharedGuidance,
+                  onSave: saveSharedGuidance,
+                  locked: guidanceLocked || !!state.batch?.active || state.titlesBusy,
+                }
+              : undefined
+          }
           onChapterUpdateDays={controller.changeChapterUpdateDays}
           onLookupWikipedia={controller.changeLookupWikipedia}
           onLookupNamuwiki={controller.changeLookupNamuwiki}

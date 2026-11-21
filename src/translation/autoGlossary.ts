@@ -1,5 +1,10 @@
 import type { ProviderSession, SelectedModel, SourceSnapshot } from '../contracts/reading';
-import { isUnsafeTermName, type GuidanceRepository, type GuidanceTerm } from './guidance';
+import {
+  isUnsafeTermName,
+  referenceTermsForWork,
+  type GuidanceRepository,
+  type GuidanceTerm,
+} from './guidance';
 import { createNameCandidateScan } from './scan';
 
 export type GlossaryProposal = { source: string; target: string; category: string };
@@ -185,13 +190,17 @@ export function createAutoGlossary(
   source: SourceSnapshot;
   selection: SelectedModel;
   signal: AbortSignal;
+  referenceTerms?: readonly GuidanceTerm[];
 }) => Promise<AutoGlossaryResult> {
-  return async ({ workId, source, selection, signal }) => {
+  return async ({ workId, source, selection, signal, referenceTerms = [] }) => {
     const session = createProvider(selection);
     if (!session.completeJson) return 'skipped';
     const current = await guidance.read(workId);
     const known = current?.terms ?? [];
-    const candidates = autoGlossaryCandidates(source.paragraphs, known);
+    const candidates = autoGlossaryCandidates(source.paragraphs, [
+      ...known,
+      ...referenceTermsForWork(current, referenceTerms),
+    ]);
     if (!shouldGenerateGlossary(candidates, known)) return 'skipped';
     // 작은 모델의 맥락 한도 대비. 이름은 보통 회차 앞부분에 나온다.
     const text = source.paragraphs
@@ -205,7 +214,15 @@ export function createAutoGlossary(
     // 생성 요청 동안 사람이 고친 내용을 보존하려고 저장 직전에 다시 읽는다.
     const latest = await guidance.read(workId);
     const latestTerms = latest?.terms ?? [];
-    const terms = mergeGlossaryProposals(latestTerms, proposals);
+    const sharedNames = new Set(
+      referenceTermsForWork(latest, referenceTerms)
+        .flatMap((term) => [term.source, ...term.aliases])
+        .map(nameKey),
+    );
+    const terms = mergeGlossaryProposals(
+      latestTerms,
+      proposals.filter((proposal) => !sharedNames.has(nameKey(proposal.source))),
+    );
     const changed =
       terms.length !== latestTerms.length ||
       terms.some((term, index) => term !== latestTerms[index]);

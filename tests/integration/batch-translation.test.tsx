@@ -535,6 +535,68 @@ test('approved work context survives restart, is included in requests and change
   expect(harness.posts()).toHaveLength(2);
   restarted.dispose();
 });
+
+test('settings glossary supplies both works by default, while work overrides and prepared batches keep their own spelling', async () => {
+  const harness = fixture();
+  harness.chapterExtra = '魔法陣を描く。';
+  await harness.setup();
+  harness.app.navigate({ kind: 'settings' });
+  const view = render(<Application controller={harness.app} />);
+  fireEvent.click(await screen.findByRole('button', { name: /공용 용어집/ }));
+  const defaultTarget = await screen.findByDisplayValue('마법진');
+  fireEvent.change(defaultTarget, { target: { value: '공용 마법진' } });
+  fireEvent.click(screen.getByRole('button', { name: '저장하기' }));
+  await screen.findByText('저장했어요. 새로 시작하는 번역 작업부터 적용돼요.');
+  fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+  const shared = (await harness.guidance.readShared!())!;
+  expect(shared.terms).toContainEqual(
+    expect.objectContaining({ source: '魔法陣', target: '공용 마법진' }),
+  );
+
+  await act(async () => {
+    await harness.app.openWork(workUrl);
+    await harness.app.saveGuidance('n1234ab', {
+      terms: [{ source: '魔法陣', target: '작품 마법진', aliases: [], category: '', note: '' }],
+      voices: [],
+    });
+    await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+    await finishScan(harness.app);
+    await harness.app.runBatch();
+  });
+  const workPrompt = JSON.stringify(harness.posts()[0]!.data);
+  expect(workPrompt).toContain('魔法陣 translates to 작품 마법진');
+  expect(workPrompt).not.toContain('공용 마법진');
+  await act(async () => {
+    await harness.app.openWork(otherWorkUrl);
+    await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+    await finishScan(harness.app);
+    await harness.guidance.saveShared!(
+      shared.terms.map((term) =>
+        term.source === '魔法陣' ? { ...term, target: '새 공용 마법진' } : term,
+      ),
+      shared.hash,
+    );
+    await harness.app.runBatch();
+  });
+  expect(JSON.stringify(harness.posts()[1]!.data)).toContain('魔法陣 translates to 공용 마법진');
+  await act(async () => {
+    await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  });
+  expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(0);
+  await act(async () => {
+    await finishScan(harness.app);
+    await harness.app.runBatch();
+  });
+  expect(JSON.stringify(harness.posts()[2]!.data)).toContain('魔法陣 translates to 새 공용 마법진');
+  expect(await harness.library.listVersions('n9999zz/1')).toHaveLength(2);
+  await act(async () => {
+    await harness.app.openWork(workUrl);
+    await harness.app.prepareBatch({ first: 1, last: 1 }, false);
+  });
+  expect(harness.app.getSnapshot().batch?.record?.alreadySaved).toBe(1);
+  view.unmount();
+  harness.app.dispose();
+});
 test('the work glossary has no entry-count cap but rejects normalized duplicate names', async () => {
   const harness = fixture();
   await harness.setup();

@@ -21,11 +21,13 @@ import {
   plotSummaryWithoutNames,
   streamingGuidanceContext,
   appliedGuidanceHash,
+  referenceTermsForWork,
   type GuidanceRepository,
+  type GuidanceTerm,
   type WorkGuidance,
 } from './guidance';
 import { normalizeChapterInput } from '../providers/plainText';
-import { contextHints, referencePreset } from './preset';
+import { contextHints, readReferenceTerms } from './preset';
 import { checkTranslationQuality } from './quality';
 import type { CandidateDecision } from './termDecision';
 export interface FlowDependencies {
@@ -39,6 +41,7 @@ export interface FlowDependencies {
   decideCandidates?: (
     input: string,
     guidance: WorkGuidance | null,
+    referenceTerms: readonly GuidanceTerm[],
   ) => Promise<CandidateDecision | null>;
   /** 번역 직전 자동 용어집(#192). 없으면 건너뛴다. */
   autoGlossary?: (input: {
@@ -46,6 +49,7 @@ export interface FlowDependencies {
     source: SourceSnapshot;
     selection: SelectedModel;
     signal: AbortSignal;
+    referenceTerms?: readonly GuidanceTerm[];
   }) => Promise<'skipped' | 'added'>;
 }
 /**
@@ -104,13 +108,14 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
     approved?: WorkGuidance | null,
     scannedSource?: SourceSnapshot,
     repair?: ParagraphRepair,
-    options: { autoGlossary?: boolean } = {},
+    options: { autoGlossary?: boolean; referenceTerms?: readonly GuidanceTerm[] } = {},
   ): Promise<void> {
     if (!foreground || disposed || slot.occupied || state.pendingSave) return;
     const chapter = structuredClone(ref),
       selected = structuredClone(selection),
       frozenGuidance = approved === undefined ? undefined : structuredClone(approved);
     const frozenRepair = repair ? structuredClone(repair) : undefined;
+    const frozenReferenceTerms = options.referenceTerms && structuredClone(options.referenceTerms);
     await slot.run(async () => {
       const token: TranslationToken = {
         requestId: crypto.randomUUID(),
@@ -180,6 +185,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         if (frozenRepair) publish({ preview: frozenRepair.base.text });
         timings.sourceMs = deps.clock.now() - started;
         if (control.signal.aborted || !foreground || disposed) throw new ReaderError('cancelled');
+        const preset = frozenReferenceTerms ?? (await readReferenceTerms(selected, deps.guidance));
         // 번역 직전 자동 용어집(#192): 원문을 한 번만 받고 같은 취소 신호를 쓴다.
         if (
           options.autoGlossary &&
@@ -199,6 +205,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
               source,
               selection: selected,
               signal: child.signal,
+              referenceTerms: preset,
             });
             publish({ glossary: undefined });
           } catch (error) {
@@ -214,7 +221,6 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           frozenGuidance === undefined
             ? ((await deps.guidance?.read(chapter.workId)) ?? null)
             : frozenGuidance;
-        const preset = referencePreset(selected);
         const local = selected.connection.provider === 'openai-compatible';
         const gemini = selected.connection.provider === 'gemini';
         const segmented = local && !!selected.limits;
@@ -225,7 +231,11 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         let decisionMs = 0;
         try {
           const decisionStarted = deps.clock.now();
-          const found = await deps.decideCandidates?.(chapterInput, guidance);
+          const found = await deps.decideCandidates?.(
+            chapterInput,
+            guidance,
+            referenceTermsForWork(guidance, preset),
+          );
           if (found) {
             decision = found;
             decisionMs = Math.max(0, Math.round(deps.clock.now() - decisionStarted));

@@ -14,13 +14,16 @@ import { StorageError } from '../storage/errors';
 import { identifier, selected, workPage } from '../storage/readingValidation';
 import type { WholeChapterFlow } from './wholeChapter';
 import { normalizeChapterInput } from '../providers/plainText';
-import { referencePreset } from './preset';
+import { readReferenceTerms, referencePreset } from './preset';
 import {
   appliedGuidanceHash,
   guidanceHash,
   isMachineTerm,
+  referenceTermsForWork,
   validateGuidance,
+  validateSharedTerms,
   type GuidanceRepository,
+  type GuidanceTerm,
   type WorkGuidance,
 } from './guidance';
 import { createNameCandidateScan, type NameCandidate } from './scan';
@@ -49,6 +52,7 @@ export type BatchRecord = {
   dismissed?: boolean;
   currentVersionIds?: readonly string[];
   guidance?: WorkGuidance;
+  referenceTerms?: readonly GuidanceTerm[];
   scan?: RangeScan;
 };
 export type BatchState = {
@@ -120,6 +124,7 @@ export async function validateBatch(value: unknown): Promise<BatchRecord | null>
     'dismissed',
     'currentVersionIds',
     'guidance',
+    'referenceTerms',
     'scan',
   ]);
   check(value.schemaVersion === 1);
@@ -132,6 +137,7 @@ export async function validateBatch(value: unknown): Promise<BatchRecord | null>
     const guidance = await validateGuidance(value.guidance);
     check(guidance.workId === work.workId);
   }
+  if (value.referenceTerms !== undefined) validateSharedTerms(value.referenceTerms);
   check(work.complete && work.nextPageUrl === null);
   check(
     Array.isArray(value.chapters) &&
@@ -282,7 +288,8 @@ export function createBatchTranslation(dependencies: {
   async function matchesSelection(
     version: Awaited<ReturnType<LibraryStore['listVersions']>>[number],
     selection: SelectedModel,
-    guidance?: WorkGuidance | null,
+    guidance: WorkGuidance | null | undefined,
+    referenceTerms: readonly GuidanceTerm[],
   ): Promise<boolean> {
     return (
       version.provenance.provider === selection.connection.provider &&
@@ -292,9 +299,13 @@ export function createBatchTranslation(dependencies: {
           guidance ?? null,
           version.source.workId,
           normalizeChapterInput(version.source),
-          referencePreset(selection),
+          referenceTerms,
         ))
     );
+  }
+  function batchReferenceTerms(record: BatchRecord): readonly GuidanceTerm[] {
+    // A batch created before the editable glossary keeps the terms it was prepared with.
+    return record.referenceTerms ?? referencePreset(record.selection);
   }
   async function filterAsync<T>(items: readonly T[], test: (item: T) => Promise<boolean>) {
     const kept = await Promise.all(items.map(test));
@@ -384,6 +395,7 @@ export function createBatchTranslation(dependencies: {
     try {
       const completeWork = await collectWork(work, control.signal);
       const guidance = (await dependencies.guidance?.read(work.workId)) ?? null;
+      const referenceTerms = await readReferenceTerms(frozenSelection, dependencies.guidance);
       const first = range?.first ?? 1;
       const last = range?.last ?? completeWork.chapters.length;
       if (last > completeWork.chapters.length) throw new ReaderError('source_parse');
@@ -396,7 +408,7 @@ export function createBatchTranslation(dependencies: {
         for (const chapter of chapters) {
           const versions = await dependencies.library.listVersions(chapter.chapterId);
           const matching = await filterAsync(versions, (version) =>
-            matchesSelection(version, frozenSelection, guidance),
+            matchesSelection(version, frozenSelection, guidance, referenceTerms),
           );
           if (matching.length) alreadySaved++;
         }
@@ -411,6 +423,7 @@ export function createBatchTranslation(dependencies: {
         work: completeWork,
         selection: frozenSelection,
         ...(guidanceHash(guidance) ? { guidance: structuredClone(guidance!) } : {}),
+        ...(dependencies.guidance?.readShared ? { referenceTerms } : {}),
         chapters,
         retranslate,
         alreadySaved,
@@ -464,7 +477,7 @@ export function createBatchTranslation(dependencies: {
       const guidance = (await dependencies.guidance?.read(record.work.workId)) ?? null;
       const candidateScan = createNameCandidateScan(
         guidance?.terms ?? [],
-        referencePreset(record.selection),
+        referenceTermsForWork(guidance, batchReferenceTerms(record)),
       );
       let completed = 0;
       for (const [index, chapter] of record.chapters.entries()) {
@@ -597,7 +610,7 @@ export function createBatchTranslation(dependencies: {
           if (
             (
               await filterAsync(versions, (version) =>
-                matchesSelection(version, record.selection, guidance),
+                matchesSelection(version, record.selection, guidance, batchReferenceTerms(record)),
               )
             ).length
           )
@@ -664,8 +677,10 @@ export function createBatchTranslation(dependencies: {
         const chapter = record.chapters[record.cursor]!;
         const versions = await dependencies.library.listVersions(chapter.chapterId);
         const selection = record.selection;
+        const guidance = record.guidance;
+        const referenceTerms = batchReferenceTerms(record);
         const sameModel = await filterAsync(versions, (version) =>
-          matchesSelection(version, selection, record!.guidance),
+          matchesSelection(version, selection, guidance, referenceTerms),
         );
         const beforeRequest = record.currentVersionIds;
         const completedDuringBatch =
@@ -700,6 +715,8 @@ export function createBatchTranslation(dependencies: {
           record.selection,
           record.guidance ?? null,
           scannedSources.get(chapter.chapterId),
+          undefined,
+          { referenceTerms },
         );
         const result = dependencies.flow.getCompleted();
         if (result && result.source.chapterId === chapter.chapterId) {

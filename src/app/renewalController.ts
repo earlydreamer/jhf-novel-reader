@@ -413,6 +413,8 @@ export interface RenewalController {
     draft: GuidanceDraft,
     expectedHash?: string | null,
   ): Promise<WorkGuidance>;
+  readSharedGuidance?(): Promise<WorkGuidance | null>;
+  saveSharedGuidance?(draft: GuidanceDraft, expectedHash: string | null): Promise<WorkGuidance>;
   startTermScan(workId: string): Promise<void>;
   cancelTermScan(): void;
   revertTermScanChange(source: string): Promise<void>;
@@ -3470,6 +3472,28 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     removeTermScanCommon,
     closeTermScan,
     readGuidance: async (workId) => (await dependencies.guidance?.read(workId)) ?? null,
+    readSharedGuidance: dependencies.guidance?.readShared,
+    ...(dependencies.guidance?.saveShared
+      ? {
+          async saveSharedGuidance(draft: GuidanceDraft, expectedHash: string | null) {
+            if (
+              disposed ||
+              !initialized ||
+              !foreground ||
+              snapshot.route.kind !== 'settings' ||
+              snapshot.busy ||
+              activeTranslation ||
+              dependencies.flow?.active ||
+              dependencies.batch?.active ||
+              termScanAbort !== null ||
+              termScanChecking ||
+              snapshot.titlesBusy
+            )
+              throw new ReaderError('storage');
+            return dependencies.guidance!.saveShared!(draft.terms, expectedHash);
+          },
+        }
+      : {}),
     async saveGuidance(workId, draft, expectedHash) {
       if (
         !dependencies.guidance ||

@@ -7,7 +7,7 @@ import { createReaderStore, legacyBodyValidator, legacyPositionRecord } from './
 import { check } from './validation';
 import { validateAttempts } from '../translation/attempts';
 import { validateBatch } from '../translation/batch';
-import { validateGuidance } from '../translation/guidance';
+import { SHARED_GLOSSARY_ID, validateGuidance } from '../translation/guidance';
 import { validateTitleRecord } from '../translation/titles';
 
 export interface BackupSnapshot {
@@ -52,6 +52,9 @@ export async function validateBackupSnapshot(snapshot: BackupSnapshot): Promise<
     }
   }
   const index = await load('library/index', validateLibraryIndex);
+  const sharedPath = `guidance/${SHARED_GLOSSARY_ID}`;
+  const shared = await load(sharedPath, validateGuidance);
+  if (shared) check(shared.workId === SHARED_GLOSSARY_ID);
   await load('attempts/index', validateAttempts);
   await load('batches/current', validateBatch);
   const workIds = new Set(index?.workIds ?? []);
@@ -134,5 +137,13 @@ export async function validateBackupSnapshot(snapshot: BackupSnapshot): Promise<
     }
   }
   // An unreadable-only archive must not replace healthy data with an empty view.
-  check(index !== null || paths.size === 0 || readableLegacy > 0);
+  check(
+    index !== null ||
+      paths.size === 0 ||
+      readableLegacy > 0 ||
+      (shared !== null &&
+        [...paths].every(
+          (path) => path === `${sharedPath}.0.json` || path === `${sharedPath}.1.json`,
+        )),
+  );
 }
