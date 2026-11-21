@@ -1,9 +1,14 @@
 import { expect, it, vi } from 'vitest';
-import { ReaderError, type NativeHttpClient } from '../../src/contracts';
+import {
+  ReaderError,
+  type NativeHttpClient,
+  type NativeStreamingClient,
+} from '../../src/contracts';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 const url =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-synthetic:generateContent';
 const modelsUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+const streamUrl = url.replace(':generateContent', ':streamGenerateContent?alt=sse');
 const signal = () => new AbortController().signal;
 const body = { contents: [{ parts: [{ text: 'synthetic' }] }] };
 function setup() {
@@ -13,7 +18,8 @@ function setup() {
     data: {},
     url: input.url,
   }));
-  return { request, model: createModelTransport({ request }) };
+  const requestStream = vi.fn<NativeStreamingClient['requestStream']>(request);
+  return { request, requestStream, model: createModelTransport({ request }, { requestStream }) };
 }
 it('emits fixed Gemini key header without OpenAI stream or Authorization', async () => {
   const h = setup();
@@ -150,4 +156,57 @@ it('sanitizes a known native error rather than leaking its message/cause', async
     .catch((e) => e);
   expect(caught.message).toBe('connection');
   expect(caught).not.toHaveProperty('cause');
+});
+
+it('sends Gemini SSE with a header key and the unmodified generation body', async () => {
+  const h = setup();
+  await h.model.streamPost!(
+    { url: streamUrl, body, geminiApiKey: 'synthetic-key' },
+    signal(),
+    vi.fn(),
+  );
+  expect(h.requestStream.mock.calls[0]?.[0]).toMatchObject({
+    url: streamUrl,
+    method: 'POST',
+    headers: {
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+      'x-goog-api-key': 'synthetic-key',
+    },
+    disableRedirects: true,
+  });
+  expect(h.requestStream.mock.calls[0]?.[0].data).toEqual(body);
+  expect(h.requestStream.mock.calls[0]?.[0].headers).not.toHaveProperty('Authorization');
+});
+
+it.each([
+  streamUrl.replace('https:', 'http:'),
+  streamUrl.replace('.com/', '.com.example/'),
+  streamUrl.replace('.com/', '.com:443/'),
+  streamUrl.replace('https://', 'https://user@'),
+  streamUrl.replace('/gemini-synthetic:', '/../models/gemini-synthetic:'),
+  streamUrl.replace('/gemini-synthetic:', '/%2e%2e:'),
+  streamUrl + '&key=bad',
+  streamUrl + '#',
+  streamUrl + '\n',
+  streamUrl.replace('alt=sse', 'alt=json'),
+  url,
+])('rejects streaming a Gemini key to %s before native dispatch', async (target) => {
+  const h = setup();
+  await expect(
+    h.model.streamPost!({ url: target, body, geminiApiKey: 'synthetic-key' }, signal(), vi.fn()),
+  ).rejects.toMatchObject({ code: 'connection', outcome: 'not_sent' });
+  expect(h.requestStream).not.toHaveBeenCalled();
+});
+
+it.each([
+  { geminiApiKey: '', authorization: undefined },
+  { geminiApiKey: 'bad\nheader', authorization: undefined },
+  { geminiApiKey: 'synthetic-key', authorization: 'Bearer mixed' },
+])('rejects invalid Gemini streaming credentials before native dispatch', async (auth) => {
+  const h = setup();
+  await expect(
+    h.model.streamPost!({ url: streamUrl, body, ...auth }, signal(), vi.fn()),
+  ).rejects.toMatchObject({ code: 'auth', outcome: 'not_sent' });
+  expect(h.requestStream).not.toHaveBeenCalled();
 });

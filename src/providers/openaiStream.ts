@@ -1,17 +1,11 @@
 import { ReaderError } from '../contracts';
-/** SSE is framed independently of network reads, JSON and UTF-8 byte boundaries. */
+import { createSseReader } from './sse';
+
 export function createOpenAIStream(onText: (text: string) => void) {
-  let buffer = '',
-    text = '',
+  let text = '',
     finish: unknown = null,
     ended = false;
-  function frame(value: string) {
-    const data = value
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).replace(/^ /, ''))
-      .join('\n');
-    if (!data) return;
+  const frames = createSseReader((data) => {
     if (ended) throw new ReaderError('invalid_output', 'received');
     if (data === '[DONE]') {
       ended = true;
@@ -60,22 +54,11 @@ export function createOpenAIStream(onText: (text: string) => void) {
     }
     if (choice.finish_reason !== undefined && choice.finish_reason !== null)
       finish = choice.finish_reason;
-  }
+  });
   return {
-    push(chunk: string) {
-      buffer += chunk;
-      let boundary: RegExpExecArray | null;
-      while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
-        // Limit each wire frame (including its separator), not the network chunk.
-        const frameLength = boundary.index + boundary[0].length;
-        if (frameLength > 1_000_000) throw new ReaderError('invalid_output', 'received');
-        frame(buffer.slice(0, boundary.index));
-        buffer = buffer.slice(frameLength);
-      }
-      if (buffer.length > 1_000_000) throw new ReaderError('invalid_output', 'received');
-    },
+    push: frames.push,
     complete() {
-      if (buffer.trim()) frame(buffer);
+      frames.flush();
       if (!ended || !['stop', 'length', 'content_filter'].includes(String(finish)))
         throw new ReaderError('invalid_output', 'received');
       return {

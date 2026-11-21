@@ -6,6 +6,7 @@ import type {
   HttpResponse,
   NativeHttpClient,
   NativeHttpRequest,
+  NativeStreamingClient,
 } from '../../src/contracts';
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
@@ -32,7 +33,7 @@ function generationResponse(finishReason: Finish): string {
   });
 }
 
-function harness(finishReason: Finish = 'STOP') {
+function harness(finishReason: Finish = 'STOP', streaming?: NativeStreamingClient) {
   const bytes = new Map<string, string>();
   const preferences = new Map<string, string>();
   const secrets = new Map<string, string>();
@@ -108,7 +109,15 @@ function harness(finishReason: Finish = 'STOP') {
     },
     lifecycle,
     sourceTransport: createSourceTransport(client),
-    modelTransport: createModelTransport(client),
+    modelTransport: createModelTransport(
+      client,
+      streaming && {
+        requestStream(input, signal, onData) {
+          requests.push(input);
+          return streaming.requestStream(input, signal, onData);
+        },
+      },
+    ),
     browse: async () => ({ selectedUrl: chapterUrl }),
   });
   return { app, requests, store: createLibraryStore(files) };
@@ -192,6 +201,153 @@ it.each(['SAFETY', 'OTHER'] as const)('does not save a %s Gemini result', async 
 
   await h.app.translate();
 
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(1);
+  await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual([]);
+});
+
+const sse = (value: unknown) => `data: ${JSON.stringify(value)}\r\n\r\n`;
+const partial = sse({
+  candidates: [
+    {
+      index: 0,
+      content: {
+        parts: [
+          { text: '모델의 추론', thought: true },
+          { text: '첫 문단' },
+          { thoughtSignature: 'opaque' },
+        ],
+      },
+    },
+  ],
+});
+
+it('previews Gemini text before settlement and saves the complete native response once', async () => {
+  let finish!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const h = harness('STOP', {
+    async requestStream(input, _signal, onData) {
+      onData(partial.slice(0, -1));
+      onData(partial.slice(-1));
+      await wait;
+      // Final frames can reach the native promise before their listener events.
+      return {
+        status: 200,
+        url: input.url,
+        headers: {},
+        data:
+          partial +
+          sse({ candidates: [{ content: { parts: [{ text: '\n\n둘째 문단' }] } }] }) +
+          sse({ candidates: [{ finishReason: 'STOP', content: { role: 'model' } }] }) +
+          sse({ usageMetadata: { totalTokenCount: 15 } }),
+      };
+    },
+  });
+  const chapter = await selectChapter(h);
+  await selectGemini(h);
+
+  const translating = h.app.translate();
+  try {
+    await expect.poll(() => h.app.getSnapshot().translation.preview).toBe('첫 문단');
+    expect(h.app.getSnapshot().translation.phase).toBe('translating');
+    await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual([]);
+  } finally {
+    finish();
+    await translating;
+  }
+
+  const posts = h.requests.filter((request) => request.method === 'POST');
+  expect(posts).toHaveLength(1);
+  expect(posts[0]?.url).toBe(
+    `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
+  );
+  const versions = await h.store.listVersions(chapter.chapterId);
+  expect(versions).toHaveLength(1);
+  expect(versions[0]).toMatchObject({
+    text: '첫 문단\n\n둘째 문단',
+    provenance: { provider: 'gemini', modelId: 'gemini-synthetic' },
+  });
+  await h.app.selectChapter(chapter);
+  expect(h.app.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
+});
+
+it.each([
+  ['후보 차단', partial + sse({ candidates: [{ finishReason: 'SAFETY' }] }), 'blocked'],
+  ['프롬프트 차단', sse({ promptFeedback: { blockReason: 'SAFETY' } }), 'blocked'],
+  ['출력 한도', partial + sse({ candidates: [{ finishReason: 'MAX_TOKENS' }] }), 'output_limit'],
+  [
+    '번역문 없이 종료',
+    sse({
+      candidates: [
+        { finishReason: 'STOP', content: { parts: [{ text: '추론만 반환', thought: true }] } },
+      ],
+    }),
+    'invalid_output',
+  ],
+  ['종료 프레임 누락', partial, 'timeout_unknown'],
+  [
+    '종료 프레임 잘림',
+    partial + sse({ candidates: [{ finishReason: 'STOP' }] }).slice(0, -2),
+    'timeout_unknown',
+  ],
+  ['손상된 프레임', partial + 'data: {\n\n', 'invalid_output'],
+  [
+    '완료 이후 후보',
+    partial + sse({ candidates: [{ finishReason: 'STOP' }] }) + partial,
+    'invalid_output',
+  ],
+] as const)('Gemini 스트림 %s에서 저장하거나 재전송하지 않는다', async (_scenario, data, code) => {
+  const h = harness('STOP', {
+    async requestStream(input, _signal, onData) {
+      onData(data);
+      return { status: 200, url: input.url, headers: {}, data };
+    },
+  });
+  const chapter = await selectChapter(h);
+  await selectGemini(h);
+
+  await h.app.translate();
+
+  expect(h.app.getSnapshot().translation.error?.code).toBe(code);
+  expect(h.app.getSnapshot().translation.phase).toBe(
+    code === 'timeout_unknown' ? 'unknown' : 'failed',
+  );
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(1);
+  await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual([]);
+});
+
+it('discards a completed Gemini response if translation was cancelled before settlement', async () => {
+  let finish!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const h = harness('STOP', {
+    async requestStream(input, _signal, onData) {
+      onData(partial);
+      await wait;
+      return {
+        status: 200,
+        url: input.url,
+        headers: {},
+        data: partial + sse({ candidates: [{ finishReason: 'STOP' }] }),
+      };
+    },
+  });
+  const chapter = await selectChapter(h);
+  await selectGemini(h);
+  const translating = h.app.translate();
+  try {
+    await expect.poll(() => h.app.getSnapshot().translation.preview).toBe('첫 문단');
+    h.app.cancelTranslation();
+  } finally {
+    finish();
+    await translating;
+  }
+  expect(h.app.getSnapshot().translation).toMatchObject({
+    phase: 'unknown',
+    error: { code: 'cancelled' },
+  });
   expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(1);
   await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual([]);
 });

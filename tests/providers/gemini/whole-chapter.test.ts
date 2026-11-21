@@ -94,6 +94,18 @@ describe('renewal Gemini whole-chapter provider', () => {
     expect(posts[0]?.body.generationConfig).not.toHaveProperty('responseSchema');
   });
 
+  it('requires a streaming transport when Gemini is selected in streaming mode', async () => {
+    const posts: ModelRequest[] = [];
+    await expect(
+      createGeminiProviderSession(
+        { ...selection, translationMode: 'stream' },
+        sessionTransport({}, posts),
+        secrets,
+      ).translateChapter(request, signal()),
+    ).rejects.toMatchObject({ code: 'connection', outcome: 'not_sent' });
+    expect(posts).toHaveLength(0);
+  });
+
   it.each([
     ['MAX_TOKENS', 'length'],
     ['SAFETY', 'blocked'],

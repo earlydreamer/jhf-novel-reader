@@ -31,21 +31,31 @@ public final class ModelStreamPlugin extends Plugin {
         JSObject body = call.getObject("data");
         try {
             URI target = new URI(url == null ? "" : url);
+            boolean gemini = url != null && url.matches(
+                "https://generativelanguage\\.googleapis\\.com/v1beta/models/[A-Za-z0-9][A-Za-z0-9._-]{0,255}:streamGenerateContent\\?alt=sse");
+            boolean local = url != null && url.matches("https?://[^/?#]+(?:/[A-Za-z0-9._-]+)*/v1/chat/completions") &&
+                target.getRawQuery() == null && !url.contains("/../") && !url.contains("/./");
             if (id == null || !id.matches("[a-f0-9-]{36}") || activeId != null || paused || body == null ||
                 !("http".equals(target.getScheme()) || "https".equals(target.getScheme())) ||
-                target.getHost() == null || target.getRawUserInfo() != null || target.getRawQuery() != null || target.getRawFragment() != null ||
-                !url.matches("https?://[^/?#]+(?:/[A-Za-z0-9._-]+)*/v1/chat/completions") || url.contains("/../") || url.contains("/./")) {
+                target.getHost() == null || target.getRawUserInfo() != null || target.getRawFragment() != null ||
+                (!gemini && !local)) {
                 call.reject("connection_not_sent"); return;
             }
             String auth = headers.getString("Authorization");
-            if (auth != null && !auth.matches("Bearer [^\\s\\x7f]+")) { call.reject("auth_not_sent"); return; }
+            Object keyHeader = headers.opt("x-goog-api-key");
+            String key = keyHeader instanceof String ? (String) keyHeader : null;
+            if (gemini
+                ? headers.has("Authorization") || key == null || !key.matches("[^\\x00-\\x20\\x7f]+")
+                : headers.has("x-goog-api-key") || (auth != null && !auth.matches("Bearer [^\\s\\x7f]+"))) {
+                call.reject("auth_not_sent"); return;
+            }
             activeId = id;
             cancelled = false;
-            executor.execute(() -> run(call, id, url, auth, body));
+            executor.execute(() -> run(call, id, url, auth, key, body));
         } catch (Exception invalid) { call.reject("connection_not_sent"); }
     }
 
-    private void run(PluginCall call, String id, String url, String auth, JSObject body) {
+    private void run(PluginCall call, String id, String url, String auth, String geminiKey, JSObject body) {
         HttpURLConnection socket = null;
         JSObject result = null;
         String failure = null;
@@ -63,8 +73,9 @@ public final class ModelStreamPlugin extends Plugin {
             socket.setRequestProperty("Content-Type", "application/json");
             socket.setRequestProperty("Cookie", "");
             if (auth != null) socket.setRequestProperty("Authorization", auth);
+            if (geminiKey != null) socket.setRequestProperty("x-goog-api-key", geminiKey);
             socket.setDoOutput(true);
-            body.put("stream", true);
+            if (geminiKey == null) body.put("stream", true);
             byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
             socket.setFixedLengthStreamingMode(bytes.length);
             if (cancelled) throw new InterruptedException();

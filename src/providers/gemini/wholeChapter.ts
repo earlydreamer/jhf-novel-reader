@@ -10,6 +10,7 @@ import type {
 } from '../../contracts';
 import { envelope, object } from '../catalog';
 import { normalizeChapterInput } from '../plainText';
+import { createSseReader } from '../sse';
 import { normalizeGeminiBaseUrl, normalizeGeminiModel } from './index';
 
 const instruction =
@@ -54,41 +55,98 @@ async function geminiApiKey(
   return key;
 }
 
+function promptBlocked(feedback: unknown): boolean {
+  if (feedback === undefined) return false;
+  if (!object(feedback)) throw new ReaderError('invalid_output', 'received');
+  const { blockReason } = feedback;
+  if (blockReason === undefined || blockReason === 'BLOCK_REASON_UNSPECIFIED') return false;
+  if (typeof blockReason !== 'string' || !blockReason)
+    throw new ReaderError('invalid_output', 'received');
+  return true;
+}
+
+function textParts(content: unknown, allowSignatureOnly = false): string {
+  if (!object(content) || !Array.isArray(content.parts))
+    throw new ReaderError('invalid_output', 'received');
+  let text = '';
+  for (const part of content.parts) {
+    if (
+      !object(part) ||
+      Object.keys(part).some((key) => !['text', 'thought', 'thoughtSignature'].includes(key)) ||
+      (part.thought !== undefined && typeof part.thought !== 'boolean') ||
+      (part.thoughtSignature !== undefined && typeof part.thoughtSignature !== 'string') ||
+      (typeof part.text !== 'string' &&
+        !(
+          allowSignatureOnly &&
+          part.text === undefined &&
+          typeof part.thoughtSignature === 'string'
+        ))
+    )
+      throw new ReaderError('invalid_output', 'received');
+    if (part.thought !== true && typeof part.text === 'string') text += part.text;
+  }
+  return text;
+}
+
 function decode(data: unknown): WholeChapterResult {
   const value = envelope(data);
   if (!object(value) || value.error !== undefined)
     throw new ReaderError('invalid_output', 'received');
-  if (value.promptFeedback !== undefined) {
-    if (!object(value.promptFeedback)) throw new ReaderError('invalid_output', 'received');
-    const blockReason = value.promptFeedback.blockReason;
-    if (blockReason !== undefined && blockReason !== 'BLOCK_REASON_UNSPECIFIED') {
-      if (typeof blockReason !== 'string' || !blockReason)
-        throw new ReaderError('invalid_output', 'received');
-      return { text: '', finishReason: 'blocked' };
-    }
-  }
+  if (promptBlocked(value.promptFeedback)) return { text: '', finishReason: 'blocked' };
   if (!Array.isArray(value.candidates) || value.candidates.length !== 1)
     throw new ReaderError('invalid_output', 'received');
   const candidate = value.candidates[0];
   if (!object(candidate)) throw new ReaderError('invalid_output', 'received');
   const result = finishReason(candidate.finishReason);
   if (result !== 'complete') return { text: '', finishReason: result };
-  if (!object(candidate.content) || !Array.isArray(candidate.content.parts))
-    throw new ReaderError('invalid_output', 'received');
-  let text = '';
-  for (const part of candidate.content.parts) {
-    if (
-      !object(part) ||
-      typeof part.text !== 'string' ||
-      Object.keys(part).some((key) => !['text', 'thought', 'thoughtSignature'].includes(key)) ||
-      (part.thought !== undefined && typeof part.thought !== 'boolean') ||
-      (part.thoughtSignature !== undefined && typeof part.thoughtSignature !== 'string')
-    )
-      throw new ReaderError('invalid_output', 'received');
-    if (part.thought !== true) text += part.text;
-  }
+  const text = textParts(candidate.content);
   if (!text.trim()) throw new ReaderError('invalid_output', 'received');
   return { text, finishReason: result };
+}
+
+function createGeminiStream(onPreview?: (text: string) => void) {
+  let text = '';
+  let finish: WholeChapterResult['finishReason'] | undefined;
+  const frames = createSseReader((data) => {
+    const value = envelope(data);
+    if (!object(value) || value.error !== undefined)
+      throw new ReaderError('invalid_output', 'received');
+    if (promptBlocked(value.promptFeedback)) {
+      if (finish) throw new ReaderError('invalid_output', 'received');
+      finish = 'blocked';
+      return;
+    }
+    const candidates = value.candidates === undefined ? [] : value.candidates;
+    if (!Array.isArray(candidates)) throw new ReaderError('invalid_output', 'received');
+    if (!candidates.length && (object(value.usageMetadata) || object(value.promptFeedback))) return;
+    if (candidates.length !== 1 || finish) throw new ReaderError('invalid_output', 'received');
+    const candidate = candidates[0];
+    if (!object(candidate) || (candidate.index !== undefined && candidate.index !== 0))
+      throw new ReaderError('invalid_output', 'received');
+    const reason = candidate.finishReason;
+    if (reason !== undefined && reason !== 'FINISH_REASON_UNSPECIFIED') {
+      if (typeof reason !== 'string' || !reason)
+        throw new ReaderError('invalid_output', 'received');
+      finish = finishReason(reason);
+    }
+    if (finish && finish !== 'complete') return;
+    const content = candidate.content;
+    if (content === undefined || (finish && object(content) && content.parts === undefined)) return;
+    const delta = textParts(content, true);
+    if (!delta) return;
+    text += delta;
+    if (text.length > 4_000_000) throw new ReaderError('invalid_output', 'received');
+    onPreview?.(text);
+  });
+  return {
+    push: frames.push,
+    complete(): WholeChapterResult {
+      if (frames.pending || !finish) throw new ReaderError('timeout_unknown', 'unknown');
+      if (finish !== 'complete') return { text: '', finishReason: finish };
+      if (!text.trim()) throw new ReaderError('invalid_output', 'received');
+      return { text, finishReason: finish };
+    },
+  };
 }
 
 export async function listGeminiModels(
@@ -172,21 +230,36 @@ export function createGeminiProviderSession(
         throw new ReaderError('invalid_output');
       const input = normalizeChapterInput(request.source);
       if (!input.trim()) throw new ReaderError('source_parse');
+      const streaming = snapshot.translationMode === 'stream';
+      const streamPost = streaming ? transport.streamPost?.bind(transport) : undefined;
+      if (streaming && !streamPost) throw new ReaderError('connection', 'not_sent');
       const key = await geminiApiKey(connection, secrets, signal);
+      const modelRequest = {
+        url: `${base}/models/${model}:${streamPost ? 'streamGenerateContent?alt=sse' : 'generateContent'}`,
+        body: {
+          systemInstruction: { parts: [{ text: instruction }] },
+          contents: [{ role: 'user', parts: [{ text: input }] }],
+          generationConfig: { candidateCount: 1 },
+        },
+        geminiApiKey: key,
+      };
       let response;
       try {
-        response = await transport.post(
-          {
-            url: `${base}/models/${model}:generateContent`,
-            body: {
-              systemInstruction: { parts: [{ text: instruction }] },
-              contents: [{ role: 'user', parts: [{ text: input }] }],
-              generationConfig: { candidateCount: 1 },
-            },
-            geminiApiKey: key,
-          },
-          signal,
-        );
+        if (streamPost) {
+          const preview = createGeminiStream(request.onPreview);
+          let invalidPreview = false;
+          response = await streamPost(modelRequest, signal, (chunk) => {
+            if (signal.aborted || invalidPreview) return;
+            try {
+              preview.push(chunk);
+            } catch {
+              // The settled response is authoritative even when listener delivery is incomplete.
+              invalidPreview = true;
+            }
+          });
+        } else {
+          response = await transport.post(modelRequest, signal);
+        }
       } catch (error) {
         if (error instanceof ReaderError)
           throw new ReaderError(error.code, error.outcome, error.status);
@@ -197,6 +270,12 @@ export function createGeminiProviderSession(
         throw new ReaderError('auth', 'received', response.status);
       if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300)
         throw new ReaderError('connection', 'received', response.status);
+      if (streamPost) {
+        if (typeof response.data !== 'string') throw new ReaderError('invalid_output', 'received');
+        const parsed = createGeminiStream();
+        parsed.push(response.data);
+        return parsed.complete();
+      }
       return decode(response.data);
     },
   };

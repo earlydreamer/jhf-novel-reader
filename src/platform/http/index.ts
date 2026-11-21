@@ -186,6 +186,12 @@ export function createLookupTransport(
   };
 }
 
+function geminiKeyHeader(key: string | undefined, authorization: string | undefined) {
+  if (authorization !== undefined || !key || /[\u0000-\u0020\u007f]/.test(key))
+    throw new ReaderError('auth');
+  return { 'x-goog-api-key': key };
+}
+
 export function createModelTransport(
   client: NativeHttpClient,
   streaming?: NativeStreamingClient,
@@ -195,31 +201,37 @@ export function createModelTransport(
       ? ({
           async streamPost(input, signal, onData) {
             const url = validateUrl(input.url, false);
+            const gemini = input.geminiApiKey !== undefined;
             if (
-              input.geminiApiKey !== undefined ||
-              !/^https?:\/\/[^/?#]+(?:\/[A-Za-z0-9._-]+)*\/v1\/chat\/completions$/.test(
-                input.url,
-              ) ||
-              input.url.includes('/../') ||
-              input.url.includes('/./')
+              gemini
+                ? input.url !== url.href ||
+                  !/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/[A-Za-z0-9][A-Za-z0-9._-]{0,255}:streamGenerateContent\?alt=sse$/.test(
+                    input.url,
+                  )
+                : !/^https?:\/\/[^/?#]+(?:\/[A-Za-z0-9._-]+)*\/v1\/chat\/completions$/.test(
+                    input.url,
+                  ) ||
+                  input.url.includes('/../') ||
+                  input.url.includes('/./')
             )
               throw new ReaderError('connection');
-            if (
-              input.authorization !== undefined &&
-              !/^Bearer [^\s\u007f]+$/.test(input.authorization)
-            )
-              throw new ReaderError('auth');
+            const headers: Record<string, string> = {
+              Accept: 'text/event-stream',
+              'Content-Type': 'application/json',
+            };
+            if (gemini)
+              Object.assign(headers, geminiKeyHeader(input.geminiApiKey, input.authorization));
+            else if (input.authorization !== undefined) {
+              if (!/^Bearer [^\s\u007f]+$/.test(input.authorization)) throw new ReaderError('auth');
+              headers.Authorization = input.authorization;
+            }
             return dispatch(
               { request: (options) => streaming.requestStream(options, signal, onData) },
               {
                 url: url.href,
                 method: 'POST',
-                headers: {
-                  Accept: 'text/event-stream',
-                  'Content-Type': 'application/json',
-                  ...(input.authorization ? { Authorization: input.authorization } : {}),
-                },
-                data: { ...input.body, stream: true },
+                headers,
+                data: gemini ? { ...input.body } : { ...input.body, stream: true },
                 responseType: 'text',
                 disableRedirects: true,
                 connectTimeout: 15000,
@@ -243,13 +255,7 @@ export function createModelTransport(
         throw new ReaderError('connection');
       const headers: Record<string, string> = { Accept: 'application/json' };
       if (gemini) {
-        if (
-          input.authorization !== undefined ||
-          !input.geminiApiKey ||
-          /[\u0000-\u0020\u007f]/.test(input.geminiApiKey)
-        )
-          throw new ReaderError('auth');
-        headers['x-goog-api-key'] = input.geminiApiKey;
+        Object.assign(headers, geminiKeyHeader(input.geminiApiKey, input.authorization));
       } else if (input.authorization !== undefined) {
         if (!/^Bearer [^\s\u007f]+$/.test(input.authorization)) throw new ReaderError('auth');
         headers.Authorization = input.authorization;
@@ -284,13 +290,7 @@ export function createModelTransport(
           )
         )
           throw new ReaderError('connection');
-        if (
-          input.authorization !== undefined ||
-          !input.geminiApiKey ||
-          /[\u0000-\u0020\u007f]/.test(input.geminiApiKey)
-        )
-          throw new ReaderError('auth');
-        headers['x-goog-api-key'] = input.geminiApiKey;
+        Object.assign(headers, geminiKeyHeader(input.geminiApiKey, input.authorization));
       } else if (input.authorization) headers.Authorization = input.authorization;
       return dispatch(
         client,
