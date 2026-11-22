@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import { expect, it } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it } from 'vitest';
+import { Application } from '../../src/app/Application';
 import { createRenewalApplication } from '../../src/app/compose';
 import type {
   AppLifecycle,
@@ -23,6 +26,8 @@ const chapterHtml =
   '<h1 class="p-novel__title">第一話</h1><div class="p-novel__body"><div class="p-novel__text"><p>開始</p><p>終わり</p></div></div>';
 
 type Finish = 'STOP' | 'SAFETY' | 'OTHER';
+
+afterEach(cleanup);
 
 function generationResponse(finishReason: Finish, text = '저장할 한국어 본문'): string {
   return JSON.stringify({
@@ -426,6 +431,97 @@ it('merges and applies the work glossary, retries only the affected Gemini parag
   expect(restarted.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
   expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(3);
 });
+
+it.each([true, false])(
+  'routes a selected Gemini paragraph through the shared repair flow with matching glossary=%s',
+  async (matchingGlossary) => {
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const repairedText = matchingGlossary ? '끝나리로 맺는 문단' : '다시 번역한 문단';
+    let streams = 0;
+    const h = harness('STOP', {
+      async requestStream(input, _signal, onData) {
+        const repair = ++streams === 2;
+        const text = repair
+          ? `<main><p id="A">${repairedText}</p></main>`
+          : '기존 첫 문단\n\n기존 둘째 문단';
+        const delta = sse({ candidates: [{ content: { parts: [{ text }] } }] });
+        onData(delta);
+        if (repair) await wait;
+        return {
+          status: 200,
+          headers: {},
+          url: input.url,
+          data: delta + sse({ candidates: [{ finishReason: 'STOP' }] }),
+        };
+      },
+    });
+    const chapter = await selectChapter(h);
+    await selectGemini(h);
+    await h.app.translate();
+    const base = (await h.store.listVersions(chapter.chapterId))[0]!;
+    expect(base.blocks).toHaveLength(2);
+    const glossary = await h.app.saveGuidance(chapter.workId, {
+      terms: [
+        { source: '開始', target: '시작말', aliases: [], category: '', note: '' },
+        ...(matchingGlossary
+          ? [{ source: '終わり', target: '끝나리', aliases: [], category: '', note: '' }]
+          : []),
+      ],
+      voices: [],
+    });
+    h.app.changeAutoGlossary(true);
+
+    render(<Application controller={h.app} />);
+    const article = screen.getByRole('article', { name: '번역 본문' });
+    fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '문단 골라 다시 번역하기' }));
+    fireEvent.click(screen.getByRole('button', { name: '기존 둘째 문단' }));
+    fireEvent.click(screen.getByRole('button', { name: '선택 문단 다시 번역하기' }));
+
+    try {
+      await waitFor(() => expect(article).toHaveTextContent(repairedText));
+      expect(screen.getByRole('article', { name: '번역 본문' })).toBe(article);
+      expect(article).toHaveTextContent(base.blocks[0]!.text);
+      expect(h.app.getSnapshot().version?.versionId).toBe(base.versionId);
+      expect(
+        (await h.store.listVersions(chapter.chapterId)).map((version) => version.versionId),
+      ).toEqual([base.versionId]);
+    } finally {
+      release();
+    }
+    await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('ready'));
+    const versions = await h.store.listVersions(chapter.chapterId);
+    expect(versions).toHaveLength(2);
+    const repaired = versions.find((version) => version.versionId !== base.versionId)!;
+    expect(repaired.blocks.map((block) => block.text)).toEqual([
+      base.blocks[0]!.text,
+      repairedText,
+    ]);
+    expect(repaired.provenance).toMatchObject({
+      provider: 'gemini',
+      promptVersion: 'colomo-local-v1',
+      repair: { baseVersionId: base.versionId, paragraphIndexes: [1] },
+    });
+    expect(Boolean(repaired.provenance.guidanceHash)).toBe(matchingGlossary);
+    expect(await h.store.readVersion(base.versionId)).toEqual(base);
+    expect(await h.app.readGuidance(chapter.workId)).toEqual(glossary);
+
+    const posts = h.requests.filter((request) => request.method === 'POST');
+    expect(posts).toHaveLength(2);
+    expect(posts[1]?.url).toBe(
+      `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
+    );
+    const prompt = (posts[1]!.data as { contents: { parts: { text: string }[] }[] }).contents[0]!
+      .parts[0]!.text;
+    expect(prompt).toContain('<p id="A">終わり</p>');
+    expect(prompt).not.toMatch(/開始|시작말|<p id="B">/);
+    expect(prompt.includes('終わり->끝나리')).toBe(matchingGlossary);
+  },
+);
 
 it.each([
   ['후보 차단', partial + sse({ candidates: [{ finishReason: 'SAFETY' }] }), 'blocked'],

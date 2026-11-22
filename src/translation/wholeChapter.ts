@@ -148,7 +148,6 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             frozenRepair.base.source.sourceHash !== source.sourceHash ||
             frozenRepair.base.blocks.length !== source.paragraphs.length ||
             selected.translationMode !== 'stream' ||
-            selected.connection.provider !== 'openai-compatible' ||
             !repairIndexes.size ||
             [...repairIndexes].some(
               (index) =>
@@ -247,7 +246,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           throw new ReaderError('guidance_unsupported');
         const plotSummary = localStreaming || gemini ? plotSummaryWithoutNames(guidance) : '';
         const translateByParagraph =
-          localStreaming || (gemini && Boolean(chapterReference || plotSummary));
+          localStreaming || (gemini && Boolean(frozenRepair || chapterReference || plotSummary));
         const provider = deps.createProvider(selected);
         await deps.attempts.write({ token, phase: 'dispatching' });
         if (control.signal.aborted || !foreground || disposed) {

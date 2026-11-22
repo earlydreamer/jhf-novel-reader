@@ -203,9 +203,7 @@ function RouteScreen({
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy}
-          retryParagraphsAvailable={
-            state.streamingAvailable && state.connection.provider === 'openai-compatible'
-          }
+          retryParagraphsAvailable={state.streamingAvailable}
           pendingSaveElsewhere={
             !!state.pendingSaveChapter &&
             state.pendingSaveChapter.chapterId !== state.chapter.chapterId
@@ -228,11 +226,7 @@ function RouteScreen({
           onCancel={controller.cancelTranslation}
           onRetry={() => void controller.retryTranslation()}
           onRetrySave={() => void controller.retrySave()}
-          onRetryParagraphs={
-            state.streamingAvailable && state.connection.provider === 'openai-compatible'
-              ? (indexes) => void controller.retryParagraphs(indexes)
-              : undefined
-          }
+          onRetryParagraphs={(indexes) => void controller.retryParagraphs(indexes)}
           onSettings={() => controller.navigate({ kind: 'settings' })}
           onCheckConnection={() => void controller.checkConnection()}
           onRefreshSource={() => void controller.refreshSource()}
@@ -291,9 +285,7 @@ function RouteScreen({
           showOriginal={state.showOriginal}
           sourceChange={state.sourceChange}
           busy={state.busy}
-          retryParagraphsAvailable={
-            state.streamingAvailable && state.connection.provider === 'openai-compatible'
-          }
+          retryParagraphsAvailable={state.streamingAvailable}
           titles={
             state.titlesAvailable
               ? { entries: state.titles, busy: titles?.busy ?? false }
@@ -312,11 +304,7 @@ function RouteScreen({
           onCancel={controller.cancelTranslation}
           onRetry={() => void controller.retryTranslation()}
           onRetrySave={() => void controller.retrySave()}
-          onRetryParagraphs={
-            state.streamingAvailable && state.connection.provider === 'openai-compatible'
-              ? (indexes) => void controller.retryParagraphs(indexes)
-              : undefined
-          }
+          onRetryParagraphs={(indexes) => void controller.retryParagraphs(indexes)}
           onSettings={() => controller.navigate({ kind: 'settings' })}
           onCheckConnection={() => void controller.checkConnection()}
           onRefreshSource={() => void controller.refreshSource()}
