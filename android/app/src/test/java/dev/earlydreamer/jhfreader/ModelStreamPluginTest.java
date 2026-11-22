@@ -11,18 +11,35 @@ import org.junit.Test;
 
 public class ModelStreamPluginTest {
     @Test public void acceptsExactLimitAndKeepsLineEndingsSeparate() throws IOException {
-        try (BufferedReader reader = new BufferedReader(new StringReader("가나\r\n\r다\n라"))) {
-            assertEquals("가나", ModelStreamPlugin.readBoundedLine(reader, 2));
-            assertEquals("", ModelStreamPlugin.readBoundedLine(reader, 0));
-            assertEquals("다", ModelStreamPlugin.readBoundedLine(reader, 1));
-            assertEquals("라", ModelStreamPlugin.readBoundedLine(reader, 1));
-            assertNull(ModelStreamPlugin.readBoundedLine(reader, -1));
+        try (BufferedReader reader = new BufferedReader(new StringReader("가나\r\n\r다\n라"), 1)) {
+            ModelStreamPlugin.BoundedLineReader lines = new ModelStreamPlugin.BoundedLineReader(reader);
+            assertEquals("가나", lines.readLine(2));
+            assertEquals("", lines.readLine(0));
+            assertEquals("다", lines.readLine(1));
+            assertEquals("라", lines.readLine(1));
+            assertNull(lines.readLine(-1));
+        }
+    }
+
+    @Test public void returnsCrTerminatedEventWithoutWaitingForMoreInput() throws IOException {
+        StringReader input = new StringReader("data: {}\r\r") {
+            @Override public int read(char[] buffer, int offset, int length) throws IOException {
+                int count = super.read(buffer, offset, length);
+                if (count == -1) throw new IOException("More input is not available yet");
+                return count;
+            }
+        };
+        try (BufferedReader reader = new BufferedReader(input, 1)) {
+            ModelStreamPlugin.BoundedLineReader lines = new ModelStreamPlugin.BoundedLineReader(reader);
+            assertEquals("data: {}", lines.readLine(8));
+            assertEquals("", lines.readLine(0));
         }
     }
 
     @Test public void stopsAtTheFirstCharacterBeyondTheLimit() throws IOException {
         try (BufferedReader reader = new BufferedReader(new StringReader("abcdef\n"))) {
-            assertThrows(IOException.class, () -> ModelStreamPlugin.readBoundedLine(reader, 3));
+            ModelStreamPlugin.BoundedLineReader lines = new ModelStreamPlugin.BoundedLineReader(reader);
+            assertThrows(IOException.class, () -> lines.readLine(3));
             assertEquals('e', reader.read());
         }
     }

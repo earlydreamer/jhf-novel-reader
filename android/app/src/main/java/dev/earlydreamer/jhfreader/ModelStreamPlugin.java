@@ -92,12 +92,11 @@ public final class ModelStreamPlugin extends Plugin {
             StringBuilder all = new StringBuilder();
             InputStream input = status >= 400 ? socket.getErrorStream() : socket.getInputStream();
             if (input != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+                BoundedLineReader lines = new BoundedLineReader(reader);
                 String line;
                 int count = 0;
                 int responseLimit = sse ? MAX_SSE_RESPONSE_CHARS : MAX_NON_SSE_RESPONSE_CHARS;
-                while ((line = readBoundedLine(
-                    reader, Math.min(MAX_SSE_LINE_CHARS, responseLimit - all.length() - 1)
-                )) != null) {
+                while ((line = lines.readLine(Math.min(MAX_SSE_LINE_CHARS, responseLimit - all.length() - 1))) != null) {
                     if (cancelled) throw new InterruptedException();
                     if (++count > MAX_RESPONSE_LINES) throw new IOException("Response has too many lines");
                     all.append(line).append('\n');
@@ -121,21 +120,30 @@ public final class ModelStreamPlugin extends Plugin {
         if (failure != null) call.reject(failure); else call.resolve(result);
     }
 
-    static String readBoundedLine(BufferedReader reader, int limit) throws IOException {
-        int ch = reader.read();
-        if (ch == -1) return null;
-        if (limit < 0) throw new IOException("Response limit exceeded");
-        StringBuilder line = new StringBuilder();
-        while (ch != -1 && ch != '\n' && ch != '\r') {
-            if (line.length() == limit) throw new IOException("Response line limit exceeded");
-            line.append((char) ch);
-            ch = reader.read();
+    static final class BoundedLineReader {
+        private final BufferedReader reader;
+        private boolean skipLineFeed;
+
+        BoundedLineReader(BufferedReader reader) { this.reader = reader; }
+
+        String readLine(int limit) throws IOException {
+            int ch = reader.read();
+            if (skipLineFeed) {
+                skipLineFeed = false;
+                if (ch == '\n') ch = reader.read();
+            }
+            if (ch == -1) return null;
+            if (limit < 0) throw new IOException("Response limit exceeded");
+            StringBuilder line = new StringBuilder();
+            while (ch != -1 && ch != '\n' && ch != '\r') {
+                if (line.length() == limit) throw new IOException("Response line limit exceeded");
+                line.append((char) ch);
+                ch = reader.read();
+            }
+            // CR already ends the line. Check for the optional LF on the next read.
+            skipLineFeed = ch == '\r';
+            return line.toString();
         }
-        if (ch == '\r') {
-            reader.mark(1);
-            if (reader.read() != '\n') reader.reset();
-        }
-        return line.toString();
     }
 
     @PluginMethod public synchronized void cancel(PluginCall call) {
