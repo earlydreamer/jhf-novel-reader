@@ -236,11 +236,33 @@ describe('renewal Gemini whole-chapter provider', () => {
     },
   );
 
-  it('lists only Gemini models that support generateContent', async () => {
+  it('lists Gemini models across pages and omits TTS and image generation models', async () => {
     const gets: Array<{ url: string; authorization?: string; geminiApiKey?: string }> = [];
     const transport: ModelTransport = {
       get: async (input) => {
         gets.push(input);
+        if (gets.length > 1)
+          return {
+            status: 200,
+            headers: {},
+            url: input.url,
+            data: {
+              models: [
+                {
+                  name: 'models/gemini-second',
+                  supportedGenerationMethods: ['generateContent'],
+                },
+                {
+                  name: 'models/gemini-2.5-flash-image',
+                  supportedGenerationMethods: ['generateContent'],
+                },
+                {
+                  name: 'models/gemini-nano-banana-2.1',
+                  supportedGenerationMethods: ['generateContent'],
+                },
+              ],
+            },
+          };
         return {
           status: 200,
           headers: {},
@@ -257,7 +279,12 @@ describe('renewal Gemini whole-chapter provider', () => {
                 displayName: 'Embedding Synthetic',
                 supportedGenerationMethods: ['embedContent'],
               },
+              {
+                name: 'models/gemini-2.5-flash-preview-tts',
+                supportedGenerationMethods: ['generateContent'],
+              },
             ],
+            nextPageToken: 'next/+==',
           },
         };
       },
@@ -270,9 +297,27 @@ describe('renewal Gemini whole-chapter provider', () => {
       listGeminiModels(selection.connection, transport, secrets, signal()),
     ).resolves.toEqual([
       { id: 'gemini-synthetic', displayName: 'Gemini Synthetic', supportsGeneration: true },
+      { id: 'gemini-second', displayName: 'gemini-second', supportsGeneration: true },
     ]);
     expect(gets).toEqual([
       { url: `${GEMINI_BASE_URL}/models`, geminiApiKey: 'synthetic-gemini-key' },
+      {
+        url: `${GEMINI_BASE_URL}/models?pageToken=next%2F%2B%3D%3D`,
+        geminiApiKey: 'synthetic-gemini-key',
+      },
     ]);
+  });
+
+  it('rejects a repeated catalog cursor instead of returning an incomplete list', async () => {
+    let requests = 0;
+    const transport = sessionTransport({}, []);
+    transport.get = async ({ url }) => {
+      if (++requests > 2) throw new Error('Requested a repeated cursor');
+      return { status: 200, headers: {}, url, data: { models: [], nextPageToken: 'repeat' } };
+    };
+    await expect(
+      listGeminiModels(selection.connection, transport, secrets, signal()),
+    ).rejects.toMatchObject({ code: 'model_list', outcome: 'received' });
+    expect(requests).toBe(2);
   });
 });

@@ -9,6 +9,7 @@ import type {
   NativeStreamingClient,
 } from '../../contracts';
 import packageInfo from '../../../package.json';
+import { GEMINI_MODELS_URL } from '../../providers/gemini';
 function validateUrl(value: string, source: boolean): URL {
   try {
     const url = new URL(value);
@@ -246,10 +247,14 @@ export function createModelTransport(
     async get(input, signal) {
       const url = validateUrl(input.url, false);
       const gemini = input.geminiApiKey !== undefined;
+      const pageToken = gemini ? url.searchParams.get('pageToken') : null;
+      const geminiUrl = pageToken
+        ? `${GEMINI_MODELS_URL}?${new URLSearchParams({ pageToken })}`
+        : GEMINI_MODELS_URL;
       if (
         input.url.includes('/../') ||
         (gemini
-          ? input.url !== 'https://generativelanguage.googleapis.com/v1beta/models'
+          ? input.url !== geminiUrl
           : !/^https?:\/\/[^/?#]+(?:\/[A-Za-z0-9._-]+)*\/v1\/models$/.test(input.url))
       )
         throw new ReaderError('connection');

@@ -1,6 +1,7 @@
 import { ReaderError } from '../../contracts';
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+export const GEMINI_MODELS_URL = `${GEMINI_BASE_URL}/models`;
 /** Fixed Google endpoint only; never retarget a user's key to a custom proxy. */
 export function normalizeGeminiBaseUrl(value: string): string {
   if (value.trim() !== GEMINI_BASE_URL && value.trim() !== GEMINI_BASE_URL + '/')

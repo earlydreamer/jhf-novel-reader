@@ -1,6 +1,6 @@
 # Gemini 구현과 현재 노출 범위
 
-설정의 **번역 서버 → 제공자 → Google Gemini**에서 원문·작품 용어집 전송과 비용 안내를 확인합니다. **API 키**를 입력하고 **연결 확인하기**를 누른 뒤 **모델**에서 연결된 계정의 생성 모델을 선택합니다. 기본 제공자는 로컬 서버입니다.
+설정의 **번역 서버 → 제공자 → Google Gemini**에서 원문·작품 용어집 전송과 비용 안내를 확인합니다. **API 키**를 입력한 뒤 **모델**이나 **연결 확인하기**를 누르면 모델 목록을 불러옵니다. 처음 연결했거나 저장한 모델이 목록에서 사라졌으면 선택 화면이 바로 열립니다. 이름이나 모델 ID로 검색해 선택합니다. 기본 제공자는 로컬 서버입니다.
 
 연결을 확인한 API 키는 기기의 보안 저장소에 보관합니다. 앱 재시작과 제공자 변경 후에도 각 연결의 주소, 키 참조, 모델 선택을 기억합니다. 연결 확인은 모델 목록만 조회합니다. 자동 번역을 켠 상태에서 저장본이 없는 회차를 열면 선택한 모델로 본문을 번역합니다.
 
@@ -12,7 +12,7 @@ Gemini 기본 주소는 `https://generativelanguage.googleapis.com/v1beta`로 �
 
 ## 전체 회차 요청 계약
 
-- 목록 조회는 고정된 `GET https://generativelanguage.googleapis.com/v1beta/models`를 사용합니다.
+- 목록 조회는 고정된 `GET https://generativelanguage.googleapis.com/v1beta/models`에서 다음 페이지까지 읽습니다. `generateContent`를 지원하는 모델을 표시하며 음성 전용 TTS와 이미지 생성용 Gemini 모델은 제외합니다.
 - Android의 본문 요청은 선택한 모델의 `:streamGenerateContent?alt=sse`를 사용합니다. 한국어 본문이 도착하면 저장 전 미리보기를 갱신합니다. 비스트리밍 모드는 `:generateContent`를 사용합니다.
 - 적용할 작품 참고 정보가 없는 회차는 전체 원문을 한 번에 보냅니다. SSE는 전체 응답에 유효한 `STOP`과 번역문이 있어야 저장하며, 모델의 추론 내용은 미리보기와 저장에서 제외합니다.
 - 일반 회차 번역에서 **번역 전 용어집 자동 생성**을 켜면 로컬과 같은 규칙으로 후보를 찾습니다. 생성이 필요한 경우 `:generateContent`로 구조화 응답을 받고, 원문에 있는 용어만 기존 작품 용어집에 병합합니다. 사람이 정한 표기는 보존합니다.
@@ -24,7 +24,7 @@ Gemini 기본 주소는 `https://generativelanguage.googleapis.com/v1beta`로 �
 
 ## 전송과 인증 경계
 
-API 키는 `x-goog-api-key` 헤더에만 담습니다. 키가 있는 GET은 고정 모델 목록 주소, POST는 고정 Google HTTPS `generateContent`와 `streamGenerateContent?alt=sse` 주소만 허용합니다. 스트리밍에 고정된 `alt=sse` 외의 쿼리, 다른 목적지, fragment·사용자 정보·경로 순회·Authorization 혼용은 전송 전에 거부합니다.
+API 키는 `x-goog-api-key` 헤더에만 담습니다. 키가 있는 GET은 고정 모델 목록 주소와 페이지를 넘길 때 필요한 `pageToken`만 허용합니다. POST는 고정 Google HTTPS `generateContent`와 `streamGenerateContent?alt=sse` 주소만 허용합니다. 허용 범위 밖의 쿼리, 다른 목적지, fragment·사용자 정보·경로 순회·Authorization 혼용은 전송 전에 거부합니다.
 
 리디렉션은 네이티브 전송 전에 끄고 응답 URL도 비교합니다. 오류에 키나 원문을 넣지 않습니다.
 

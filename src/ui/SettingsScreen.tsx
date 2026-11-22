@@ -85,16 +85,19 @@ const catalogLabels: Record<CatalogStatus, string> = {
   unavailable: '이 환경에서는 모델 서버 연결을 아직 사용할 수 없어요.',
 };
 
-function problemMessage(problem: CatalogProblem): string {
+function problemMessage(problem: CatalogProblem, gemini = false): string {
   const code = problem.httpStatus ? `(HTTP ${problem.httpStatus})` : '';
   switch (problem.reason) {
     case 'invalid_url':
       return 'API 주소 형식이 올바르지 않아요. http:// 또는 https://로 시작하고 /v1까지만 적어 주세요.';
     case 'network':
+      if (gemini) return 'Gemini에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.';
       return '서버에 연결하지 못했어요. 주소와 포트, 서버가 켜져 있는지, 같은 네트워크(또는 VPN)에 있는지 확인해 주세요.';
     case 'redirect':
       return `서버가 다른 주소로 보내려고 했어요${code}. 최종 API 주소를 직접 적어 주세요.`;
     case 'http':
+      if (gemini)
+        return `Gemini의 모델 목록을 불러오지 못했어요${code}. 잠시 뒤 다시 확인해 주세요.`;
       if (problem.httpStatus === 404)
         return '서버가 이 주소를 찾지 못했어요(HTTP 404). API 주소가 /v1로 끝나는지 확인해 주세요.';
       if (problem.httpStatus && problem.httpStatus >= 500)
@@ -113,7 +116,7 @@ function problemMessage(problem: CatalogProblem): string {
   }
 }
 
-function checkResultMessage(result: ConnectionCheckResult): string | null {
+function checkResultMessage(result: ConnectionCheckResult, gemini: boolean): string | null {
   if (result.kind === 'superseded') return null;
   if (result.kind === 'skipped')
     return result.reason === 'busy'
@@ -121,9 +124,11 @@ function checkResultMessage(result: ConnectionCheckResult): string | null {
       : result.reason === 'not_ready'
         ? '앱을 준비하고 있어요. 잠시 뒤 다시 확인해 주세요.'
         : catalogLabels.unavailable;
-  if (result.problem) return problemMessage(result.problem);
+  if (result.problem) return problemMessage(result.problem, gemini);
   if (result.status === 'empty')
-    return '서버에 연결했지만 번역에 쓸 수 있는 생성 모델이 없어요. 서버에서 모델을 불러와 주세요.';
+    return gemini
+      ? 'Gemini에 연결했지만 선택할 수 있는 모델이 없어요.'
+      : '서버에 연결했지만 번역에 쓸 수 있는 생성 모델이 없어요. 서버에서 모델을 불러와 주세요.';
   if (result.status === 'model_missing')
     return '서버에 연결했지만 선택한 모델이 목록에 없어요. 다른 모델을 골라 주세요.';
   return `서버에 연결했어요. 번역에 쓸 수 있는 모델이 ${result.modelCount}개 있어요.`;
@@ -143,6 +148,7 @@ const themeLabels: Record<ThemePreference, string> = {
 type RadioChoice = {
   readonly value: string;
   readonly label: string;
+  readonly supporting?: string;
   readonly disabled?: boolean;
 };
 
@@ -164,11 +170,17 @@ function RadioList({
       {choices.map((choice) => (
         <div
           key={choice.value}
-          className={`nr-list-item${choice.value === value ? ' nr-list-item--current' : ''}`}
+          className={`nr-list-item${choice.supporting ? ' nr-list-item--two-line' : ''}${choice.value === value ? ' nr-list-item--current' : ''}`}
         >
           <label className="nr-list-item__main">
             <span className="nr-list-item__text">
               <span className="nr-list-item__headline">{choice.label}</span>
+              {choice.supporting && (
+                <>
+                  {' '}
+                  <span className="nr-list-item__supporting">{choice.supporting}</span>
+                </>
+              )}
             </span>
             <input
               className="nr-list-item__radio"
@@ -396,6 +408,7 @@ export function SettingsScreen({
   const [geminiOpen, setGeminiOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
   const [modeOpen, setModeOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [lookupConfirm, setLookupConfirm] = useState<LookupSourceKey | null>(null);
@@ -501,37 +514,40 @@ export function SettingsScreen({
     else update({ provider: 'openai-compatible', baseUrl: '' });
   }
 
-  async function runCheck(secret: string): Promise<ConnectionCheckResult | null> {
-    if (gemini && !state.connection.authRef && !secret.trim()) {
+  function openModelPicker(): void {
+    setModelSearch('');
+    setModelOpen(true);
+  }
+
+  async function check(openOnSuccess = false, value = clearSecret()): Promise<void> {
+    if (gemini && !state.connection.authRef && !value.trim()) {
+      secret.current?.focus();
       showSnackbar('Gemini API 키를 입력해 주세요.');
-      return null;
+      return;
     }
     let result: ConnectionCheckResult;
     try {
-      result = await onCheck(gemini ? secret.trim() : secret);
+      result = await onCheck(gemini ? value.trim() : value);
     } catch {
       showSnackbar(catalogLabels.model_list);
-      return null;
+      return;
     }
-    const message = checkResultMessage(result);
+    if (
+      result.kind === 'done' &&
+      result.modelCount > 0 &&
+      (openOnSuccess || (gemini && result.status === 'model_missing'))
+    ) {
+      openModelPicker();
+      return;
+    }
+    const message = checkResultMessage(result, gemini);
     if (message) showSnackbar(message);
-    return result;
-  }
-
-  async function check(): Promise<ConnectionCheckResult | null> {
-    return runCheck(clearSecret());
-  }
-
-  /** 목록 없이 모델 행을 누르면 연결을 확인하고, 생성 가능한 모델이 왔을 때만 선택 창을 연다(#176). 실패는 check()가 알린다. */
-  async function checkForModel(): Promise<void> {
-    const result = await check();
-    if (result?.kind === 'done' && result.modelCount > 0) setModelOpen(true);
   }
 
   async function saveAuth(): Promise<void> {
     const value = clearSecret();
     setAuthOpen(false);
-    await runCheck(value);
+    await check(gemini && !state.selectedModelId, value);
   }
 
   function closeAuth(): void {
@@ -543,7 +559,24 @@ export function SettingsScreen({
   const modelLabel =
     state.models.find((model) => model.id === state.selectedModelId)?.displayName ??
     (state.selectedModelId ? readableModelName(state.selectedModelId) : undefined) ??
-    '선택 전';
+    (gemini
+      ? state.connection.authRef
+        ? '모델 목록에서 선택해요.'
+        : 'API 키를 입력한 뒤 선택해요.'
+      : '선택 전');
+  const search = modelSearch.trim().toLowerCase();
+  const pickerModels = gemini
+    ? state.models
+        .filter(
+          (model) =>
+            model.displayName.toLowerCase().includes(search) ||
+            model.id.toLowerCase().includes(search),
+        )
+        .sort(
+          (left, right) =>
+            Number(right.id === state.selectedModelId) - Number(left.id === state.selectedModelId),
+        )
+    : state.models;
   const modeDisabled =
     state.translationActive || !!state.batch?.active || !!state.pendingSaveChapter;
   const authDisabled = !state.connectionAvailable || checking || !state.connection.baseUrl;
@@ -561,23 +594,7 @@ export function SettingsScreen({
           disabled={!state.connectionAvailable || modeDisabled}
           onClick={() => setProviderOpen(true)}
         />
-        <div className="nr-list-item nr-list-item--two-line">
-          <div className="nr-list-item__main" role="status">
-            <span className="nr-list-item__text">
-              <span className="nr-list-item__headline">연결 상태</span>
-              <span className="nr-list-item__supporting">
-                {gemini && state.catalogStatus === 'auth'
-                  ? 'Gemini API 키를 확인해 주세요.'
-                  : state.catalogProblem
-                    ? problemMessage(state.catalogProblem)
-                    : catalogLabels[state.catalogStatus]}
-              </span>
-            </span>
-          </div>
-        </div>
-        {gemini ? (
-          <p>Google Gemini API · generativelanguage.googleapis.com</p>
-        ) : (
+        {!gemini && (
           <LocalServerAddress
             connection={state.connection}
             disabled={Boolean(state.batch?.active)}
@@ -588,11 +605,14 @@ export function SettingsScreen({
           <ListItem
             headline={authLabel}
             supporting="저장됨"
+            navigates={gemini}
             onClick={() => setAuthOpen(true)}
             trailing={
-              <Button variant="text" onClick={() => setAuthOpen(true)}>
-                변경
-              </Button>
+              !gemini && (
+                <Button variant="text" onClick={() => setAuthOpen(true)}>
+                  변경
+                </Button>
+              )
             }
           />
         ) : (
@@ -618,38 +638,47 @@ export function SettingsScreen({
             </p>
           </>
         )}
-        <Button
-          variant="tonal"
-          size="s"
-          disabled={!state.connectionAvailable || checking || !state.connection.baseUrl}
-          onClick={() => void check()}
-        >
-          {checking ? '확인하는 중…' : '연결 확인하기'}
-        </Button>
         <ListItem
           headline="모델"
           supporting={modelLabel}
           navigates
-          disabled={checking || (state.models.length === 0 && !state.selectedModelId)}
+          disabled={
+            checking ||
+            (gemini
+              ? !state.connectionAvailable || modeDisabled
+              : state.models.length === 0 && !state.selectedModelId)
+          }
           onClick={() => {
-            if (state.models.length > 0) setModelOpen(true);
-            else void checkForModel();
+            if (state.models.length > 0) openModelPicker();
+            else void check(true);
           }}
         />
+        <div className="nr-list-item nr-list-item--two-line">
+          <div className="nr-list-item__main" role="status">
+            <span className="nr-list-item__text">
+              <span className="nr-list-item__headline">연결 상태</span>
+              <span className="nr-list-item__supporting">
+                {gemini && state.catalogStatus === 'auth'
+                  ? 'Gemini API 키를 확인해 주세요.'
+                  : state.catalogProblem
+                    ? problemMessage(state.catalogProblem, gemini)
+                    : catalogLabels[state.catalogStatus]}
+              </span>
+            </span>
+          </div>
+        </div>
+        <Button
+          variant="tonal"
+          size="s"
+          disabled={!state.connectionAvailable || checking || !state.connection.baseUrl}
+          onClick={() => void check(gemini && !state.selectedModelId)}
+        >
+          {checking ? '확인하는 중…' : '연결 확인하기'}
+        </Button>
       </section>
 
-      {state.chapterUpdatesAvailable && onChapterUpdateDays && (
-        <section aria-labelledby="settings-chapter-updates">
-          <h2 id="settings-chapter-updates">새 회차 검사</h2>
-          <ChapterUpdateSettings
-            key={state.chapterUpdateDays}
-            days={state.chapterUpdateDays}
-            onSave={onChapterUpdateDays}
-          />
-        </section>
-      )}
       <section aria-labelledby="settings-translation">
-        <h2 id="settings-translation">번역 방식</h2>
+        <h2 id="settings-translation">번역 옵션</h2>
         {!gemini && state.streamingAvailable && onMode && (
           <ListItem
             headline="로컬 번역 방식"
@@ -764,6 +793,16 @@ export function SettingsScreen({
         </section>
       )}
 
+      {state.chapterUpdatesAvailable && onChapterUpdateDays && (
+        <section aria-labelledby="settings-chapter-updates">
+          <h2 id="settings-chapter-updates">새 회차 검사</h2>
+          <ChapterUpdateSettings
+            key={state.chapterUpdateDays}
+            days={state.chapterUpdateDays}
+            onSave={onChapterUpdateDays}
+          />
+        </section>
+      )}
       {onTheme && (
         <section aria-labelledby="settings-display">
           <h2 id="settings-display">화면</h2>
@@ -909,7 +948,8 @@ export function SettingsScreen({
 
       <Dialog
         open={modelOpen}
-        title="모델 선택"
+        title={gemini ? 'Gemini 모델 선택' : '모델 선택'}
+        fullScreen={gemini}
         onClose={() => setModelOpen(false)}
         actions={
           <Button variant="text" onClick={() => setModelOpen(false)}>
@@ -917,13 +957,35 @@ export function SettingsScreen({
           </Button>
         }
       >
+        {gemini && (
+          <div className="nr-model-picker__search">
+            <label>
+              모델 검색
+              <input
+                type="search"
+                placeholder="모델 이름 또는 ID"
+                value={modelSearch}
+                onChange={(event) => setModelSearch(event.target.value)}
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+              />
+            </label>
+          </div>
+        )}
+        {gemini && pickerModels.length === 0 && (
+          <p role="status">
+            {search ? '검색어와 일치하는 모델이 없어요.' : '불러온 모델이 없어요.'}
+          </p>
+        )}
         <RadioList
           name="model"
           label="모델 선택"
           value={state.selectedModelId}
-          choices={state.models.map((model) => ({
+          choices={pickerModels.map((model) => ({
             value: model.id,
             label: model.displayName,
+            supporting: gemini && model.displayName !== model.id ? model.id : undefined,
             disabled: !model.supportsGeneration,
           }))}
           onSelect={(modelId) => {
