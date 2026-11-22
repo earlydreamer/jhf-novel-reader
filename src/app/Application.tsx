@@ -641,7 +641,7 @@ export function Application({
       <SnackbarBridge
         state={state}
         holdErrors={urlDialogOpen && state.route.kind === 'home'}
-        notice={actionNotice ?? state.settingsNotice}
+        notice={actionNotice}
       />
       <div className="nr-application" lang="ko">
         <ShellAppBar

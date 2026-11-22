@@ -11,6 +11,7 @@ import type {
 } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
 import type { BackupResult } from '../platform/backup';
+import { GEMINI_BASE_URL } from '../providers/gemini';
 import { readableModelName } from '../providers/modelName';
 import type { ThemePreference } from '../storage/settings';
 import { Button } from './components/Button';
@@ -129,6 +130,10 @@ function checkResultMessage(result: ConnectionCheckResult): string | null {
 }
 
 const modeLabels = { stream: '읽으며 번역', legacy: '기존 묶음 방식' } as const;
+const providerLabels = {
+  'openai-compatible': '로컬 서버',
+  gemini: 'Google Gemini',
+} as const;
 const themeLabels: Record<ThemePreference, string> = {
   system: '시스템 설정 따르기',
   light: '라이트',
@@ -229,6 +234,139 @@ export function composePresetAddress(host: string, port: string): string {
   return `http://${trimmedHost}${trimmedPort ? `:${trimmedPort}` : ''}/v1`;
 }
 
+function LocalServerAddress({
+  connection,
+  disabled,
+  onChange,
+}: {
+  connection: ConnectionConfig;
+  disabled: boolean;
+  onChange(baseUrl: string): void;
+}): JSX.Element {
+  const addressHelpId = useId();
+  const [manualAddress, setManualAddress] = useState(
+    () => connection.baseUrl.trim() !== '' && parsePresetAddress(connection.baseUrl) === null,
+  );
+  // 같은 목적지인 입력도 편집 중에는 남긴다. 실제 연결이 바뀌면 그 연결의 주소를 표시한다.
+  const [manualAddressDraft, setManualAddressDraft] = useState<{
+    connection: ConnectionConfig;
+    text: string;
+  } | null>(null);
+  const [host, setHost] = useState(() => parsePresetAddress(connection.baseUrl)?.host ?? '');
+  const [port, setPort] = useState(() => parsePresetAddress(connection.baseUrl)?.port ?? '');
+  return (
+    <>
+      <Switch
+        label="전체 주소 직접 입력"
+        description="API 형식이 다르면 켜고 주소 전체를 그대로 적어 주세요."
+        checked={manualAddress}
+        onChange={(checked) => {
+          setManualAddress(checked);
+          if (!checked) {
+            const parsed = parsePresetAddress(connection.baseUrl);
+            setHost(parsed?.host ?? '');
+            setPort(parsed?.port ?? '');
+            // 해석할 수 없는 주소는 지우지 않는다. 사용자가 서버 주소를 적으면 그때 바뀐다.
+          }
+        }}
+      />
+      {manualAddress ? (
+        <label>
+          API 기본 주소
+          <input
+            type="url"
+            disabled={disabled}
+            value={
+              manualAddressDraft?.connection === connection
+                ? manualAddressDraft.text
+                : connection.baseUrl
+            }
+            onChange={(event) => {
+              if (disabled) return;
+              setManualAddressDraft({
+                connection: connection,
+                text: event.target.value,
+              });
+              onChange(event.target.value);
+            }}
+            placeholder="http://192.168.0.10:1234/v1"
+          />
+        </label>
+      ) : (
+        <>
+          <div className="nr-address-preset">
+            <label>
+              서버 주소
+              <input
+                type="text"
+                inputMode="url"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                value={host}
+                placeholder="192.168.0.10"
+                aria-describedby={addressHelpId}
+                onChange={(event) => {
+                  setHost(event.target.value);
+                  onChange(composePresetAddress(event.target.value, port));
+                }}
+              />
+            </label>
+            <label>
+              포트
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={5}
+                value={port}
+                placeholder="1234"
+                aria-describedby={addressHelpId}
+                onChange={(event) => {
+                  const next = event.target.value.replace(/\D/g, '').slice(0, 5);
+                  setPort(next);
+                  onChange(composePresetAddress(host, next));
+                }}
+              />
+            </label>
+          </div>
+          <div className="nr-address-ports" role="group" aria-label="자주 쓰는 포트">
+            <Chip
+              label="LM Studio 1234"
+              selected={port === '1234'}
+              onClick={() => {
+                setPort('1234');
+                onChange(composePresetAddress(host, '1234'));
+              }}
+            />
+            <Chip
+              label="Ollama 11434"
+              selected={port === '11434'}
+              onClick={() => {
+                setPort('11434');
+                onChange(composePresetAddress(host, '11434'));
+              }}
+            />
+            <Chip
+              label="llama.cpp 8080"
+              selected={port === '8080'}
+              onClick={() => {
+                setPort('8080');
+                onChange(composePresetAddress(host, '8080'));
+              }}
+            />
+          </div>
+          <p id={addressHelpId}>
+            {composePresetAddress(host, port)
+              ? `완성 주소: ${composePresetAddress(host, port)}`
+              : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.'}
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 export function SettingsScreen({
   state,
   onChange,
@@ -252,19 +390,10 @@ export function SettingsScreen({
   const secret = useRef<HTMLInputElement>(null);
   const showSnackbar = useSnackbar();
   const secretHelpId = useId();
-  const addressHelpId = useId();
-  const [manualAddress, setManualAddress] = useState(
-    () =>
-      state.connection.baseUrl.trim() !== '' &&
-      parsePresetAddress(state.connection.baseUrl) === null,
-  );
-  // 같은 목적지인 입력도 편집 중에는 남긴다. 실제 연결이 바뀌면 그 연결의 주소를 표시한다.
-  const [manualAddressDraft, setManualAddressDraft] = useState<{
-    connection: ConnectionConfig;
-    text: string;
-  } | null>(null);
-  const [host, setHost] = useState(() => parsePresetAddress(state.connection.baseUrl)?.host ?? '');
-  const [port, setPort] = useState(() => parsePresetAddress(state.connection.baseUrl)?.port ?? '');
+  const gemini = state.connection.provider === 'gemini';
+  const authLabel = gemini ? 'API 키' : '인증값';
+  const [providerOpen, setProviderOpen] = useState(false);
+  const [geminiOpen, setGeminiOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
@@ -368,10 +497,21 @@ export function SettingsScreen({
     onChange({ provider: state.connection.provider, baseUrl: state.connection.baseUrl, ...value });
   }
 
+  function chooseProvider(provider: string): void {
+    setProviderOpen(false);
+    if (provider === state.connection.provider) return;
+    if (provider === 'gemini') setGeminiOpen(true);
+    else update({ provider: 'openai-compatible', baseUrl: '' });
+  }
+
   async function runCheck(secret: string): Promise<ConnectionCheckResult | null> {
+    if (gemini && !state.connection.authRef && !secret.trim()) {
+      showSnackbar('Gemini API 키를 입력해 주세요.');
+      return null;
+    }
     let result: ConnectionCheckResult;
     try {
-      result = await onCheck(secret);
+      result = await onCheck(gemini ? secret.trim() : secret);
     } catch {
       showSnackbar(catalogLabels.model_list);
       return null;
@@ -417,128 +557,39 @@ export function SettingsScreen({
 
       <section aria-labelledby="settings-server">
         <h2 id="settings-server">번역 서버</h2>
+        <ListItem
+          headline="제공자"
+          supporting={providerLabels[state.connection.provider]}
+          navigates
+          disabled={!state.connectionAvailable || modeDisabled}
+          onClick={() => setProviderOpen(true)}
+        />
         <div className="nr-list-item nr-list-item--two-line">
           <div className="nr-list-item__main" role="status">
             <span className="nr-list-item__text">
               <span className="nr-list-item__headline">연결 상태</span>
               <span className="nr-list-item__supporting">
-                {state.catalogProblem
-                  ? problemMessage(state.catalogProblem)
-                  : catalogLabels[state.catalogStatus]}
+                {gemini && state.catalogStatus === 'auth'
+                  ? 'Gemini API 키를 확인해 주세요.'
+                  : state.catalogProblem
+                    ? problemMessage(state.catalogProblem)
+                    : catalogLabels[state.catalogStatus]}
               </span>
             </span>
           </div>
         </div>
-        <Switch
-          label="전체 주소 직접 입력"
-          description="API 형식이 다르면 켜고 주소 전체를 그대로 적어 주세요."
-          checked={manualAddress}
-          onChange={(checked) => {
-            setManualAddress(checked);
-            if (!checked) {
-              const parsed = parsePresetAddress(state.connection.baseUrl);
-              setHost(parsed?.host ?? '');
-              setPort(parsed?.port ?? '');
-              // 해석할 수 없는 주소는 지우지 않는다. 사용자가 서버 주소를 적으면 그때 바뀐다.
-            }
-          }}
-        />
-        {manualAddress ? (
-          <label>
-            API 기본 주소
-            <input
-              type="url"
-              disabled={state.batch?.active}
-              value={
-                manualAddressDraft?.connection === state.connection
-                  ? manualAddressDraft.text
-                  : state.connection.baseUrl
-              }
-              onChange={(event) => {
-                if (state.batch?.active) return;
-                setManualAddressDraft({
-                  connection: state.connection,
-                  text: event.target.value,
-                });
-                update({ baseUrl: event.target.value });
-              }}
-              placeholder="http://192.168.0.10:1234/v1"
-            />
-          </label>
+        {gemini ? (
+          <p>Google Gemini API · generativelanguage.googleapis.com</p>
         ) : (
-          <>
-            <div className="nr-address-preset">
-              <label>
-                서버 주소
-                <input
-                  type="text"
-                  inputMode="url"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  value={host}
-                  placeholder="192.168.0.10"
-                  aria-describedby={addressHelpId}
-                  onChange={(event) => {
-                    setHost(event.target.value);
-                    update({ baseUrl: composePresetAddress(event.target.value, port) });
-                  }}
-                />
-              </label>
-              <label>
-                포트
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={5}
-                  value={port}
-                  placeholder="1234"
-                  aria-describedby={addressHelpId}
-                  onChange={(event) => {
-                    const next = event.target.value.replace(/\D/g, '').slice(0, 5);
-                    setPort(next);
-                    update({ baseUrl: composePresetAddress(host, next) });
-                  }}
-                />
-              </label>
-            </div>
-            <div className="nr-address-ports" role="group" aria-label="자주 쓰는 포트">
-              <Chip
-                label="LM Studio 1234"
-                selected={port === '1234'}
-                onClick={() => {
-                  setPort('1234');
-                  update({ baseUrl: composePresetAddress(host, '1234') });
-                }}
-              />
-              <Chip
-                label="Ollama 11434"
-                selected={port === '11434'}
-                onClick={() => {
-                  setPort('11434');
-                  update({ baseUrl: composePresetAddress(host, '11434') });
-                }}
-              />
-              <Chip
-                label="llama.cpp 8080"
-                selected={port === '8080'}
-                onClick={() => {
-                  setPort('8080');
-                  update({ baseUrl: composePresetAddress(host, '8080') });
-                }}
-              />
-            </div>
-            <p id={addressHelpId}>
-              {composePresetAddress(host, port)
-                ? `완성 주소: ${composePresetAddress(host, port)}`
-                : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.'}
-            </p>
-          </>
+          <LocalServerAddress
+            connection={state.connection}
+            disabled={Boolean(state.batch?.active)}
+            onChange={(baseUrl) => update({ baseUrl })}
+          />
         )}
         {state.connection.authRef ? (
           <ListItem
-            headline="인증값"
+            headline={authLabel}
             supporting="저장됨"
             onClick={() => setAuthOpen(true)}
             trailing={
@@ -550,17 +601,23 @@ export function SettingsScreen({
         ) : (
           <>
             <label>
-              인증값 (선택)
+              {gemini ? authLabel : '인증값 (선택)'}
               <input
                 ref={secret}
                 type="password"
                 autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-required={gemini || undefined}
                 aria-describedby={secretHelpId}
                 disabled={!state.connectionAvailable || checking}
               />
             </label>
             <p id={secretHelpId}>
-              인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.
+              {gemini
+                ? 'Gemini API 키는 연결을 확인한 뒤 이 기기의 보안 저장소에 저장해요.'
+                : '인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.'}
             </p>
           </>
         )}
@@ -596,7 +653,7 @@ export function SettingsScreen({
       )}
       <section aria-labelledby="settings-translation">
         <h2 id="settings-translation">번역 방식</h2>
-        {state.streamingAvailable && onMode && (
+        {!gemini && state.streamingAvailable && onMode && (
           <ListItem
             headline="로컬 번역 방식"
             supporting={modeLabels[state.translationMode]}
@@ -613,10 +670,10 @@ export function SettingsScreen({
             onChange={onAutoTranslate}
           />
         )}
-        {onAutoGlossary && state.connection.provider === 'openai-compatible' && (
+        {onAutoGlossary && (
           <Switch
             label="번역 전 용어집 자동 생성"
-            description="새 이름이 나오면 번역하기 전에 모델로 용어집을 만들어 바로 적용해요. 처음 번역할 때 조금 더 걸리고, 작품 용어집에서 언제든 고칠 수 있어요."
+            description="새 이름이 나오면 번역하기 전에 모델로 용어집을 만들어 바로 적용해요. 추가 모델 요청으로 비용이 생길 수 있고, 표기는 작품 용어집에서 고칠 수 있어요."
             checked={state.autoGlossary}
             onChange={onAutoGlossary}
           />
@@ -624,7 +681,7 @@ export function SettingsScreen({
         {onAutoRetryFailed && (
           <Switch
             label="실패한 문단 자동으로 다시 번역"
-            description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요."
+            description="문단별 번역에서 검증에 실패하거나 필수 용어 표기가 빠진 문단을 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요."
             checked={state.autoRetryFailed}
             onChange={onAutoRetryFailed}
           />
@@ -767,8 +824,61 @@ export function SettingsScreen({
       </footer>
 
       <Dialog
+        open={providerOpen}
+        title="제공자 선택"
+        onClose={() => setProviderOpen(false)}
+        actions={
+          <Button variant="text" onClick={() => setProviderOpen(false)}>
+            닫기
+          </Button>
+        }
+      >
+        <RadioList
+          name="provider"
+          label="제공자 선택"
+          value={state.connection.provider}
+          choices={[
+            { value: 'openai-compatible', label: providerLabels['openai-compatible'] },
+            { value: 'gemini', label: providerLabels.gemini },
+          ]}
+          onSelect={chooseProvider}
+        />
+      </Dialog>
+
+      <Dialog
+        open={geminiOpen}
+        title="Gemini를 사용할까요?"
+        onClose={() => setGeminiOpen(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setGeminiOpen(false)}>
+              취소
+            </Button>
+            <Button
+              variant="text"
+              onClick={() => {
+                update({ provider: 'gemini', baseUrl: GEMINI_BASE_URL });
+                setGeminiOpen(false);
+              }}
+            >
+              Gemini 사용하기
+            </Button>
+          </>
+        }
+      >
+        <p>
+          번역할 회차의 원문과 적용할 작품 용어집의 표기·말투·줄거리 참고 정보를 Google로 보내요.
+        </p>
+        <p>
+          자동 용어집 생성이나 표기 재시도는 추가 요청을 보낼 수 있어요. 사용량에 따라 비용이 발생할
+          수 있어요.
+        </p>
+        <p>자동 번역이 켜져 있으면 저장본이 없는 회차를 열 때 요청을 보내요.</p>
+      </Dialog>
+
+      <Dialog
         open={authOpen}
-        title="인증값 변경"
+        title={`${authLabel} 변경`}
         onClose={closeAuth}
         actions={
           <>
@@ -782,11 +892,21 @@ export function SettingsScreen({
         }
       >
         <label>
-          새 인증값
-          <input ref={secret} type="password" autoComplete="off" disabled={authDisabled} />
+          새 {authLabel}
+          <input
+            ref={secret}
+            type="password"
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            disabled={authDisabled}
+          />
         </label>
         <p>
-          새 인증값은 이 기기의 보안 저장소에 저장해요. 비워 두고 저장하면 기존 인증값을 유지해요.
+          {gemini
+            ? '새 API 키는 연결을 확인한 뒤 이 기기의 보안 저장소에 저장해요. 비워 두면 기존 키를 사용해요.'
+            : '새 인증값은 이 기기의 보안 저장소에 저장해요. 비워 두고 저장하면 기존 인증값을 유지해요.'}
         </p>
       </Dialog>
 

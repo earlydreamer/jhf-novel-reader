@@ -77,6 +77,19 @@ test('자동 용어집이 실패하면 번역은 계속되고 glossary 상태는
   expect(flow.getSnapshot()).toMatchObject({ phase: 'ready', glossary: 'failed' });
 });
 
+test('자동 용어집 시작 상태를 받은 구독자가 즉시 취소하면 모델 요청을 보내지 않는다', async () => {
+  const autoGlossary = vi.fn<AutoGlossary>(async () => 'added');
+  const { flow, translate } = makeFlow(autoGlossary);
+  const unsubscribe = flow.subscribe(({ glossary, error }) => {
+    if (glossary === 'running' && !error) flow.cancel();
+  });
+  await flow.start(ref, local, undefined, undefined, undefined, { autoGlossary: true });
+  unsubscribe();
+  expect(autoGlossary).not.toHaveBeenCalled();
+  expect(translate).not.toHaveBeenCalled();
+  expect(flow.getSnapshot().error).toMatchObject({ code: 'cancelled', outcome: 'not_sent' });
+});
+
 test('자동 용어집 진행 중 사용자가 취소하면 번역이 시작되지 않는다', async () => {
   const autoGlossary = vi.fn<AutoGlossary>(
     ({ signal }) =>
@@ -132,7 +145,7 @@ test('옵션이 없으면 자동 용어집을 호출하지 않는다', async () 
   expect(translate).toHaveBeenCalledTimes(1);
 });
 
-test('gemini 선택이면 옵션이 켜져 있어도 자동 용어집을 호출하지 않는다', async () => {
+test('Gemini도 옵션이 켜져 있으면 번역 직전에 자동 용어집을 호출한다', async () => {
   const autoGlossary = vi.fn<AutoGlossary>(async () => 'added');
   const { flow, translate } = makeFlow(autoGlossary);
   const gemini: SelectedModel = {
@@ -140,7 +153,12 @@ test('gemini 선택이면 옵션이 켜져 있어도 자동 용어집을 호출�
     modelId: 'gemini-test',
   };
   await flow.start(ref, gemini, undefined, undefined, undefined, { autoGlossary: true });
-  expect(autoGlossary).not.toHaveBeenCalled();
+  expect(autoGlossary).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ workId: ref.workId, selection: gemini }),
+  );
+  expect(autoGlossary.mock.invocationCallOrder[0]!).toBeLessThan(
+    translate.mock.invocationCallOrder[0]!,
+  );
   expect(translate).toHaveBeenCalledTimes(1);
 });
 

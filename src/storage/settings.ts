@@ -1,8 +1,9 @@
-import { selected } from './readingValidation';
+import { connectionConfig, selected } from './readingValidation';
 import { validChapterUpdateDays } from '../app/chapterUpdateSchedule';
 import type { PreferencesPlugin } from '@capacitor/preferences';
+import type { SelectedModel } from '../contracts';
 import { StorageError, storageError } from './errors';
-import { check, integer, object, snapshot as cloneInput } from './validation';
+import { check, integer, object, snapshot as cloneInput, text } from './validation';
 export type PreferenceBackend = Pick<PreferencesPlugin, 'get' | 'set'> &
   Partial<Pick<PreferencesPlugin, 'remove'>>;
 const queues = new WeakMap<PreferenceBackend, Promise<unknown>>();
@@ -12,9 +13,15 @@ export type LineHeight = 1.6 | 1.8 | 2;
 export const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
 export const READING_BACKGROUNDS: readonly ReadingBackground[] = ['theme', 'sepia', 'black'];
 export const LINE_HEIGHTS: readonly LineHeight[] = [1.6, 1.8, 2];
+export type RememberedConnection = Pick<SelectedModel, 'connection' | 'translationMode'> & {
+  modelId?: string;
+};
 export type ReadingSettings = {
   schemaVersion: 2;
-  selection: import('../contracts').SelectedModel | null;
+  selection: SelectedModel | null;
+  /** 모델 선택을 끝내기 전에도 제공자, 주소, 보안 저장소 참조를 기억한다. */
+  configuredConnection?: RememberedConnection;
+  inactiveConnection?: RememberedConnection;
   fontSize: number;
   autoTranslate?: boolean;
   autoRetryFailed?: boolean;
@@ -30,10 +37,26 @@ export type ReadingSettings = {
   readingBackground?: ReadingBackground;
   lineHeight?: LineHeight;
 };
+function rememberedConnection(value: unknown): void {
+  object(value, ['connection', 'modelId', 'translationMode']);
+  connectionConfig(value.connection);
+  check(
+    value.translationMode === undefined ||
+      value.translationMode === 'stream' ||
+      value.translationMode === 'legacy',
+  );
+  if (value.modelId !== undefined) {
+    text(value.modelId);
+    check(value.modelId.length <= 256);
+  }
+}
+
 function readingSettings(value: unknown): ReadingSettings {
   object(value, [
     'schemaVersion',
     'selection',
+    'configuredConnection',
+    'inactiveConnection',
     'fontSize',
     'autoTranslate',
     'autoRetryFailed',
@@ -71,6 +94,8 @@ function readingSettings(value: unknown): ReadingSettings {
   integer(value.fontSize, 10);
   check(value.fontSize <= 48);
   if (value.selection !== null) selected(value.selection);
+  if (value.configuredConnection !== undefined) rememberedConnection(value.configuredConnection);
+  if (value.inactiveConnection !== undefined) rememberedConnection(value.inactiveConnection);
   return value as unknown as ReadingSettings;
 }
 export function createReadingSettingsRepository(backend: PreferenceBackend) {

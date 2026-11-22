@@ -6,6 +6,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -18,6 +19,11 @@ import java.util.concurrent.Executors;
 /** Model-only SSE. No redirects, cookie persistence, logging or automatic POST retries. */
 @CapacitorPlugin(name = "ModelStream")
 public final class ModelStreamPlugin extends Plugin {
+    // A single native line must fit within the JavaScript SSE frame budget.
+    private static final int MAX_SSE_LINE_CHARS = 1_000_000;
+    private static final int MAX_SSE_RESPONSE_CHARS = 16_000_000;
+    private static final int MAX_NON_SSE_RESPONSE_CHARS = 65_536;
+    private static final int MAX_RESPONSE_LINES = 200_000;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private String activeId;
     private volatile boolean cancelled;
@@ -31,21 +37,31 @@ public final class ModelStreamPlugin extends Plugin {
         JSObject body = call.getObject("data");
         try {
             URI target = new URI(url == null ? "" : url);
+            boolean gemini = url != null && url.matches(
+                "https://generativelanguage\\.googleapis\\.com/v1beta/models/[A-Za-z0-9][A-Za-z0-9._-]{0,255}:streamGenerateContent\\?alt=sse");
+            boolean local = url != null && url.matches("https?://[^/?#]+(?:/[A-Za-z0-9._-]+)*/v1/chat/completions") &&
+                target.getRawQuery() == null && !url.contains("/../") && !url.contains("/./");
             if (id == null || !id.matches("[a-f0-9-]{36}") || activeId != null || paused || body == null ||
                 !("http".equals(target.getScheme()) || "https".equals(target.getScheme())) ||
-                target.getHost() == null || target.getRawUserInfo() != null || target.getRawQuery() != null || target.getRawFragment() != null ||
-                !url.matches("https?://[^/?#]+(?:/[A-Za-z0-9._-]+)*/v1/chat/completions") || url.contains("/../") || url.contains("/./")) {
+                target.getHost() == null || target.getRawUserInfo() != null || target.getRawFragment() != null ||
+                (!gemini && !local)) {
                 call.reject("connection_not_sent"); return;
             }
             String auth = headers.getString("Authorization");
-            if (auth != null && !auth.matches("Bearer [^\\s\\x7f]+")) { call.reject("auth_not_sent"); return; }
+            Object keyHeader = headers.opt("x-goog-api-key");
+            String key = keyHeader instanceof String ? (String) keyHeader : null;
+            if (gemini
+                ? headers.has("Authorization") || key == null || !key.matches("[^\\x00-\\x20\\x7f]+")
+                : headers.has("x-goog-api-key") || (auth != null && !auth.matches("Bearer [^\\s\\x7f]+"))) {
+                call.reject("auth_not_sent"); return;
+            }
             activeId = id;
             cancelled = false;
-            executor.execute(() -> run(call, id, url, auth, body));
+            executor.execute(() -> run(call, id, url, auth, key, body));
         } catch (Exception invalid) { call.reject("connection_not_sent"); }
     }
 
-    private void run(PluginCall call, String id, String url, String auth, JSObject body) {
+    private void run(PluginCall call, String id, String url, String auth, String geminiKey, JSObject body) {
         HttpURLConnection socket = null;
         JSObject result = null;
         String failure = null;
@@ -63,8 +79,9 @@ public final class ModelStreamPlugin extends Plugin {
             socket.setRequestProperty("Content-Type", "application/json");
             socket.setRequestProperty("Cookie", "");
             if (auth != null) socket.setRequestProperty("Authorization", auth);
+            if (geminiKey != null) socket.setRequestProperty("x-goog-api-key", geminiKey);
             socket.setDoOutput(true);
-            body.put("stream", true);
+            if (geminiKey == null) body.put("stream", true);
             byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
             socket.setFixedLengthStreamingMode(bytes.length);
             if (cancelled) throw new InterruptedException();
@@ -75,12 +92,14 @@ public final class ModelStreamPlugin extends Plugin {
             StringBuilder all = new StringBuilder();
             InputStream input = status >= 400 ? socket.getErrorStream() : socket.getInputStream();
             if (input != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+                BoundedLineReader lines = new BoundedLineReader(reader);
                 String line;
                 int count = 0;
-                while ((line = reader.readLine()) != null) {
+                int responseLimit = sse ? MAX_SSE_RESPONSE_CHARS : MAX_NON_SSE_RESPONSE_CHARS;
+                while ((line = lines.readLine(Math.min(MAX_SSE_LINE_CHARS, responseLimit - all.length() - 1))) != null) {
                     if (cancelled) throw new InterruptedException();
+                    if (++count > MAX_RESPONSE_LINES) throw new IOException("Response has too many lines");
                     all.append(line).append('\n');
-                    if (++count > 200000 || all.length() > (sse ? 16000000 : 65536)) throw new IllegalStateException();
                     if (sse) {
                         JSObject event = new JSObject();
                         event.put("id", id); event.put("data", line + "\n");
@@ -99,6 +118,32 @@ public final class ModelStreamPlugin extends Plugin {
         }
         // Settle only after the native socket has been cleaned up.
         if (failure != null) call.reject(failure); else call.resolve(result);
+    }
+
+    static final class BoundedLineReader {
+        private final BufferedReader reader;
+        private boolean skipLineFeed;
+
+        BoundedLineReader(BufferedReader reader) { this.reader = reader; }
+
+        String readLine(int limit) throws IOException {
+            int ch = reader.read();
+            if (skipLineFeed) {
+                skipLineFeed = false;
+                if (ch == '\n') ch = reader.read();
+            }
+            if (ch == -1) return null;
+            if (limit < 0) throw new IOException("Response limit exceeded");
+            StringBuilder line = new StringBuilder();
+            while (ch != -1 && ch != '\n' && ch != '\r') {
+                if (line.length() == limit) throw new IOException("Response line limit exceeded");
+                line.append((char) ch);
+                ch = reader.read();
+            }
+            // CR already ends the line. Check for the optional LF on the next read.
+            skipLineFeed = ch == '\r';
+            return line.toString();
+        }
     }
 
     @PluginMethod public synchronized void cancel(PluginCall call) {

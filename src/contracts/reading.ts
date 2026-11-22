@@ -65,7 +65,7 @@ export type WholeChapterRequest = {
   contractVersion: 'plain-v1';
   promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1' | 'lines-v1' | 'colomo-local-v1';
   onProgress?: (completed: number, total: number) => void;
-  /** 저장 전 미리보기: 지금까지 완료된 문단을 원문 순서로 조립한 텍스트. */
+  /** 저장 전 미리보기: 지금까지 받은 번역문을 원문 순서로 조립한 텍스트. */
   onPreview?: (text: string) => void;
   /** 입력 하나에 대한 승인된 참고 데이터. 해당 입력의 지시문 앞에만 붙여 보낸다. */
   reference?: (input: string) => string;
@@ -137,6 +137,8 @@ export type TranslationState = {
   progress?: { completed: number; total: number };
   /** 번역 중에만 보여 주는 저장 전 미리보기. 저장 기준은 완성본이다. */
   preview?: string;
+  /** 현재 모델 요청에서 비어 있지 않은 미리보기가 도착했는지 나타낸다. */
+  hasModelPreview?: boolean;
   /** 번역 전 자동 용어집 상태(#192). */
   glossary?: 'running' | 'failed';
 };
