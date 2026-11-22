@@ -156,6 +156,8 @@ export interface ProviderSession {
       user: string;
       schema: Record<string, unknown>;
       maxTokens: number;
+      /** 추론 토큰이 출력 상한에 포함되는 제공자는 응답 예산에 추론 여유를 더한다. */
+      reserveThinkingTokens?: boolean;
       /** 0~1. 다수결 판정에서 회차마다 다른 답을 받을 때만 쓴다. */
       temperature?: number;
     },

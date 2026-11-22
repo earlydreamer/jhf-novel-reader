@@ -264,6 +264,7 @@ async function judgeCandidates(input: {
             user: request.user,
             schema: request.schema,
             maxTokens: request.maxTokens,
+            reserveThinkingTokens: true,
             temperature,
           },
           signal,

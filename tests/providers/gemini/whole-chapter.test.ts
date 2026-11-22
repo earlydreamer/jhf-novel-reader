@@ -107,6 +107,54 @@ describe('renewal Gemini whole-chapter provider', () => {
   });
 
   it.each([
+    ['gemini-3.5-flash-lite', true, 4536],
+    ['gemini-2.5-pro', true, 4536],
+    ['gemini-3.5-flash-lite', undefined, 440],
+  ] as const)(
+    'reserves thinking tokens for opted-in JSON requests on %s (%s)',
+    async (modelId, reserveThinkingTokens, maxOutputTokens) => {
+      const json = { items: [{ id: 'c1', target: '알베르토' }] };
+      const posts: ModelRequest[] = [];
+      const session = createGeminiProviderSession(
+        { ...selection, modelId, translationMode: 'stream' },
+        sessionTransport(
+          {
+            candidates: [
+              { finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(json) }] } },
+            ],
+          },
+          posts,
+        ),
+        secrets,
+      );
+      await expect(
+        session.completeJson!(
+          {
+            system: 'judge',
+            user: 'candidate',
+            schema: { type: 'object' },
+            maxTokens: 440,
+            reserveThinkingTokens,
+          },
+          signal(),
+        ),
+      ).resolves.toEqual(json);
+      expect(posts).toHaveLength(1);
+      expect(posts[0]).toMatchObject({
+        url: `${GEMINI_BASE_URL}/models/${modelId}:generateContent`,
+        body: {
+          generationConfig: {
+            maxOutputTokens,
+            responseMimeType: 'application/json',
+            responseJsonSchema: { type: 'object' },
+          },
+        },
+      });
+      expect(posts[0]?.body.generationConfig).not.toHaveProperty('thinkingConfig');
+    },
+  );
+
+  it.each([
     ['MAX_TOKENS', 'length'],
     ['SAFETY', 'blocked'],
     ['OTHER', 'unknown'],

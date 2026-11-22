@@ -456,10 +456,7 @@ export function SettingsScreen({
     setRestoreOpen(false);
     void runBackup('restore');
   }
-  const lookupAvailable =
-    state.termScanAvailable &&
-    state.connection.provider === 'openai-compatible' &&
-    Boolean(onLookupWikipedia && onLookupNamuwiki);
+  const lookupAvailable = state.termScanAvailable && Boolean(onLookupWikipedia && onLookupNamuwiki);
   function confirmLookup(): void {
     if (lookupConfirm === 'wikipedia') onLookupWikipedia?.(true);
     if (lookupConfirm === 'namuwiki') onLookupNamuwiki?.(true);

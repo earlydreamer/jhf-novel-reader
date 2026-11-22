@@ -18,7 +18,6 @@ import type { TermScanChange, TermScanResult } from '../../src/translation/termS
 type TermScan = NonNullable<RenewalDependencies['termScan']>;
 
 const CONNECTION_MESSAGE = '연결 설정에서 서버와 모델을 확인하면 용어 정밀스캔을 할 수 있어요.';
-const GEMINI_MESSAGE = '용어 정밀스캔은 로컬 모델 연결에서만 쓸 수 있어요.';
 const BUSY_MESSAGE = '번역이 끝난 뒤 용어 정밀스캔을 시작할 수 있어요.';
 const SAVED_MESSAGE = '저장된 회차가 있어야 용어 정밀스캔을 할 수 있어요.';
 const FAILED_MESSAGE = '용어 정밀스캔을 마치지 못했어요. 연결을 확인하고 다시 시도해 주세요.';
@@ -312,12 +311,18 @@ it('연결 확인 중 두 번째 시작 요청은 아무것도 하지 않아 스
   app.dispose();
 });
 
-it('Gemini 연결에서는 로컬 모델 연결만 쓸 수 있다고 안내한다', async () => {
+it('Gemini 연결로 저장된 회차의 정밀스캔을 실행한다', async () => {
   const scan = vi.fn<TermScan>(async () => emptyResult);
   const app = await connectedApp({ termScan: scan }, { provider: 'gemini' });
   await app.startTermScan(page.workId);
-  expect(scan).not.toHaveBeenCalled();
-  expect(app.getSnapshot().error).toBe(GEMINI_MESSAGE);
+  expect(scan).toHaveBeenCalledTimes(1);
+  expect(scan.mock.calls[0]![0]).toMatchObject({
+    workId: page.workId,
+    chapterIds: [chapters[0]!.chapterId],
+    selection: { connection: { provider: 'gemini' }, modelId: 'local' },
+  });
+  expect(scan.mock.calls[0]![0].selection.limits).toBeUndefined();
+  expect(app.getSnapshot()).toMatchObject({ error: null, termScan: { phase: 'done' } });
   app.dispose();
 });
 

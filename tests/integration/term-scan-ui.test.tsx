@@ -179,46 +179,37 @@ it('OpenAI 호환 연결에서는 더보기 메뉴에 용어 정밀스캔을 두
   app.dispose();
 });
 
-it('Gemini 연결에서는 용어 정밀스캔 메뉴를 두지 않는다', async () => {
-  const app = await connectedApp(
-    { guidance: guidanceStore([existing]), termScan: vi.fn<TermScan>() },
-    'gemini',
-  );
-  render(<Application controller={app} />);
-  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
-  expect(screen.getByRole('menuitem', { name: '용어집 편집하기' })).toBeInTheDocument();
-  expect(screen.queryByRole('menuitem', { name: '용어 정밀스캔' })).toBeNull();
-  app.dispose();
-});
+it.each(['openai-compatible', 'gemini'] as const)(
+  '%s 정밀스캔이 저장한 용어를 용어집에서 다시 읽는다',
+  async (provider) => {
+    const guidance = guidanceStore([existing]);
+    const app = await connectedApp({ guidance, termScan: scanAddingTerm(guidance) }, provider);
+    render(<Application controller={app} />);
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
+    expect(await screen.findByDisplayValue('合成')).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: '작품 용어집' })).getByRole('button', {
+        name: '닫기',
+      }),
+    );
 
-it('정밀스캔이 끝나면 닫아 두었던 용어집도 바뀐 내용을 다시 읽는다', async () => {
-  const guidance = guidanceStore([existing]);
-  const app = await connectedApp({ guidance, termScan: scanAddingTerm(guidance) });
-  render(<Application controller={app} />);
-  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
-  expect(await screen.findByDisplayValue('合成')).toBeInTheDocument();
-  fireEvent.click(
-    within(screen.getByRole('dialog', { name: '작품 용어집' })).getByRole('button', {
-      name: '닫기',
-    }),
-  );
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '용어 정밀스캔' }));
+    fireEvent.click(screen.getByRole('button', { name: '정밀스캔 시작하기' }));
+    await screen.findByText('바꾼 용어 1개 · 확인한 용어 0개 · 제안 0개');
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: '용어 정밀스캔' })).getByRole('button', {
+        name: '닫기',
+      }),
+    );
 
-  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: '용어 정밀스캔' }));
-  fireEvent.click(screen.getByRole('button', { name: '정밀스캔 시작하기' }));
-  await screen.findByText('바꾼 용어 1개 · 확인한 용어 0개 · 제안 0개');
-  fireEvent.click(
-    within(screen.getByRole('dialog', { name: '용어 정밀스캔' })).getByRole('button', {
-      name: '닫기',
-    }),
-  );
-
-  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
-  expect(await screen.findByDisplayValue('アルベルト')).toBeInTheDocument();
-  app.dispose();
-});
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '용어집 편집하기' }));
+    expect(await screen.findByDisplayValue('アルベルト')).toBeInTheDocument();
+    app.dispose();
+  },
+);
 
 const emptyResult: TermScanResult = { applied: [], confirmed: 0, suggestions: [], partial: false };
 

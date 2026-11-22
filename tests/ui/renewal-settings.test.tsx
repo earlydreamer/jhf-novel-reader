@@ -1092,20 +1092,19 @@ describe('정밀스캔 외부 조회 설정 (#203)', () => {
     return { onLookupWikipedia, onLookupNamuwiki };
   }
 
-  it('정밀스캔이 가능한 OpenAI 호환 서버에서만 조회 섹션을 보여 준다', () => {
-    renderSettings(scanState());
-    expect(screen.getByRole('heading', { name: '용어 정밀스캔' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: WIKI_SWITCH })).not.toBeChecked();
-    expect(screen.getByRole('switch', { name: NAMU_SWITCH })).not.toBeChecked();
-    cleanup();
+  it.each(['openai-compatible', 'gemini'] as const)(
+    '%s에서 정밀스캔을 지원할 때 조회 섹션을 보여 준다',
+    (provider) => {
+      renderSettings(scanState({}, provider));
+      expect(screen.getByRole('heading', { name: '용어 정밀스캔' })).toBeInTheDocument();
+      expect(screen.getByRole('switch', { name: WIKI_SWITCH })).not.toBeChecked();
+      expect(screen.getByRole('switch', { name: NAMU_SWITCH })).not.toBeChecked();
+      cleanup();
 
-    renderSettings(scanState({ termScanAvailable: false }));
-    expect(screen.queryByRole('switch', { name: WIKI_SWITCH })).not.toBeInTheDocument();
-    cleanup();
-
-    renderSettings(scanState({}, 'gemini'));
-    expect(screen.queryByRole('switch', { name: NAMU_SWITCH })).not.toBeInTheDocument();
-  });
+      renderSettings(scanState({ termScanAvailable: false }, provider));
+      expect(screen.queryByRole('switch', { name: WIKI_SWITCH })).not.toBeInTheDocument();
+    },
+  );
 
   it('끈 조회를 켜면 확인 대화상자를 열고 켜기를 누를 때만 켠다', () => {
     const { onLookupWikipedia } = renderSettings(scanState());

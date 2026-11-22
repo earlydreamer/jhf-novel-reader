@@ -11,7 +11,7 @@
 | 완료 | [용어집 접근성 #147](https://github.com/earlydreamer/jhf-novel-reader/issues/147) | 작품 직접 진입·리더 메뉴·공유 편집기를 [PR #331](https://github.com/earlydreamer/jhf-novel-reader/pull/331)로 전달했습니다. | 작품별 편집 범위입니다. 공통 용어집은 별도 후순위로 유지합니다. |
 | 비교 종료·불채택 | [별명 판정 #219](https://github.com/earlydreamer/jhf-novel-reader/issues/219) | 실제 로컬 모델 비교에서 추가 뜻 분해가 채택 기준을 통과하지 못했습니다. 도구·결과는 [PR #332](https://github.com/earlydreamer/jhf-novel-reader/pull/332)로 전달했습니다. | 기본 스캔에 활성화하지 않았습니다. 원래 음독 문제 전체가 해결됐다는 의미는 아닙니다. |
 | 연구 보존·도입 미확정 | [ChatGPT 연결 #307](https://github.com/earlydreamer/jhf-novel-reader/issues/307) | 지정한 Android 조합에서 인증·세션·합성 번역 성공을 확인했습니다. 제품·정책·개인정보·법률 검토는 미완료입니다. | `codex/research-external-services`에 보존합니다. main 대상 PR #333은 미병합 종료했습니다. 별도 도입 결정 전 제품 구현·main 병합을 진행하지 않습니다. |
-| 문단 재번역 검증 | [Gemini 재구현 #29](https://github.com/earlydreamer/jhf-novel-reader/issues/29) | [PR #410](https://github.com/earlydreamer/jhf-novel-reader/pull/410)에서 설정·스트리밍·작품 용어집을 연결했습니다. 문단 재번역은 Android 에뮬레이터에서 로컬 서버와 Gemini로 검증했습니다. | 실기와 장문 품질 검증, 용어 정밀스캔 지원이 남아 있습니다. |
+| 문단 재번역·용어 정밀스캔 검증 | [Gemini 재구현 #29](https://github.com/earlydreamer/jhf-novel-reader/issues/29) | [PR #410](https://github.com/earlydreamer/jhf-novel-reader/pull/410)에서 설정·스트리밍·작품 용어집을 연결했습니다. 문단 재번역과 작품의 용어 정밀스캔은 Android 에뮬레이터에서 로컬 서버와 Gemini로 검증했습니다. | 실기와 장문 품질 검증이 남아 있습니다. |
 | 후순위 | [공통 용어집 #330](https://github.com/earlydreamer/jhf-novel-reader/issues/330) | 여러 작품에 영향을 주는 우선순위·충돌·백업 계약이 미확정입니다. | 외부 연동 보류로 자동 착수하지 않습니다. 별도 선택 뒤 설계·구현합니다. |
 
 다음 후속 작업은 연구의 제품·배포 범위를 확인하고 제공자별 데이터 흐름과 검토 질문을 준비하는 것입니다. 정책·개인정보·법률 검토와 사용자의 명시적 도입 결정을 기술 검증과 분리합니다. 로컬 기능의 독립적인 개선은 별도 이슈로 진행할 수 있지만 보류 기능의 우선순위를 임의로 바꾸지 않습니다. 아래 상세 내용은 최초 구현·검증 설계로 보존하며 현재 상태와 승인 범위는 위 표를 우선합니다.
