@@ -290,7 +290,7 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('저장된 제공자가 Gemini면 로컬 기본 연결로 되돌리고 한 번 안내한다(#280)', async () => {
+  it('저장된 Gemini 연결과 모델을 다시 열 때 복원한다', async () => {
     const value = await setup({
       saved: {
         schemaVersion: 2,
@@ -304,19 +304,61 @@ describe('Android 목록형 설정', () => {
     });
 
     expect(value.controller.getSnapshot().connection).toEqual({
-      provider: 'openai-compatible',
-      baseUrl: '',
-      revision: 0,
+      provider: 'gemini',
+      baseUrl: GEMINI_BASE_URL,
+      revision: 4,
     });
-    expect(value.controller.getSnapshot().selectedModelId).toBeNull();
-    await waitFor(() =>
-      expect(document.querySelector('.nr-snackbar__text')?.textContent).toBe(
-        'Google Gemini 제공자가 설정에서 빠져서 로컬 서버 연결로 되돌렸어요. 번역 서버 주소를 확인해 주세요.',
-      ),
+    expect(value.controller.getSnapshot().selectedModelId).toBe('generation');
+    expect(screen.getByRole('button', { name: '제공자 Google Gemini' })).toBeVisible();
+    expect(screen.getByLabelText('API 키')).toBeVisible();
+    expect(screen.queryByLabelText('서버 주소')).not.toBeInTheDocument();
+    expect(value.catalog).not.toHaveBeenCalled();
+    value.controller.dispose();
+  });
+
+  it('설정에서 Gemini를 확인한 뒤 API 키와 모델을 설정하고 로컬 연결로 돌아올 수 있다', async () => {
+    const value = await setup({ saved: savedSettings('provider.local') });
+    fireEvent.click(screen.getByRole('button', { name: '제공자 로컬 서버' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Google Gemini' }));
+    const consent = screen.getByRole('dialog', { name: 'Gemini를 사용할까요?' });
+    expect(consent).toHaveTextContent('원문을 기기에서 Google로 보내요');
+    expect(consent).toHaveTextContent('비용');
+    expect(value.catalog).not.toHaveBeenCalled();
+    fireEvent.click(within(consent).getByRole('button', { name: 'Gemini 사용하기' }));
+    expect(screen.queryByLabelText('서버 주소')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^로컬 번역 방식/ })).not.toBeInTheDocument();
+    const key = screen.getByLabelText('API 키');
+    expect(key).toHaveAttribute('type', 'password');
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+    expect(await screen.findByText('Gemini API 키를 입력해 주세요.')).toBeVisible();
+    expect(value.catalog).not.toHaveBeenCalled();
+    fireEvent.change(key, { target: { value: 'synthetic-gemini-key' } });
+    fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
+    expect(key).toHaveValue('');
+    await screen.findByRole('button', { name: 'API 키 저장됨' });
+    expect(value.catalog).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'gemini', baseUrl: GEMINI_BASE_URL }),
+      'synthetic-gemini-key',
+      expect.any(AbortSignal),
     );
-    await waitFor(() => expect(value.saveReadingSettings).toHaveBeenCalled());
-    expect(value.persisted().selection).toBeNull();
-    expect(screen.getByLabelText('서버 주소')).toBeVisible();
+    await waitFor(() =>
+      expect(value.persisted().configuredConnection?.connection.authRef).toBe('provider.saved'),
+    );
+    expect(JSON.stringify(value.persisted())).not.toContain('synthetic-gemini-key');
+    fireEvent.click(screen.getByRole('button', { name: '모델 선택 전' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Generation model' }));
+    expect(screen.getByRole('button', { name: '모델 Generation model' })).toBeVisible();
+    await waitFor(() => expect(value.persisted().selection?.modelId).toBe('generation'));
+    expect(value.post).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '제공자 Google Gemini' }));
+    fireEvent.click(screen.getByRole('radio', { name: '로컬 서버' }));
+    expect(screen.getByLabelText('서버 주소')).toHaveValue('192.0.2.1');
+    expect(value.controller.getSnapshot().connection.authRef).toBe('provider.local');
+    expect(value.controller.getSnapshot().selectedModelId).toBe('generation');
+    await waitFor(() =>
+      expect(value.persisted().inactiveConnection?.connection.authRef).toBe('provider.saved'),
+    );
     value.controller.dispose();
   });
 

@@ -90,37 +90,38 @@ function harness(finishReason: Finish = 'STOP', streaming?: NativeStreamingClien
       bytes.set(path, value);
     },
   };
-  const app = createRenewalApplication({
-    files,
-    preferences: {
-      get: async ({ key }: { key: string }) => ({ value: preferences.get(key) ?? null }),
-      set: async ({ key, value }: { key: string; value: string }) => {
-        preferences.set(key, value);
-      },
-    },
-    secrets: {
-      get: async (ref: string) => secrets.get(ref) ?? null,
-      set: async (ref: string, value: string) => {
-        secrets.set(ref, value);
-      },
-      remove: async (ref: string) => {
-        secrets.delete(ref);
-      },
-    },
-    lifecycle,
-    sourceTransport: createSourceTransport(client),
-    modelTransport: createModelTransport(
-      client,
-      streaming && {
-        requestStream(input, signal, onData) {
-          requests.push(input);
-          return streaming.requestStream(input, signal, onData);
+  const createApp = () =>
+    createRenewalApplication({
+      files,
+      preferences: {
+        get: async ({ key }: { key: string }) => ({ value: preferences.get(key) ?? null }),
+        set: async ({ key, value }: { key: string; value: string }) => {
+          preferences.set(key, value);
         },
       },
-    ),
-    browse: async () => ({ selectedUrl: chapterUrl }),
-  });
-  return { app, requests, store: createLibraryStore(files) };
+      secrets: {
+        get: async (ref: string) => secrets.get(ref) ?? null,
+        set: async (ref: string, value: string) => {
+          secrets.set(ref, value);
+        },
+        remove: async (ref: string) => {
+          secrets.delete(ref);
+        },
+      },
+      lifecycle,
+      sourceTransport: createSourceTransport(client),
+      modelTransport: createModelTransport(
+        client,
+        streaming && {
+          requestStream(input, signal, onData) {
+            requests.push(input);
+            return streaming.requestStream(input, signal, onData);
+          },
+        },
+      ),
+      browse: async () => ({ selectedUrl: chapterUrl }),
+    });
+  return { app: createApp(), createApp, requests, store: createLibraryStore(files) };
 }
 
 async function selectChapter(h: ReturnType<typeof harness>) {
@@ -158,6 +159,28 @@ it('uses Google only after explicit Gemini selection and filters its generation 
       headers: { Accept: 'application/json', 'x-goog-api-key': 'synthetic-gemini-key' },
     }),
   );
+});
+
+it('restores a checked Gemini connection before model selection and reads the saved key', async () => {
+  const h = harness();
+  await h.app.initialize();
+  h.app.changeConnection({ provider: 'gemini', baseUrl: GEMINI_BASE_URL });
+  await h.app.checkConnection('synthetic-gemini-key');
+  const connection = h.app.getSnapshot().connection;
+  expect(connection.authRef).toBeTruthy();
+
+  const restarted = h.createApp();
+  await restarted.initialize();
+  expect(restarted.getSnapshot().connection).toEqual(connection);
+  expect(restarted.getSnapshot().selectedModelId).toBeNull();
+  expect(h.requests).toHaveLength(1);
+  await restarted.checkConnection();
+  expect(h.requests[1]).toMatchObject({
+    url: modelsUrl,
+    headers: { 'x-goog-api-key': 'synthetic-gemini-key' },
+  });
+  restarted.chooseModel('gemini-synthetic');
+  expect(restarted.getSnapshot().selectedModelId).toBe('gemini-synthetic');
 });
 
 it('saves a Gemini plain-text version through the whole-chapter flow without fallback', async () => {

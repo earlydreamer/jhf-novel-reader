@@ -6,7 +6,7 @@ Android를 우선 지원하는 React·TypeScript·Vite 앱을 Capacitor로 패�
 
 현재 진입점은 `src/app/bootstrap.tsx`이며, 백업 복구와 인증 참조 정리를 마친 뒤 `createNativeRenewalApplication`을 실행합니다. `src/app/compose.ts`에서 `createRenewalController`, 원문 어댑터, 모델 세션, 서재, 번역·일괄 작업을 조합합니다. 공유 계약은 `src/contracts`에 있습니다. 초기 이슈 #1·#6의 `src/jobs` 기반 엔진과 다음 한 화 선행 번역은 현재 실행 경로가 아닙니다.
 
-현재 동작은 [앱 통합](integration.md), 로컬 스트리밍, [범위·전체 회차 번역](renewal/batch-translation.md), [저장소](storage.md)를 함께 확인합니다. Gemini 구현은 남아 있지만 현재 설정 UI에서는 숨겨져 있습니다. [Gemini 문서](gemini-provider.md)는 구현 경계를 설명합니다.
+현재 동작은 [앱 통합](integration.md), 로컬 스트리밍, [범위·전체 회차 번역](renewal/batch-translation.md), [저장소](storage.md)를 함께 확인합니다. [Gemini 문서](gemini-provider.md)에 제공자 선택, 키 보관과 회차 스트리밍을 정리합니다.
 
 ## 도구와 검증 명령
 

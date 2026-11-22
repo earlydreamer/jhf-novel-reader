@@ -1,4 +1,10 @@
-import type { CompletedTranslation, ReadingPosition, WorkPage, SelectedModel } from '../contracts';
+import type {
+  CompletedTranslation,
+  ConnectionConfig,
+  ReadingPosition,
+  WorkPage,
+  SelectedModel,
+} from '../contracts';
 import { check, integer, object, record, text, url } from './validation';
 import { StorageError } from './errors';
 import { secretRef } from './secrets';
@@ -28,6 +34,14 @@ function date(value: unknown) {
   text(value);
   check(Number.isFinite(Date.parse(value)));
 }
+export function connectionConfig(value: unknown): asserts value is ConnectionConfig {
+  object(value, ['provider', 'baseUrl', 'authRef', 'revision']);
+  check(value.provider === 'openai-compatible' || value.provider === 'gemini');
+  url(value.baseUrl);
+  integer(value.revision);
+  if (value.authRef !== undefined) secretRef(value.authRef);
+}
+
 export function selected(value: unknown): asserts value is SelectedModel {
   object(value, ['connection', 'modelId', 'limits', 'translationMode', 'autoRetryFailed']);
   check(value.autoRetryFailed === undefined || typeof value.autoRetryFailed === 'boolean');
@@ -38,15 +52,10 @@ export function selected(value: unknown): asserts value is SelectedModel {
   );
   text(value.modelId);
   check(value.modelId.length <= 256);
-  object(value.connection, ['provider', 'baseUrl', 'authRef', 'revision']);
-  const c = value.connection;
-  check(c.provider === 'openai-compatible' || c.provider === 'gemini');
-  url(c.baseUrl);
-  integer(c.revision);
-  if (c.authRef !== undefined) secretRef(c.authRef);
+  connectionConfig(value.connection);
   if (value.limits !== undefined) {
     object(value.limits, ['contextTokens', 'inputBudgetTokens', 'maxOutputTokens']);
-    check(c.provider === 'openai-compatible');
+    check(value.connection.provider === 'openai-compatible');
     check(validLocalLimits(value.limits));
   }
 }

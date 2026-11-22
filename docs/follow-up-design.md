@@ -1,6 +1,6 @@
 # 후속 작업 우선순위와 단계별 설계
 
-현재 앱의 중심인 로컬 모델 번역과 독서 흐름을 우선합니다. #147 접근성 개선과 #219 비교 실험은 전달을 마쳤습니다. ChatGPT는 Android PoC의 실제 성공을 확인했지만, 2026-10-15 사용자 결정에 따라 **도입 미확정 외부 서비스 연구로 분리하고 main에 병합하지 않습니다.** Gemini 설정 노출과 앱 공통 용어집은 보류 상태입니다.
+현재 앱의 중심인 로컬 모델 번역과 독서 흐름을 우선합니다. #147 접근성 개선과 #219 비교 실험은 전달을 마쳤습니다. ChatGPT는 Android PoC의 실제 성공을 확인했지만, 2026-10-15 사용자 결정에 따라 **도입 미확정 외부 서비스 연구로 분리하고 main에 병합하지 않습니다.** 앱 공통 용어집은 보류 상태입니다.
 
 최초 설계는 [#328](https://github.com/earlydreamer/jhf-novel-reader/issues/328)에서 관리했습니다. 아래 현재 상태는 main `288a18b65afc856d96545784092ec36d6224f058`과 이슈·PR을 대조했으며, 연구 분리와 후속 기준은 [#334](https://github.com/earlydreamer/jhf-novel-reader/issues/334)에 기록합니다. 다음 작업은 [제공자 정책·데이터 처리·개인정보·법률 검토 자료 준비](external-service-research.md)입니다. 과거 단계별 설계가 보류 기능의 자동 착수나 제품 지원 승인을 뜻하지 않습니다.
 
@@ -11,7 +11,7 @@
 | 완료 | [용어집 접근성 #147](https://github.com/earlydreamer/jhf-novel-reader/issues/147) | 작품 직접 진입·리더 메뉴·공유 편집기를 [PR #331](https://github.com/earlydreamer/jhf-novel-reader/pull/331)로 전달했습니다. | 작품별 편집 범위입니다. 공통 용어집은 별도 후순위로 유지합니다. |
 | 비교 종료·불채택 | [별명 판정 #219](https://github.com/earlydreamer/jhf-novel-reader/issues/219) | 실제 로컬 모델 비교에서 추가 뜻 분해가 채택 기준을 통과하지 못했습니다. 도구·결과는 [PR #332](https://github.com/earlydreamer/jhf-novel-reader/pull/332)로 전달했습니다. | 기본 스캔에 활성화하지 않았습니다. 원래 음독 문제 전체가 해결됐다는 의미는 아닙니다. |
 | 연구 보존·도입 미확정 | [ChatGPT 연결 #307](https://github.com/earlydreamer/jhf-novel-reader/issues/307) | 지정한 Android 조합에서 인증·세션·합성 번역 성공을 확인했습니다. 제품·정책·개인정보·법률 검토는 미완료입니다. | `codex/research-external-services`에 보존합니다. main 대상 PR #333은 미병합 종료했습니다. 별도 도입 결정 전 제품 구현·main 병합을 진행하지 않습니다. |
-| 설정 노출 보류 | [Gemini 재구현 #29](https://github.com/earlydreamer/jhf-novel-reader/issues/29) | 전체 회차 번역에 SSE 경로를 추가했습니다. 용어집 연동과 실제 기기·계정 검증은 남아 있습니다. | 기능별 지원 계약과 실기 검증을 확인한 뒤 설정 노출을 결정합니다. |
+| 설정 연동 | [Gemini 재구현 #29](https://github.com/earlydreamer/jhf-novel-reader/issues/29) | 에뮬레이터에서 실제 Gemini API로 합성 문단과 공개 작품의 한 회차를 스트리밍 번역해 저장했습니다. | 설정에서 명시적 선택, 키 입력과 모델 선택을 연결합니다. |
 | 후순위 | [공통 용어집 #330](https://github.com/earlydreamer/jhf-novel-reader/issues/330) | 여러 작품에 영향을 주는 우선순위·충돌·백업 계약이 미확정입니다. | 외부 연동 보류로 자동 착수하지 않습니다. 별도 선택 뒤 설계·구현합니다. |
 
 다음 후속 작업은 연구의 제품·배포 범위를 확인하고 제공자별 데이터 흐름과 검토 질문을 준비하는 것입니다. 정책·개인정보·법률 검토와 사용자의 명시적 도입 결정을 기술 검증과 분리합니다. 로컬 기능의 독립적인 개선은 별도 이슈로 진행할 수 있지만 보류 기능의 우선순위를 임의로 바꾸지 않습니다. 아래 상세 내용은 최초 구현·검증 설계로 보존하며 현재 상태와 승인 범위는 위 표를 우선합니다.

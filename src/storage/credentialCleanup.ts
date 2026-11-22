@@ -23,8 +23,13 @@ export async function cleanupUnreferencedCredentials(
     const batches = await new Journal(files).readSlots('batches/current', validateBatch);
     if (batches.invalidSlots.length) return;
     const retained = new Set<string>();
-    const selectedRef = saved.selection?.connection.authRef;
-    if (selectedRef) retained.add(selectedRef);
+    for (const connection of [
+      saved.selection,
+      saved.configuredConnection,
+      saved.inactiveConnection,
+    ]) {
+      if (connection?.connection.authRef) retained.add(connection.connection.authRef);
+    }
     for (const entry of batches.entries) {
       const ref = entry.value?.selection.connection.authRef;
       if (ref) retained.add(ref);

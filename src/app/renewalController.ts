@@ -11,6 +11,7 @@ import {
   type LineHeight,
   type ReadingBackground,
   type ReadingSettings,
+  type RememberedConnection,
   type ThemePreference,
 } from '../storage/settings';
 import type { LegacyMigrationSummary, LegacyMigrationWarning } from '../storage/migration';
@@ -195,8 +196,6 @@ export interface RenewalSnapshot {
   readonly translationMode: 'stream' | 'legacy';
   readonly streamingAvailable: boolean;
   readonly legacyWarnings: readonly LegacyMigrationWarning[];
-  /** 설정에서 빠진 제공자(Google Gemini)를 로컬 기본 연결로 되돌렸을 때 한 번 보여 주는 안내. */
-  readonly settingsNotice: { id: number; text: string } | null;
   readonly route: Route;
   readonly work: WorkPage | null;
   /** 전체 캐시와 별도로, 작품 화면에서 사용자가 펼친 목차 범위. */
@@ -441,8 +440,7 @@ interface ActiveTranslation {
 export function createRenewalController(dependencies: RenewalDependencies = {}): RenewalController {
   // 기기 판정 문의 마지막으로 알린 값. 초기값 false는 판정 문의 초기 상태와 같다.
   let termDecisionActive = false;
-  // 설정 안내의 표시 id. 같은 문구를 다시 띄울 때는 id를 올려 구분한다.
-  let settingsNoticeSequence = 0;
+  let inactiveConnection: RememberedConnection | undefined;
   let snapshot: RenewalSnapshot = {
     titles: [],
     titlesBusy: false,
@@ -464,7 +462,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     streamingAvailable: Boolean(dependencies.streamingAvailable),
     route: { kind: 'home' },
     legacyWarnings: [],
-    settingsNotice: null,
     work: null,
     workRecent: null,
     savedChapterIds: [],
@@ -540,12 +537,34 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   const clock = dependencies.clock ?? { now: () => performance.now() };
   let readerReadyAt = 0,
     measuredVersionId: string | null = null;
+  function rememberedConnection(): RememberedConnection | undefined {
+    try {
+      const baseUrl = safeEndpoint(snapshot.connection.baseUrl);
+      return {
+        connection: { ...snapshot.connection, baseUrl },
+        translationMode: snapshot.translationMode,
+        ...(snapshot.selectedModelId ? { modelId: snapshot.selectedModelId } : {}),
+      };
+    } catch {
+      return undefined;
+    }
+  }
+  function connectionMode(
+    provider: ConnectionConfig['provider'],
+    mode?: SelectedModel['translationMode'],
+  ): RenewalSnapshot['translationMode'] {
+    if (provider === 'gemini') return dependencies.streamingAvailable ? 'stream' : 'legacy';
+    return mode ?? dependencies.defaultTranslationMode ?? 'legacy';
+  }
   function persistSettings() {
     if (!dependencies.settings || !initialized || disposed) return;
     const operation = ++settingsOperation;
+    const configuredConnection = snapshot.selectedModelId ? undefined : rememberedConnection();
     const value: ReadingSettings = {
       schemaVersion: 2,
       fontSize: snapshot.fontSize,
+      ...(configuredConnection ? { configuredConnection } : {}),
+      ...(inactiveConnection ? { inactiveConnection } : {}),
       ...(snapshot.theme !== 'system' ? { theme: snapshot.theme } : {}),
       ...(snapshot.readingBackground !== 'theme'
         ? { readingBackground: snapshot.readingBackground }
@@ -693,6 +712,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   function requestTitleTranslation() {
     if (
+      snapshot.connection.provider === 'openai-compatible' &&
       snapshot.autoTranslate &&
       snapshot.work &&
       titlesByWork.has(snapshot.work.workId) &&
@@ -736,7 +756,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       dependencies.batch?.active ||
       termScanRunning() ||
       snapshot.pendingSaveChapter ||
-      (automatic && (!snapshot.autoTranslate || !titlesByWork.has(snapshot.work.workId)))
+      (automatic &&
+        (snapshot.connection.provider !== 'openai-compatible' ||
+          !snapshot.autoTranslate ||
+          !titlesByWork.has(snapshot.work.workId)))
     )
       return;
     const workId = snapshot.work.workId;
@@ -1340,20 +1363,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         await dependencies.batch?.initialize();
         const saved = await dependencies.settings?.readReadingSettings();
         if (disposed) return;
-        // Gemini 제공자는 정식판 설정에서 빠졌다(#280). 예전에 골라 둔 저장 상태는 로컬 기본 연결로 되돌린다.
-        // Gemini로 번역해 둔 저장본은 그대로 두고, 이 선택만 초기화한다.
-        const hiddenProvider = saved?.selection?.connection.provider === 'gemini';
-        if (saved)
+        if (saved) {
+          const selected = saved.selection ?? saved.configuredConnection;
+          const connection = selected?.connection ?? DEFAULT_CONNECTION;
+          if (saved.inactiveConnection?.connection.provider !== connection.provider)
+            inactiveConnection = saved.inactiveConnection;
           publish({
-            connection: hiddenProvider
-              ? DEFAULT_CONNECTION
-              : (saved.selection?.connection ?? DEFAULT_CONNECTION),
-            selectedModelId: hiddenProvider ? null : (saved.selection?.modelId ?? null),
-            translationMode: hiddenProvider
-              ? (dependencies.defaultTranslationMode ?? 'legacy')
-              : (saved.selection?.translationMode ??
-                dependencies.defaultTranslationMode ??
-                'legacy'),
+            connection,
+            selectedModelId: selected?.modelId ?? null,
+            translationMode: connectionMode(connection.provider, selected?.translationMode),
             localLimits: undefined,
             fontSize: saved.fontSize,
             theme: saved.theme ?? 'system',
@@ -1367,18 +1385,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             lookupWikipedia: saved.lookupWikipedia ?? false,
             lookupNamuwiki: saved.lookupNamuwiki ?? false,
             onDeviceEmbedding: saved.onDeviceEmbedding ?? false,
-            ...(hiddenProvider
-              ? {
-                  settingsNotice: {
-                    id: ++settingsNoticeSequence,
-                    text: 'Google Gemini 제공자가 설정에서 빠져서 로컬 서버 연결로 되돌렸어요. 번역 서버 주소를 확인해 주세요.',
-                  },
-                }
-              : {}),
           });
+        }
         initialized = true;
-        // 되돌린 선택을 저장해 두어 다음 시작에는 안내가 다시 나오지 않는다.
-        if (hiddenProvider) persistSettings();
         void restoreOnDeviceEmbedding();
         runAutomaticTranslation();
       } catch {
@@ -2113,7 +2122,18 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     await verifyWorkRecent(workId);
   }
   function changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void {
-    if (input.provider === snapshot.connection.provider) {
+    const switchingProvider = input.provider !== snapshot.connection.provider;
+    if (
+      disposed ||
+      dependencies.batch?.active ||
+      (switchingProvider &&
+        (activeTranslation ||
+          dependencies.flow?.active ||
+          snapshot.pendingSaveChapter ||
+          termScanRunning()))
+    )
+      return;
+    if (!switchingProvider) {
       if (input.baseUrl === snapshot.connection.baseUrl) return;
       if (input.provider === 'openai-compatible') {
         try {
@@ -2128,14 +2148,24 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       }
     }
     titleAbort?.abort();
-    if (disposed || dependencies.batch?.active) return;
     catalogOperation++;
     catalogAbort?.abort();
     session = null;
+    const remembered =
+      switchingProvider && inactiveConnection?.connection.provider === input.provider
+        ? inactiveConnection
+        : undefined;
+    if (switchingProvider) inactiveConnection = rememberedConnection();
     publish({
-      connection: { ...input, revision: snapshot.connection.revision + 1 },
+      connection: {
+        ...(remembered?.connection ?? input),
+        revision: snapshot.connection.revision + 1,
+      },
       models: [],
-      selectedModelId: null,
+      selectedModelId: remembered?.modelId ?? null,
+      translationMode: switchingProvider
+        ? connectionMode(input.provider, remembered?.translationMode)
+        : snapshot.translationMode,
       catalogStatus: dependencies.connect || dependencies.catalog ? 'idle' : 'unavailable',
       catalogProblem: null,
       localLimits: undefined,
@@ -3294,6 +3324,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     changeTranslationMode(mode) {
       if (
         disposed ||
+        snapshot.connection.provider !== 'openai-compatible' ||
         activeTranslation ||
         dependencies.flow?.active ||
         dependencies.batch?.active ||

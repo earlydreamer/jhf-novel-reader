@@ -89,6 +89,26 @@ it('collects only generated unreferenced keys without reading secret values', as
   await h.run();
   expect([...h.refs]).toEqual([b, 'provider.legacy', 'unrelated']);
 });
+it('keeps credentials for a configured connection and the inactive provider', async () => {
+  const h = fixture();
+  h.setSettings(
+    JSON.stringify({
+      schemaVersion: 2,
+      fontSize: 18,
+      selection: null,
+      configuredConnection: {
+        connection: {
+          ...selection(b).connection,
+          provider: 'gemini',
+          baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        },
+      },
+      inactiveConnection: selection(a),
+    }),
+  );
+  await h.run();
+  expect(h.secrets.remove).toHaveBeenCalledExactlyOnceWith(orphan);
+});
 it.each(['prepared', 'paused', 'running', 'unknown', 'saving', 'complete'] as const)(
   'preserves %s batch credentials across startup and settings rotation',
   async (phase) => {

@@ -8,7 +8,7 @@
 - ChatGPT 연구: [#307](https://github.com/earlydreamer/jhf-novel-reader/issues/307), main 대상 [PR #333](https://github.com/earlydreamer/jhf-novel-reader/pull/333)은 미병합 종료했습니다. 실험 커밋과 기기 검증 문서는 연구 브랜치에 보존합니다.
 - 실제 성공을 확인한 구현 소스는 `3fc2854a84c96a71f61acb3d0202835a86232028`이며, 이후 문서 커밋을 새 APK 실측으로 취급하지 않습니다.
 - 연구 범위는 별도 패키지의 합성 입력 PoC입니다. 제품 제공자·설정·독서 저장 경로·릴리스에는 연결하지 않았습니다. 이전 실제 세션은 철회·삭제했습니다.
-- [Gemini #29](https://github.com/earlydreamer/jhf-novel-reader/issues/29)는 보류를 유지합니다. 이미 main에 있는 숨겨진 과거 구현은 이 문서로 활성화하거나 연구 브랜치로 임의 이동하지 않습니다.
+- [Gemini #29](https://github.com/earlydreamer/jhf-novel-reader/issues/29)의 구현·설정과 Android 검증은 [Gemini 제공자 문서](gemini-provider.md)에서 관리합니다. 공개 배포에 적용할 제공자 조건과 고지는 이 문서의 검토 범위에 포함합니다.
 
 연구 브랜치는 main으로 일괄 병합할 후보가 아닙니다. 향후 도입이 결정되면 승인된 기능만 최신 main에서 별도 이슈·구현 PR로 제안하고 필요한 연구 코드를 검토합니다. 연구 재개·로그인·모델 호출·사용량 소비도 각 실행 범위가 필요하며, 코드 보존이 추가 실행 동의를 뜻하지 않습니다.
 
