@@ -236,7 +236,7 @@ describe('renewal Gemini whole-chapter provider', () => {
     },
   );
 
-  it('lists generative Gemini models across pages and omits audio-only TTS', async () => {
+  it('lists Gemini models across pages and omits TTS and image generation models', async () => {
     const gets: Array<{ url: string; authorization?: string; geminiApiKey?: string }> = [];
     const transport: ModelTransport = {
       get: async (input) => {
@@ -250,6 +250,14 @@ describe('renewal Gemini whole-chapter provider', () => {
               models: [
                 {
                   name: 'models/gemini-second',
+                  supportedGenerationMethods: ['generateContent'],
+                },
+                {
+                  name: 'models/gemini-2.5-flash-image',
+                  supportedGenerationMethods: ['generateContent'],
+                },
+                {
+                  name: 'models/gemini-nano-banana-2.1',
                   supportedGenerationMethods: ['generateContent'],
                 },
               ],

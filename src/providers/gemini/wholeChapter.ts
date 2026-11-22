@@ -217,8 +217,9 @@ export async function listGeminiModels(
       } catch {
         throw new ReaderError('model_list', 'received');
       }
-      // TTS 모델은 generateContent를 지원하지만 응답은 음성뿐이다.
+      // TTS는 음성만 출력하고 이미지 생성용 Gemini 모델은 번역에 필요한 구조화 응답을 지원하지 않는다.
       if (/(?:^|[-_.])tts(?:$|[-_.])/i.test(id)) continue;
+      if (/^gemini-(?:nano-banana(?:$|-)|.*-image(?:$|-))/i.test(id)) continue;
       if (ids.has(id)) throw new ReaderError('model_list', 'received');
       ids.add(id);
       models.push({

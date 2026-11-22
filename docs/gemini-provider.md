@@ -12,7 +12,7 @@ Gemini 기본 주소는 `https://generativelanguage.googleapis.com/v1beta`로 �
 
 ## 전체 회차 요청 계약
 
-- 목록 조회는 고정된 `GET https://generativelanguage.googleapis.com/v1beta/models`에서 다음 페이지까지 읽습니다. `generateContent`를 지원하는 모델을 표시하며 음성 전용 TTS 모델은 제외합니다.
+- 목록 조회는 고정된 `GET https://generativelanguage.googleapis.com/v1beta/models`에서 다음 페이지까지 읽습니다. `generateContent`를 지원하는 모델을 표시하며 음성 전용 TTS와 이미지 생성용 Gemini 모델은 제외합니다.
 - Android의 본문 요청은 선택한 모델의 `:streamGenerateContent?alt=sse`를 사용합니다. 한국어 본문이 도착하면 저장 전 미리보기를 갱신합니다. 비스트리밍 모드는 `:generateContent`를 사용합니다.
 - 적용할 작품 참고 정보가 없는 회차는 전체 원문을 한 번에 보냅니다. SSE는 전체 응답에 유효한 `STOP`과 번역문이 있어야 저장하며, 모델의 추론 내용은 미리보기와 저장에서 제외합니다.
 - 일반 회차 번역에서 **번역 전 용어집 자동 생성**을 켜면 로컬과 같은 규칙으로 후보를 찾습니다. 생성이 필요한 경우 `:generateContent`로 구조화 응답을 받고, 원문에 있는 용어만 기존 작품 용어집에 병합합니다. 사람이 정한 표기는 보존합니다.
