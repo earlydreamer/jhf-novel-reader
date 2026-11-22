@@ -38,20 +38,27 @@ it('emits fixed Gemini key header without OpenAI stream or Authorization', async
   expect(h.request.mock.calls[0]![0].headers).not.toHaveProperty('Authorization');
   expect(h.request.mock.calls[0]![0].data).not.toHaveProperty('stream');
 });
-it('emits the fixed Gemini catalog GET with a header-only key', async () => {
-  const h = setup();
-  await h.model.get({ url: modelsUrl, geminiApiKey: 'synthetic-key' }, signal());
-  expect(h.request.mock.calls[0]![0]).toMatchObject({
-    url: modelsUrl,
-    method: 'GET',
-    headers: { Accept: 'application/json', 'x-goog-api-key': 'synthetic-key' },
-    disableRedirects: true,
-  });
-  expect(h.request.mock.calls[0]![0].headers).not.toHaveProperty('Authorization');
-});
+it.each([modelsUrl, modelsUrl + '?pageToken=next%2F%2B%3D%3D'])(
+  'emits the fixed Gemini catalog GET with a header-only key (%s)',
+  async (url) => {
+    const h = setup();
+    await h.model.get({ url, geminiApiKey: 'synthetic-key' }, signal());
+    expect(h.request.mock.calls[0]![0]).toMatchObject({
+      url,
+      method: 'GET',
+      headers: { Accept: 'application/json', 'x-goog-api-key': 'synthetic-key' },
+      disableRedirects: true,
+    });
+    expect(h.request.mock.calls[0]![0].headers).not.toHaveProperty('Authorization');
+  },
+);
 it.each([
   modelsUrl + '/',
   modelsUrl + '?key=bad',
+  modelsUrl + '?pageToken=',
+  modelsUrl + '?pageToken=next&pageToken=other',
+  modelsUrl + '?pageToken=next&key=bad',
+  modelsUrl.replace('googleapis.com', 'googleapis.com.evil.test') + '?pageToken=next',
   modelsUrl.replace('googleapis.com', 'googleapis.com.evil.test'),
   modelsUrl.replace('https://', 'https://secret@'),
   modelsUrl.replace('.com/', '.com:444/'),

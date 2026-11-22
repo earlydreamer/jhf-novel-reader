@@ -359,6 +359,14 @@
   margin-inline: 16px;
 }
 
+.nr-model-picker__search {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  padding-block: 8px;
+  background: var(--surface);
+}
+
 /* 설정 끝 브랜드 영역(#143) */
 .nr-settings-footer {
   display: grid;

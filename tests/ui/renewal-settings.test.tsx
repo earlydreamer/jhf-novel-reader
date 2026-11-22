@@ -124,7 +124,7 @@ describe('Android 목록형 설정', () => {
   it('네 섹션과 웹 버전·실제 오픈소스 고지를 정보 행으로 보여 준다', async () => {
     const value = await setup();
 
-    for (const name of ['번역 서버', '번역 방식', '화면', '정보']) {
+    for (const name of ['번역 서버', '번역 옵션', '화면', '정보']) {
       expect(screen.getByRole('heading', { name })).toBeVisible();
     }
     expect(screen.getByText(`웹 미리보기 ${packageInfo.version}`)).toBeVisible();
@@ -199,7 +199,7 @@ describe('Android 목록형 설정', () => {
     expect(
       within(info).getByRole('button', { name: '오픈소스 라이선스 포함된 오픈소스와 라이선스' }),
     ).toBeVisible();
-    const translation = screen.getByRole('region', { name: '번역 방식' });
+    const translation = screen.getByRole('region', { name: '번역 옵션' });
     expect(within(translation).getByText('최근 번역 시간')).toBeVisible();
     expect(within(translation).getByText('아직 기록이 없어요')).toBeVisible();
     value.controller.dispose();
@@ -342,7 +342,7 @@ describe('Android 목록형 설정', () => {
     fireEvent.change(key, { target: { value: 'synthetic-gemini-key' } });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
     expect(key).toHaveValue('');
-    await screen.findByRole('button', { name: 'API 키 저장됨' });
+    const picker = await screen.findByRole('dialog', { name: 'Gemini 모델 선택' });
     expect(value.catalog).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'gemini', baseUrl: GEMINI_BASE_URL }),
       'synthetic-gemini-key',
@@ -352,8 +352,8 @@ describe('Android 목록형 설정', () => {
       expect(value.persisted().configuredConnection?.connection.authRef).toBe('provider.saved'),
     );
     expect(JSON.stringify(value.persisted())).not.toContain('synthetic-gemini-key');
-    fireEvent.click(screen.getByRole('button', { name: '모델 선택 전' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Generation model' }));
+    fireEvent.click(within(picker).getByRole('radio', { name: 'Generation model generation' }));
+    expect(screen.getByRole('button', { name: 'API 키 저장됨' })).toBeVisible();
     expect(screen.getByRole('button', { name: '모델 Generation model' })).toBeVisible();
     await waitFor(() => expect(value.persisted().selection?.modelId).toBe('generation'));
     expect(value.post).not.toHaveBeenCalled();
@@ -366,6 +366,49 @@ describe('Android 목록형 설정', () => {
     await waitFor(() =>
       expect(value.persisted().inactiveConnection?.connection.authRef).toBe('provider.saved'),
     );
+    value.controller.dispose();
+  });
+
+  it('저장된 Gemini 키로 모델 목록을 열고 이름과 ID로 구분해 선택한다', async () => {
+    const value = await setup({
+      saved: {
+        schemaVersion: 2,
+        fontSize: 18,
+        selection: {
+          connection: {
+            provider: 'gemini',
+            baseUrl: GEMINI_BASE_URL,
+            revision: 4,
+            authRef: 'provider.gemini',
+          },
+          modelId: 'gemini-used',
+          translationMode: 'stream',
+        },
+      },
+      catalog: vi.fn(async (connection: ConnectionConfig) => ({
+        connection,
+        models: [
+          { id: 'gemini-other', displayName: 'Gemini Model', supportsGeneration: true },
+          { id: 'gemini-used', displayName: 'Gemini Model', supportsGeneration: true },
+        ],
+      })),
+    });
+    fireEvent.click(screen.getByRole('button', { name: '모델 gemini-used' }));
+    const picker = await screen.findByRole('dialog', { name: 'Gemini 모델 선택' });
+    const choices = within(picker).getAllByRole('radio');
+    expect(choices[0]).toHaveAttribute('value', 'gemini-used');
+    expect(choices[0]).toBeChecked();
+    const search = within(picker).getByRole('searchbox', { name: '모델 검색' });
+    fireEvent.change(search, { target: { value: 'unavailable' } });
+    expect(within(picker).getByRole('status')).toHaveTextContent('일치하는 모델이 없어요');
+    fireEvent.change(search, { target: { value: ' GEMINI-OTHER ' } });
+    expect(within(picker).getAllByRole('radio')).toHaveLength(1);
+    fireEvent.click(within(picker).getByRole('radio', { name: 'Gemini Model gemini-other' }));
+    await waitFor(() => expect(value.persisted().selection?.modelId).toBe('gemini-other'));
+    expect(value.catalog).toHaveBeenCalledTimes(1);
+    expect(value.post).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '모델 Gemini Model' }));
+    expect(screen.getByRole('searchbox', { name: '모델 검색' })).toHaveValue('');
     value.controller.dispose();
   });
 
