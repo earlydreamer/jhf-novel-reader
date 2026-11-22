@@ -221,10 +221,10 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     ]);
     const g = p.generation;
     check(
-      p.provider === 'openai-compatible' &&
-        ((p.promptVersion === 'hymt2-segments-v1' && g.mode === 'segments-v1') ||
-          (p.promptVersion === 'lines-v1' && g.mode === 'lines-v1') ||
-          (p.promptVersion === 'colomo-local-v1' && g.mode === 'colomo-local-v1')),
+      (p.promptVersion === 'colomo-local-v1' && g.mode === 'colomo-local-v1') ||
+        (p.provider === 'openai-compatible' &&
+          ((p.promptVersion === 'hymt2-segments-v1' && g.mode === 'segments-v1') ||
+            (p.promptVersion === 'lines-v1' && g.mode === 'lines-v1'))),
     );
     integer(g.segments, 1);
     if (g.continuations !== undefined) integer(g.continuations, 0);

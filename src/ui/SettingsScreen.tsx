@@ -670,18 +670,18 @@ export function SettingsScreen({
             onChange={onAutoTranslate}
           />
         )}
-        {onAutoGlossary && state.connection.provider === 'openai-compatible' && (
+        {onAutoGlossary && (
           <Switch
             label="번역 전 용어집 자동 생성"
-            description="새 이름이 나오면 번역하기 전에 모델로 용어집을 만들어 바로 적용해요. 처음 번역할 때 조금 더 걸리고, 작품 용어집에서 언제든 고칠 수 있어요."
+            description="새 이름이 나오면 번역하기 전에 모델로 용어집을 만들어 바로 적용해요. 추가 모델 요청으로 비용이 생길 수 있고, 표기는 작품 용어집에서 고칠 수 있어요."
             checked={state.autoGlossary}
             onChange={onAutoGlossary}
           />
         )}
-        {!gemini && onAutoRetryFailed && (
+        {onAutoRetryFailed && (
           <Switch
             label="실패한 문단 자동으로 다시 번역"
-            description="읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요."
+            description="문단별 번역에서 검증에 실패하거나 필수 용어 표기가 빠진 문단을 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요."
             checked={state.autoRetryFailed}
             onChange={onAutoRetryFailed}
           />
@@ -866,7 +866,13 @@ export function SettingsScreen({
           </>
         }
       >
-        <p>번역할 회차의 원문을 기기에서 Google로 보내요. 사용량에 따라 비용이 발생할 수 있어요.</p>
+        <p>
+          번역할 회차의 원문과 적용할 작품 용어집의 표기·말투·줄거리 참고 정보를 Google로 보내요.
+        </p>
+        <p>
+          자동 용어집 생성이나 표기 재시도는 추가 요청을 보낼 수 있어요. 사용량에 따라 비용이 발생할
+          수 있어요.
+        </p>
         <p>자동 번역이 켜져 있으면 저장본이 없는 회차를 열 때 요청을 보내요.</p>
       </Dialog>
 

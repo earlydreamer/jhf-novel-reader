@@ -2663,6 +2663,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         runAutomaticTranslation();
         requestTitleTranslation();
         if (
+          snapshot.connection.provider === 'openai-compatible' &&
           !snapshot.autoTranslate &&
           dependencies.flow?.getCompleted()?.source.chapterId === chapter.chapterId &&
           snapshot.chapter?.chapterId === chapter.chapterId &&

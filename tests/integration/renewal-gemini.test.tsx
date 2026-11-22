@@ -9,8 +9,10 @@ import type {
   NativeStreamingClient,
 } from '../../src/contracts';
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
+import { normalizeChapterInput } from '../../src/providers/plainText';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 import { createLibraryStore } from '../../src/storage/library';
+import { appliedGuidanceHash } from '../../src/translation/guidance';
 
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
 const chapterUrl = `${workUrl}1/`;
@@ -22,18 +24,23 @@ const chapterHtml =
 
 type Finish = 'STOP' | 'SAFETY' | 'OTHER';
 
-function generationResponse(finishReason: Finish): string {
+function generationResponse(finishReason: Finish, text = '저장할 한국어 본문'): string {
   return JSON.stringify({
     candidates: [
       {
         finishReason,
-        content: { role: 'model', parts: [{ text: '저장할 한국어 본문' }] },
+        content: { role: 'model', parts: [{ text }] },
       },
     ],
   });
 }
 
-function harness(finishReason: Finish = 'STOP', streaming?: NativeStreamingClient) {
+function harness(
+  finishReason: Finish = 'STOP',
+  streaming?: NativeStreamingClient,
+  chapter = chapterHtml,
+  completion?: string,
+) {
   const bytes = new Map<string, string>();
   const preferences = new Map<string, string>();
   const secrets = new Map<string, string>();
@@ -66,7 +73,12 @@ function harness(finishReason: Finish = 'STOP', streaming?: NativeStreamingClien
           }),
         };
       if (input.method === 'POST')
-        return { status: 200, headers: {}, url: input.url, data: generationResponse(finishReason) };
+        return {
+          status: 200,
+          headers: {},
+          url: input.url,
+          data: generationResponse(finishReason, completion),
+        };
       if (input.url === workUrl)
         return {
           status: 200,
@@ -79,7 +91,7 @@ function harness(finishReason: Finish = 'STOP', streaming?: NativeStreamingClien
           status: 200,
           headers: { 'Content-Type': 'text/html' },
           url: input.url,
-          data: chapterHtml,
+          data: chapter,
         };
       throw new Error(`Unexpected test request: ${input.url}`);
     },
@@ -127,6 +139,7 @@ function harness(finishReason: Finish = 'STOP', streaming?: NativeStreamingClien
 async function selectChapter(h: ReturnType<typeof harness>) {
   await h.app.initialize();
   h.app.changeAutoTranslate(false);
+  h.app.changeAutoGlossary(false);
   await h.app.browse();
   const chapter = h.app.getSnapshot().work?.chapters.at(0);
   if (!chapter) throw new Error('Test fixture did not create a chapter');
@@ -293,6 +306,122 @@ it('previews Gemini text before settlement and saves the complete native respons
   });
   await h.app.selectChapter(chapter);
   expect(h.app.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
+});
+
+it('merges and applies the work glossary, retries only the affected Gemini paragraph, and reopens the saved result', async () => {
+  let finish!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  let streams = 0;
+  const h = harness(
+    'STOP',
+    {
+      async requestStream(input, _signal, onData) {
+        const first = ++streams === 1;
+        const text = first
+          ? '<main><p id="A">루미나를 봤다.</p><p id="B">루미나가 돌아갔다.</p></main>'
+          : '<main><p id="A">달그림자가 루미나를 봤다.</p></main>';
+        const delta = sse({ candidates: [{ content: { parts: [{ text }] } }] });
+        onData(delta);
+        if (first) await wait;
+        return {
+          status: 200,
+          url: input.url,
+          headers: {},
+          data: delta + sse({ candidates: [{ finishReason: 'STOP' }] }),
+        };
+      },
+    },
+    chapterHtml.replace(
+      '<p>開始</p><p>終わり</p>',
+      '<p>月影がルミナを見た。</p><p>ルミナが帰った。</p>',
+    ),
+    JSON.stringify({
+      terms: [
+        { source: 'ルミナ', target: '루미나', category: '인명' },
+        { source: '月影', target: '츠키카게', category: '인명' },
+        { source: '虚構国', target: '가공국', category: '지명' },
+      ],
+    }),
+  );
+  const chapter = await selectChapter(h);
+  await selectGemini(h);
+  h.app.changeAutoGlossary(true);
+  const manual = {
+    source: '月影団',
+    target: '달그림자',
+    aliases: ['月影'],
+    category: '조직',
+    note: '',
+  };
+  const absent = {
+    source: '星空団',
+    target: '별빛단',
+    aliases: [],
+    category: '조직',
+    note: '',
+  };
+  await h.app.saveGuidance(chapter.workId, { terms: [manual, absent], voices: [] });
+
+  const translating = h.app.translate();
+  try {
+    await expect.poll(() => h.app.getSnapshot().translation.preview).toContain('루미나를 봤다.');
+    expect(h.app.getSnapshot().translation.phase).toBe('translating');
+    await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual([]);
+  } finally {
+    finish();
+    await translating;
+  }
+
+  const posts = h.requests.filter((request) => request.method === 'POST');
+  expect(posts.map((request) => request.url)).toEqual([
+    `${GEMINI_BASE_URL}/models/gemini-synthetic:generateContent`,
+    `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
+    `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
+  ]);
+  expect(posts[0]?.data).toMatchObject({
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseJsonSchema: { required: ['terms'] },
+    },
+  });
+  const prompt = (index: number) =>
+    (posts[index]?.data as { contents: { parts: { text: string }[] }[] }).contents.at(-1)!.parts[0]!
+      .text;
+  expect(prompt(1)).toContain('月影->달그림자');
+  expect(prompt(1)).toContain('ルミナ->루미나');
+  expect(prompt(1)).not.toMatch(/星空団|츠키카게|가공국/);
+  expect(prompt(2)).toContain('月影 → 달그림자');
+  expect(prompt(2)).toContain('<p id="A">');
+  expect(prompt(2)).not.toContain('<p id="B">');
+
+  const guidance = await h.app.readGuidance(chapter.workId);
+  expect(guidance?.terms).toEqual([
+    manual,
+    absent,
+    expect.objectContaining({ source: 'ルミナ', target: '루미나', origin: 'model' }),
+  ]);
+  const versions = await h.store.listVersions(chapter.chapterId);
+  expect(versions).toHaveLength(1);
+  expect(versions[0]).toMatchObject({
+    text: '달그림자가 루미나를 봤다.\n\n루미나가 돌아갔다.',
+    provenance: {
+      provider: 'gemini',
+      generation: { segments: 1, continuations: 1 },
+      guidanceHash: await appliedGuidanceHash(
+        guidance,
+        chapter.workId,
+        normalizeChapterInput(versions[0]!.source),
+      ),
+    },
+  });
+
+  const restarted = h.createApp();
+  await restarted.initialize();
+  await restarted.selectChapter(chapter);
+  expect(restarted.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
+  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(3);
 });
 
 it.each([

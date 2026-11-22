@@ -238,7 +238,7 @@ describe('Android 목록형 설정', () => {
 
     expect(
       screen.getByText(
-        '읽으며 번역에서 검증에 실패한 문단만 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요.',
+        '문단별 번역에서 검증에 실패하거나 필수 용어 표기가 빠진 문단을 한 번 더 번역해요. 추가 모델 요청으로 비용이 생길 수 있어요. 결과를 확인할 수 없는 요청은 자동으로 다시 보내지 않아요.',
       ),
     ).toBeVisible();
     value.controller.dispose();
@@ -321,12 +321,19 @@ describe('Android 목록형 설정', () => {
     fireEvent.click(screen.getByRole('button', { name: '제공자 로컬 서버' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Google Gemini' }));
     const consent = screen.getByRole('dialog', { name: 'Gemini를 사용할까요?' });
-    expect(consent).toHaveTextContent('원문을 기기에서 Google로 보내요');
+    expect(consent).toHaveTextContent(
+      '원문과 적용할 작품 용어집의 표기·말투·줄거리 참고 정보를 Google로 보내요',
+    );
+    expect(consent).toHaveTextContent(
+      '자동 용어집 생성이나 표기 재시도는 추가 요청을 보낼 수 있어요',
+    );
     expect(consent).toHaveTextContent('비용');
     expect(value.catalog).not.toHaveBeenCalled();
     fireEvent.click(within(consent).getByRole('button', { name: 'Gemini 사용하기' }));
     expect(screen.queryByLabelText('서버 주소')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^로컬 번역 방식/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: '번역 전 용어집 자동 생성' })).toBeVisible();
+    expect(screen.getByRole('switch', { name: '실패한 문단 자동으로 다시 번역' })).toBeVisible();
     const key = screen.getByLabelText('API 키');
     expect(key).toHaveAttribute('type', 'password');
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));

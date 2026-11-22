@@ -2,6 +2,7 @@ import { ReaderError } from '../../contracts';
 import type {
   ConnectionConfig,
   ModelChoice,
+  ModelRequest,
   ModelTransport,
   ProviderSession,
   SecretStore,
@@ -9,6 +10,7 @@ import type {
   WholeChapterResult,
 } from '../../contracts';
 import { envelope, object } from '../catalog';
+import { translateParagraphs } from '../paragraphTranslation';
 import { normalizeChapterInput } from '../plainText';
 import { createSseReader } from '../sse';
 import { normalizeGeminiBaseUrl, normalizeGeminiModel } from './index';
@@ -219,6 +221,57 @@ export function createGeminiProviderSession(
     throw new ReaderError('model_missing');
   const base = normalizeGeminiBaseUrl(connection.baseUrl);
   const model = normalizeGeminiModel(snapshot.modelId);
+  const streaming = snapshot.translationMode === 'stream';
+
+  async function generate(
+    body: ModelRequest['body'],
+    signal: AbortSignal,
+    stream: boolean,
+    onPreview?: (text: string) => void,
+  ): Promise<WholeChapterResult> {
+    const streamPost = stream ? transport.streamPost?.bind(transport) : undefined;
+    if (stream && !streamPost) throw new ReaderError('connection', 'not_sent');
+    const modelRequest: ModelRequest = {
+      url: `${base}/models/${model}:${streamPost ? 'streamGenerateContent?alt=sse' : 'generateContent'}`,
+      body,
+      geminiApiKey: await geminiApiKey(connection, secrets, signal),
+    };
+    let response;
+    try {
+      if (streamPost) {
+        const preview = createGeminiStream(onPreview);
+        let invalidPreview = false;
+        response = await streamPost(modelRequest, signal, (chunk) => {
+          if (signal.aborted || invalidPreview) return;
+          try {
+            preview.push(chunk);
+          } catch {
+            // The settled response is authoritative even when listener delivery is incomplete.
+            invalidPreview = true;
+          }
+        });
+      } else {
+        response = await transport.post(modelRequest, signal);
+      }
+    } catch (error) {
+      if (error instanceof ReaderError)
+        throw new ReaderError(error.code, error.outcome, error.status);
+      throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
+    }
+    if (signal.aborted) throw new ReaderError('cancelled', 'unknown');
+    if (response.status === 401 || response.status === 403)
+      throw new ReaderError('auth', 'received', response.status);
+    if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300)
+      throw new ReaderError('connection', 'received', response.status);
+    if (streamPost) {
+      if (typeof response.data !== 'string') throw new ReaderError('invalid_output', 'received');
+      const parsed = createGeminiStream();
+      parsed.push(response.data);
+      return parsed.complete();
+    }
+    return decode(response.data);
+  }
+
   return {
     listModels: (signal) => listGeminiModels(connection, transport, secrets, signal),
     async translateChapter(request, signal) {
@@ -230,53 +283,67 @@ export function createGeminiProviderSession(
         throw new ReaderError('invalid_output');
       const input = normalizeChapterInput(request.source);
       if (!input.trim()) throw new ReaderError('source_parse');
-      const streaming = snapshot.translationMode === 'stream';
-      const streamPost = streaming ? transport.streamPost?.bind(transport) : undefined;
-      if (streaming && !streamPost) throw new ReaderError('connection', 'not_sent');
-      const key = await geminiApiKey(connection, secrets, signal);
-      const modelRequest = {
-        url: `${base}/models/${model}:${streamPost ? 'streamGenerateContent?alt=sse' : 'generateContent'}`,
-        body: {
+      if (request.reference || request.plotSummary) {
+        return translateParagraphs(
+          request,
+          snapshot,
+          (messages, maxOutputTokens, onPreview, signal) =>
+            generate(
+              {
+                contents: messages.map(({ role, content }) => ({
+                  role: role === 'assistant' ? 'model' : 'user',
+                  parts: [{ text: content }],
+                })),
+                generationConfig: { candidateCount: 1, maxOutputTokens },
+              },
+              signal,
+              streaming,
+              onPreview,
+            ),
+          signal,
+        );
+      }
+      return generate(
+        {
           systemInstruction: { parts: [{ text: instruction }] },
           contents: [{ role: 'user', parts: [{ text: input }] }],
           generationConfig: { candidateCount: 1 },
         },
-        geminiApiKey: key,
-      };
-      let response;
+        signal,
+        streaming,
+        request.onPreview,
+      );
+    },
+    async completeJson(request, signal) {
+      const result = await generate(
+        {
+          systemInstruction: { parts: [{ text: request.system }] },
+          contents: [{ role: 'user', parts: [{ text: request.user }] }],
+          generationConfig: {
+            candidateCount: 1,
+            temperature: request.temperature ?? 0,
+            maxOutputTokens: request.maxTokens,
+            responseMimeType: 'application/json',
+            responseJsonSchema: request.schema,
+          },
+        },
+        signal,
+        false,
+      );
+      if (result.finishReason !== 'complete')
+        throw new ReaderError(
+          result.finishReason === 'length'
+            ? 'output_limit'
+            : result.finishReason === 'blocked'
+              ? 'blocked'
+              : 'invalid_output',
+          'received',
+        );
       try {
-        if (streamPost) {
-          const preview = createGeminiStream(request.onPreview);
-          let invalidPreview = false;
-          response = await streamPost(modelRequest, signal, (chunk) => {
-            if (signal.aborted || invalidPreview) return;
-            try {
-              preview.push(chunk);
-            } catch {
-              // The settled response is authoritative even when listener delivery is incomplete.
-              invalidPreview = true;
-            }
-          });
-        } else {
-          response = await transport.post(modelRequest, signal);
-        }
-      } catch (error) {
-        if (error instanceof ReaderError)
-          throw new ReaderError(error.code, error.outcome, error.status);
-        throw new ReaderError(signal.aborted ? 'cancelled' : 'timeout_unknown', 'unknown');
+        return JSON.parse(result.text) as unknown;
+      } catch {
+        throw new ReaderError('invalid_output', 'received');
       }
-      if (signal.aborted) throw new ReaderError('cancelled', 'unknown');
-      if (response.status === 401 || response.status === 403)
-        throw new ReaderError('auth', 'received', response.status);
-      if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300)
-        throw new ReaderError('connection', 'received', response.status);
-      if (streamPost) {
-        if (typeof response.data !== 'string') throw new ReaderError('invalid_output', 'received');
-        const parsed = createGeminiStream();
-        parsed.push(response.data);
-        return parsed.complete();
-      }
-      return decode(response.data);
     },
   };
 }

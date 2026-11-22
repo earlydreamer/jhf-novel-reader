@@ -132,7 +132,7 @@ test('옵션이 없으면 자동 용어집을 호출하지 않는다', async () 
   expect(translate).toHaveBeenCalledTimes(1);
 });
 
-test('gemini 선택이면 옵션이 켜져 있어도 자동 용어집을 호출하지 않는다', async () => {
+test('Gemini도 옵션이 켜져 있으면 번역 직전에 자동 용어집을 호출한다', async () => {
   const autoGlossary = vi.fn<AutoGlossary>(async () => 'added');
   const { flow, translate } = makeFlow(autoGlossary);
   const gemini: SelectedModel = {
@@ -140,7 +140,12 @@ test('gemini 선택이면 옵션이 켜져 있어도 자동 용어집을 호출�
     modelId: 'gemini-test',
   };
   await flow.start(ref, gemini, undefined, undefined, undefined, { autoGlossary: true });
-  expect(autoGlossary).not.toHaveBeenCalled();
+  expect(autoGlossary).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ workId: ref.workId, selection: gemini }),
+  );
+  expect(autoGlossary.mock.invocationCallOrder[0]!).toBeLessThan(
+    translate.mock.invocationCallOrder[0]!,
+  );
   expect(translate).toHaveBeenCalledTimes(1);
 });
 

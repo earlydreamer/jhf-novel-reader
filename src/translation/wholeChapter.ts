@@ -186,8 +186,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           options.autoGlossary &&
           deps.autoGlossary &&
           !frozenRepair &&
-          frozenGuidance === undefined &&
-          selected.connection.provider === 'openai-compatible'
+          frozenGuidance === undefined
         ) {
           publish({ glossary: 'running' });
           const child = new AbortController();
@@ -215,19 +214,17 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             ? ((await deps.guidance?.read(chapter.workId)) ?? null)
             : frozenGuidance;
         const preset = referencePreset(selected);
-        const segmented = selected.connection.provider === 'openai-compatible' && !!selected.limits;
-        const streaming =
-          selected.connection.provider === 'openai-compatible' &&
-          selected.translationMode === 'stream';
+        const local = selected.connection.provider === 'openai-compatible';
+        const gemini = selected.connection.provider === 'gemini';
+        const segmented = local && !!selected.limits;
+        const localStreaming = local && selected.translationMode === 'stream';
+        const chapterInput = normalizeChapterInput(requestSource);
         // 후보 용어 판정(#241): 번역 요청 직전에 회차 입력으로 한 번만 부른다. 실패해도 번역은 판정 없이 계속한다.
         let decision: CandidateDecision | undefined;
         let decisionMs = 0;
         try {
           const decisionStarted = deps.clock.now();
-          const found = await deps.decideCandidates?.(
-            normalizeChapterInput(requestSource),
-            guidance,
-          );
+          const found = await deps.decideCandidates?.(chapterInput, guidance);
           if (found) {
             decision = found;
             decisionMs = Math.max(0, Math.round(deps.clock.now() - decisionStarted));
@@ -238,17 +235,18 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         // 문형 힌트는 구간 번역에서만, 그 구간에 해당 문형이 있을 때만 참고 데이터 앞에 붙는다.
         const reference = (input: string) => {
           const hints = segmented ? contextHints(input) : '';
-          const terms = streaming
-            ? streamingGuidanceContext(guidance, chapter.workId, input, preset, decision)
-            : guidanceContext(guidance, chapter.workId, input, preset, decision);
+          const terms =
+            localStreaming || gemini
+              ? streamingGuidanceContext(guidance, chapter.workId, input, preset, decision)
+              : guidanceContext(guidance, chapter.workId, input, preset, decision);
           return hints ? hints + (terms || '\n') : terms;
         };
-        const chapterReference = reference(normalizeChapterInput(requestSource));
-        if (
-          chapterReference &&
-          (selected.connection.provider !== 'openai-compatible' || (!selected.limits && !streaming))
-        )
+        const chapterReference = reference(chapterInput);
+        if (chapterReference && !localStreaming && !segmented && !gemini)
           throw new ReaderError('guidance_unsupported');
+        const plotSummary = localStreaming || gemini ? plotSummaryWithoutNames(guidance) : '';
+        const translateByParagraph =
+          localStreaming || (gemini && Boolean(chapterReference || plotSummary));
         const provider = deps.createProvider(selected);
         await deps.attempts.write({ token, phase: 'dispatching' });
         if (control.signal.aborted || !foreground || disposed) {
@@ -264,11 +262,15 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             source: requestSource,
             languageDirection: 'ja-ko',
             contractVersion: 'plain-v1',
-            promptVersion: streaming ? 'colomo-local-v1' : segmented ? 'lines-v1' : 'hymt2-ko-v1',
+            promptVersion: translateByParagraph
+              ? 'colomo-local-v1'
+              : segmented
+                ? 'lines-v1'
+                : 'hymt2-ko-v1',
             onProgress: (completed, total) => publish({ progress: { completed, total } }),
             onPreview: (preview) => publish({ preview: mergePreview(preview) }),
             ...(chapterReference ? { reference } : {}),
-            ...(streaming
+            ...(translateByParagraph
               ? {
                   requiredTerms: (input: string) =>
                     (
@@ -276,7 +278,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
                     ).flatMap(({ term, names }) =>
                       names.map((source) => ({ source, target: term.target })),
                     ),
-                  plotSummary: plotSummaryWithoutNames(guidance),
+                  plotSummary,
                 }
               : {}),
           },
@@ -332,7 +334,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         const appliedHash = await appliedGuidanceHash(
           guidance,
           chapter.workId,
-          normalizeChapterInput(requestSource),
+          chapterInput,
           preset,
         );
         const versionId = crypto.randomUUID();
