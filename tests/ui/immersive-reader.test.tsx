@@ -1017,6 +1017,31 @@ test('번역 중 상태 알림은 앱바 바로 뒤의 형제라 바가 숨어�
   expect(appbar!.compareDocumentPosition(pill!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
+test('현재 회차의 미리보기에 본문이 도착하면 대기 상태를 번역 중으로 바꾼다', () => {
+  const initial = props({
+    route: 'translation',
+    version: null,
+    translation: {
+      phase: 'translating',
+      elapsedMs: 20,
+      token: { requestId: 'preview', chapterId: chapter.chapterId, settingsRevision: 1 },
+      preview: '\n\n',
+    },
+    translationActive: true,
+  });
+  const { rerender } = render(<ImmersiveReader {...initial} />);
+  const pill = document.querySelector<HTMLElement>('.nr-status-pill')!;
+  expect(within(pill).getByText('모델 응답 대기 중')).toBeInTheDocument();
+
+  rerender(
+    <ImmersiveReader
+      {...initial}
+      translation={{ ...initial.translation, preview: '도착한 문단' }}
+    />,
+  );
+  expect(within(pill).getByText('번역 중')).toBeInTheDocument();
+});
+
 test('바가 보이면 스낵바를 하단 툴바 위 72px로 올리고 숨으면 0px로 되돌린다(#154)', () => {
   render(
     <SnackbarProvider>

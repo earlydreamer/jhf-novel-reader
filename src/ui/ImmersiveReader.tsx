@@ -551,7 +551,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
       : {
           idle: '번역 전',
           preparing: '원문 준비 중',
-          translating: '모델 응답 대기 중',
+          translating: livePreview?.trim() ? '번역 중' : '모델 응답 대기 중',
           validating: '결과를 확인하고 있어요',
           saving: '기기에 저장 중',
           ready: '저장 완료',
