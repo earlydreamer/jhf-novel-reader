@@ -2786,13 +2786,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       !foreground
     )
       return;
-    if (
-      base.blocks.length !== base.source.paragraphs.length ||
-      !dependencies.streamingAvailable ||
-      snapshot.connection.provider !== 'openai-compatible'
-    ) {
+    if (base.blocks.length !== base.source.paragraphs.length || !dependencies.streamingAvailable) {
       publish({
-        error: '문단 재번역은 원문과 문단이 맞는 로컬 번역본에서만 쓸 수 있어요.',
+        error: '문단 재번역을 하려면 스트리밍을 지원하고 원문과 번역본 문단이 맞아야 해요.',
       });
       return;
     }
@@ -2906,10 +2902,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       retryableRepair?.base.source.chapterId === snapshot.chapter?.chapterId
         ? (retryableRepair ?? undefined)
         : undefined;
-    if (repair && snapshot.connection.provider !== 'openai-compatible') {
-      publish({ error: '로컬 모델 연결을 확인한 뒤 문단 재번역을 다시 시도할 수 있어요.' });
-      return;
-    }
     publish({ translation: { phase: 'idle', elapsedMs: 0 } });
     await translate(repair);
   }

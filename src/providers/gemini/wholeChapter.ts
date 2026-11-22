@@ -283,7 +283,7 @@ export function createGeminiProviderSession(
         throw new ReaderError('invalid_output');
       const input = normalizeChapterInput(request.source);
       if (!input.trim()) throw new ReaderError('source_parse');
-      if (request.reference || request.plotSummary) {
+      if (request.promptVersion === 'colomo-local-v1' || request.reference || request.plotSummary) {
         return translateParagraphs(
           request,
           snapshot,
