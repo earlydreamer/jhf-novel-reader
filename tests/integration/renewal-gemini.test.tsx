@@ -65,8 +65,13 @@ function harness(
           data: JSON.stringify({
             models: [
               {
-                name: 'models/gemini-synthetic',
-                displayName: 'Gemini Synthetic',
+                name: 'models/gemini-3.6-flash',
+                displayName: 'Gemini 3.6 Flash',
+                supportedGenerationMethods: ['generateContent'],
+              },
+              {
+                name: 'models/gemini-2.5-flash',
+                displayName: 'Gemini 2.5 Flash',
                 supportedGenerationMethods: ['generateContent'],
               },
               {
@@ -155,7 +160,7 @@ async function selectChapter(h: ReturnType<typeof harness>) {
 async function selectGemini(h: ReturnType<typeof harness>) {
   h.app.changeConnection({ provider: 'gemini', baseUrl: GEMINI_BASE_URL });
   await h.app.checkConnection('synthetic-gemini-key');
-  h.app.chooseModel('gemini-synthetic');
+  h.app.chooseModel('gemini-3.6-flash');
 }
 
 it('uses Google only after explicit Gemini selection and filters its generation catalog', async () => {
@@ -168,8 +173,10 @@ it('uses Google only after explicit Gemini selection and filters its generation 
   await selectGemini(h);
 
   expect(h.app.getSnapshot().models).toEqual([
-    { id: 'gemini-synthetic', displayName: 'Gemini Synthetic', supportsGeneration: true },
+    { id: 'gemini-3.6-flash', displayName: 'Gemini 3.6 Flash', supportsGeneration: true },
   ]);
+  h.app.chooseModel('gemini-2.5-flash');
+  expect(h.app.getSnapshot().selectedModelId).toBe('gemini-3.6-flash');
   expect(h.requests).toContainEqual(
     expect.objectContaining({
       url: modelsUrl,
@@ -197,8 +204,8 @@ it('restores a checked Gemini connection before model selection and reads the sa
     url: modelsUrl,
     headers: { 'x-goog-api-key': 'synthetic-gemini-key' },
   });
-  restarted.chooseModel('gemini-synthetic');
-  expect(restarted.getSnapshot().selectedModelId).toBe('gemini-synthetic');
+  restarted.chooseModel('gemini-3.6-flash');
+  expect(restarted.getSnapshot().selectedModelId).toBe('gemini-3.6-flash');
 });
 
 it('saves a Gemini plain-text version through the whole-chapter flow without fallback', async () => {
@@ -211,7 +218,7 @@ it('saves a Gemini plain-text version through the whole-chapter flow without fal
   const posts = h.requests.filter((request) => request.method === 'POST');
   expect(posts).toHaveLength(1);
   expect(posts[0]).toMatchObject({
-    url: `${GEMINI_BASE_URL}/models/gemini-synthetic:generateContent`,
+    url: `${GEMINI_BASE_URL}/models/gemini-3.6-flash:generateContent`,
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
@@ -224,7 +231,7 @@ it('saves a Gemini plain-text version through the whole-chapter flow without fal
   expect(versions).toHaveLength(1);
   expect(versions[0]).toMatchObject({
     text: '저장할 한국어 본문',
-    provenance: { provider: 'gemini', modelId: 'gemini-synthetic' },
+    provenance: { provider: 'gemini', modelId: 'gemini-3.6-flash' },
   });
 
   const versionId = versions[0]?.versionId;
@@ -304,13 +311,13 @@ it('previews Gemini text before settlement and saves the complete native respons
   const posts = h.requests.filter((request) => request.method === 'POST');
   expect(posts).toHaveLength(1);
   expect(posts[0]?.url).toBe(
-    `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
+    `${GEMINI_BASE_URL}/models/gemini-3.6-flash:streamGenerateContent?alt=sse`,
   );
   const versions = await h.store.listVersions(chapter.chapterId);
   expect(versions).toHaveLength(1);
   expect(versions[0]).toMatchObject({
     text: '첫 문단\n\n둘째 문단',
-    provenance: { provider: 'gemini', modelId: 'gemini-synthetic' },
+    provenance: { provider: 'gemini', modelId: 'gemini-3.6-flash' },
   });
   await h.app.selectChapter(chapter);
   expect(h.app.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
@@ -384,9 +391,9 @@ it('merges and applies the work glossary, retries only the affected Gemini parag
 
   const posts = h.requests.filter((request) => request.method === 'POST');
   expect(posts.map((request) => request.url)).toEqual([
-    `${GEMINI_BASE_URL}/models/gemini-synthetic:generateContent`,
-    `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
-    `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
+    `${GEMINI_BASE_URL}/models/gemini-3.6-flash:generateContent`,
+    `${GEMINI_BASE_URL}/models/gemini-3.6-flash:streamGenerateContent?alt=sse`,
+    `${GEMINI_BASE_URL}/models/gemini-3.6-flash:streamGenerateContent?alt=sse`,
   ]);
   expect(posts[0]?.data).toMatchObject({
     generationConfig: {
@@ -513,7 +520,7 @@ it.each([true, false])(
     const posts = h.requests.filter((request) => request.method === 'POST');
     expect(posts).toHaveLength(2);
     expect(posts[1]?.url).toBe(
-      `${GEMINI_BASE_URL}/models/gemini-synthetic:streamGenerateContent?alt=sse`,
+      `${GEMINI_BASE_URL}/models/gemini-3.6-flash:streamGenerateContent?alt=sse`,
     );
     const prompt = (posts[1]!.data as { contents: { parts: { text: string }[] }[] }).contents[0]!
       .parts[0]!.text;
