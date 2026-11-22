@@ -32,7 +32,7 @@ type ProviderHooks = {
   /** 요청 하나를 잡아 두는 대기. 동시에 나간 요청 수를 재는 데 쓴다. */
   wait?: (call: number) => Promise<void>;
 };
-type Request = { system: string; user: string; temperature?: number };
+type Request = Parameters<NonNullable<ProviderSession['completeJson']>>[0];
 
 const NOW = '2026-10-03T00:00:00Z';
 const selection = { modelId: 'fake-model' } as SelectedModel;
@@ -347,6 +347,7 @@ test('후보를 8개씩 묶고 묶음마다 3회 요청하며 온도는 0, 0.7, 
   const progress: TermScanProgress[] = [];
   await run(h, ['c1'], (item) => progress.push(item));
   expect(h.requests.map((request) => request.temperature)).toEqual([0, 0.7, 0.7, 0, 0.7, 0.7]);
+  expect(h.requests.every((request) => request.reserveThinkingTokens)).toBe(true);
   expect(h.requests.map((request) => (request.user.match(/^\[c\d+\]/gm) ?? []).length)).toEqual([
     8, 8, 8, 1, 1, 1,
   ]);
