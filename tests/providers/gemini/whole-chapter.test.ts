@@ -236,7 +236,7 @@ describe('renewal Gemini whole-chapter provider', () => {
     },
   );
 
-  it('lists Gemini models across pages and omits TTS and image generation models', async () => {
+  it('lists supported stable Gemini translation models across catalog pages', async () => {
     const gets: Array<{ url: string; authorization?: string; geminiApiKey?: string }> = [];
     const transport: ModelTransport = {
       get: async (input) => {
@@ -249,11 +249,23 @@ describe('renewal Gemini whole-chapter provider', () => {
             data: {
               models: [
                 {
-                  name: 'models/gemini-second',
+                  name: 'models/gemini-3.5-flash-lite',
                   supportedGenerationMethods: ['generateContent'],
                 },
                 {
-                  name: 'models/gemini-2.5-flash-image',
+                  name: 'models/gemini-3.1-flash-lite',
+                  supportedGenerationMethods: ['generateContent'],
+                },
+                {
+                  name: 'models/gemini-3.8-flash',
+                  supportedGenerationMethods: ['countTokens'],
+                },
+                {
+                  name: 'models/gemini-4-neon',
+                  supportedGenerationMethods: ['generateContent'],
+                },
+                {
+                  name: 'models/gemini-3.1-flash-image',
                   supportedGenerationMethods: ['generateContent'],
                 },
                 {
@@ -270,9 +282,25 @@ describe('renewal Gemini whole-chapter provider', () => {
           data: {
             models: [
               {
-                name: 'models/gemini-synthetic',
-                displayName: 'Gemini Synthetic',
+                name: 'models/gemini-4-hydrogen',
+                displayName: 'Gemini 4 Hydrogen',
                 supportedGenerationMethods: ['generateContent', 'countTokens'],
+              },
+              {
+                name: 'models/gemini-3.6-flash',
+                supportedGenerationMethods: ['generateContent'],
+              },
+              {
+                name: 'models/gemini-2.5-flash',
+                supportedGenerationMethods: ['generateContent', 'countTokens'],
+              },
+              {
+                name: 'models/gemini-3-flash-preview',
+                supportedGenerationMethods: ['generateContent'],
+              },
+              {
+                name: 'models/gemini-flash-latest',
+                supportedGenerationMethods: ['generateContent'],
               },
               {
                 name: 'models/embedding-synthetic',
@@ -296,8 +324,18 @@ describe('renewal Gemini whole-chapter provider', () => {
     await expect(
       listGeminiModels(selection.connection, transport, secrets, signal()),
     ).resolves.toEqual([
-      { id: 'gemini-synthetic', displayName: 'Gemini Synthetic', supportsGeneration: true },
-      { id: 'gemini-second', displayName: 'gemini-second', supportsGeneration: true },
+      { id: 'gemini-4-hydrogen', displayName: 'Gemini 4 Hydrogen', supportsGeneration: true },
+      { id: 'gemini-3.6-flash', displayName: 'gemini-3.6-flash', supportsGeneration: true },
+      {
+        id: 'gemini-3.5-flash-lite',
+        displayName: 'gemini-3.5-flash-lite',
+        supportsGeneration: true,
+      },
+      {
+        id: 'gemini-3.1-flash-lite',
+        displayName: 'gemini-3.1-flash-lite',
+        supportsGeneration: true,
+      },
     ]);
     expect(gets).toEqual([
       { url: `${GEMINI_BASE_URL}/models`, geminiApiKey: 'synthetic-gemini-key' },
