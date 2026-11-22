@@ -70,6 +70,11 @@ function harness(
                 supportedGenerationMethods: ['generateContent'],
               },
               {
+                name: 'models/gemini-3.5-flash-lite',
+                displayName: 'Gemini 3.5 Flash-Lite',
+                supportedGenerationMethods: ['generateContent'],
+              },
+              {
                 name: 'models/gemini-2.5-flash',
                 displayName: 'Gemini 2.5 Flash',
                 supportedGenerationMethods: ['generateContent'],
@@ -174,6 +179,7 @@ it('uses Google only after explicit Gemini selection and filters its generation 
 
   expect(h.app.getSnapshot().models).toEqual([
     { id: 'gemini-3.6-flash', displayName: 'Gemini 3.6 Flash', supportsGeneration: true },
+    { id: 'gemini-3.5-flash-lite', displayName: 'Gemini 3.5 Flash-Lite', supportsGeneration: true },
   ]);
   h.app.chooseModel('gemini-2.5-flash');
   expect(h.app.getSnapshot().selectedModelId).toBe('gemini-3.6-flash');
@@ -321,6 +327,63 @@ it('previews Gemini text before settlement and saves the complete native respons
   });
   await h.app.selectChapter(chapter);
   expect(h.app.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
+});
+
+it('opens model selection after a Gemini generation 404 and waits for an explicit retry', async () => {
+  let unavailable = false;
+  const h = harness('STOP', {
+    async requestStream(input) {
+      if (unavailable && input.url.includes('/gemini-3.6-flash:'))
+        return {
+          status: 404,
+          url: input.url,
+          headers: {},
+          data: { error: { status: 'NOT_FOUND' } },
+        };
+      return {
+        status: 200,
+        url: input.url,
+        headers: {},
+        data: sse({
+          candidates: [{ content: { parts: [{ text: '저장된 본문' }] }, finishReason: 'STOP' }],
+        }),
+      };
+    },
+  });
+  const chapter = await selectChapter(h);
+  await selectGemini(h);
+  await h.app.translate();
+  const saved = await h.store.listVersions(chapter.chapterId);
+  expect(saved).toHaveLength(1);
+  unavailable = true;
+  h.app.changeAutoTranslate(true);
+  const posts = () => h.requests.filter(({ method }) => method === 'POST');
+  await h.app.retranslateChapter();
+  expect(h.app.getSnapshot().translation).toMatchObject({
+    phase: 'failed',
+    error: { code: 'model_unavailable', status: 404 },
+    unavailableModelId: 'gemini-3.6-flash',
+  });
+  expect(posts()).toHaveLength(2);
+  await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual(saved);
+  await h.app.retryTranslation();
+  expect(posts()).toHaveLength(2);
+
+  render(<Application controller={h.app} />);
+  expect(
+    screen.getByText('이 Gemini 모델을 사용할 수 없어요. 다른 모델을 선택해 주세요.'),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '모델 다시 선택' }));
+  expect(screen.getByRole('dialog', { name: 'Gemini 모델 선택' })).toBeVisible();
+  fireEvent.click(screen.getByRole('radio', { name: /Gemini 3.5 Flash-Lite/ }));
+  fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
+  expect(screen.getByText('다른 모델을 선택했어요. 다시 번역할 수 있어요.')).toBeVisible();
+  expect(posts()).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: '다시 번역하기' }));
+  await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('ready'));
+  expect(posts()).toHaveLength(3);
+  expect(posts()[2]?.url).toContain('/gemini-3.5-flash-lite:streamGenerateContent');
+  await expect(h.store.readVersion(saved[0]!.versionId)).resolves.toEqual(saved[0]);
 });
 
 it('merges and applies the work glossary, retries only the affected Gemini paragraph, and reopens the saved result', async () => {

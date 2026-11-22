@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest';
+import { ReaderError } from '../../src/contracts';
 import { createWholeChapterFlow, type FlowDependencies } from '../../src/translation/wholeChapter';
 import type {
   ChapterRef,
@@ -75,6 +76,27 @@ test('자동 용어집이 실패하면 번역은 계속되고 glossary 상태는
   expect(translate).toHaveBeenCalledTimes(1);
   expect(flow.getCompleted()).not.toBeNull();
   expect(flow.getSnapshot()).toMatchObject({ phase: 'ready', glossary: 'failed' });
+});
+
+test('Gemini 자동 용어집에서 모델을 사용할 수 없으면 후속 번역을 요청하지 않는다', async () => {
+  const autoGlossary = vi.fn<AutoGlossary>(async () => {
+    throw new ReaderError('model_unavailable', 'received', 404);
+  });
+  const selected: SelectedModel = {
+    connection: { provider: 'gemini', baseUrl: GEMINI_BASE_URL, revision: 0 },
+    modelId: 'gemini-test',
+  };
+  const { flow, translate } = makeFlow(autoGlossary);
+  await flow.start(ref, selected, undefined, undefined, undefined, { autoGlossary: true });
+  expect(autoGlossary).toHaveBeenCalledTimes(1);
+  expect(translate).not.toHaveBeenCalled();
+  expect(flow.getCompleted()).toBeNull();
+  expect(flow.getSnapshot()).toMatchObject({
+    phase: 'failed',
+    error: { code: 'model_unavailable', status: 404 },
+    unavailableModelId: selected.modelId,
+  });
+  expect(flow.getSnapshot().glossary).toBeUndefined();
 });
 
 test('자동 용어집 시작 상태를 받은 구독자가 즉시 취소하면 모델 요청을 보내지 않는다', async () => {

@@ -1909,7 +1909,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (
       state &&
       (state.pendingSave?.source.chapterId === chapterId ||
-        activeTranslation?.chapterId === chapterId)
+        activeTranslation?.chapterId === chapterId ||
+        (state.token?.chapterId === chapterId && state.error?.code === 'model_unavailable'))
     )
       return state;
     if (flow?.getUnfinished().some((token) => token.chapterId === chapterId))
@@ -2681,8 +2682,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return;
     const state = dependencies.flow.getSnapshot();
     if (['ready', 'failed', 'unknown'].includes(state.phase)) {
-      // 사용자가 중단했거나 앱이 백그라운드로 가서 멈춘 결과는 리더의 중단 안내로 충분하므로 스낵바를 띄우지 않는다(#164).
-      if (request.cancelled || state.error?.code === 'cancelled') {
+      // 중단이나 모델 사용 불가 상태는 리더 안내 카드에 표시한다.
+      if (
+        request.cancelled ||
+        state.error?.code === 'cancelled' ||
+        state.error?.code === 'model_unavailable'
+      ) {
         publish({ translation: state });
         return;
       }
@@ -2894,6 +2899,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     )
       return;
     if (!['unknown', 'failed'].includes(snapshot.translation.phase)) return;
+    if (
+      snapshot.translation.error?.code === 'model_unavailable' &&
+      (!snapshot.selectedModelId ||
+        snapshot.selectedModelId === snapshot.translation.unavailableModelId)
+    )
+      return;
     const repair =
       snapshot.paragraphRepair &&
       retryableRepair?.base.source.chapterId === snapshot.chapter?.chapterId

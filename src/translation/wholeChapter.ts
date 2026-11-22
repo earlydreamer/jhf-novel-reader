@@ -180,7 +180,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         if (frozenRepair) publish({ preview: frozenRepair.base.text });
         timings.sourceMs = deps.clock.now() - started;
         if (control.signal.aborted || !foreground || disposed) throw new ReaderError('cancelled');
-        // 번역 직전 자동 용어집(#192): 원문을 한 번만 받고 같은 취소 신호를 쓴다. 실패해도 번역은 막지 않는다.
+        // 번역 직전 자동 용어집(#192): 원문을 한 번만 받고 같은 취소 신호를 쓴다.
         if (
           options.autoGlossary &&
           deps.autoGlossary &&
@@ -201,8 +201,9 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
               signal: child.signal,
             });
             publish({ glossary: undefined });
-          } catch {
+          } catch (error) {
             if (control.signal.aborted) throw new ReaderError('cancelled');
+            if (error instanceof ReaderError && error.code === 'model_unavailable') throw error;
             publish({ glossary: 'failed' });
           } finally {
             clearTimeout(timeout);
@@ -407,7 +408,13 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           return;
         }
         if (unknown) unfinished = [...unfinished, token];
-        publish({ phase: unknown ? 'unknown' : 'failed', error: safe });
+        publish({
+          phase: unknown ? 'unknown' : 'failed',
+          error: safe,
+          ...(safe.code === 'model_unavailable'
+            ? { unavailableModelId: selected.modelId, glossary: undefined }
+            : {}),
+        });
       } finally {
         clearInterval(timer);
         abort = null;

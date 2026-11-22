@@ -44,6 +44,7 @@ describe('shared contracts', () => {
       'cancelled',
       'model_list',
       'model_missing',
+      'model_unavailable',
       'input_limit',
       'output_limit',
       'blocked',
