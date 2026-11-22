@@ -188,12 +188,13 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
           !frozenRepair &&
           frozenGuidance === undefined
         ) {
-          publish({ glossary: 'running' });
           const child = new AbortController();
           const abortChild = () => child.abort();
           control.signal.addEventListener('abort', abortChild, { once: true });
           const timeout = setTimeout(abortChild, 30_000);
           try {
+            publish({ glossary: 'running' });
+            if (child.signal.aborted) throw new ReaderError('cancelled');
             await deps.autoGlossary({
               workId: chapter.workId,
               source,
@@ -268,7 +269,8 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
                 ? 'lines-v1'
                 : 'hymt2-ko-v1',
             onProgress: (completed, total) => publish({ progress: { completed, total } }),
-            onPreview: (preview) => publish({ preview: mergePreview(preview) }),
+            onPreview: (preview) =>
+              publish({ preview: mergePreview(preview), hasModelPreview: Boolean(preview.trim()) }),
             ...(chapterReference ? { reference } : {}),
             ...(translateByParagraph
               ? {

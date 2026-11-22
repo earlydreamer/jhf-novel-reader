@@ -6,6 +6,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -18,6 +19,11 @@ import java.util.concurrent.Executors;
 /** Model-only SSE. No redirects, cookie persistence, logging or automatic POST retries. */
 @CapacitorPlugin(name = "ModelStream")
 public final class ModelStreamPlugin extends Plugin {
+    // A single native line must fit within the JavaScript SSE frame budget.
+    private static final int MAX_SSE_LINE_CHARS = 1_000_000;
+    private static final int MAX_SSE_RESPONSE_CHARS = 16_000_000;
+    private static final int MAX_NON_SSE_RESPONSE_CHARS = 65_536;
+    private static final int MAX_RESPONSE_LINES = 200_000;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private String activeId;
     private volatile boolean cancelled;
@@ -88,10 +94,13 @@ public final class ModelStreamPlugin extends Plugin {
             if (input != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
                 String line;
                 int count = 0;
-                while ((line = reader.readLine()) != null) {
+                int responseLimit = sse ? MAX_SSE_RESPONSE_CHARS : MAX_NON_SSE_RESPONSE_CHARS;
+                while ((line = readBoundedLine(
+                    reader, Math.min(MAX_SSE_LINE_CHARS, responseLimit - all.length() - 1)
+                )) != null) {
                     if (cancelled) throw new InterruptedException();
+                    if (++count > MAX_RESPONSE_LINES) throw new IOException("Response has too many lines");
                     all.append(line).append('\n');
-                    if (++count > 200000 || all.length() > (sse ? 16000000 : 65536)) throw new IllegalStateException();
                     if (sse) {
                         JSObject event = new JSObject();
                         event.put("id", id); event.put("data", line + "\n");
@@ -110,6 +119,23 @@ public final class ModelStreamPlugin extends Plugin {
         }
         // Settle only after the native socket has been cleaned up.
         if (failure != null) call.reject(failure); else call.resolve(result);
+    }
+
+    static String readBoundedLine(BufferedReader reader, int limit) throws IOException {
+        int ch = reader.read();
+        if (ch == -1) return null;
+        if (limit < 0) throw new IOException("Response limit exceeded");
+        StringBuilder line = new StringBuilder();
+        while (ch != -1 && ch != '\n' && ch != '\r') {
+            if (line.length() == limit) throw new IOException("Response line limit exceeded");
+            line.append((char) ch);
+            ch = reader.read();
+        }
+        if (ch == '\r') {
+            reader.mark(1);
+            if (reader.read() != '\n') reader.reset();
+        }
+        return line.toString();
     }
 
     @PluginMethod public synchronized void cancel(PluginCall call) {

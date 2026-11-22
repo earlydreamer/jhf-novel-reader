@@ -286,7 +286,10 @@ it('previews Gemini text before settlement and saves the complete native respons
   const translating = h.app.translate();
   try {
     await expect.poll(() => h.app.getSnapshot().translation.preview).toBe('첫 문단');
-    expect(h.app.getSnapshot().translation.phase).toBe('translating');
+    expect(h.app.getSnapshot().translation).toMatchObject({
+      phase: 'translating',
+      hasModelPreview: true,
+    });
     await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual([]);
   } finally {
     finish();

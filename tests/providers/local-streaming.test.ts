@@ -330,11 +330,13 @@ test('automatic retry only regenerates failed rows and retains the accepted firs
   expect(result.failedParagraphs).toBeUndefined();
   expect(f.calls).toHaveLength(2);
 });
-test('rejects merged, duplicate or reordered IDs after one retry', async () => {
+test('rejects merged, duplicate, reordered, nested or unclosed paragraphs after one retry', async () => {
   for (const output of [
     '<main><p id="A">합친 두 줄</p></main>',
     '<main><p id="A">하나</p><p id="A">둘</p></main>',
     '<main><p id="B">둘</p><p id="A">하나</p></main>',
+    '<main><p id="A">하나<p id="B">둘</p><p id="B">둘</p></main>',
+    '<main><p id="A">하나</p><p id="B">둘</main>',
   ]) {
     const f = fixture(() => output);
     const result = await f.provider.translateChapter(

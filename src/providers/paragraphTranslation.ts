@@ -36,12 +36,24 @@ const clean = (text: string) =>
     .join('\n');
 const kana = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
 function rows(text: string, units: readonly LineUnit[]) {
-  const matches = [...text.matchAll(/<p id="([A-Za-z]{1,3})">([\s\S]*?)<\/p>/g)];
-  const exact =
-    matches.length === units.length &&
-    matches.every((m, i) => m[1] === units[i]?.id) &&
-    /<\/main>\s*$/.test(text);
-  return { exact, matches };
+  const matches: string[] = [];
+  const body = text.trimStart();
+  if (!body.startsWith('<main>')) return { matches, exact: false };
+  const opening = /\s*<p id="([A-Za-z]{1,3})">/y;
+  const boundary = /<\/?(?:p|main)(?=[\s/>])/gi;
+  let offset = '<main>'.length;
+  for (const unit of units) {
+    opening.lastIndex = offset;
+    if (opening.exec(body)?.[1] !== unit.id) return { matches, exact: false };
+    const start = opening.lastIndex;
+    boundary.lastIndex = start;
+    const end = boundary.exec(body)?.index;
+    if (end === undefined) return { matches, partial: body.slice(start), exact: false };
+    if (!body.startsWith('</p>', end)) return { matches, exact: false };
+    matches.push(body.slice(start, end));
+    offset = end + '</p>'.length;
+  }
+  return { matches, exact: body.slice(offset).trim() === '</main>' };
 }
 /** Shared prompt, paragraph validation, and retries for translations with streaming previews. */
 export async function translateParagraphs(
@@ -164,21 +176,16 @@ export async function translateParagraphs(
         if (!request.onPreview) return;
         const values = new Map(done);
         for (const [id, text] of accepted) values.set(id, text);
-        const closed = [...text.matchAll(/<p id="([A-Za-z]{1,3})">([\s\S]*?)<\/p>/g)];
-        let offset = 0;
-        for (const m of closed) {
-          if (m[1] !== pending[offset]?.id) break;
-          const checked = validateLine(pending[offset]!, m[2]!);
-          if (checked) values.set(m[1]!, checked.value);
-          offset++;
-        }
-        const next = pending[offset];
-        if (next) {
-          const open = text.match(new RegExp('<p id="' + next.id + '">([^]*?)$'));
-          if (open && !open[1]!.includes('</p>')) {
-            const value = clean(open[1]!);
-            if (value) values.set(next.id, value);
-          }
+        const { matches, partial } = rows(text, pending);
+        matches.forEach((body, index) => {
+          const unit = pending[index]!;
+          const checked = validateLine(unit, body);
+          if (checked) values.set(unit.id, checked.value);
+        });
+        const next = pending[matches.length];
+        if (next && partial) {
+          const value = clean(partial);
+          if (value) values.set(next.id, value);
         }
         preview(values, true);
       };
@@ -193,17 +200,18 @@ export async function translateParagraphs(
       if (result.finishReason === 'blocked' || result.finishReason === 'unknown') return result;
       const parsed = rows(result.text, pending);
       if (parsed.exact && result.finishReason === 'complete')
-        for (const [i, m] of parsed.matches.entries()) {
-          const checked = validateLine(pending[i]!, m[2]!);
+        for (const [i, body] of parsed.matches.entries()) {
+          const unit = pending[i]!;
+          const checked = validateLine(unit, body);
           if (!checked) continue;
           if (checked.missing.length && attempt + 1 < attempts) {
             // 다음 시도에서 이 문단만 표기 줄을 붙여 다시 요청한다.
-            fallback.set(m[1]!, checked.value);
-            lacking.add(m[1]!);
+            fallback.set(unit.id, checked.value);
+            lacking.add(unit.id);
             continue;
           }
-          accepted.set(m[1]!, checked.value);
-          historyRows.set(m[1]!, m[2]!);
+          accepted.set(unit.id, checked.value);
+          historyRows.set(unit.id, body);
         }
       if (parsed.exact && accepted.size === batch.length && result.finishReason === 'complete') {
         historyOutput =

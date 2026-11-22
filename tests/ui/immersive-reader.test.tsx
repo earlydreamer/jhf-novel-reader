@@ -1036,7 +1036,34 @@ test('현재 회차의 미리보기에 본문이 도착하면 대기 상태를 �
   rerender(
     <ImmersiveReader
       {...initial}
-      translation={{ ...initial.translation, preview: '도착한 문단' }}
+      translation={{ ...initial.translation, preview: '도착한 문단', hasModelPreview: true }}
+    />,
+  );
+  expect(within(pill).getByText('번역 중')).toBeInTheDocument();
+});
+
+test('문단 재번역은 저장된 본문을 보여 주면서 현재 모델 미리보기를 기다린다', () => {
+  const version = completed();
+  const initial = props({
+    route: 'translation',
+    version,
+    translationActive: true,
+    translation: {
+      phase: 'translating',
+      elapsedMs: 20,
+      token: { requestId: 'repair', chapterId: chapter.chapterId, settingsRevision: 1 },
+      preview: version.text,
+    },
+  });
+  const { rerender } = render(<ImmersiveReader {...initial} />);
+  const pill = document.querySelector<HTMLElement>('.nr-status-pill')!;
+  expect(within(pill).getByText('모델 응답 대기 중')).toBeInTheDocument();
+  expect(screen.getByText('첫 번역')).toBeInTheDocument();
+
+  rerender(
+    <ImmersiveReader
+      {...initial}
+      translation={{ ...initial.translation, hasModelPreview: true }}
     />,
   );
   expect(within(pill).getByText('번역 중')).toBeInTheDocument();

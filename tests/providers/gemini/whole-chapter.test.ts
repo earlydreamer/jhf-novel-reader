@@ -125,6 +125,69 @@ describe('renewal Gemini whole-chapter provider', () => {
     expect(posts).toHaveLength(1);
   });
 
+  it.each([
+    { terminal: true, expectedCalls: 3 },
+    { terminal: false, expectedCalls: 2 },
+  ])(
+    'handles an empty paragraph batch with terminal=$terminal',
+    async ({ terminal, expectedCalls }) => {
+      const posts: ModelRequest[] = [];
+      const transport: ModelTransport = {
+        ...sessionTransport({}, posts),
+        streamPost: async (input) => {
+          posts.push(input);
+          const prompt = (input.body.contents as { parts: { text: string }[] }[]).at(-1)!.parts[0]!
+            .text;
+          const ids = [...prompt.matchAll(/<p id="([A-Za-z]+)">/g)].map((m) => m[1]);
+          const text =
+            '<main>' + ids.map((id) => `<p id="${id}">번역${id}</p>`).join('') + '</main>';
+          const empty = posts.length === 2;
+          const candidate = empty
+            ? terminal
+              ? { finishReason: 'STOP' }
+              : { content: { parts: [{ text: '' }] } }
+            : { finishReason: 'STOP', content: { parts: [{ text }] } };
+          return {
+            status: 200,
+            headers: {},
+            url: input.url,
+            data: `data: ${JSON.stringify({ candidates: [candidate] })}\n\n`,
+          };
+        },
+      };
+      const provider = createGeminiProviderSession(
+        { ...selection, translationMode: 'stream' },
+        transport,
+        secrets,
+      );
+      const result = provider.translateChapter(
+        {
+          ...request,
+          source: {
+            ...source,
+            paragraphs: Array.from({ length: 9 }, (_, i) => ({
+              id: `p${i}`,
+              text: '夏の朝。',
+              ruby: [],
+            })),
+          },
+          reference: () => '용어집',
+        },
+        signal(),
+      );
+      if (terminal) {
+        await expect(result).resolves.toMatchObject({
+          text: '번역A\n\n번역B\n\n번역C\n\n번역D\n\n번역E\n\n번역F\n\n번역G\n\n번역H\n\n번역I',
+          generation: { segments: 2, continuations: 1 },
+        });
+        expect(JSON.stringify(posts[1]?.body)).toBe(JSON.stringify(posts[2]?.body));
+      } else {
+        await expect(result).rejects.toMatchObject({ code: 'timeout_unknown', outcome: 'unknown' });
+      }
+      expect(posts).toHaveLength(expectedCalls);
+    },
+  );
+
   it('lists only Gemini models that support generateContent', async () => {
     const gets: Array<{ url: string; authorization?: string; geminiApiKey?: string }> = [];
     const transport: ModelTransport = {

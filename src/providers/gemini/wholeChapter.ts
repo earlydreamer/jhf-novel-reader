@@ -287,19 +287,30 @@ export function createGeminiProviderSession(
         return translateParagraphs(
           request,
           snapshot,
-          (messages, maxOutputTokens, onPreview, signal) =>
-            generate(
-              {
-                contents: messages.map(({ role, content }) => ({
-                  role: role === 'assistant' ? 'model' : 'user',
-                  parts: [{ text: content }],
-                })),
-                generationConfig: { candidateCount: 1, maxOutputTokens },
-              },
-              signal,
-              streaming,
-              onPreview,
-            ),
+          async (messages, maxOutputTokens, onPreview, signal) => {
+            try {
+              return await generate(
+                {
+                  contents: messages.map(({ role, content }) => ({
+                    role: role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: content }],
+                  })),
+                  generationConfig: { candidateCount: 1, maxOutputTokens },
+                },
+                signal,
+                streaming,
+                onPreview,
+              );
+            } catch (error) {
+              if (
+                error instanceof ReaderError &&
+                error.code === 'invalid_output' &&
+                error.outcome === 'received'
+              )
+                return undefined;
+              throw error;
+            }
+          },
           signal,
         );
       }

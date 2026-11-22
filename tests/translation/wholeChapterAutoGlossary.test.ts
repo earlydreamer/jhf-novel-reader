@@ -77,6 +77,19 @@ test('자동 용어집이 실패하면 번역은 계속되고 glossary 상태는
   expect(flow.getSnapshot()).toMatchObject({ phase: 'ready', glossary: 'failed' });
 });
 
+test('자동 용어집 시작 상태를 받은 구독자가 즉시 취소하면 모델 요청을 보내지 않는다', async () => {
+  const autoGlossary = vi.fn<AutoGlossary>(async () => 'added');
+  const { flow, translate } = makeFlow(autoGlossary);
+  const unsubscribe = flow.subscribe(({ glossary, error }) => {
+    if (glossary === 'running' && !error) flow.cancel();
+  });
+  await flow.start(ref, local, undefined, undefined, undefined, { autoGlossary: true });
+  unsubscribe();
+  expect(autoGlossary).not.toHaveBeenCalled();
+  expect(translate).not.toHaveBeenCalled();
+  expect(flow.getSnapshot().error).toMatchObject({ code: 'cancelled', outcome: 'not_sent' });
+});
+
 test('자동 용어집 진행 중 사용자가 취소하면 번역이 시작되지 않는다', async () => {
   const autoGlossary = vi.fn<AutoGlossary>(
     ({ signal }) =>
