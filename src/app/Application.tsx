@@ -419,7 +419,7 @@ function ShellAppBar({
   if (state.route.kind === 'work' && state.work) {
     if (state.guidanceAvailable)
       items.push({ label: '용어집 편집하기', onSelect: () => onOpenWorkDialog('guidance') });
-    if (state.termScanAvailable && state.connection.provider === 'openai-compatible')
+    if (state.termScanAvailable)
       items.push({ label: '용어 정밀스캔', onSelect: () => onOpenWorkDialog('termScan') });
     items.push({ label: '미리 번역하기', onSelect: () => onOpenWorkDialog('batch') });
     if (state.titlesAvailable)

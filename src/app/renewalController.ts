@@ -339,7 +339,8 @@ function problemOf(error: unknown): CatalogProblem {
 }
 const TERM_SCAN_CONNECTION_MESSAGE =
   '연결 설정에서 서버와 모델을 확인하면 용어 정밀스캔을 할 수 있어요.';
-const TERM_SCAN_GEMINI_MESSAGE = '용어 정밀스캔은 로컬 모델 연결에서만 쓸 수 있어요.';
+const TERM_FILL_GEMINI_MESSAGE =
+  '미리 번역 후보의 표기 채우기는 로컬 모델 연결에서만 쓸 수 있어요.';
 const TERM_SCAN_BUSY_MESSAGE = '번역이 끝난 뒤 용어 정밀스캔을 시작할 수 있어요.';
 const TERM_SCAN_SAVED_MESSAGE = '저장된 회차가 있어야 용어 정밀스캔을 할 수 있어요.';
 const TERM_SCAN_FAILED_MESSAGE =
@@ -2326,10 +2327,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ error: TERM_SCAN_CONNECTION_MESSAGE });
       return;
     }
-    if (snapshot.connection.provider !== 'openai-compatible') {
-      publish({ error: TERM_SCAN_GEMINI_MESSAGE });
-      return;
-    }
     if (
       termScanRunning() ||
       activeTranslation ||
@@ -2418,7 +2415,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return;
     }
     if (snapshot.connection.provider !== 'openai-compatible') {
-      publish({ error: TERM_SCAN_GEMINI_MESSAGE });
+      publish({ error: TERM_FILL_GEMINI_MESSAGE });
       return;
     }
     const batch = dependencies.batch;
