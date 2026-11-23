@@ -50,6 +50,9 @@ describe('shared contracts', () => {
       'blocked',
       'guidance_unsupported',
       'source_unsupported',
+      'reconnect_required',
+      'plan_not_eligible',
+      'usage_limit',
     ]);
     expect(DEFAULT_PREFERENCES.prefetchEnabled).toBe(false);
   });

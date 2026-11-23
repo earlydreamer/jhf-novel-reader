@@ -34,6 +34,7 @@ public class MainActivity extends BridgeActivity {
         });
         registerPlugin(SourceBrowserPlugin.class);
         registerPlugin(ModelStreamPlugin.class);
+        registerPlugin(ChatGptPlugin.class);
         registerPlugin(OnDeviceEmbeddingPlugin.class);
         registerPlugin(ReaderThemePlugin.class);
         registerPlugin(ScreenAwakePlugin.class);

@@ -373,6 +373,17 @@ function RouteScreen({
             onExport: backup.exportBackup,
             onRestore: backup.restoreBackup,
           }}
+          {...(state.chatgptAccount !== 'unavailable'
+            ? {
+                chatgpt: {
+                  onConnect: () => void controller.connectChatGpt(),
+                  onCancelConnect: controller.cancelChatGptConnect,
+                  onDisconnect: () => void controller.disconnectChatGpt(),
+                  onAcknowledgeWelcome: controller.acknowledgeChatGptWelcome,
+                  onDismissNotice: controller.dismissChatGptNotice,
+                },
+              }
+            : {})}
         />
       );
   }

@@ -102,6 +102,8 @@ dependencies {
     implementation "com.google.ai.edge.litertlm:litertlm-android:0.18.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    // JVM 검사에서 android.jar의 org.json 빈 구현 대신 실제 구현을 쓴다. 앱 APK에는 들어가지 않는다.
+    testImplementation "org.json:json:20250517"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

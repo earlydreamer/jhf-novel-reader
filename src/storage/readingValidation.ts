@@ -5,6 +5,7 @@ import type {
   WorkPage,
   SelectedModel,
 } from '../contracts';
+import { PROVIDER_IDS, type ProviderId } from '../contracts';
 import { check, integer, object, record, text, url } from './validation';
 import { StorageError } from './errors';
 import { secretRef } from './secrets';
@@ -36,10 +37,13 @@ function date(value: unknown) {
 }
 export function connectionConfig(value: unknown): asserts value is ConnectionConfig {
   object(value, ['provider', 'baseUrl', 'authRef', 'revision']);
-  check(value.provider === 'openai-compatible' || value.provider === 'gemini');
+  check(PROVIDER_IDS.includes(value.provider as ProviderId));
   url(value.baseUrl);
   integer(value.revision);
   if (value.authRef !== undefined) secretRef(value.authRef);
+  // ChatGPT 토큰은 네이티브 저장소에만 있다. 설정에는 고정 주소만 두고 인증 참조를 두지 않는다.
+  if (value.provider === 'chatgpt')
+    check(value.baseUrl === 'https://api.openai.com/v1' && value.authRef === undefined);
 }
 
 export function selected(value: unknown): asserts value is SelectedModel {
@@ -189,7 +193,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     );
     check(value.blocks.length === source.paragraphs.length);
   }
-  check(p.provider === 'openai-compatible' || p.provider === 'gemini');
+  check(PROVIDER_IDS.includes(p.provider as ProviderId));
   text(p.connectionId);
   text(p.modelId);
   check(p.contractVersion === 'plain-v1' && p.languageDirection === 'ja-ko');

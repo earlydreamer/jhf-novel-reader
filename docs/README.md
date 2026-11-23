@@ -12,11 +12,11 @@
 2. [개발 환경과 검사](development-checks.md)에 따라 실행하고 검사합니다.
 3. [아키텍처](architecture.md)에서 현재 코드의 역할과 앱 흐름을 확인합니다.
 
-동작별 설명은 [원문 가져오기](source.md), [번역 제공자](providers.md), [독서 흐름](integration.md), [저장소](storage.md)에 정리합니다. [Gemini 제공자 구현](gemini-provider.md)는 현재 지원 범위를 먼저 확인한 뒤 읽습니다.
+동작별 설명은 [원문 가져오기](source.md), [번역 제공자](providers.md), [독서 흐름](integration.md), [저장소](storage.md)에 정리합니다. [Gemini 제공자 구현](gemini-provider.md)는 현재 지원 범위를 먼저 확인한 뒤 읽습니다. [ChatGPT 계정 연결](chatgpt-provider.md)은 로그인·토큰 보관·연결 해제를 다룹니다.
 
 다음 작업의 범위는 [후속 작업 우선순위와 단계별 설계](follow-up-design.md)에서 확인합니다. 구현 제안과 기존 후순위·보류 결정을 구분하여 읽습니다.
 
-[외부 서비스 연동 연구와 제품 도입 결정](external-service-research.md)은 ChatGPT 연구 브랜치 보존, main 미병합 결정, 제공자 정책·개인정보처리방침·법률 검토의 선행 조건을 정리합니다.
+[외부 서비스 연동 연구와 제품 도입 결정](external-service-research.md)은 ChatGPT 연구 브랜치 보존, 2026-11-23 제품 도입 결정, 제공자 정책·개인정보처리방침 검토의 순서를 정리합니다.
 
 [별명 뜻 분해 비교 실험](nickname-experiment.md)은 합성 사례로 기존 판정과 추가 뜻 분해를 비교하는 명시적 실행 절차입니다.
 

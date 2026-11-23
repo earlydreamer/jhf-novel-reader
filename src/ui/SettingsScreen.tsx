@@ -6,12 +6,15 @@ import packageInfo from '../../package.json';
 import type {
   CatalogProblem,
   CatalogStatus,
+  ChatGptNotice,
   ConnectionCheckResult,
   RenewalSnapshot,
 } from '../app/renewalController';
 import type { ConnectionConfig } from '../contracts/reading';
 import type { BackupResult } from '../platform/backup';
 import { GEMINI_BASE_URL } from '../providers/gemini';
+import { CHATGPT_BASE_URL, CHATGPT_USAGE_URL } from '../providers/chatgpt';
+import type { ChatGptConnectOutcome } from '../contracts';
 import { readableModelName } from '../providers/modelName';
 import type { ThemePreference } from '../storage/settings';
 import { SHARED_GLOSSARY_ID } from '../translation/guidance';
@@ -55,6 +58,14 @@ export interface SettingsScreenProps {
   };
   /** 복원이 끝난 뒤 앱을 다시 불러오는 동작. 시험에서 바꿔 끼운다. */
   onReload?(): void;
+  /** ChatGPT 계정 연결. Android 앱에서만 넘긴다. */
+  chatgpt?: {
+    onConnect(): void;
+    onCancelConnect(): void;
+    onDisconnect(): void;
+    onAcknowledgeWelcome(): void;
+    onDismissNotice(): void;
+  };
 }
 
 type LookupSourceKey = 'wikipedia' | 'namuwiki';
@@ -89,25 +100,35 @@ const catalogLabels: Record<CatalogStatus, string> = {
   unavailable: '이 환경에서는 모델 서버 연결을 아직 사용할 수 없어요.',
 };
 
-function problemMessage(problem: CatalogProblem, gemini = false): string {
+function problemMessage(problem: CatalogProblem, gemini = false, chatgpt = false): string {
   const code = problem.httpStatus ? `(HTTP ${problem.httpStatus})` : '';
   switch (problem.reason) {
+    case 'account_reconnect':
+      return 'ChatGPT 연결이 끊겼어요. 다시 로그인해 주세요.';
+    case 'plan_not_eligible':
+      return '연결한 계정의 플랜으로는 앱에서 ChatGPT를 쓸 수 없어요.';
+    case 'usage_limit':
+      return 'ChatGPT 플랜의 사용 한도에 도달했어요. 사용량은 ChatGPT 설정에서 확인할 수 있어요.';
     case 'invalid_url':
       return 'API 주소 형식이 올바르지 않아요. http:// 또는 https://로 시작하고 /v1까지만 적어 주세요.';
     case 'network':
       if (gemini) return 'Gemini에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.';
+      if (chatgpt) return 'ChatGPT에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.';
       return '서버에 연결하지 못했어요. 주소와 포트, 서버가 켜져 있는지, 같은 네트워크(또는 VPN)에 있는지 확인해 주세요.';
     case 'redirect':
       return `서버가 다른 주소로 보내려고 했어요${code}. 최종 API 주소를 직접 적어 주세요.`;
     case 'http':
       if (gemini)
         return `Gemini의 모델 목록을 불러오지 못했어요${code}. 잠시 뒤 다시 확인해 주세요.`;
+      if (chatgpt)
+        return `ChatGPT의 모델 목록을 불러오지 못했어요${code}. 잠시 뒤 다시 확인해 주세요.`;
       if (problem.httpStatus === 404)
         return '서버가 이 주소를 찾지 못했어요(HTTP 404). API 주소가 /v1로 끝나는지 확인해 주세요.';
       if (problem.httpStatus && problem.httpStatus >= 500)
         return `서버 내부에서 오류가 났어요${code}. 서버 상태를 확인해 주세요.`;
       return `서버가 요청을 처리하지 못했어요${code}. API 주소와 서버 설정을 확인해 주세요.`;
     case 'auth_rejected':
+      if (chatgpt) return `ChatGPT가 이 계정의 요청을 받지 않았어요${code}. 다시 로그인해 주세요.`;
       return `서버가 인증값을 거부했어요${code}. 인증값을 다시 확인해 주세요.`;
     case 'auth_missing':
       return '인증값이 없거나 올바르지 않아요. 인증값을 다시 입력해 주세요.';
@@ -120,7 +141,11 @@ function problemMessage(problem: CatalogProblem, gemini = false): string {
   }
 }
 
-function checkResultMessage(result: ConnectionCheckResult, gemini: boolean): string | null {
+function checkResultMessage(
+  result: ConnectionCheckResult,
+  gemini: boolean,
+  chatgpt = false,
+): string | null {
   if (result.kind === 'superseded') return null;
   if (result.kind === 'skipped')
     return result.reason === 'busy'
@@ -128,10 +153,10 @@ function checkResultMessage(result: ConnectionCheckResult, gemini: boolean): str
       : result.reason === 'not_ready'
         ? '앱을 준비하고 있어요. 잠시 뒤 다시 확인해 주세요.'
         : catalogLabels.unavailable;
-  if (result.problem) return problemMessage(result.problem, gemini);
+  if (result.problem) return problemMessage(result.problem, gemini, chatgpt);
   if (result.status === 'empty')
-    return gemini
-      ? 'Gemini에 연결했지만 선택할 수 있는 모델이 없어요.'
+    return gemini || chatgpt
+      ? `${gemini ? 'Gemini' : 'ChatGPT'}에 연결했지만 선택할 수 있는 모델이 없어요.`
       : '서버에 연결했지만 번역에 쓸 수 있는 생성 모델이 없어요. 서버에서 모델을 불러와 주세요.';
   if (result.status === 'model_missing')
     return '서버에 연결했지만 선택한 모델이 목록에 없어요. 다른 모델을 골라 주세요.';
@@ -142,7 +167,41 @@ const modeLabels = { stream: '읽으며 번역', legacy: '기존 묶음 방식' 
 const providerLabels = {
   'openai-compatible': '로컬 서버',
   gemini: 'Google Gemini',
+  chatgpt: 'ChatGPT',
 } as const;
+const chatGptAccountLabels: Record<RenewalSnapshot['chatgptAccount'], string> = {
+  unavailable: 'Android 앱에서 연결할 수 있어요.',
+  disconnected: '연결되지 않았어요.',
+  connecting: '브라우저에서 로그인하고 있어요. 마치면 앱으로 돌아와 주세요.',
+  connected: '연결됨',
+  reconnect: '다시 로그인해야 해요.',
+  disconnecting: '연결을 해제하고 있어요.',
+};
+const chatGptConnectMessages: Record<ChatGptConnectOutcome, string> = {
+  connected: 'ChatGPT 계정을 연결했어요.',
+  cancelled: '로그인을 취소했어요. 연결은 저장하지 않았어요.',
+  denied: '권한 동의를 거부해 연결하지 않았어요.',
+  timeout: '5분 안에 로그인을 마치지 못해 연결하지 않았어요. 다시 시도해 주세요.',
+  not_eligible: '이 계정의 플랜으로는 앱에서 ChatGPT를 쓸 수 없어요. 연결은 저장하지 않았어요.',
+  account_mismatch: '이 기기에서 전에 연결한 ChatGPT 계정과 달라요. 같은 계정으로 로그인해 주세요.',
+  already_connected: '이미 연결된 계정이 있어요. 연결을 해제한 뒤 다시 시도해 주세요.',
+  no_browser: '로그인에 쓸 브라우저를 찾지 못했어요.',
+  failed: '로그인을 마치지 못해 연결하지 않았어요. 다시 시도해 주세요.',
+};
+/** 원격 철회를 확인하지 못한 해제는 대화상자로 남기고, 나머지는 짧은 알림으로 보여 준다. */
+function chatGptNoticeMessage(notice: ChatGptNotice): string {
+  switch (notice.kind) {
+    case 'connect':
+      return chatGptConnectMessages[notice.outcome];
+    case 'disconnect':
+      if (!notice.hadSession) return '이 기기에 지울 ChatGPT 연결이 없었어요.';
+      return notice.revoked
+        ? 'ChatGPT 연결을 해제하고 이 기기의 로그인 정보를 지웠어요.'
+        : '이 기기의 로그인 정보는 지웠지만 OpenAI에서 연결이 해제됐는지 확인하지 못했어요. ChatGPT 설정의 연결된 앱에서 이 앱의 연결을 확인해 주세요.';
+    case 'disconnect_failed':
+      return '연결을 해제하지 못했어요. 다시 시도해 주세요.';
+  }
+}
 const themeLabels: Record<ThemePreference, string> = {
   system: '시스템 설정 따르기',
   light: '라이트',
@@ -383,6 +442,58 @@ function LocalServerAddress({
   );
 }
 
+function ChatGptAccountSection({
+  state,
+  actions,
+  onDisconnect,
+}: {
+  state: RenewalSnapshot;
+  actions: SettingsScreenProps['chatgpt'];
+  onDisconnect(): void;
+}): JSX.Element {
+  const account = state.chatgptAccount;
+  const busy = !!state.batch?.active || state.translationActive;
+  return (
+    <>
+      <div className="nr-list-item nr-list-item--two-line">
+        <div className="nr-list-item__main" role="status">
+          <span className="nr-list-item__text">
+            <span className="nr-list-item__headline">ChatGPT 계정</span>
+            <span className="nr-list-item__supporting">{chatGptAccountLabels[account]}</span>
+          </span>
+        </div>
+      </div>
+      {(account === 'disconnected' || account === 'reconnect') && (
+        <Button variant="filled" disabled={!actions} onClick={() => actions?.onConnect()}>
+          Continue with ChatGPT
+        </Button>
+      )}
+      {account === 'connecting' && (
+        <Button variant="text" onClick={() => actions?.onCancelConnect()}>
+          로그인 취소
+        </Button>
+      )}
+      {account === 'connected' && (
+        <>
+          <Button
+            variant="text"
+            size="s"
+            onClick={() => window.open(CHATGPT_USAGE_URL, '_blank', 'noopener,noreferrer')}
+          >
+            사용량 관리
+          </Button>
+          <Button variant="text" size="s" disabled={busy} onClick={onDisconnect}>
+            연결 해제
+          </Button>
+        </>
+      )}
+      <p>
+        로그인은 시스템 브라우저에서 진행하고, 로그인 정보는 이 기기의 보안 저장소에만 저장해요.
+      </p>
+    </>
+  );
+}
+
 export function SettingsScreen({
   state,
   onChange,
@@ -403,14 +514,29 @@ export function SettingsScreen({
   onTheme,
   backup,
   onReload,
+  chatgpt: chatGptActions,
 }: SettingsScreenProps): JSX.Element {
   const secret = useRef<HTMLInputElement>(null);
   const showSnackbar = useSnackbar();
   const secretHelpId = useId();
   const gemini = state.connection.provider === 'gemini';
+  const chatgpt = state.connection.provider === 'chatgpt';
+  const chatGptConnected = state.chatgptAccount === 'connected';
   const authLabel = gemini ? 'API 키' : '인증값';
   const [providerOpen, setProviderOpen] = useState(false);
   const [geminiOpen, setGeminiOpen] = useState(false);
+  const [chatGptOpen, setChatGptOpen] = useState(false);
+  const [chatGptDisconnectOpen, setChatGptDisconnectOpen] = useState(false);
+  const chatGptNotice = state.chatgptNotice;
+  const chatGptNoticeDialog =
+    chatGptNotice?.kind === 'disconnect' && chatGptNotice.hadSession && !chatGptNotice.revoked;
+  // 동작 객체는 렌더마다 새로 오므로 고정된 알림 지우기 함수만 의존성으로 쓴다.
+  const dismissChatGptNotice = chatGptActions?.onDismissNotice;
+  useEffect(() => {
+    if (!chatGptNotice || chatGptNoticeDialog) return;
+    showSnackbar(chatGptNoticeMessage(chatGptNotice));
+    dismissChatGptNotice?.();
+  }, [chatGptNotice, chatGptNoticeDialog, dismissChatGptNotice, showSnackbar]);
   const [authOpen, setAuthOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(
     gemini && state.route.kind === 'settings' && state.route.pickModel === true,
@@ -519,6 +645,7 @@ export function SettingsScreen({
     setProviderOpen(false);
     if (provider === state.connection.provider) return;
     if (provider === 'gemini') setGeminiOpen(true);
+    else if (provider === 'chatgpt') setChatGptOpen(true);
     else update({ provider: 'openai-compatible', baseUrl: '' });
   }
 
@@ -548,7 +675,7 @@ export function SettingsScreen({
       openModelPicker();
       return;
     }
-    const message = checkResultMessage(result, gemini);
+    const message = checkResultMessage(result, gemini, chatgpt);
     if (message) showSnackbar(message);
   }
 
@@ -571,7 +698,11 @@ export function SettingsScreen({
       ? state.connection.authRef
         ? '모델 목록에서 선택해요.'
         : 'API 키를 입력한 뒤 선택해요.'
-      : '선택 전');
+      : chatgpt
+        ? chatGptConnected
+          ? '모델 목록에서 선택해요.'
+          : '계정을 연결한 뒤 선택해요.'
+        : '선택 전');
   const search = modelSearch.trim().toLowerCase();
   const pickerModels = gemini
     ? state.models
@@ -602,14 +733,20 @@ export function SettingsScreen({
           disabled={!state.connectionAvailable || modeDisabled}
           onClick={() => setProviderOpen(true)}
         />
-        {!gemini && (
+        {!gemini && !chatgpt && (
           <LocalServerAddress
             connection={state.connection}
             disabled={Boolean(state.batch?.active)}
             onChange={(baseUrl) => update({ baseUrl })}
           />
         )}
-        {state.connection.authRef ? (
+        {chatgpt ? (
+          <ChatGptAccountSection
+            state={state}
+            actions={chatGptActions}
+            onDisconnect={() => setChatGptDisconnectOpen(true)}
+          />
+        ) : state.connection.authRef ? (
           <ListItem
             headline={authLabel}
             supporting="저장됨"
@@ -652,9 +789,11 @@ export function SettingsScreen({
           navigates
           disabled={
             checking ||
-            (gemini
-              ? !state.connectionAvailable || modeDisabled
-              : state.models.length === 0 && !state.selectedModelId)
+            (chatgpt
+              ? !chatGptConnected || modeDisabled
+              : gemini
+                ? !state.connectionAvailable || modeDisabled
+                : state.models.length === 0 && !state.selectedModelId)
           }
           onClick={() => {
             if (state.models.length > 0) openModelPicker();
@@ -669,8 +808,10 @@ export function SettingsScreen({
                 {gemini && state.catalogStatus === 'auth'
                   ? 'Gemini API 키를 확인해 주세요.'
                   : state.catalogProblem
-                    ? problemMessage(state.catalogProblem, gemini)
-                    : catalogLabels[state.catalogStatus]}
+                    ? problemMessage(state.catalogProblem, gemini, chatgpt)
+                    : chatgpt && !chatGptConnected
+                      ? 'ChatGPT 계정을 연결하면 모델 목록을 불러와요.'
+                      : catalogLabels[state.catalogStatus]}
               </span>
             </span>
           </div>
@@ -678,8 +819,13 @@ export function SettingsScreen({
         <Button
           variant="tonal"
           size="s"
-          disabled={!state.connectionAvailable || checking || !state.connection.baseUrl}
-          onClick={() => void check(gemini && !state.selectedModelId)}
+          disabled={
+            !state.connectionAvailable ||
+            checking ||
+            !state.connection.baseUrl ||
+            (chatgpt && !chatGptConnected)
+          }
+          onClick={() => void check((gemini || chatgpt) && !state.selectedModelId)}
         >
           {checking ? '확인하는 중…' : '연결 확인하기'}
         </Button>
@@ -901,6 +1047,13 @@ export function SettingsScreen({
           choices={[
             { value: 'openai-compatible', label: providerLabels['openai-compatible'] },
             { value: 'gemini', label: providerLabels.gemini },
+            {
+              value: 'chatgpt',
+              label: providerLabels.chatgpt,
+              ...(state.chatgptAccount === 'unavailable'
+                ? { supporting: chatGptAccountLabels.unavailable, disabled: true }
+                : {}),
+            },
           ]}
           onSelect={chooseProvider}
         />
@@ -935,6 +1088,109 @@ export function SettingsScreen({
           수 있어요.
         </p>
         <p>자동 번역이 켜져 있으면 저장본이 없는 회차를 열 때 요청을 보내요.</p>
+      </Dialog>
+
+      <Dialog
+        open={chatGptOpen}
+        title="ChatGPT를 사용할까요?"
+        onClose={() => setChatGptOpen(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setChatGptOpen(false)}>
+              취소
+            </Button>
+            <Button
+              variant="text"
+              onClick={() => {
+                update({ provider: 'chatgpt', baseUrl: CHATGPT_BASE_URL });
+                setChatGptOpen(false);
+              }}
+            >
+              ChatGPT 사용하기
+            </Button>
+          </>
+        }
+      >
+        <p>
+          번역할 회차의 원문과 적용할 작품 용어집의 표기·말투·줄거리 참고 정보를 OpenAI로 보내요.
+          요청은 OpenAI가 응답을 저장하지 않도록 보내요.
+        </p>
+        <p>
+          API 키 대신 내 ChatGPT 계정으로 로그인하고, 요청은 그 계정의 플랜 사용량을 써요. 사용
+          한도는 ChatGPT와 같은 계정을 쓰는 다른 앱이 함께 써요.
+        </p>
+        <p>
+          자동 번역·자동 용어집·실패 문단 재번역이 켜져 있으면 추가 요청을 보낼 수 있어요. 앱이
+          백그라운드에 있을 때는 새 요청을 보내지 않아요.
+        </p>
+        <p>
+          연결은 이 화면이나 ChatGPT 설정의 연결된 앱에서 언제든 해제할 수 있어요. 로그인 정보는 이
+          기기의 보안 저장소에만 저장해요.
+        </p>
+      </Dialog>
+
+      <Dialog
+        open={chatGptDisconnectOpen}
+        title="ChatGPT 연결을 해제할까요?"
+        onClose={() => setChatGptDisconnectOpen(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setChatGptDisconnectOpen(false)}>
+              취소
+            </Button>
+            <Button
+              variant="text"
+              onClick={() => {
+                setChatGptDisconnectOpen(false);
+                chatGptActions?.onDisconnect();
+              }}
+            >
+              연결 해제
+            </Button>
+          </>
+        }
+      >
+        <p>
+          OpenAI에 이 앱의 연결 해제를 요청하고 이 기기에 저장한 로그인 정보를 지워요. 다시 쓰려면
+          로그인해야 해요.
+        </p>
+      </Dialog>
+
+      <Dialog
+        open={chatGptNoticeDialog}
+        title="원격 해제를 확인하지 못했어요"
+        onClose={() => chatGptActions?.onDismissNotice()}
+        actions={
+          <Button variant="text" onClick={() => chatGptActions?.onDismissNotice()}>
+            확인
+          </Button>
+        }
+      >
+        <p>{chatGptNotice ? chatGptNoticeMessage(chatGptNotice) : ''}</p>
+      </Dialog>
+
+      <Dialog
+        open={chatgpt && chatGptConnected && !state.chatgptWelcomed}
+        title="ChatGPT 플랜을 사용하고 있어요"
+        onClose={() => chatGptActions?.onAcknowledgeWelcome()}
+        actions={
+          <>
+            <Button
+              variant="text"
+              onClick={() => window.open(CHATGPT_USAGE_URL, '_blank', 'noopener,noreferrer')}
+            >
+              사용량 관리
+            </Button>
+            <Button variant="text" onClick={() => chatGptActions?.onAcknowledgeWelcome()}>
+              확인
+            </Button>
+          </>
+        }
+      >
+        <p>
+          이 앱의 번역 요청은 연결한 ChatGPT 계정의 플랜 사용량을 써요. 사용량과 한도는 ChatGPT
+          설정에서 관리할 수 있어요.
+        </p>
       </Dialog>
 
       <Dialog
@@ -973,7 +1229,7 @@ export function SettingsScreen({
 
       <Dialog
         open={modelOpen}
-        title={gemini ? 'Gemini 모델 선택' : '모델 선택'}
+        title={gemini ? 'Gemini 모델 선택' : chatgpt ? 'ChatGPT 모델 선택' : '모델 선택'}
         fullScreen={gemini}
         onClose={() => setModelOpen(false)}
         actions={
