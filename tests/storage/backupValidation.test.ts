@@ -4,6 +4,8 @@ import { createLibraryStore } from '../../src/storage/library';
 import { createReaderStore } from '../../src/storage/store';
 import { createCacheKey } from '../../src/contracts/legacy';
 import { digest } from '../../src/storage/journal';
+import { createGuidanceRepository } from '../../src/translation/guidance';
+import { readReferenceTerms } from '../../src/translation/preset';
 import { source } from '../providers/wholeChapterFixture';
 import type { CompletedTranslation } from '../../src/contracts';
 
@@ -55,6 +57,51 @@ async function put(memory: Map<string, string>, name: string, payload: unknown, 
 }
 
 describe('read-only backup preflight', () => {
+  it('preserves a customized shared glossary, including an explicitly emptied list, before any work has been added', async () => {
+    const f = await fixture();
+    f.memory.clear();
+    const repo = createGuidanceRepository(f.files);
+    const selection = {
+      connection: {
+        provider: 'openai-compatible' as const,
+        baseUrl: 'http://localhost:1234',
+        revision: 1,
+      },
+      modelId: 'local',
+      translationMode: 'stream' as const,
+    };
+    expect(await readReferenceTerms(selection, repo)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: '魔法陣', target: '마법진' })]),
+    );
+    const empty = await repo.saveShared!([], null);
+    await expect(f.validate()).resolves.toBeUndefined();
+    const restored = new Map(f.memory);
+    const restoredRepo = createGuidanceRepository({
+      ...f.files,
+      read: async (path) => restored.get(path) ?? null,
+    });
+    expect(await restoredRepo.readShared!()).toEqual(empty);
+    expect(await readReferenceTerms(selection, restoredRepo)).toEqual([]);
+    await expect(repo.saveShared!([], null)).rejects.toThrow();
+    restored.clear();
+    expect(await readReferenceTerms(selection, restoredRepo)).not.toHaveLength(0);
+  });
+
+  it('validates work exclusions and preserves them when an older caller only updates terms', async () => {
+    const f = await fixture();
+    const repo = createGuidanceRepository(f.files);
+    const draft = { terms: [], voices: [], excludedSharedTerms: ['魔導具'] };
+    const original = await repo.save(source.workId, draft, null);
+    expect((await repo.save(source.workId, { terms: [], voices: [] })).hash).toBe(original.hash);
+    await expect(f.validate()).resolves.toBeUndefined();
+    const cleared = await repo.save(
+      source.workId,
+      { ...draft, excludedSharedTerms: [] },
+      original.hash,
+    );
+    expect(cleared.excludedSharedTerms).toBeUndefined();
+    expect(cleared.hash).not.toBe(original.hash);
+  });
   it('accepts a valid independent saved version without requiring a work TOC', async () => {
     const f = await fixture(),
       before = [...f.memory];

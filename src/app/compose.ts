@@ -84,10 +84,16 @@ export function createRenewalApplication(
     createProvider,
     ...(capacitorEmbedding.available()
       ? {
-          decideCandidates: async (input: string, workGuidance: WorkGuidance | null) =>
+          decideCandidates: async (
+            input: string,
+            workGuidance: WorkGuidance | null,
+            referenceTerms,
+          ) =>
             termDecisionGate.enabled
-              ? decideCandidates(input, workGuidance?.terms ?? [], (texts) =>
-                  capacitorEmbedding.embed(texts),
+              ? decideCandidates(
+                  input,
+                  [...(workGuidance?.terms ?? []), ...referenceTerms],
+                  (texts) => capacitorEmbedding.embed(texts),
                 )
               : null,
         }

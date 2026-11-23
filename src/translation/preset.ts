@@ -1,5 +1,5 @@
 import type { SelectedModel } from '../contracts/reading';
-import type { GuidanceTerm } from './guidance';
+import type { GuidanceRepository, GuidanceTerm } from './guidance';
 
 const entry = (source: string, target: string, category: string, note = ''): GuidanceTerm => ({
   source,
@@ -28,14 +28,45 @@ export const UNIVERSAL_PRESET: readonly GuidanceTerm[] = [
   entry('カブトムシ', '장수풍뎅이', '곤충'),
 ];
 
+// These are editable initial values. Saving the list replaces the defaults, including removed entries.
+export const DEFAULT_SHARED_TERMS: readonly GuidanceTerm[] = [
+  ...UNIVERSAL_PRESET,
+  entry('異世界', '이세계', '이세계'),
+  entry('冒険者ギルド', '모험가 길드', '조직'),
+  entry('魔法陣', '마법진', '마법'),
+  { ...entry('魔道具', '마도구', '마법'), aliases: ['魔導具'] },
+  entry('魔導書', '마도서', '마법'),
+  entry('召喚獣', '소환수', '마법'),
+  entry('錬金術', '연금술', '마법'),
+  entry('治癒魔法', '치유 마법', '마법'),
+];
+
 /**
- * 프리셋은 구간 번역(로컬 모델) 경로에서만 쓴다. 사용자가 승인한 작품 용어집과 달리
- * 지원하지 않는 제공자에서 번역을 막을 이유가 없으므로 조용히 생략한다.
+ * 공용 목록 이전의 규칙이다. 내장 프리셋은 로컬 구간 번역에서만 썼다. 공용 목록 없이 준비한
+ * 일괄 번역 기록은 저장본을 비교할 때 준비 당시와 같은 결과를 내도록 이 규칙을 계속 쓴다.
  */
 export function referencePreset(selection: SelectedModel): readonly GuidanceTerm[] {
   return selection.connection.provider === 'openai-compatible' && selection.limits
     ? UNIVERSAL_PRESET
     : [];
+}
+
+/**
+ * 참고 용어를 번역 요청에 넣을 수 있는 경로인지 판정한다. Gemini는 일반·스트리밍 모두 문단 번역으로 받는다.
+ * 로컬 서버의 일반 텍스트 전체 회차 번역은 참고 데이터를 받지 못한다. 공용 용어 때문에 번역이 막히지 않도록 제외한다.
+ */
+function acceptsReferenceTerms(selection: SelectedModel): boolean {
+  if (selection.connection.provider === 'gemini') return true;
+  return Boolean(selection.limits) || selection.translationMode === 'stream';
+}
+
+export async function readReferenceTerms(
+  selection: SelectedModel,
+  guidance?: GuidanceRepository,
+): Promise<readonly GuidanceTerm[]> {
+  if (!guidance?.readShared) return referencePreset(selection);
+  if (!acceptsReferenceTerms(selection)) return [];
+  return (await guidance.readShared())?.terms ?? DEFAULT_SHARED_TERMS;
 }
 
 /** 숫자로 쓴 「N月」 뒤에 기간 표현이 오면 달력의 월이 아니라 N개월이다. */

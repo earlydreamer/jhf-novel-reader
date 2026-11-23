@@ -6,6 +6,7 @@ import {
   type GuidanceTerm,
   type WorkGuidance,
 } from '../translation/guidance';
+import { DEFAULT_SHARED_TERMS } from '../translation/preset';
 
 /** 원문이나 별칭에 번역 제외 대상(한 글자·짧은 히라가나)이 있는지. 아직 비어 있는 입력칸은 세지 않는다. */
 const hasUnsafeName = (term: GuidanceTerm) =>
@@ -26,6 +27,8 @@ function humanized(term: GuidanceTerm): GuidanceTerm {
 export interface GuidancePanelProps {
   workId: string;
   locked: boolean;
+  shared?: boolean;
+  allowSharedExclusions?: boolean;
   refreshKey?: string;
   onRead(workId: string): Promise<WorkGuidance | null>;
   onSave(workId: string, draft: GuidanceDraft, expectedHash?: string | null): Promise<WorkGuidance>;
@@ -37,6 +40,8 @@ const aliases = (value: string) => value.split(/[,、]/).map((name) => name.trim
 export function GuidancePanel({
   workId,
   locked,
+  shared = false,
+  allowSharedExclusions = false,
   refreshKey,
   onRead,
   onSave,
@@ -44,6 +49,7 @@ export function GuidancePanel({
   onStateChange,
 }: GuidancePanelProps): JSX.Element {
   const [draft, setDraft] = useState<GuidanceDraft>({ terms: [], voices: [] });
+  const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState('');
   const [available, setAvailable] = useState(false);
@@ -74,9 +80,10 @@ export function GuidancePanel({
         if (!mounted) return;
         baseHash.current = value?.hash ?? null;
         setDraft({
-          terms: value?.terms ?? [],
+          terms: value?.terms ?? (shared ? [...DEFAULT_SHARED_TERMS] : []),
           voices: value?.voices ?? [],
           ...(value?.plotSummary !== undefined ? { plotSummary: value.plotSummary } : {}),
+          ...(value?.excludedSharedTerms ? { excludedSharedTerms: value.excludedSharedTerms } : {}),
         });
         setAvailable(true);
         setLoadedKey(loadKey);
@@ -90,7 +97,7 @@ export function GuidancePanel({
     return () => {
       mounted = false;
     };
-  }, [workId, onRead, loadKey]);
+  }, [workId, onRead, loadKey, shared]);
   function change(next: GuidanceDraft) {
     dirtyRef.current = true;
     setDirty(true);
@@ -107,6 +114,13 @@ export function GuidancePanel({
         workId,
         {
           ...(draft.plotSummary !== undefined ? { plotSummary: draft.plotSummary } : {}),
+          ...(draft.excludedSharedTerms
+            ? {
+                excludedSharedTerms: draft.excludedSharedTerms
+                  .map((term) => term.trim())
+                  .filter(Boolean),
+              }
+            : {}),
           terms: draft.terms.map((term) => ({ ...term, aliases: term.aliases.filter(Boolean) })),
           voices: draft.voices.map((voice) => ({
             ...voice,
@@ -122,8 +136,13 @@ export function GuidancePanel({
         terms: value.terms,
         voices: value.voices,
         ...(value.plotSummary !== undefined ? { plotSummary: value.plotSummary } : {}),
+        ...(value.excludedSharedTerms ? { excludedSharedTerms: value.excludedSharedTerms } : {}),
       });
-      setMessage('저장했어요. 다음 번역부터 적용되고 기존 번역은 그대로 남아요.');
+      setMessage(
+        shared
+          ? '저장했어요. 새로 시작하는 번역 작업부터 적용돼요.'
+          : '저장했어요. 다음 번역부터 적용되고 기존 번역은 그대로 남아요.',
+      );
       onSaved?.(value);
     } catch (error) {
       if (error instanceof GuidanceConflictError) {
@@ -140,13 +159,30 @@ export function GuidancePanel({
       setBusy(false);
     }
   }
+  const searchKey = search.trim().normalize('NFKC').toLowerCase();
+  const shownTerms = draft.terms
+    .map((term, index) => ({ term, index }))
+    .filter(
+      ({ term }) =>
+        !shared ||
+        [term.source, term.target, ...term.aliases].some((name) =>
+          name.normalize('NFKC').toLowerCase().includes(searchKey),
+        ),
+    );
   return (
     <div className="nr-guidance-panel">
-      <p>
-        이 작품에서 직접 저장한 항목 중 원문에 이름·별칭이 나오는 항목만 적용해요. 로컬 모델 번역에
-        쓰고, 화자가 불확실한 대사는 추측하지 않도록 전달해요. 용어집이 길어 입력 예산이 부족하면
-        항목을 줄인 뒤 다시 시작해 주세요.
-      </p>
+      {shared ? (
+        <p>
+          모든 작품의 회차 번역에 공용 표기를 기본으로 써요. 같은 용어의 작품별 표기가 있으면 그
+          표기를 우선해요.
+        </p>
+      ) : (
+        <p>
+          이 작품에서 직접 저장한 항목 중 원문에 이름·별칭이 나오는 항목만 번역에 적용해요. 화자가
+          불확실한 대사는 추측하지 않도록 전달해요. 용어집이 길어 입력 예산이 부족하면 항목을 줄인
+          뒤 다시 시작해 주세요.
+        </p>
+      )}
       <p>
         저장 개수에는 제한이 없고, 번역 구간에 나온 항목만 전달해요. 원문·표기·이름은 80자, 분류는
         40자, 설명은 300자, 말투 지침은 400자까지 입력할 수 있어요. 같은 이름(전각·반각 차이 포함)은
@@ -155,17 +191,36 @@ export function GuidancePanel({
       {locked && (
         <p role="status">작업 중에는 용어집을 고칠 수 없어요. 작업이 끝난 뒤 저장해 주세요.</p>
       )}
+      {shared && (
+        <label>
+          공용 용어 검색
+          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
+        </label>
+      )}
       <fieldset disabled={!canSave}>
         <legend>용어집</legend>
-        <label>
-          이전 이야기 요약 (선택, 이름 없이 400자 이내)
-          <textarea
-            maxLength={400}
-            value={draft.plotSummary ?? ''}
-            onChange={(event) => change({ ...draft, plotSummary: event.target.value })}
-          />
-        </label>
-        {draft.terms.map((term, index) => (
+        {!shared && (
+          <label>
+            이전 이야기 요약 (선택, 이름 없이 400자 이내)
+            <textarea
+              maxLength={400}
+              value={draft.plotSummary ?? ''}
+              onChange={(event) => change({ ...draft, plotSummary: event.target.value })}
+            />
+          </label>
+        )}
+        {!shared && allowSharedExclusions && (
+          <label>
+            이 작품에서 제외할 공용 용어 (원문 또는 별칭, 줄마다 하나)
+            <textarea
+              value={draft.excludedSharedTerms?.join('\n') ?? ''}
+              onChange={(event) =>
+                change({ ...draft, excludedSharedTerms: event.target.value.split('\n') })
+              }
+            />
+          </label>
+        )}
+        {shownTerms.map(({ term, index }) => (
           <fieldset key={index}>
             <legend>용어 {index + 1}</legend>
             {term.origin === 'model' && <span className="nr-guidance-origin">자동 생성</span>}
@@ -239,94 +294,100 @@ export function GuidancePanel({
             </button>
           </fieldset>
         ))}
+        {shared && searchKey && !shownTerms.length && <p>해당하는 공용 용어가 없어요.</p>}
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            if (shared) setSearch('');
             change({
               ...draft,
               terms: [
                 ...draft.terms,
                 { source: '', target: '', aliases: [], category: '', note: '' },
               ],
-            })
-          }
+            });
+          }}
         >
           용어 추가
         </button>
-        <h3>캐릭터 말투</h3>
-        {draft.voices.map((voice, index) => (
-          <fieldset key={index}>
-            <legend>캐릭터 {index + 1}</legend>
-            <label>
-              이름
-              <input
-                aria-label={`캐릭터 ${index + 1} 이름`}
-                maxLength={80}
-                value={voice.name}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    voices: draft.voices.map((entry, i) =>
-                      i === index ? { ...entry, name: event.target.value } : entry,
-                    ),
-                  })
-                }
-              />
-            </label>
-            <label>
-              별칭 (쉼표로 구분, 최대 8개)
-              <input
-                aria-label={`캐릭터 ${index + 1} 별칭`}
-                value={voice.aliases.join(', ')}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    voices: draft.voices.map((entry, i) =>
-                      i === index ? { ...entry, aliases: aliases(event.target.value) } : entry,
-                    ),
-                  })
-                }
-              />
-            </label>
-            <label>
-              말투·호칭 지침
-              <textarea
-                aria-label={`캐릭터 ${index + 1} 말투`}
-                maxLength={400}
-                value={voice.instruction}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    voices: draft.voices.map((entry, i) =>
-                      i === index ? { ...entry, instruction: event.target.value } : entry,
-                    ),
-                  })
-                }
-              />
-            </label>
+        {!shared && (
+          <>
+            <h3>캐릭터 말투</h3>
+            {draft.voices.map((voice, index) => (
+              <fieldset key={index}>
+                <legend>캐릭터 {index + 1}</legend>
+                <label>
+                  이름
+                  <input
+                    aria-label={`캐릭터 ${index + 1} 이름`}
+                    maxLength={80}
+                    value={voice.name}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        voices: draft.voices.map((entry, i) =>
+                          i === index ? { ...entry, name: event.target.value } : entry,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  별칭 (쉼표로 구분, 최대 8개)
+                  <input
+                    aria-label={`캐릭터 ${index + 1} 별칭`}
+                    value={voice.aliases.join(', ')}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        voices: draft.voices.map((entry, i) =>
+                          i === index ? { ...entry, aliases: aliases(event.target.value) } : entry,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  말투·호칭 지침
+                  <textarea
+                    aria-label={`캐릭터 ${index + 1} 말투`}
+                    maxLength={400}
+                    value={voice.instruction}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        voices: draft.voices.map((entry, i) =>
+                          i === index ? { ...entry, instruction: event.target.value } : entry,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    change({ ...draft, voices: draft.voices.filter((_, i) => i !== index) })
+                  }
+                >
+                  캐릭터 {index + 1} 삭제
+                </button>
+              </fieldset>
+            ))}
             <button
               type="button"
               onClick={() =>
-                change({ ...draft, voices: draft.voices.filter((_, i) => i !== index) })
+                change({
+                  ...draft,
+                  voices: [...draft.voices, { name: '', aliases: [], instruction: '' }],
+                })
               }
             >
-              캐릭터 {index + 1} 삭제
+              캐릭터 추가
             </button>
-          </fieldset>
-        ))}
-        <button
-          type="button"
-          onClick={() =>
-            change({
-              ...draft,
-              voices: [...draft.voices, { name: '', aliases: [], instruction: '' }],
-            })
-          }
-        >
-          캐릭터 추가
-        </button>
+          </>
+        )}
         <button type="button" data-guidance-save onClick={() => void save()}>
-          용어집·말투 저장
+          {shared ? '공용 용어집 저장' : '용어집·말투 저장'}
         </button>
       </fieldset>
       {busy && <p>용어집 처리 중…</p>}

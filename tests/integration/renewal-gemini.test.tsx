@@ -16,6 +16,7 @@ import { normalizeChapterInput } from '../../src/providers/plainText';
 import { createModelTransport, createSourceTransport } from '../../src/platform/http';
 import { createLibraryStore } from '../../src/storage/library';
 import { appliedGuidanceHash } from '../../src/translation/guidance';
+import { DEFAULT_SHARED_TERMS } from '../../src/translation/preset';
 
 const workUrl = 'https://ncode.syosetu.com/n1234ab/';
 const chapterUrl = `${workUrl}1/`;
@@ -546,6 +547,56 @@ it('merges and applies the work glossary, retries only the affected Gemini parag
   await restarted.selectChapter(chapter);
   expect(restarted.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
   expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(3);
+});
+
+it('applies the shared glossary to a Gemini chapter without a work glossary', async () => {
+  const h = harness(
+    'STOP',
+    {
+      async requestStream(input, _signal, onData) {
+        const delta = sse({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { text: '<main><p id="A">모험가 길드로 간다.</p><p id="B">끝.</p></main>' },
+                ],
+              },
+            },
+          ],
+        });
+        onData(delta);
+        return {
+          status: 200,
+          url: input.url,
+          headers: {},
+          data: delta + sse({ candidates: [{ finishReason: 'STOP' }] }),
+        };
+      },
+    },
+    chapterHtml.replace('<p>開始</p><p>終わり</p>', '<p>冒険者ギルドへ行く。</p><p>終わり。</p>'),
+  );
+  const chapter = await selectChapter(h);
+  await selectGemini(h);
+  await h.app.translate();
+
+  const posts = h.requests.filter((request) => request.method === 'POST');
+  expect(posts.map((request) => request.url)).toEqual([
+    `${GEMINI_BASE_URL}/models/gemini-3.6-flash:streamGenerateContent?alt=sse`,
+  ]);
+  const prompt = (posts[0]?.data as { contents: { parts: { text: string }[] }[] }).contents.at(-1)!
+    .parts[0]!.text;
+  expect(prompt).toContain('冒険者ギルド->모험가 길드');
+  const versions = await h.store.listVersions(chapter.chapterId);
+  expect(versions).toHaveLength(1);
+  expect(versions[0]?.provenance.guidanceHash).toBe(
+    await appliedGuidanceHash(
+      null,
+      chapter.workId,
+      normalizeChapterInput(versions[0]!.source),
+      DEFAULT_SHARED_TERMS,
+    ),
+  );
 });
 
 it.each([true, false])(

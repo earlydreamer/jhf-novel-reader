@@ -111,6 +111,57 @@ test('the built-in preset applies without a work glossary and a work entry overr
   expect(guidanceContext(null, 'n1234ab', '冒険者ギルド。', [])).toBe('');
 });
 
+test('a work keeps its spelling on normalized alias collisions and can exclude a shared term by alias', async () => {
+  const shared: GuidanceTerm[] = [
+    {
+      source: '王立騎士団',
+      target: '공용 기사단',
+      aliases: ['ＡＢＣ騎士団', '王国騎士団'],
+      category: '',
+      note: '',
+    },
+    { source: '魔道具', target: '마도구', aliases: ['魔導具'], category: '', note: '' },
+  ];
+  const work: WorkGuidance = {
+    ...guidance,
+    terms: [
+      {
+        source: 'ABC騎士団',
+        target: '작품 기사단',
+        aliases: [],
+        category: '',
+        note: '',
+        origin: 'scan',
+      },
+    ],
+    excludedSharedTerms: ['魔導具'],
+  };
+  const input = 'ABC騎士団にいた。王国騎士団に行った。魔道具を買った。';
+  const actual = guidanceContext(work, work.workId, input, shared);
+  expect(actual).toContain('ABC騎士団 translates to 작품 기사단');
+  expect(actual).not.toContain('ＡＢＣ騎士団 translates to 공용 기사단');
+  expect(actual).toContain('王国騎士団 translates to 공용 기사단');
+  expect(actual).not.toContain('마도구');
+  expect(guidanceContext(null, 'n9999zz', input, shared)).toContain('魔道具 translates to 마도구');
+  expect(await appliedGuidanceHash(work, work.workId, input, shared)).toBe(
+    await appliedGuidanceHash(work, work.workId, input, shared.slice(0, 1)),
+  );
+
+  // 겹친 공용 별칭은 버리지 않고 작품 항목의 이름으로 쓴다. 전각으로 쓴 원문에도 작품 표기가 적용된다.
+  const fullWidth = 'ＡＢＣ騎士団にいた。';
+  const fullWidthContext = guidanceContext(work, work.workId, fullWidth, shared);
+  expect(fullWidthContext).toContain('ＡＢＣ騎士団 translates to 작품 기사단');
+  expect(fullWidthContext).not.toContain('공용 기사단');
+  // 반각 원문의 적용 결과는 겹친 별칭이 없을 때와 같다.
+  const withoutCollision = [{ ...shared[0]!, aliases: ['王国騎士団'] }, shared[1]!];
+  expect(guidanceContext(work, work.workId, input, shared)).toBe(
+    guidanceContext(work, work.workId, input, withoutCollision),
+  );
+  expect(await appliedGuidanceHash(work, work.workId, input, shared)).toBe(
+    await appliedGuidanceHash(work, work.workId, input, withoutCollision),
+  );
+});
+
 async function signed(terms: unknown[]): Promise<unknown> {
   return {
     schemaVersion: 1,

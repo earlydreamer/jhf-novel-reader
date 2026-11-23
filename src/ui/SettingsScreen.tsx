@@ -14,6 +14,9 @@ import type { BackupResult } from '../platform/backup';
 import { GEMINI_BASE_URL } from '../providers/gemini';
 import { readableModelName } from '../providers/modelName';
 import type { ThemePreference } from '../storage/settings';
+import { SHARED_GLOSSARY_ID } from '../translation/guidance';
+import { GuidanceDialog } from './GuidanceDialog';
+import type { GuidancePanelProps } from './GuidancePanel';
 import { Button } from './components/Button';
 import { Chip } from './components/Chip';
 import { Dialog } from './components/Modal';
@@ -34,6 +37,7 @@ export interface SettingsScreenProps {
   onAutoTranslate?(enabled: boolean): void;
   onAutoRetryFailed?(enabled: boolean): void;
   onAutoGlossary?(enabled: boolean): void;
+  sharedGuidance?: Pick<GuidancePanelProps, 'onRead' | 'onSave' | 'locked'>;
   onChapterUpdateDays?(days: number): void;
   onLookupWikipedia?(enabled: boolean): void;
   onLookupNamuwiki?(enabled: boolean): void;
@@ -388,6 +392,7 @@ export function SettingsScreen({
   onAutoTranslate,
   onAutoRetryFailed,
   onAutoGlossary,
+  sharedGuidance,
   onChapterUpdateDays,
   onLookupWikipedia,
   onLookupNamuwiki,
@@ -412,6 +417,7 @@ export function SettingsScreen({
   );
   const [modelSearch, setModelSearch] = useState('');
   const [modeOpen, setModeOpen] = useState(false);
+  const [sharedGlossaryOpen, setSharedGlossaryOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [lookupConfirm, setLookupConfirm] = useState<LookupSourceKey | null>(null);
   const [embeddingConfirm, setEmbeddingConfirm] = useState(false);
@@ -704,6 +710,23 @@ export function SettingsScreen({
             description="새 이름이 나오면 번역하기 전에 모델로 용어집을 만들어 바로 적용해요. 추가 모델 요청으로 비용이 생길 수 있고, 표기는 작품 용어집에서 고칠 수 있어요."
             checked={state.autoGlossary}
             onChange={onAutoGlossary}
+          />
+        )}
+        {sharedGuidance && (
+          <ListItem
+            headline="공용 용어집"
+            supporting="모든 작품에 기본으로 쓰는 용어 표기예요."
+            navigates
+            disabled={backupBusy}
+            onClick={() => setSharedGlossaryOpen(true)}
+          />
+        )}
+        {sharedGuidance && sharedGlossaryOpen && (
+          <GuidanceDialog
+            {...sharedGuidance}
+            shared
+            workId={SHARED_GLOSSARY_ID}
+            onClose={() => setSharedGlossaryOpen(false)}
           />
         )}
         {onAutoRetryFailed && (
