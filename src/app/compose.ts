@@ -52,6 +52,7 @@ import { BROWSE_SITES } from '../platform/browseSites';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
 import { listChatGptModels, normalizeChatGptBaseUrl } from '../providers/chatgpt';
+import { createChatGptProviderSession } from '../providers/chatgpt/session';
 import { nativeChatGptAccount } from '../platform/chatgpt';
 import { ReaderError } from '../contracts';
 import { createGuidanceRepository, type WorkGuidance } from '../translation/guidance';
@@ -76,6 +77,9 @@ export function createRenewalApplication(
         return createProviderSession(selection, adapters.modelTransport, adapters.secrets);
       case 'gemini':
         return createGeminiProviderSession(selection, adapters.modelTransport, adapters.secrets);
+      case 'chatgpt':
+        if (!adapters.chatgpt) throw new ReaderError('model_missing');
+        return createChatGptProviderSession(selection, adapters.chatgpt);
       default:
         throw new ReaderError('model_missing');
     }

@@ -13,6 +13,7 @@ import type {
 import { digest } from '../storage/journal';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
+import { normalizeChatGptBaseUrl } from '../providers/chatgpt';
 import type { AttemptRepository } from './attempts';
 import { createSingleFlight } from './singleFlight';
 import {
@@ -224,7 +225,10 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
         const local = selected.connection.provider === 'openai-compatible';
         const gemini = selected.connection.provider === 'gemini';
         const segmented = local && !!selected.limits;
-        const localStreaming = local && selected.translationMode === 'stream';
+        // ChatGPT 계정 연결은 Responses 스트림만 받으므로 로컬 스트리밍과 같은 문단 번역을 쓴다.
+        const localStreaming =
+          (local && selected.translationMode === 'stream') ||
+          selected.connection.provider === 'chatgpt';
         const chapterInput = normalizeChapterInput(requestSource);
         // 후보 용어 판정(#241): 번역 요청 직전에 회차 입력으로 한 번만 부른다. 실패해도 번역은 판정 없이 계속한다.
         let decision: CandidateDecision | undefined;
@@ -339,6 +343,9 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             break;
           case 'gemini':
             normalizedBaseUrl = normalizeGeminiBaseUrl(selected.connection.baseUrl);
+            break;
+          case 'chatgpt':
+            normalizedBaseUrl = normalizeChatGptBaseUrl(selected.connection.baseUrl);
             break;
           default:
             throw new ReaderError('connection');

@@ -320,6 +320,10 @@ function safeEndpoint(input: string): string {
     throw new ReaderError('connection');
   return url.href.replace(/\/$/, '');
 }
+/** 모델을 서버가 정하는 원격 제공자. 404로 사라진 모델에 자동으로 다시 보내지 않는다. */
+function remoteProvider(provider: ConnectionConfig['provider']): boolean {
+  return provider === 'gemini' || provider === 'chatgpt';
+}
 function errorLabel(error: unknown): CatalogStatus {
   if (
     error instanceof ReaderError &&
@@ -975,10 +979,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   function geminiTranslationKey(chapterId: string, connection: ConnectionConfig, modelId: string) {
     return JSON.stringify([chapterId, connection.authRef, modelId]);
   }
-  /** 선택한 Gemini 모델이 어느 회차에서든 404를 냈으면, 사용자가 모델을 바꾸기 전까지 제목도 자동으로 보내지 않는다. */
+  /** 선택한 원격 모델이 어느 회차에서든 404를 냈으면, 사용자가 모델을 바꾸기 전까지 제목도 자동으로 보내지 않는다. */
   function selectedGeminiModelUnavailable(): boolean {
     const { connection, selectedModelId } = snapshot;
-    if (connection.provider !== 'gemini' || !selectedModelId) return false;
+    if (!remoteProvider(connection.provider) || !selectedModelId) return false;
     const model = JSON.stringify([connection.authRef, selectedModelId]);
     return [...unavailableGeminiTranslations].some(
       (key) => JSON.stringify((JSON.parse(key) as unknown[]).slice(1)) === model,
@@ -987,7 +991,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   function unavailableGeminiTranslation(chapterId: string): TranslationState | undefined {
     const { connection, selectedModelId } = snapshot;
     if (
-      connection.provider !== 'gemini' ||
+      !remoteProvider(connection.provider) ||
       !selectedModelId ||
       !unavailableGeminiTranslations.has(
         geminiTranslationKey(chapterId, connection, selectedModelId),
@@ -2724,7 +2728,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           { autoGlossary: snapshot.autoGlossary && !repair },
         );
         const completed = dependencies.flow.getCompleted();
-        if (selectedModel.connection.provider === 'gemini') {
+        if (remoteProvider(selectedModel.connection.provider)) {
           const state = dependencies.flow.getSnapshot();
           const key = geminiTranslationKey(
             chapter.chapterId,

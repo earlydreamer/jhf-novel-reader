@@ -197,6 +197,7 @@ function RouteScreen({
           paragraphRepair={state.paragraphRepair}
           translationAvailable={state.translationAvailable}
           selectedModelId={state.selectedModelId}
+          provider={state.connection.provider}
           connected={state.catalogStatus === 'connected' && !!state.selectedModelId}
           catalogStatus={state.catalogStatus}
           connectionConfigured={!!state.connection.baseUrl}
@@ -279,6 +280,7 @@ function RouteScreen({
           paragraphRepair={state.paragraphRepair}
           translationAvailable={state.translationAvailable}
           selectedModelId={state.selectedModelId}
+          provider={state.connection.provider}
           connected={state.catalogStatus === 'connected' && !!state.selectedModelId}
           catalogStatus={state.catalogStatus}
           connectionConfigured={!!state.connection.baseUrl}

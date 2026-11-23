@@ -218,8 +218,11 @@ export function createTitleTranslation(
     const shared = await readReferenceTerms(selected, guidance);
     const reference = (input: string) => streamingGuidanceContext(terms, workId, input, shared);
     // Gemini는 본문과 같이 적용할 표기가 있는 제목만 문단 번역으로 보내고, 없으면 기존 요청을 그대로 쓴다.
+    // ChatGPT는 로컬 스트리밍처럼 늘 문단 번역으로 보낸다.
+    const chatgpt = selected.connection.provider === 'chatgpt';
     const guided =
       local ||
+      chatgpt ||
       (selected.connection.provider === 'gemini' &&
         Boolean(reference(normalizeChapterInput(source))));
     const result = await createProvider(selected).translateChapter(

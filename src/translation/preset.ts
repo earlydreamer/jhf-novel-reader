@@ -56,7 +56,8 @@ export function referencePreset(selection: SelectedModel): readonly GuidanceTerm
  * 로컬 서버의 일반 텍스트 전체 회차 번역은 참고 데이터를 받지 못한다. 공용 용어 때문에 번역이 막히지 않도록 제외한다.
  */
 function acceptsReferenceTerms(selection: SelectedModel): boolean {
-  if (selection.connection.provider === 'gemini') return true;
+  if (selection.connection.provider === 'gemini' || selection.connection.provider === 'chatgpt')
+    return true;
   return Boolean(selection.limits) || selection.translationMode === 'stream';
 }
 

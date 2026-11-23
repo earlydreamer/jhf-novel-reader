@@ -19,7 +19,7 @@ import type {
   TranslationState,
   WorkPage,
 } from '../contracts/reading';
-import type { ErrorCode } from '../contracts';
+import type { ErrorCode, ProviderId } from '../contracts';
 import type { CatalogStatus, SourceChangeStatus } from '../app/renewalController';
 import { japaneseBlockIndexes } from '../translation/quality';
 import type { GuidanceTerm } from '../translation/guidance';
@@ -57,6 +57,8 @@ export interface ImmersiveReaderProps {
   paragraphRepair: boolean;
   translationAvailable: boolean;
   selectedModelId: string | null;
+  /** 지금 연결한 제공자. 사용할 수 없는 모델 안내에 이름을 쓴다. */
+  provider?: ProviderId;
   connected: boolean;
   catalogStatus: CatalogStatus;
   connectionConfigured: boolean;
@@ -103,6 +105,12 @@ const LONG_PRESS_MS = 500;
 const CENTER_TAP = 0.2;
 const GLOSSARY_SAVE_FAILED =
   '지금은 용어집을 저장하지 못했어요. 번역이 끝난 뒤 다시 시도해 주세요.';
+/** 저장본 출처의 제공자 이름. 로컬 서버는 OpenAI 호환 서버다. */
+const PROVIDER_LABELS: Record<ProviderId, string> = {
+  'openai-compatible': 'OpenAI 호환',
+  gemini: 'Google Gemini',
+  chatgpt: 'ChatGPT',
+};
 const translationFailureMessages: Partial<Record<ErrorCode, string>> = {
   auth: '서버 인증에 실패했어요. 연결 설정에서 인증 정보를 확인해 주세요.',
   connection: '서버에 연결하지 못했어요. 주소와 서버 상태를 확인해 주세요.',
@@ -119,6 +127,10 @@ const translationFailureMessages: Partial<Record<ErrorCode, string>> = {
   model_missing: '생성 모델을 찾지 못했어요. 연결 설정에서 모델을 다시 선택해 주세요.',
   storage: '기기 저장소에 접근하지 못했어요. 저장 공간이나 앱 상태를 확인해 주세요.',
   cancelled: '번역이 중단됐어요.',
+  reconnect_required: 'ChatGPT 연결이 끊겼어요. 설정에서 다시 로그인해 주세요.',
+  plan_not_eligible: '연결한 계정의 플랜으로는 이 번역을 요청할 수 없어요.',
+  usage_limit:
+    '계정 플랜의 사용 한도에 도달해 저장하지 않았어요. 자동으로 다시 요청하지 않아요. 사용량은 ChatGPT 설정에서 확인할 수 있어요.',
 };
 
 function ownVersion(version: CompletedTranslation | null, chapter: ChapterRef): boolean {
@@ -574,6 +586,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     props.selectedModelId !== props.translation.unavailableModelId;
   const failureNeedsSettings = [
     'auth',
+    'reconnect_required',
+    'plan_not_eligible',
     'connection',
     'input_limit',
     'guidance_unsupported',
@@ -724,7 +738,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             : modelUnavailable
               ? modelReplaced
                 ? '다른 모델을 선택했어요. 다시 번역할 수 있어요.'
-                : '이 Gemini 모델을 사용할 수 없어요. 다른 모델을 선택해 주세요.'
+                : `이 ${props.provider === 'chatgpt' ? 'ChatGPT' : 'Gemini'} 모델을 사용할 수 없어요. 다른 모델을 선택해 주세요.`
               : (failureMessage ?? '번역을 완료하지 못했어요. 자동으로 다시 요청하지 않아요.')}
         </p>
         {props.translation.pendingSave ? (
@@ -1191,11 +1205,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           <p>저장 상태: {ownsPendingSave ? '저장 대기' : '저장 완료'}</p>
           <p>
             제공자:{' '}
-            {displayVersion
-              ? displayVersion.provenance.provider === 'gemini'
-                ? 'Google Gemini'
-                : 'OpenAI 호환'
-              : '기록 없음'}
+            {displayVersion ? PROVIDER_LABELS[displayVersion.provenance.provider] : '기록 없음'}
           </p>
           <p>모델: {displayVersion?.provenance.modelId ?? '기록 없음'}</p>
           <p>경과 시간: 기록 없음</p>

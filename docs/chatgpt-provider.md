@@ -28,6 +28,13 @@ ChatGPT 연결은 Android 앱에서만 제공합니다. 웹 미리보기에는 �
 - **연결 해제**는 먼저 해제 중 표식을 저장하고 `https://auth.openai.com/api/accounts/oauth/revoke`로 refresh token 철회를 요청한 뒤 로컬 세션을 지웁니다. 네트워크 실패·5xx는 짧게 물러난 뒤 두 번까지 다시 시도합니다. 빈 200으로 철회를 확인하지 못하면 로컬 삭제와 나눠 알리고 ChatGPT 설정의 연결된 앱에서 확인하도록 안내합니다.
 - 번역·미리 번역·정밀스캔·제목 번역이 ChatGPT 연결을 쓰는 중에는 해제하지 않습니다.
 
+## 회차 번역
+
+- 요청은 `POST https://api.openai.com/v1/responses`에 `model`·`instructions`·`input`·`store:false`·`stream:true`만 담습니다. SiwC가 받지 않는 temperature·`max_output_tokens`·`previous_response_id`는 넣지 않으며 네이티브도 허용 목록 밖의 필드를 거절합니다.
+- 구조화 출력 지원이 문서로 확인되지 않아 로컬 스트리밍과 같은 문단 ID 형식(`<main><p id="…">`)을 씁니다. 작품 용어집·공용 용어집·말투·줄거리는 다른 제공자와 같은 선별 규칙으로 넣고, 문단 순서·ID·필수 표기를 확인한 뒤 회차 전체가 완료되면 기존 저장 흐름으로 저장합니다. 적용한 용어집 해시와 `provenance.provider: "chatgpt"`를 저장본에 남기고 독서 화면에 `ChatGPT`로 표시합니다.
+- 도착한 delta는 저장 전 미리보기에만 씁니다. `response.completed`의 최종 assistant 텍스트를 확인해야 완료입니다. 완료 이벤트의 `output`이 비어 있으면 같은 응답에서 열고 닫은 모든 출력 항목이 완료됐을 때만 그 텍스트를 씁니다. `response.failed`·`response.incomplete`·연결 종료는 완료본으로 저장하지 않습니다. 서버가 Content-Type을 주지 않아도 본문을 SSE로 해석합니다.
+- 문단 재번역·실패 문단 자동 재번역·제목 자동/직접 번역·읽는 회차 자동 번역은 다른 제공자와 같은 설정과 횟수 제한을 따릅니다. 결과를 알 수 없는 요청은 다시 보내지 않습니다.
+
 ## 오류 안내
 
 | 상황                                                               | 앱의 처리                                                                                           |
@@ -43,4 +50,5 @@ ChatGPT 연결은 Android 앱에서만 제공합니다. 웹 미리보기에는 �
 
 - JVM 단위 검사(`ChatGptProtocolTest`·`ChatGptLoopbackTest`·`ChatGptSessionTest`): PKCE 알려진 벡터, 인증 주소, 콜백 Host·경로·중복 질의·state, 합성 RSA 키의 ID token 서명·클레임, 모델 목록, 오류 축약, 요청 본문 허용 목록, 로그인 저장·권한 없음 철회·계정 불일치·교환 결과 불명, 갱신 회전·결과 불명·종료 오류·5xx, 연결 해제를 검사합니다.
 - 웹 통합 검사(`tests/integration/chatgpt-account.test.tsx`, `tests/platform/chatgpt.test.ts`)는 가짜 계정 연결로 로그인·취소·모델 목록 오류·연결 해제·설정 저장과 설정 화면 흐름을 확인합니다.
+- 번역 검사(`tests/providers/chatgpt/responses.test.ts`, [제공자 기능 검사](../tests/integration/provider-capabilities.test.tsx))는 Responses SSE의 완료·빈 완료 출력·중간 실패·불완전·EOF와 요청 필드, 기능 표의 ChatGPT 칸, 저장본 출처·해시, 한도 오류의 저장·재전송 금지를 확인합니다.
 - 합성 검사는 실제 OpenAI 로그인·TLS·계정 플랜의 성공을 입증하지 않습니다. 실제 계정 검증은 계정 소유자가 로그인과 동의를 직접 진행하는 기기 검증에서 기록합니다.
