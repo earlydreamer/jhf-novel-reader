@@ -130,7 +130,7 @@ const translationFailureMessages: Partial<Record<ErrorCode, string>> = {
   reconnect_required: 'ChatGPT 연결이 끊겼어요. 설정에서 다시 로그인해 주세요.',
   plan_not_eligible: '연결한 계정의 플랜으로는 이 번역을 요청할 수 없어요.',
   usage_limit:
-    '계정 플랜의 사용 한도에 도달해 저장하지 않았어요. 자동으로 다시 요청하지 않아요. 사용량은 ChatGPT 설정에서 확인할 수 있어요.',
+    '계정 플랜의 사용 한도에 도달해 저장하지 않았어요. 자동으로 다시 요청하지 않아요. 사용량은 ChatGPT의 Settings > Usage에서 확인할 수 있어요.',
 };
 
 function ownVersion(version: CompletedTranslation | null, chapter: ChapterRef): boolean {

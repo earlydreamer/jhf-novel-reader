@@ -44,6 +44,15 @@ ChatGPT는 4단계 도입 판단을 2026-11-23 사용자 결정으로 마쳤고 
 | Gemini API | [Gemini 추가 약관](https://ai.google.dev/gemini-api/terms)은 무료/유료 서비스와 지역에 따라 데이터 이용 조건을 구분합니다. | 실제 결제 프로젝트·지역·모델·기능에 적용되는 조항과 보관·학습·사람 검토·처리 계약을 확인합니다. 무료/유료를 같은 개인정보 조건으로 취급하지 않습니다. 보류 중인 호출을 실행하지 않습니다. |
 | 프로젝트와 제공자의 개인정보 안내 | [OpenAI 개인정보처리방침](https://openai.com/policies/privacy-policy/) 및 각 제공자의 해당 서비스 문서가 확인 출발점입니다. | 제공자 방침이 프로젝트 자신의 방침을 대신하지 않습니다. ChatGPT 플랜 경로에 유료 API의 데이터 조건을 그대로 대입하지 않고 실제 계약과 설정을 확인합니다. |
 
+## ChatGPT 방침 개정의 확인 결과 (#425)
+
+2026-11-24 [#336](https://github.com/earlydreamer/jhf-novel-reader/issues/336)에 남은 두 확인 항목을 #422~#424의 실제 요청 코드와 OpenAI 공개 문서로 대조했습니다. [개인정보 처리방침](../PRIVACY.md)은 이 결과로 제5조 제4항~제6항과 제7조 제5항을 개정해 2026-11-24부터 시행합니다.
+
+1. **전송·저장 항목 대조.** 로그인은 시스템 브라우저와 기기 사이의 OAuth이며, 앱은 신원 확인 토큰에서 계정 식별자만 확인해 저장합니다. 번역 요청은 회차 원문·제목과 해당 회차에 나오는 작품·공용 용어집 표기·말투·이야기 요약을, 자동 용어집은 회차 원문과 이름 후보를, 정밀스캔·표기 채우기는 용어 후보·문맥과 켠 경우의 조회 결과를 보냅니다(`src/providers/chatgpt/session.ts`, `src/translation/wholeChapter.ts`, `src/translation/autoGlossary.ts`, `src/translation/termScanRun.ts`). 기기에는 Keystore로 암호화한 연결 토큰, 발급 client ID·host ID·계정 식별자, 선택한 모델, 저장본의 `provenance.provider`만 남습니다. 연결 해제는 철회 요청 뒤 로컬 세션을 지우고 철회 미확인을 따로 알립니다. 사용량은 ChatGPT의 Settings > Usage, 연결 해제는 Settings > Security and login > Login connections로 안내합니다. [플랜 사용 안내](https://help.openai.com/en/articles/20001542-using-your-chatgpt-plan-in-other-apps-and-sites)
+2. **보관·학습·삭제 조건.** [SiwC 약관](https://openai.com/policies/sign-in-with-chatgpt-terms/)(2026-11-04 시행), 플랜 사용 안내, [요청 제약](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations), [OpenAI 한국 방침](https://openai.com/ko-KR/policies/kr-privacy-policy/)(2026-09-10)과 [부속방침](https://openai.com/ko-KR/policies/kr-privacy-policy-addendum/)(2026-03-27)에는 SiwC 플랜 요청의 보관 기간·모델 학습 이용·데이터 제어 적용 여부가 없습니다. `store:false`도 요청 형식 요건으로만 적혀 있습니다. 방침에는 이 상태를 미확정으로 적고, 약관에 포함된 Terms of Use·Service Terms와 데이터 제어 도움말을 다음 확인 경로로 둡니다.
+3. **약관상 앱 요건.** 처리 전 고지와 동의·철회 수단, 사용자 기기의 로컬 토큰 보관, 플랜 사용에 대한 별도 요금 금지를 지킵니다. 백그라운드 사용은 사전 명시 동의가 필요해 앱이 백그라운드에 있으면 새 요청을 보내지 않습니다. 약관은 만 13세 미만 또는 각국 디지털 동의 연령 미만의 개인정보 전송을 금지하며, OpenAI 한국 부속방침은 이 기준을 만 14세로 둡니다.
+4. **국외 이전.** 정보는 운영자를 거치지 않고 이용자 기기에서 OpenAI OpCo, L.L.C.(미국)로 직접 전송되며, OpenAI 한국 부속방침은 미국 서버 보관과 국외 이전 조건을 따로 밝힙니다. 운영자가 정보를 받거나 보관하지 않으므로 운영자 명의의 국외 이전 항목은 두지 않았습니다. 이 판단의 법률 검토는 받지 않았습니다.
+
 ## 데이터 흐름과 개인정보처리방침 검토 자료
 
 | 데이터·동작 | 현재 연구에서 확인한 경계 | 도입 검토에서 기록할 항목 |

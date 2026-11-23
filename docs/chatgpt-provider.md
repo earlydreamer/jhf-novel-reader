@@ -25,7 +25,7 @@ ChatGPT 연결은 Android 앱에서만 제공합니다. 웹 미리보기에는 �
 ## 모델 목록과 연결 해제
 
 - 모델 목록은 `GET https://api.openai.com/v1/models`의 `models` 중 `visibility`가 `list`인 항목만 서버 순서대로 보여 줍니다. 목록 조회에 성공했다고 해서 번역 요청 권한까지 확인한 것은 아닙니다.
-- **연결 해제**는 먼저 해제 중 표식을 저장하고 `https://auth.openai.com/api/accounts/oauth/revoke`로 refresh token 철회를 요청한 뒤 로컬 세션을 지웁니다. 네트워크 실패·5xx는 짧게 물러난 뒤 두 번까지 다시 시도합니다. 빈 200으로 철회를 확인하지 못하면 로컬 삭제와 나눠 알리고 ChatGPT 설정의 연결된 앱에서 확인하도록 안내합니다.
+- **연결 해제**는 먼저 해제 중 표식을 저장하고 `https://auth.openai.com/api/accounts/oauth/revoke`로 refresh token 철회를 요청한 뒤 로컬 세션을 지웁니다. 네트워크 실패·5xx는 짧게 물러난 뒤 두 번까지 다시 시도합니다. 빈 200으로 철회를 확인하지 못하면 로컬 삭제와 나눠 알리고 ChatGPT의 Settings > Security and login > Login connections에서 확인하도록 안내합니다.
 - 번역·미리 번역·정밀스캔·제목 번역이 ChatGPT 연결을 쓰는 중에는 해제하지 않습니다.
 
 ## 회차 번역

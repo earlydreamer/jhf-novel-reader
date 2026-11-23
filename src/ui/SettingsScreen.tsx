@@ -108,7 +108,7 @@ function problemMessage(problem: CatalogProblem, gemini = false, chatgpt = false
     case 'plan_not_eligible':
       return '연결한 계정의 플랜으로는 앱에서 ChatGPT를 쓸 수 없어요.';
     case 'usage_limit':
-      return 'ChatGPT 플랜의 사용 한도에 도달했어요. 사용량은 ChatGPT 설정에서 확인할 수 있어요.';
+      return 'ChatGPT 플랜의 사용 한도에 도달했어요. 사용량은 ChatGPT의 Settings > Usage에서 확인할 수 있어요.';
     case 'invalid_url':
       return 'API 주소 형식이 올바르지 않아요. http:// 또는 https://로 시작하고 /v1까지만 적어 주세요.';
     case 'network':
@@ -164,6 +164,8 @@ function checkResultMessage(
 }
 
 const modeLabels = { stream: '읽으며 번역', legacy: '기존 묶음 방식' } as const;
+const APP_PRIVACY_URL = 'https://github.com/earlydreamer/jhf-novel-reader/blob/main/PRIVACY.md';
+const OPENAI_PRIVACY_URL = 'https://openai.com/ko-KR/policies/kr-privacy-policy/';
 const providerLabels = {
   'openai-compatible': '로컬 서버',
   gemini: 'Google Gemini',
@@ -197,7 +199,7 @@ function chatGptNoticeMessage(notice: ChatGptNotice): string {
       if (!notice.hadSession) return '이 기기에 지울 ChatGPT 연결이 없었어요.';
       return notice.revoked
         ? 'ChatGPT 연결을 해제하고 이 기기의 로그인 정보를 지웠어요.'
-        : '이 기기의 로그인 정보는 지웠지만 OpenAI에서 연결이 해제됐는지 확인하지 못했어요. ChatGPT 설정의 연결된 앱에서 이 앱의 연결을 확인해 주세요.';
+        : '이 기기의 로그인 정보는 지웠지만 OpenAI에서 연결이 해제됐는지 확인하지 못했어요. ChatGPT의 Settings > Security and login > Login connections에서 이 앱의 연결을 확인해 주세요.';
     case 'disconnect_failed':
       return '연결을 해제하지 못했어요. 다시 시도해 주세요.';
   }
@@ -1112,20 +1114,32 @@ export function SettingsScreen({
         }
       >
         <p>
-          번역할 회차의 원문과 적용할 작품 용어집의 표기·말투·줄거리 참고 정보를 OpenAI로 보내요.
-          요청은 OpenAI가 응답을 저장하지 않도록 보내요.
+          번역할 회차 원문·제목과 적용할 작품 용어집의 표기·말투·줄거리 참고 정보를 이 기기에서
+          OpenAI로 직접 보내요. 자동 용어집과 정밀스캔은 회차 원문이나 용어 후보·문맥·조회 결과를
+          보내요. 요청은 응답 저장을 끄고 보내지만, OpenAI의 보관·학습 조건은 OpenAI 개인정보
+          처리방침을 따라요.
         </p>
         <p>
           API 키 대신 내 ChatGPT 계정으로 로그인하고, 요청은 그 계정의 플랜 사용량을 써요. 사용
-          한도는 ChatGPT와 같은 계정을 쓰는 다른 앱이 함께 써요.
+          한도는 ChatGPT와 같은 계정을 쓰는 다른 앱이 함께 써요. 로그인할 때 OpenAI가 이름·이메일
+          주소가 담긴 신원 정보를 보내지만, 앱은 계정 식별자만 확인해 이 기기에 저장해요.
         </p>
         <p>
           자동 번역·자동 용어집·실패 문단 재번역이 켜져 있으면 추가 요청을 보낼 수 있어요. 앱이
           백그라운드에 있을 때는 새 요청을 보내지 않아요.
         </p>
         <p>
-          연결은 이 화면이나 ChatGPT 설정의 연결된 앱에서 언제든 해제할 수 있어요. 로그인 정보는 이
-          기기의 보안 저장소에만 저장해요.
+          연결은 이 화면이나 ChatGPT의 Settings &gt; Security and login &gt; Login connections에서
+          언제든 해제할 수 있어요. 로그인 정보는 이 기기의 보안 저장소에만 저장해요.
+        </p>
+        <p>
+          <a href={APP_PRIVACY_URL} target="_blank" rel="noreferrer">
+            앱 개인정보 처리방침
+          </a>{' '}
+          ·{' '}
+          <a href={OPENAI_PRIVACY_URL} target="_blank" rel="noreferrer">
+            OpenAI 개인정보 처리방침
+          </a>
         </p>
       </Dialog>
 

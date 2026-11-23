@@ -262,9 +262,14 @@ describe('ChatGPT 계정 연결', () => {
     fireEvent.click(await screen.findByRole('button', { name: /제공자/ }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('radio', { name: /ChatGPT/ }));
     const consent = await screen.findByRole('dialog', { name: 'ChatGPT를 사용할까요?' });
-    expect(consent).toHaveTextContent('OpenAI로 보내요');
+    expect(consent).toHaveTextContent('OpenAI로 직접 보내요');
     expect(consent).toHaveTextContent('플랜 사용량');
     expect(consent).toHaveTextContent('백그라운드에 있을 때는 새 요청을 보내지 않아요');
+    expect(within(consent).getByRole('link', { name: '앱 개인정보 처리방침' })).toHaveAttribute(
+      'href',
+      'https://github.com/earlydreamer/jhf-novel-reader/blob/main/PRIVACY.md',
+    );
+    expect(within(consent).getByRole('link', { name: 'OpenAI 개인정보 처리방침' })).toBeVisible();
     expect(fake.account.calls).toEqual([]);
     fireEvent.click(within(consent).getByRole('button', { name: 'ChatGPT 사용하기' }));
     expect(app.getSnapshot().connection.provider).toBe('chatgpt');
@@ -286,7 +291,7 @@ describe('ChatGPT 계정 연결', () => {
     const unconfirmed = await screen.findByRole('dialog', {
       name: '원격 해제를 확인하지 못했어요',
     });
-    expect(unconfirmed).toHaveTextContent('ChatGPT 설정의 연결된 앱');
+    expect(unconfirmed).toHaveTextContent('Settings > Security and login > Login connections');
     expect(await screen.findByRole('button', { name: 'Continue with ChatGPT' })).toBeVisible();
   });
 
