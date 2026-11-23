@@ -312,6 +312,33 @@ export function referenceTermsForWork(
   });
 }
 /**
+ * 작품 이름과 정규화 키가 같은 공용 이름 중 철자가 다른 것(전각·반각 등)을 그 작품 항목의 매칭 이름으로 모은다.
+ * 원문 매칭은 글자 그대로 비교하므로, 이 철자를 버리면 그렇게 쓴 원문에서 작품 표기가 빠진다.
+ */
+function sharedSpellingsForWork(
+  workTerms: readonly GuidanceTerm[],
+  guidance: WorkGuidance | null,
+  referenceTerms: readonly GuidanceTerm[],
+): Map<GuidanceTerm, string[]> {
+  const owners = new Map<string, GuidanceTerm>();
+  for (const term of workTerms)
+    for (const name of [term.source, ...term.aliases])
+      if (!owners.has(nameKey(name))) owners.set(nameKey(name), term);
+  const excluded = new Set(guidance?.excludedSharedTerms?.map(nameKey));
+  const result = new Map<GuidanceTerm, string[]>();
+  for (const term of referenceTerms) {
+    const names = [term.source, ...term.aliases];
+    if (names.some((name) => excluded.has(nameKey(name)))) continue;
+    for (const name of names) {
+      const owner = owners.get(nameKey(name));
+      if (!owner || [owner.source, ...owner.aliases].includes(name)) continue;
+      const spellings = result.get(owner) ?? [];
+      if (!spellings.includes(name)) result.set(owner, [...spellings, name]);
+    }
+  }
+  return result;
+}
+/**
  * 입력에 실제로 등장한 용어(등장한 이름 포함)와 말투만 고른다. 주입 형식과 적용 해시가 같은 매칭을 쓴다.
  * decision이 있으면 후보 이름을 확정(names)하거나 제외(candidateNames에서 뺌)한다. 해시에는 쓰지 않는다.
  */
@@ -325,13 +352,16 @@ export function appliedGuidance(
   if (value && value.workId !== workId) throw new ReaderError('storage');
   const workTerms = (value?.terms ?? []).filter((term) => term.origin !== 'auto');
   const candidates = [...workTerms, ...referenceTermsForWork(value, preset)];
+  const sharedSpellings = sharedSpellingsForWork(workTerms, value, preset);
+  const namesOf = (term: GuidanceTerm) => [
+    term.source,
+    ...term.aliases,
+    ...(sharedSpellings.get(term) ?? []),
+  ];
   const voiceList = value?.voices ?? [];
   // 용어와 말투는 따로 가린다. 같은 인물의 용어 별칭(긴 이름)이 말투 이름(짧은 이름)을 가리면 말투 지시가 빠진다.
   // 용어 이름은 글자 종류 경계로 확정·후보를 가르고, 한 글자·짧은 히라가나 이름은 찾지 않는다(findTermMatches).
-  const matches = findTermMatches(
-    input,
-    candidates.flatMap((term) => [term.source, ...term.aliases]),
-  );
+  const matches = findTermMatches(input, candidates.flatMap(namesOf));
   const confirmedNames = new Set(matches.filter((m) => m.confirmed).map((m) => m.name));
   const candidateOnlyPool = new Set(matches.filter((m) => !m.confirmed).map((m) => m.name));
   const voiceNames = matchedNames(
@@ -340,7 +370,7 @@ export function appliedGuidance(
   );
   const terms = candidates
     .map((term) => {
-      const names = [term.source, ...term.aliases];
+      const names = namesOf(term);
       // 확정된 적이 없고 후보로만 등장한 이름만 판정 대상이다.
       const pending = names.filter(
         (name) => !confirmedNames.has(name) && candidateOnlyPool.has(name),
@@ -402,9 +432,10 @@ export async function appliedGuidanceHash(
   const applied = appliedGuidance(value, workId, chapterInput, preset);
   const summary = value?.plotSummary?.trim();
   // 예전 형식({ term, names })과 같게, 확정·후보 이름을 원래 순서대로 합쳐 해시한다.
+  // 작품 항목에 붙은 공용 철자는 그 철자가 원문에 나온 경우에만 항목 이름 뒤에 들어간다.
   const hashed = (applied?.terms ?? []).map(({ term, names, candidateNames }) => ({
     term,
-    names: [term.source, ...term.aliases].filter(
+    names: [...new Set([term.source, ...term.aliases, ...names, ...candidateNames])].filter(
       (name) => names.includes(name) || candidateNames.includes(name),
     ),
   }));

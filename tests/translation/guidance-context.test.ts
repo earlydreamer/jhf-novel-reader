@@ -146,6 +146,20 @@ test('a work keeps its spelling on normalized alias collisions and can exclude a
   expect(await appliedGuidanceHash(work, work.workId, input, shared)).toBe(
     await appliedGuidanceHash(work, work.workId, input, shared.slice(0, 1)),
   );
+
+  // 겹친 공용 별칭은 버리지 않고 작품 항목의 이름으로 쓴다. 전각으로 쓴 원문에도 작품 표기가 적용된다.
+  const fullWidth = 'ＡＢＣ騎士団にいた。';
+  const fullWidthContext = guidanceContext(work, work.workId, fullWidth, shared);
+  expect(fullWidthContext).toContain('ＡＢＣ騎士団 translates to 작품 기사단');
+  expect(fullWidthContext).not.toContain('공용 기사단');
+  // 반각 원문의 적용 결과는 겹친 별칭이 없을 때와 같다.
+  const withoutCollision = [{ ...shared[0]!, aliases: ['王国騎士団'] }, shared[1]!];
+  expect(guidanceContext(work, work.workId, input, shared)).toBe(
+    guidanceContext(work, work.workId, input, withoutCollision),
+  );
+  expect(await appliedGuidanceHash(work, work.workId, input, shared)).toBe(
+    await appliedGuidanceHash(work, work.workId, input, withoutCollision),
+  );
 });
 
 async function signed(terms: unknown[]): Promise<unknown> {
