@@ -227,7 +227,7 @@ function RouteScreen({
           onRetry={() => void controller.retryTranslation()}
           onRetrySave={() => void controller.retrySave()}
           onRetryParagraphs={(indexes) => void controller.retryParagraphs(indexes)}
-          onSettings={() => controller.navigate({ kind: 'settings' })}
+          onSettings={(pickModel) => controller.navigate({ kind: 'settings', pickModel })}
           onCheckConnection={() => void controller.checkConnection()}
           onRefreshSource={() => void controller.refreshSource()}
           onRetranslate={() => void controller.retranslateChapter()}
@@ -305,7 +305,7 @@ function RouteScreen({
           onRetry={() => void controller.retryTranslation()}
           onRetrySave={() => void controller.retrySave()}
           onRetryParagraphs={(indexes) => void controller.retryParagraphs(indexes)}
-          onSettings={() => controller.navigate({ kind: 'settings' })}
+          onSettings={(pickModel) => controller.navigate({ kind: 'settings', pickModel })}
           onCheckConnection={() => void controller.checkConnection()}
           onRefreshSource={() => void controller.refreshSource()}
           onRetranslate={() => void controller.retranslateChapter()}

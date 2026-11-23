@@ -407,7 +407,9 @@ export function SettingsScreen({
   const [providerOpen, setProviderOpen] = useState(false);
   const [geminiOpen, setGeminiOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(
+    gemini && state.route.kind === 'settings' && state.route.pickModel === true,
+  );
   const [modelSearch, setModelSearch] = useState('');
   const [modeOpen, setModeOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);

@@ -301,6 +301,7 @@ export function createGeminiProviderSession(
     if (signal.aborted) throw new ReaderError('cancelled', 'unknown');
     if (response.status === 401 || response.status === 403)
       throw new ReaderError('auth', 'received', response.status);
+    if (response.status === 404) throw new ReaderError('model_unavailable', 'received', 404);
     if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300)
       throw new ReaderError('connection', 'received', response.status);
     if (streamPost) {

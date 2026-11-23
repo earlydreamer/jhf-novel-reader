@@ -87,7 +87,7 @@ export interface ImmersiveReaderProps {
   onRetry(): void;
   onRetrySave(): void;
   onRetryParagraphs?(indexes: readonly number[]): void;
-  onSettings(): void;
+  onSettings(pickModel?: true): void;
   onCheckConnection(): void;
   onRefreshSource(): void;
   onRetranslate?(): void;
@@ -567,6 +567,11 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
   );
   const failureCode = props.translation.error?.code;
   const failureMessage = failureCode ? translationFailureMessages[failureCode] : undefined;
+  const modelUnavailable = failureCode === 'model_unavailable';
+  const modelReplaced =
+    modelUnavailable &&
+    props.connected &&
+    props.selectedModelId !== props.translation.unavailableModelId;
   const failureNeedsSettings = [
     'auth',
     'connection',
@@ -651,7 +656,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           이 화 번역하기
         </Button>
         {(!props.connected || !props.translationAvailable) && (
-          <Button variant="tonal" onClick={props.onSettings}>
+          <Button variant="tonal" onClick={() => props.onSettings()}>
             연결 설정
           </Button>
         )}
@@ -716,14 +721,28 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         <p>
           {props.translation.pendingSave
             ? '번역 결과를 저장하지 못했어요.'
-            : (failureMessage ?? '번역을 완료하지 못했어요. 자동으로 다시 요청하지 않아요.')}
+            : modelUnavailable
+              ? modelReplaced
+                ? '다른 모델을 선택했어요. 다시 번역할 수 있어요.'
+                : '이 Gemini 모델을 사용할 수 없어요. 다른 모델을 선택해 주세요.'
+              : (failureMessage ?? '번역을 완료하지 못했어요. 자동으로 다시 요청하지 않아요.')}
         </p>
         {props.translation.pendingSave ? (
           <Button variant="outlined" disabled={active} onClick={props.onRetrySave}>
             저장 다시 하기
           </Button>
+        ) : modelUnavailable ? (
+          modelReplaced ? (
+            <Button variant="outlined" disabled={active} onClick={props.onRetry}>
+              다시 번역하기
+            </Button>
+          ) : (
+            <Button variant="outlined" onClick={() => props.onSettings(true)}>
+              모델 다시 선택
+            </Button>
+          )
         ) : failureNeedsSettings ? (
-          <Button variant="outlined" onClick={props.onSettings}>
+          <Button variant="outlined" onClick={() => props.onSettings()}>
             연결 설정 열기
           </Button>
         ) : failureNeedsSourceRefresh ? (

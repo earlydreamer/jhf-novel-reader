@@ -514,6 +514,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   // 전체 검사 캐시와 사용자가 펼친 목차 페이지 수는 별도로 관리한다.
   const visiblePageUrls = new Map<string, string>();
   const chaptersById = new Map<string, ChapterRef>();
+  const unavailableGeminiTranslations = new Set<string>();
   const savedChaptersByWork = new Map<string, readonly string[]>();
   const versionsById = new Map<string, CompletedTranslation>();
   const positionsByVersion = new Map<string, ReadingPosition | null>();
@@ -927,6 +928,26 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   const pendingPositions = new Map<string, ReadingPosition>();
   let positionDrain: Promise<void> | null = null;
+  function geminiTranslationKey(chapterId: string, connection: ConnectionConfig, modelId: string) {
+    return JSON.stringify([chapterId, connection.authRef, modelId]);
+  }
+  function unavailableGeminiTranslation(chapterId: string): TranslationState | undefined {
+    const { connection, selectedModelId } = snapshot;
+    if (
+      connection.provider !== 'gemini' ||
+      !selectedModelId ||
+      !unavailableGeminiTranslations.has(
+        geminiTranslationKey(chapterId, connection, selectedModelId),
+      )
+    )
+      return undefined;
+    return {
+      phase: 'failed',
+      elapsedMs: 0,
+      error: new ReaderError('model_unavailable', 'received', 404),
+      unavailableModelId: selectedModelId,
+    };
+  }
   function requestAutomaticTranslation() {
     if (
       !snapshot.autoTranslate ||
@@ -966,6 +987,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     )
       return;
     automaticRequest = null;
+    const unavailable = unavailableGeminiTranslation(request.chapterId);
+    if (unavailable) {
+      publish({ translation: unavailable });
+      return;
+    }
     void translate();
   }
   function publish(update: Partial<RenewalSnapshot>): void {
@@ -1918,7 +1944,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         elapsedMs: 0,
         error: new ReaderError('timeout_unknown', 'unknown'),
       };
-    return { phase: 'idle', elapsedMs: 0 };
+    return (
+      unavailableGeminiTranslation(chapterId) ??
+      (state?.token?.chapterId === chapterId && state.error?.code === 'model_unavailable'
+        ? state
+        : { phase: 'idle', elapsedMs: 0 })
+    );
   }
   async function selectChapter(chapter: ChapterRef): Promise<void> {
     if (removingWorkIds.has(chapter.workId)) return;
@@ -2641,8 +2672,25 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           // 일괄 번역은 자체 후보 스캔을 쓰므로 여기서 켜지 않는다. 문단 재번역도 용어집을 만들지 않는다.
           { autoGlossary: snapshot.autoGlossary && !repair },
         );
-        publish({ translationTimings: { ...dependencies.flow.getTimings(), readerDisplayMs: 0 } });
         const completed = dependencies.flow.getCompleted();
+        if (selectedModel.connection.provider === 'gemini') {
+          const state = dependencies.flow.getSnapshot();
+          const key = geminiTranslationKey(
+            chapter.chapterId,
+            selectedModel.connection,
+            selectedModel.modelId,
+          );
+          if (
+            state.phase === 'failed' &&
+            state.token?.chapterId === chapter.chapterId &&
+            state.token.settingsRevision === request.settingsRevision &&
+            state.error?.code === 'model_unavailable'
+          )
+            unavailableGeminiTranslations.add(key);
+          else if (completed?.source.chapterId === chapter.chapterId)
+            unavailableGeminiTranslations.delete(key);
+        }
+        publish({ translationTimings: { ...dependencies.flow.getTimings(), readerDisplayMs: 0 } });
         if (completed) updateSavedMetadata(completed);
         if (completed && ownsVisibleTranslation(request)) await adoptCompleted(completed, request);
       } else await dependencies.startTranslation!(chapter, selectedModel, session!);
@@ -2681,7 +2729,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       return;
     const state = dependencies.flow.getSnapshot();
     if (['ready', 'failed', 'unknown'].includes(state.phase)) {
-      // 사용자가 중단했거나 앱이 백그라운드로 가서 멈춘 결과는 리더의 중단 안내로 충분하므로 스낵바를 띄우지 않는다(#164).
+      // 중단이나 모델 사용 불가 상태는 리더 안내 카드에 표시한다.
+      if (state.error?.code === 'model_unavailable') {
+        publish({ translation: unavailableGeminiTranslation(request.chapterId) ?? state });
+        return;
+      }
       if (request.cancelled || state.error?.code === 'cancelled') {
         publish({ translation: state });
         return;
@@ -2894,6 +2946,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     )
       return;
     if (!['unknown', 'failed'].includes(snapshot.translation.phase)) return;
+    if (
+      snapshot.translation.error?.code === 'model_unavailable' &&
+      (!snapshot.selectedModelId ||
+        snapshot.selectedModelId === snapshot.translation.unavailableModelId)
+    )
+      return;
     const repair =
       snapshot.paragraphRepair &&
       retryableRepair?.base.source.chapterId === snapshot.chapter?.chapterId

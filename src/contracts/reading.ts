@@ -131,6 +131,7 @@ export type TranslationState = {
   token?: TranslationToken;
   elapsedMs: number;
   error?: ReaderError;
+  unavailableModelId?: string;
   pendingSave?: CompletedTranslation;
   /** 저장을 마친 이번 요청의 버전. 리더가 이 버전을 열었다는 뜻은 아니다. */
   completedVersionId?: string;

@@ -3,4 +3,4 @@ export type Route =
   | { kind: 'work'; workId: string; selectedChapterId?: string }
   | { kind: 'translation'; chapterId: string }
   | { kind: 'reader'; versionId: string }
-  | { kind: 'settings' };
+  | { kind: 'settings'; pickModel?: true };
