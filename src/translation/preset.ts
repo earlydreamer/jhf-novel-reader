@@ -42,8 +42,8 @@ export const DEFAULT_SHARED_TERMS: readonly GuidanceTerm[] = [
 ];
 
 /**
- * 프리셋은 구간 번역(로컬 모델) 경로에서만 쓴다. 사용자가 승인한 작품 용어집과 달리
- * 지원하지 않는 제공자에서 번역을 막을 이유가 없으므로 조용히 생략한다.
+ * 공용 목록 이전의 규칙이다. 내장 프리셋은 로컬 구간 번역에서만 썼다. 공용 목록 없이 준비한
+ * 일괄 번역 기록은 저장본을 비교할 때 준비 당시와 같은 결과를 내도록 이 규칙을 계속 쓴다.
  */
 export function referencePreset(selection: SelectedModel): readonly GuidanceTerm[] {
   return selection.connection.provider === 'openai-compatible' && selection.limits
@@ -51,16 +51,21 @@ export function referencePreset(selection: SelectedModel): readonly GuidanceTerm
     : [];
 }
 
+/**
+ * 참고 용어를 번역 요청에 넣을 수 있는 경로인지 판정한다. Gemini는 일반·스트리밍 모두 문단 번역으로 받는다.
+ * 로컬 서버의 일반 텍스트 전체 회차 번역은 참고 데이터를 받지 못한다. 공용 용어 때문에 번역이 막히지 않도록 제외한다.
+ */
+function acceptsReferenceTerms(selection: SelectedModel): boolean {
+  if (selection.connection.provider === 'gemini') return true;
+  return Boolean(selection.limits) || selection.translationMode === 'stream';
+}
+
 export async function readReferenceTerms(
   selection: SelectedModel,
   guidance?: GuidanceRepository,
 ): Promise<readonly GuidanceTerm[]> {
-  if (
-    !guidance?.readShared ||
-    selection.connection.provider !== 'openai-compatible' ||
-    (!selection.limits && selection.translationMode !== 'stream')
-  )
-    return referencePreset(selection);
+  if (!guidance?.readShared) return referencePreset(selection);
+  if (!acceptsReferenceTerms(selection)) return [];
   return (await guidance.readShared())?.terms ?? DEFAULT_SHARED_TERMS;
 }
 
