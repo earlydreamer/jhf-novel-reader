@@ -35,6 +35,12 @@ ChatGPT 연결은 Android 앱에서만 제공합니다. 웹 미리보기에는 �
 - 도착한 delta는 저장 전 미리보기에만 씁니다. `response.completed`의 최종 assistant 텍스트를 확인해야 완료입니다. 완료 이벤트의 `output`이 비어 있으면 같은 응답에서 열고 닫은 모든 출력 항목이 완료됐을 때만 그 텍스트를 씁니다. `response.failed`·`response.incomplete`·연결 종료는 완료본으로 저장하지 않습니다. 서버가 Content-Type을 주지 않아도 본문을 SSE로 해석합니다.
 - 문단 재번역·실패 문단 자동 재번역·제목 자동/직접 번역·읽는 회차 자동 번역은 다른 제공자와 같은 설정과 횟수 제한을 따릅니다. 결과를 알 수 없는 요청은 다시 보내지 않습니다.
 
+## 자동 용어집·정밀스캔·표기 채우기
+
+- 세 기능은 다른 제공자와 같은 후보 선별·판정 횟수·저장 기준을 씁니다. 정밀스캔은 묶음마다 세 번 판정하고, 표기 채우기는 결과를 검토 화면의 제안으로만 남깁니다.
+- 판정 요청도 `store:false`·`stream:true`로만 보냅니다. temperature와 출력 상한은 넣지 않습니다. 구조화 출력(`text.format: json_schema`)은 SiwC 문서에 지원 여부가 없어 먼저 보내 보고, `subscription_sharing_unsupported_capability`로 거절되면 [공식 복구 기준](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery)대로 그 입력을 빼고 스키마를 지시문에 넣어 한 번만 다시 보냅니다. 같은 세션에서는 구조화 출력을 다시 보내지 않습니다.
+- 응답은 `response.completed`의 최종 텍스트를 JSON으로 읽습니다. 코드 펜스만 걷어 내며 그 밖의 보정은 하지 않습니다.
+
 ## 오류 안내
 
 | 상황                                                               | 앱의 처리                                                                                           |

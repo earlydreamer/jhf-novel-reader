@@ -57,9 +57,9 @@ const SUPPORT: Record<Feature, Record<ProviderId, Support>> = {
   titleManual: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: 'supported' },
   titleAuto: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: 'supported' },
   titleGuidance: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: 'supported' },
-  autoGlossary: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: { issue: 424 } },
-  termScan: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: { issue: 424 } },
-  termFill: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: { issue: 424 } },
+  autoGlossary: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: 'supported' },
+  termScan: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: 'supported' },
+  termFill: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: 'supported' },
   batch: { 'openai-compatible': 'supported', gemini: 'supported', chatgpt: 'supported' },
 };
 const PROVIDERS = Object.keys(PROVIDER_LABELS) as ProviderId[];
@@ -616,6 +616,28 @@ describe('ChatGPT 회차 번역 저장과 실패 처리', () => {
     expect(body).not.toHaveProperty('temperature');
     expect(body).not.toHaveProperty('max_output_tokens');
     expect(body).not.toHaveProperty('previous_response_id');
+  });
+
+  it('정밀스캔은 temperature 없이 묶음마다 세 번 판정한다', async () => {
+    const h = harness('chatgpt', { first: 'アリスとアリスが扉を開けた。' });
+    await h.connect();
+    const chapter = await h.openFirstChapter();
+    await h.app.translate();
+    await settle(h.app);
+    const before = h.posts.length;
+    await h.app.startTermScan(chapter.workId);
+    await expect
+      .poll(() => h.app.getSnapshot().termScan?.phase, { timeout: 5000 })
+      .toMatch(/done|failed/);
+    const judgments = h.posts
+      .slice(before)
+      .map((post) => post.data as Record<string, unknown>)
+      .filter((body) => String(body.instructions).includes('JSON'));
+    expect(judgments).toHaveLength(3);
+    for (const body of judgments) {
+      expect(body).not.toHaveProperty('temperature');
+      expect(body).toMatchObject({ store: false, stream: true });
+    }
   });
 
   for (const midStream of [false, true])

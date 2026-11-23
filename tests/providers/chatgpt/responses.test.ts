@@ -202,3 +202,70 @@ describe('ChatGPT 제공자 세션', () => {
     expect(fake.bodies).toHaveLength(1);
   });
 });
+
+describe('ChatGPT JSON 판정', () => {
+  const judge = {
+    system: '용어를 판정해.',
+    user: '後輩',
+    schema: { type: 'object', properties: { terms: { type: 'array' } }, required: ['terms'] },
+    maxTokens: 512,
+    temperature: 0.7,
+  };
+
+  it('구조화 출력을 먼저 쓰고 temperature·출력 상한은 보내지 않는다', async () => {
+    const fake = account(() => ({ status: 200, data: sse(created, completed('{"terms":[]}')) }));
+    const session = createChatGptProviderSession(selection, fake.value);
+    await expect(session.completeJson!(judge, new AbortController().signal)).resolves.toEqual({
+      terms: [],
+    });
+    const body = fake.bodies[0]!;
+    expect(body).toMatchObject({
+      store: false,
+      stream: true,
+      text: { format: { type: 'json_schema', strict: true, schema: judge.schema } },
+    });
+    expect(body).not.toHaveProperty('temperature');
+    expect(body).not.toHaveProperty('max_output_tokens');
+    expect(String(body.instructions)).toContain(JSON.stringify(judge.schema));
+  });
+
+  it('구조화 출력을 거절하면 빼고 한 번만 다시 보내며 같은 세션에서는 다시 쓰지 않는다', async () => {
+    const fake = account((body) =>
+      body.text
+        ? {
+            status: 400,
+            data: JSON.stringify({
+              error: { code: 'subscription_sharing_unsupported_capability', param: 'text' },
+            }),
+          }
+        : { status: 200, data: sse(created, completed('```json\n{"terms":[]}\n```')) },
+    );
+    const session = createChatGptProviderSession(selection, fake.value);
+    await expect(session.completeJson!(judge, new AbortController().signal)).resolves.toEqual({
+      terms: [],
+    });
+    await session.completeJson!(judge, new AbortController().signal);
+    expect(fake.bodies.map((body) => 'text' in body)).toEqual([true, false, false]);
+  });
+
+  it('JSON이 아닌 응답과 한도 오류를 판정 결과로 쓰지 않는다', async () => {
+    const text = account(() => ({ status: 200, data: sse(created, completed('판정 불가')) }));
+    await expect(
+      createChatGptProviderSession(selection, text.value).completeJson!(
+        judge,
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'invalid_output' });
+    const limited = account(() => ({
+      status: 429,
+      data: JSON.stringify({ error: { code: 'subscription_sharing_usage_limit_exceeded' } }),
+    }));
+    await expect(
+      createChatGptProviderSession(selection, limited.value).completeJson!(
+        judge,
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'usage_limit' });
+    expect(limited.bodies).toHaveLength(1);
+  });
+});
