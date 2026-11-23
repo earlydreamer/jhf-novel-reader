@@ -354,22 +354,29 @@ it('opens model selection after a Gemini generation 404 and waits for an explici
   });
   const chapter = await selectChapter(h);
   await selectGemini(h);
+  const posts = () => h.requests.filter(({ method }) => method === 'POST');
+  const bodies = () => posts().filter(({ url }) => url.includes(':streamGenerateContent'));
+  const titles = () => posts().filter(({ url }) => url.endsWith(':generateContent'));
   await h.app.translate();
   const saved = await h.store.listVersions(chapter.chapterId);
   expect(saved).toHaveLength(1);
+  // 회차 번역을 마치면 현재 회차 제목을 같은 모델로 이어서 번역한다.
+  await waitFor(() => expect(h.app.getSnapshot().titlesBusy).toBe(false));
+  expect(titles()).toHaveLength(1);
   unavailable = true;
   h.app.changeAutoTranslate(true);
-  const posts = () => h.requests.filter(({ method }) => method === 'POST');
   await h.app.retranslateChapter();
   expect(h.app.getSnapshot().translation).toMatchObject({
     phase: 'failed',
     error: { code: 'model_unavailable', status: 404 },
     unavailableModelId: 'gemini-3.6-flash',
   });
-  expect(posts()).toHaveLength(2);
+  // 404를 낸 모델로는 본문 재시도도 제목 자동 번역도 보내지 않는다.
+  expect(bodies()).toHaveLength(2);
+  expect(titles()).toHaveLength(1);
   await expect(h.store.listVersions(chapter.chapterId)).resolves.toEqual(saved);
   await h.app.retryTranslation();
-  expect(posts()).toHaveLength(2);
+  expect(posts()).toHaveLength(3);
 
   render(<Application controller={h.app} />);
   expect(
@@ -380,11 +387,11 @@ it('opens model selection after a Gemini generation 404 and waits for an explici
   fireEvent.click(screen.getByRole('radio', { name: /Gemini 3.5 Flash-Lite/ }));
   fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
   expect(screen.getByText('다른 모델을 선택했어요. 다시 번역할 수 있어요.')).toBeVisible();
-  expect(posts()).toHaveLength(2);
+  expect(posts()).toHaveLength(3);
   fireEvent.click(screen.getByRole('button', { name: '다시 번역하기' }));
   await waitFor(() => expect(h.app.getSnapshot().translation.phase).toBe('ready'));
-  expect(posts()).toHaveLength(3);
-  expect(posts()[2]?.url).toContain('/gemini-3.5-flash-lite:streamGenerateContent');
+  expect(bodies()).toHaveLength(3);
+  expect(bodies()[2]?.url).toContain('/gemini-3.5-flash-lite:streamGenerateContent');
   await expect(h.store.readVersion(saved[0]!.versionId)).resolves.toEqual(saved[0]);
 });
 
@@ -546,7 +553,11 @@ it('merges and applies the work glossary, retries only the affected Gemini parag
   await restarted.initialize();
   await restarted.selectChapter(chapter);
   expect(restarted.getSnapshot().version?.versionId).toBe(versions[0]?.versionId);
-  expect(h.requests.filter((request) => request.method === 'POST')).toHaveLength(3);
+  // 본문 세 요청 뒤에는 현재 회차 제목 요청 하나만 더 나가고, 다시 열 때는 보내지 않는다.
+  const after = h.requests.filter((request) => request.method === 'POST');
+  expect(after).toHaveLength(4);
+  expect(after[3]?.url).toBe(`${GEMINI_BASE_URL}/models/gemini-3.6-flash:generateContent`);
+  expect(JSON.stringify(after[3]?.data)).toContain('合成作品');
 });
 
 it('applies the shared glossary to a Gemini chapter without a work glossary', async () => {

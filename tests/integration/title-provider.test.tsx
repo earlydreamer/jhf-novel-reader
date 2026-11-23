@@ -259,3 +259,22 @@ test('unknown title transport outcomes propagate without automatic replay', asyn
   ).rejects.toMatchObject({ code: 'timeout_unknown' });
   expect(h.streamPost).toHaveBeenCalledTimes(1);
 });
+test('local title requests carry shared glossary renderings as reference terms', async () => {
+  const h = harness();
+  const translate = createTitleTranslation(
+    (selection) => createProviderSession(selection, h.adapters.modelTransport, h.adapters.secrets),
+    createGuidanceRepository(h.files),
+    true,
+  );
+  await translate(
+    {
+      connection: { provider: 'openai-compatible', baseUrl: 'http://localhost:1234', revision: 1 },
+      modelId: 'test-model',
+      limits: DEFAULT_LOCAL_LIMITS,
+    },
+    'n1234ab',
+    [{ key: 'n1234ab/1', source: '冒険者ギルドの朝' }],
+    new AbortController().signal,
+  );
+  expect(JSON.stringify(h.requests[0]!.body.messages)).toContain('冒険者ギルド->모험가 길드');
+});

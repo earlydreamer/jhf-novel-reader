@@ -339,8 +339,6 @@ function problemOf(error: unknown): CatalogProblem {
 }
 const TERM_SCAN_CONNECTION_MESSAGE =
   '연결 설정에서 서버와 모델을 확인하면 용어 정밀스캔을 할 수 있어요.';
-const TERM_FILL_GEMINI_MESSAGE =
-  '미리 번역 후보의 표기 채우기는 로컬 모델 연결에서만 쓸 수 있어요.';
 const TERM_SCAN_BUSY_MESSAGE = '번역이 끝난 뒤 용어 정밀스캔을 시작할 수 있어요.';
 const TERM_SCAN_SAVED_MESSAGE = '저장된 회차가 있어야 용어 정밀스캔을 할 수 있어요.';
 const TERM_SCAN_FAILED_MESSAGE =
@@ -716,7 +714,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   function requestTitleTranslation() {
     if (
-      snapshot.connection.provider === 'openai-compatible' &&
       snapshot.autoTranslate &&
       snapshot.work &&
       titlesByWork.has(snapshot.work.workId) &&
@@ -761,9 +758,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       termScanRunning() ||
       snapshot.pendingSaveChapter ||
       (automatic &&
-        (snapshot.connection.provider !== 'openai-compatible' ||
-          !snapshot.autoTranslate ||
-          !titlesByWork.has(snapshot.work.workId)))
+        (!snapshot.autoTranslate ||
+          !titlesByWork.has(snapshot.work.workId) ||
+          selectedGeminiModelUnavailable()))
     )
       return;
     const workId = snapshot.work.workId;
@@ -932,6 +929,15 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let positionDrain: Promise<void> | null = null;
   function geminiTranslationKey(chapterId: string, connection: ConnectionConfig, modelId: string) {
     return JSON.stringify([chapterId, connection.authRef, modelId]);
+  }
+  /** 선택한 Gemini 모델이 어느 회차에서든 404를 냈으면, 사용자가 모델을 바꾸기 전까지 제목도 자동으로 보내지 않는다. */
+  function selectedGeminiModelUnavailable(): boolean {
+    const { connection, selectedModelId } = snapshot;
+    if (connection.provider !== 'gemini' || !selectedModelId) return false;
+    const model = JSON.stringify([connection.authRef, selectedModelId]);
+    return [...unavailableGeminiTranslations].some(
+      (key) => JSON.stringify((JSON.parse(key) as unknown[]).slice(1)) === model,
+    );
   }
   function unavailableGeminiTranslation(chapterId: string): TranslationState | undefined {
     const { connection, selectedModelId } = snapshot;
@@ -2447,10 +2453,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ error: TERM_SCAN_CONNECTION_MESSAGE });
       return;
     }
-    if (snapshot.connection.provider !== 'openai-compatible') {
-      publish({ error: TERM_FILL_GEMINI_MESSAGE });
-      return;
-    }
     const batch = dependencies.batch;
     if (!batch) return;
     if (termScanRunning() || activeTranslation || dependencies.flow?.active || batch.active) {
@@ -2710,7 +2712,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         runAutomaticTranslation();
         requestTitleTranslation();
         if (
-          snapshot.connection.provider === 'openai-compatible' &&
           !snapshot.autoTranslate &&
           dependencies.flow?.getCompleted()?.source.chapterId === chapter.chapterId &&
           snapshot.chapter?.chapterId === chapter.chapterId &&

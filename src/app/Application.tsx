@@ -165,9 +165,7 @@ function RouteScreen({
           onScanBatch={() => void controller.scanBatch()}
           onConfirmBatchCandidates={(choices) => void controller.confirmBatchCandidates(choices)}
           batchFill={state.batchFill}
-          fillAllowed={
-            state.batchFillAvailable && state.connection.provider === 'openai-compatible'
-          }
+          fillAllowed={state.batchFillAvailable}
           onFillBatch={() => void controller.fillBatchCandidates()}
           onCancelBatchFill={controller.cancelBatchFill}
           onCancelBatch={controller.cancelBatch}

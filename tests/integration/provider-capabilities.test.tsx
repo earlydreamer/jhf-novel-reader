@@ -52,11 +52,11 @@ const SUPPORT: Record<Feature, Record<ProviderId, Support>> = {
   autoRetry: { 'openai-compatible': 'supported', gemini: 'supported' },
   autoChapter: { 'openai-compatible': 'supported', gemini: 'supported' },
   titleManual: { 'openai-compatible': 'supported', gemini: 'supported' },
-  titleAuto: { 'openai-compatible': 'supported', gemini: { issue: 421 } },
-  titleGuidance: { 'openai-compatible': 'supported', gemini: { issue: 421 } },
+  titleAuto: { 'openai-compatible': 'supported', gemini: 'supported' },
+  titleGuidance: { 'openai-compatible': 'supported', gemini: 'supported' },
   autoGlossary: { 'openai-compatible': 'supported', gemini: 'supported' },
   termScan: { 'openai-compatible': 'supported', gemini: 'supported' },
-  termFill: { 'openai-compatible': 'supported', gemini: { issue: 421 } },
+  termFill: { 'openai-compatible': 'supported', gemini: 'supported' },
   batch: { 'openai-compatible': 'supported', gemini: 'supported' },
 };
 const PROVIDERS = Object.keys(PROVIDER_LABELS) as ProviderId[];
@@ -449,12 +449,18 @@ const CHECKS: Record<Feature, (provider: ProviderId) => Promise<boolean>> = {
     return h.posts.length > before;
   },
   async termFill(provider) {
-    // 후보가 없는 상태에서는 지원 제공자가 조용히 끝나고, 미지원 제공자만 안내를 남긴다.
-    const h = harness(provider);
+    // 두 번 나온 이름이 미리 번역 후보가 되고, 채우기가 같은 연결로 판정을 요청한 뒤 끝나야 한다.
+    const h = harness(provider, { first: 'アリスとアリスが扉を開けた。' });
     await h.connect();
     await h.app.openWork(workUrl);
+    await h.app.prepareBatch({ first: 1, last: 2 }, false);
+    if (h.app.getSnapshot().batch?.record?.scan?.status === 'pending') await h.app.scanBatch();
+    const record = h.app.getSnapshot().batch?.record;
+    if (record?.scan?.status !== 'review' || !record.scan.candidates.length) return false;
+    const before = h.posts.length;
     await h.app.fillBatchCandidates();
-    return h.app.getSnapshot().error === null;
+    const fill = h.app.getSnapshot().batchFill;
+    return h.app.getSnapshot().error === null && h.posts.length > before && fill?.phase === 'done';
   },
   async batch(provider) {
     const h = harness(provider);

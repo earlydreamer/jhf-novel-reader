@@ -10,7 +10,9 @@ import { digest, Journal, serial, type PrivateFiles } from '../storage/journal';
 import { check, object, record } from '../storage/validation';
 import { chapterIdentity, identifier } from '../storage/readingValidation';
 import { sourceWorkUrl } from '../source/sites';
+import { normalizeChapterInput } from '../providers/plainText';
 import { appliedGuidance, streamingGuidanceContext, type GuidanceRepository } from './guidance';
+import { readReferenceTerms } from './preset';
 
 export type TitleInput = { key: string; source: string };
 export type SavedTitle = TitleInput & {
@@ -212,6 +214,14 @@ export function createTitleTranslation(
     };
     const terms = await guidance.read(workId);
     const local = selected.connection.provider === 'openai-compatible';
+    // 본문과 같이 공용 용어집을 참고 표기로만 넣는다. 필수 표기는 작품 용어집에서만 고른다.
+    const shared = await readReferenceTerms(selected, guidance);
+    const reference = (input: string) => streamingGuidanceContext(terms, workId, input, shared);
+    // Gemini는 본문과 같이 적용할 표기가 있는 제목만 문단 번역으로 보내고, 없으면 기존 요청을 그대로 쓴다.
+    const guided =
+      local ||
+      (selected.connection.provider === 'gemini' &&
+        Boolean(reference(normalizeChapterInput(source))));
     const result = await createProvider(selected).translateChapter(
       {
         token: {
@@ -223,14 +233,14 @@ export function createTitleTranslation(
         languageDirection: 'ja-ko',
         contractVersion: 'plain-v1',
         promptVersion:
-          selected.translationMode === 'stream'
+          selected.translationMode === 'stream' || (guided && !local)
             ? 'colomo-local-v1'
             : local && selected.limits
               ? 'lines-v1'
               : 'hymt2-ko-v1',
-        ...(local
+        ...(guided
           ? {
-              reference: (input: string) => streamingGuidanceContext(terms, workId, input, []),
+              reference,
               requiredTerms: (input: string) =>
                 (appliedGuidance(terms, workId, input, [])?.terms ?? []).flatMap(
                   ({ term, names }) => names.map((name) => ({ source: name, target: term.target })),
