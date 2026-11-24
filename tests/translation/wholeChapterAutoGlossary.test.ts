@@ -202,7 +202,7 @@ test('문단 복구 요청이면 옵션이 켜져 있어도 자동 용어집을 
       connectionId: 'connection',
       modelId: 'local',
       contractVersion: 'plain-v1',
-      promptVersion: 'colomo-local-v1',
+      promptVersion: 'paragraph-stream-v1',
       languageDirection: 'ja-ko',
     },
   } as CompletedTranslation;

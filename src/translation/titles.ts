@@ -237,7 +237,7 @@ export function createTitleTranslation(
         contractVersion: 'plain-v1',
         promptVersion:
           selected.translationMode === 'stream' || (guided && !local)
-            ? 'colomo-local-v1'
+            ? 'paragraph-stream-v1'
             : local && selected.limits
               ? 'lines-v1'
               : 'hymt2-ko-v1',

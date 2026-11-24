@@ -1015,9 +1015,9 @@ it('같은 작품을 다시 등록해도 제거 전 livePosition을 새 번역�
     versionId: 'new-after-removal',
     provenance: {
       ...oldVersion.provenance,
-      promptVersion: 'colomo-local-v1',
+      promptVersion: 'paragraph-stream-v1',
       generation: {
-        mode: 'colomo-local-v1',
+        mode: 'paragraph-stream-v1',
         segments: 1,
         contextTokens: 2048,
         inputBudgetTokens: 1024,

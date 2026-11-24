@@ -2862,7 +2862,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   });
   async function adoptCompleted(value: CompletedTranslation, request: ActiveTranslation) {
-    if (value.provenance.generation?.mode !== 'colomo-local-v1')
+    if (value.provenance.generation?.mode !== 'paragraph-stream-v1')
       return openCompleted(value, request);
     // Saving must not replace the live reading surface or reset its scroll position.
     const recent = (await dependencies.library?.listRecent()) ?? [];

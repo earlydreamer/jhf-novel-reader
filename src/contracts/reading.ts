@@ -43,7 +43,7 @@ export type LocalTranslationLimits = {
 };
 export type SegmentedGeneration = LocalTranslationLimits & {
   /** segments-v1은 이전 평문 구간 저장본, lines-v1은 줄 ID 방식이다. */
-  mode: 'segments-v1' | 'lines-v1' | 'colomo-local-v1';
+  mode: 'segments-v1' | 'lines-v1' | 'paragraph-stream-v1';
   segments: number;
   /** lines-v1에서 완료되지 않은 줄을 이어 보낸 횟수. */
   continuations?: number;
@@ -63,7 +63,7 @@ export type WholeChapterRequest = {
   source: SourceSnapshot;
   languageDirection: 'ja-ko';
   contractVersion: 'plain-v1';
-  promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1' | 'lines-v1' | 'colomo-local-v1';
+  promptVersion: 'hymt2-ko-v1' | 'hymt2-segments-v1' | 'lines-v1' | 'paragraph-stream-v1';
   onProgress?: (completed: number, total: number) => void;
   /** 저장 전 미리보기: 지금까지 받은 번역문을 원문 순서로 조립한 텍스트. */
   onPreview?: (text: string) => void;

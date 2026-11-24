@@ -537,7 +537,7 @@ test.each([
       connectionId: 'saved-connection',
       modelId: 'saved-model',
       contractVersion: 'plain-v1',
-      promptVersion: 'colomo-local-v1',
+      promptVersion: 'paragraph-stream-v1',
       languageDirection: 'ja-ko',
     },
   });

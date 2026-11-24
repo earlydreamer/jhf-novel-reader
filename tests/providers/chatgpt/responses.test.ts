@@ -117,7 +117,7 @@ const request: WholeChapterRequest = {
   token: { requestId: 'request', chapterId: source.chapterId, settingsRevision: 1 },
   languageDirection: 'ja-ko',
   contractVersion: 'plain-v1',
-  promptVersion: 'colomo-local-v1',
+  promptVersion: 'paragraph-stream-v1',
 };
 
 function account(reply: (body: Record<string, unknown>) => { status: number; data: string }) {

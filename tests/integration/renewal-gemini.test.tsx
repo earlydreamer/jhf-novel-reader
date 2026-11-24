@@ -681,7 +681,7 @@ it.each([true, false])(
     ]);
     expect(repaired.provenance).toMatchObject({
       provider: 'gemini',
-      promptVersion: 'colomo-local-v1',
+      promptVersion: 'paragraph-stream-v1',
       repair: { baseVersionId: base.versionId, paragraphIndexes: [1] },
     });
     expect(Boolean(repaired.provenance.guidanceHash)).toBe(matchingGlossary);

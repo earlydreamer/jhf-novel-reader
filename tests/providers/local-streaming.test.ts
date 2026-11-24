@@ -37,7 +37,7 @@ const request: WholeChapterRequest = {
   source: chapter,
   token: { chapterId: source.chapterId, requestId: 'request', settingsRevision: 0 },
   contractVersion: 'plain-v1',
-  promptVersion: 'colomo-local-v1',
+  promptVersion: 'paragraph-stream-v1',
   languageDirection: 'ja-ko',
 };
 const delta = (content: string) =>
@@ -206,7 +206,7 @@ test('first 8 and following 16 paragraph batches stay inside 8K and include only
   expect(f.calls.map((c) => (c.body.messages as unknown[]).length)).toEqual([1, 3, 3]);
   expect((f.calls[2]!.body.messages as { content: string }[])[0]!.content).not.toContain('id="A"');
   expect(result.generation).toMatchObject({
-    mode: 'colomo-local-v1',
+    mode: 'paragraph-stream-v1',
     contextTokens: 8192,
     segments: 3,
     continuations: 0,

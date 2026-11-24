@@ -278,7 +278,7 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             languageDirection: 'ja-ko',
             contractVersion: 'plain-v1',
             promptVersion: translateByParagraph
-              ? 'colomo-local-v1'
+              ? 'paragraph-stream-v1'
               : segmented
                 ? 'lines-v1'
                 : 'hymt2-ko-v1',
@@ -384,8 +384,8 @@ export function createWholeChapterFlow(deps: FlowDependencies) {
             modelId: selected.modelId,
             contractVersion: 'plain-v1',
             promptVersion:
-              result.generation?.mode === 'colomo-local-v1'
-                ? 'colomo-local-v1'
+              result.generation?.mode === 'paragraph-stream-v1'
+                ? 'paragraph-stream-v1'
                 : result.generation
                   ? 'lines-v1'
                   : 'hymt2-ko-v1',
