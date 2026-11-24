@@ -22,7 +22,10 @@ import org.json.JSONObject;
  */
 @CapacitorPlugin(name = "ChatGpt")
 public final class ChatGptPlugin extends Plugin {
-    private static final long LOGIN_TIMEOUT_MS = 5 * 60 * 1000L;
+    /** 짧은 포그라운드 서비스의 시스템 한도(약 3분) 안에서 끝낸다. */
+    private static final long LOGIN_TIMEOUT_MS = 170 * 1000L;
+    /** 콜백을 받은 뒤 브라우저가 같은 콜백을 다시 열어도 완료 페이지를 보여 주는 시간. */
+    private static final long CALLBACK_GRACE_MS = 10 * 1000L;
     private final ExecutorService login = Executors.newSingleThreadExecutor();
     private final ExecutorService requests = Executors.newSingleThreadExecutor();
     private final ChatGptHttp http = new ChatGptHttp();
@@ -54,25 +57,36 @@ public final class ChatGptPlugin extends Plugin {
         if (loopback != null) { call.reject("busy"); return; }
         final ChatGptLoopback listener;
         try {
-            listener = new ChatGptLoopback();
+            listener = new ChatGptLoopback(getContext().getPackageName() + "://chatgpt");
         } catch (Exception unavailable) {
             outcome(call, "failed");
             return;
         }
         loopback = listener;
+        Runnable closer = listener::close;
         login.execute(() -> {
             String result;
             try {
-                result = signIn(listener);
+                result = signIn(listener, closer);
             } finally {
-                listener.close();
+                if (!listener.lingering()) {
+                    listener.close();
+                    releaseService(closer);
+                }
                 synchronized (this) { if (loopback == listener) loopback = null; }
             }
             outcome(call, result);
         });
     }
 
-    private String signIn(ChatGptLoopback listener) {
+    /** 이 시도가 띄운 서비스일 때만 내린다. 그 사이 새 로그인이 서비스를 이어받았으면 그대로 둔다. */
+    private synchronized void releaseService(Runnable closer) {
+        if (ChatGptLoginService.onTimeout != closer) return;
+        ChatGptLoginService.onTimeout = null;
+        ChatGptLoginService.stop(getContext());
+    }
+
+    private String signIn(ChatGptLoopback listener, Runnable closer) {
         try {
             ChatGptSession.Begin begin = session.begin();
             String state = ChatGptProtocol.random();
@@ -84,12 +98,16 @@ public final class ChatGptPlugin extends Plugin {
                 begin.hostId, begin.client, redirect, state, nonce, verifier)));
             browser.addCategory(Intent.CATEGORY_BROWSABLE);
             browser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            // 브라우저가 앞에 있는 동안 시스템이 이 앱의 네트워크를 막지 않도록 서비스를 띄운다.
+            ChatGptLoginService.onTimeout = closer;
+            ChatGptLoginService.start(getContext());
             try {
                 getContext().startActivity(browser);
             } catch (ActivityNotFoundException missing) {
                 return "no_browser";
             }
             Map<String, String> query = listener.await(state, LOGIN_TIMEOUT_MS);
+            listener.linger(state, CALLBACK_GRACE_MS, () -> releaseService(closer));
             String client = ChatGptProtocol.callbackClient(query, state, begin.client);
             session.complete(client, query.get("code"), verifier, redirect, nonce);
             return "connected";
@@ -246,6 +264,7 @@ public final class ChatGptPlugin extends Plugin {
         cancelActive();
         ChatGptLoopback listener = loopback;
         if (listener != null) listener.close();
+        ChatGptLoginService.stop(getContext());
         login.shutdownNow();
         requests.shutdownNow();
     }

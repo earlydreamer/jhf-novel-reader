@@ -183,7 +183,7 @@ const chatGptConnectMessages: Record<ChatGptConnectOutcome, string> = {
   connected: 'ChatGPT 계정을 연결했어요.',
   cancelled: '로그인을 취소했어요. 연결은 저장하지 않았어요.',
   denied: '권한 동의를 거부해 연결하지 않았어요.',
-  timeout: '5분 안에 로그인을 마치지 못해 연결하지 않았어요. 다시 시도해 주세요.',
+  timeout: '3분 안에 로그인을 마치지 못해 연결하지 않았어요. 다시 시도해 주세요.',
   not_eligible: '이 계정의 플랜으로는 앱에서 ChatGPT를 쓸 수 없어요. 연결은 저장하지 않았어요.',
   account_mismatch: '이 기기에서 전에 연결한 ChatGPT 계정과 달라요. 같은 계정으로 로그인해 주세요.',
   already_connected: '이미 연결된 계정이 있어요. 연결을 해제한 뒤 다시 시도해 주세요.',

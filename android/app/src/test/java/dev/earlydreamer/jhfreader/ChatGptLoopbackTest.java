@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -50,6 +51,49 @@ public class ChatGptLoopbackTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    private static String page(int port, String target) throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", port)) {
+            OutputStream output = socket.getOutputStream();
+            output.write(("GET " + target + " HTTP/1.1\r\nHost: 127.0.0.1:" + port + "\r\n\r\n")
+                .getBytes(StandardCharsets.US_ASCII));
+            output.flush();
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    @Test public void answersRepeatedCallbackDuringGraceThenCloses() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            ChatGptLoopback loopback = new ChatGptLoopback("dev.example.app://chatgpt");
+            int port = loopback.port();
+            Future<Map<String, String>> result = executor.submit(() -> loopback.await("good", 10_000));
+            String first = page(port, "/auth/callback?state=good&code=c1");
+            assertTrue(first.startsWith("HTTP/1.1 200"));
+            assertTrue(first.contains("href='dev.example.app://chatgpt'>앱으로 돌아가기</a>"));
+            assertEquals("c1", result.get(5, TimeUnit.SECONDS).get("code"));
+
+            CountDownLatch done = new CountDownLatch(1);
+            loopback.linger("good", 1_000, done::countDown);
+            assertTrue(loopback.lingering());
+            assertTrue(page(port, "/auth/callback?state=good&code=c1").startsWith("HTTP/1.1 200"));
+            assertTrue(page(port, "/auth/callback?state=old&code=c1").startsWith("HTTP/1.1 400"));
+            assertTrue(done.await(5, TimeUnit.SECONDS));
+            assertThrows(Exception.class, () -> page(port, "/auth/callback?state=good&code=c1"));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test public void closeEndsGraceAndRejectsUnsafeReturnLink() throws Exception {
+        ChatGptLoopback loopback = new ChatGptLoopback();
+        CountDownLatch done = new CountDownLatch(1);
+        loopback.linger("s", 60_000, done::countDown);
+        loopback.close();
+        assertTrue(done.await(5, TimeUnit.SECONDS));
+        assertThrows(IllegalArgumentException.class, () -> new ChatGptLoopback("javascript:alert(1)"));
+        assertThrows(IllegalArgumentException.class, () -> new ChatGptLoopback("app://x'><script>"));
     }
 
     @Test public void cancelAndTimeoutCloseTheListener() throws Exception {
