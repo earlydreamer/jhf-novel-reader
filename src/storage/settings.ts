@@ -33,6 +33,8 @@ export type ReadingSettings = {
   lookupNamuwiki?: boolean;
   /** 기기 안 용어 판정 모델을 쓸지. 켜졌을 때만 저장한다. */
   onDeviceEmbedding?: boolean;
+  /** ChatGPT 플랜 사용 안내를 봤는지. 본 뒤에만 저장한다. */
+  chatgptWelcomed?: boolean;
   theme?: ThemePreference;
   readingBackground?: ReadingBackground;
   lineHeight?: LineHeight;
@@ -66,6 +68,7 @@ function readingSettings(value: unknown): ReadingSettings {
     'lookupWikipedia',
     'lookupNamuwiki',
     'onDeviceEmbedding',
+    'chatgptWelcomed',
     'theme',
     'readingBackground',
     'lineHeight',
@@ -82,6 +85,7 @@ function readingSettings(value: unknown): ReadingSettings {
   check(value.lookupWikipedia === undefined || typeof value.lookupWikipedia === 'boolean');
   check(value.lookupNamuwiki === undefined || typeof value.lookupNamuwiki === 'boolean');
   check(value.onDeviceEmbedding === undefined || typeof value.onDeviceEmbedding === 'boolean');
+  check(value.chatgptWelcomed === undefined || value.chatgptWelcomed === true);
   check(value.theme === undefined || THEME_PREFERENCES.includes(value.theme as ThemePreference));
   check(
     value.readingBackground === undefined ||

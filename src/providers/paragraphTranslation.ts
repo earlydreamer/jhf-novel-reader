@@ -252,7 +252,7 @@ export async function translateParagraphs(
     finishReason: 'complete',
     ...(failures.length ? { failedParagraphs: failures } : {}),
     generation: {
-      mode: 'colomo-local-v1',
+      mode: 'paragraph-stream-v1',
       ...limits,
       segments: batches.length,
       continuations: retries,

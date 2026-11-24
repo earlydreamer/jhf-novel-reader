@@ -527,6 +527,27 @@ test('saved translation information uses the displayed version provenance and do
   expect(info).not.toHaveTextContent('987');
 });
 
+test.each([
+  ['openai-compatible', 'OpenAI 호환'],
+  ['chatgpt', 'ChatGPT'],
+] as const)('%s 저장본의 출처를 제공자 이름으로 보여 준다', (provider, label) => {
+  const version = completed({
+    provenance: {
+      provider,
+      connectionId: 'saved-connection',
+      modelId: 'saved-model',
+      contractVersion: 'plain-v1',
+      promptVersion: 'paragraph-stream-v1',
+      languageDirection: 'ja-ko',
+    },
+  });
+  render(<ImmersiveReader {...props({ version })} />);
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '번역 정보 보기' }));
+  expect(screen.getByRole('dialog', { name: '번역 정보' })).toHaveTextContent(`제공자: ${label}`);
+});
+
 test('기기 판정 기록이 있으면 번역 확인 결과에 판정 요약 한 줄을 보여 준다', () => {
   const base = completed();
   const openSheet = () => {

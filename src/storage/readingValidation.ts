@@ -5,11 +5,14 @@ import type {
   WorkPage,
   SelectedModel,
 } from '../contracts';
+import { PROVIDER_IDS, type ProviderId } from '../contracts';
 import { check, integer, object, record, text, url } from './validation';
 import { StorageError } from './errors';
 import { secretRef } from './secrets';
 import { validLocalLimits } from '../translation/segments';
 import { isCanonicalSourceUrl, isSourceChapterId, isSourceWorkPageUrl } from '../source/sites';
+/** 2026-11-24 이전 저장본의 문단 묶음 번역 식별자. 읽을 때만 받고 새로 쓰지 않는다. */
+const LEGACY_PARAGRAPH_STREAM = 'colomo-local-v1';
 export function identifier(value: unknown): asserts value is string {
   text(value);
   check(/^[A-Za-z0-9][A-Za-z0-9.-]{0,255}$/.test(value) && !value.includes('..'));
@@ -36,10 +39,13 @@ function date(value: unknown) {
 }
 export function connectionConfig(value: unknown): asserts value is ConnectionConfig {
   object(value, ['provider', 'baseUrl', 'authRef', 'revision']);
-  check(value.provider === 'openai-compatible' || value.provider === 'gemini');
+  check(PROVIDER_IDS.includes(value.provider as ProviderId));
   url(value.baseUrl);
   integer(value.revision);
   if (value.authRef !== undefined) secretRef(value.authRef);
+  // ChatGPT 토큰은 네이티브 저장소에만 있다. 설정에는 고정 주소만 두고 인증 참조를 두지 않는다.
+  if (value.provider === 'chatgpt')
+    check(value.baseUrl === 'https://api.openai.com/v1' && value.authRef === undefined);
 }
 
 export function selected(value: unknown): asserts value is SelectedModel {
@@ -189,7 +195,7 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
     );
     check(value.blocks.length === source.paragraphs.length);
   }
-  check(p.provider === 'openai-compatible' || p.provider === 'gemini');
+  check(PROVIDER_IDS.includes(p.provider as ProviderId));
   text(p.connectionId);
   text(p.modelId);
   check(p.contractVersion === 'plain-v1' && p.languageDirection === 'ja-ko');
@@ -220,8 +226,13 @@ export async function completedTranslation(value: unknown): Promise<CompletedTra
       'estimator',
     ]);
     const g = p.generation;
+    // 이름을 바꾸기 전 저장본·백업의 문단 묶음 식별자는 새 이름으로 읽는다.
+    if (p.promptVersion === LEGACY_PARAGRAPH_STREAM && g.mode === LEGACY_PARAGRAPH_STREAM) {
+      p.promptVersion = 'paragraph-stream-v1';
+      g.mode = 'paragraph-stream-v1';
+    }
     check(
-      (p.promptVersion === 'colomo-local-v1' && g.mode === 'colomo-local-v1') ||
+      (p.promptVersion === 'paragraph-stream-v1' && g.mode === 'paragraph-stream-v1') ||
         (p.provider === 'openai-compatible' &&
           ((p.promptVersion === 'hymt2-segments-v1' && g.mode === 'segments-v1') ||
             (p.promptVersion === 'lines-v1' && g.mode === 'lines-v1'))),

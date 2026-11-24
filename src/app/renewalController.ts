@@ -1,4 +1,9 @@
-import type { AppLifecycle } from '../contracts';
+import type {
+  AppLifecycle,
+  ChatGptAccount,
+  ChatGptAccountState,
+  ChatGptConnectOutcome,
+} from '../contracts';
 import type {
   ParagraphRepair,
   PhaseDurations,
@@ -95,11 +100,18 @@ export type CatalogProblemReason =
   | 'auth_missing' // 인증값이 없거나 형식이 잘못돼 요청 전에 막음
   | 'storage' // 보안 저장소 읽기·쓰기 실패
   | 'bad_response' // 응답이 모델 목록 형식이 아님
+  | 'account_reconnect' // 계정 연결이 끊겼거나 갱신 결과를 확인하지 못함
+  | 'plan_not_eligible' // 연결한 계정의 플랜으로 쓸 수 없음
+  | 'usage_limit' // 계정 플랜의 사용량 한도에 도달
   | 'unknown';
 export interface CatalogProblem {
   readonly reason: CatalogProblemReason;
   readonly httpStatus?: number;
 }
+export type ChatGptNotice =
+  | { readonly kind: 'connect'; readonly outcome: ChatGptConnectOutcome }
+  | { readonly kind: 'disconnect'; readonly revoked: boolean; readonly hadSession: boolean }
+  | { readonly kind: 'disconnect_failed' };
 export type ConnectionCheckResult =
   | {
       readonly kind: 'done';
@@ -121,6 +133,8 @@ export type WorkRecentSnapshot =
       position: ReadingPosition | null;
     };
 export interface RenewalDependencies {
+  /** Android 앱의 ChatGPT 계정 연결. 토큰은 네이티브에만 있다. */
+  readonly chatgpt?: ChatGptAccount;
   readonly titles?: TitleRepository;
   readonly translateTitles?: TitleTranslation;
   readonly defaultTranslationMode?: 'stream' | 'legacy';
@@ -254,6 +268,12 @@ export interface RenewalSnapshot {
     handled: readonly string[];
     error?: string;
   } | null;
+  /** ChatGPT 계정 연결. 계정 연결을 쓸 수 없는 환경이면 unavailable이다. */
+  readonly chatgptAccount: ChatGptAccountState | 'unavailable' | 'connecting' | 'disconnecting';
+  /** 마지막 로그인·연결 해제 결과. 화면에 한 번 알리고 지운다. */
+  readonly chatgptNotice: ChatGptNotice | null;
+  /** 플랜 사용 안내를 본 적이 있는지. 처음 연결했을 때 한 번만 보여 준다. */
+  readonly chatgptWelcomed: boolean;
   readonly batchFillAvailable: boolean;
   /** 미리 번역 검토 후보를 정밀스캔으로 채우는 상태. recordId로 어느 기록의 결과인지 밝힌다. */
   readonly batchFill: {
@@ -300,8 +320,19 @@ function safeEndpoint(input: string): string {
     throw new ReaderError('connection');
   return url.href.replace(/\/$/, '');
 }
+/** 모델을 서버가 정하는 원격 제공자. 404로 사라진 모델에 자동으로 다시 보내지 않는다. */
+function remoteProvider(provider: ConnectionConfig['provider']): boolean {
+  return provider === 'gemini' || provider === 'chatgpt';
+}
 function errorLabel(error: unknown): CatalogStatus {
-  if (error instanceof ReaderError && error.code === 'auth') return 'auth';
+  if (
+    error instanceof ReaderError &&
+    (error.code === 'auth' ||
+      error.code === 'reconnect_required' ||
+      error.code === 'plan_not_eligible')
+  )
+    return 'auth';
+  if (error instanceof ReaderError && error.code === 'usage_limit') return 'connection';
   if (error instanceof ReaderError && error.code === 'storage') return 'storage';
   if (
     error instanceof ReaderError &&
@@ -320,6 +351,12 @@ function problemOf(error: unknown): CatalogProblem {
         : { reason: 'auth_missing' };
     case 'storage':
       return { reason: 'storage' };
+    case 'reconnect_required':
+      return { reason: 'account_reconnect' };
+    case 'plan_not_eligible':
+      return { reason: 'plan_not_eligible' };
+    case 'usage_limit':
+      return { reason: 'usage_limit' };
     case 'timeout_unknown':
       return { reason: 'network' };
     case 'connection':
@@ -339,8 +376,6 @@ function problemOf(error: unknown): CatalogProblem {
 }
 const TERM_SCAN_CONNECTION_MESSAGE =
   '연결 설정에서 서버와 모델을 확인하면 용어 정밀스캔을 할 수 있어요.';
-const TERM_FILL_GEMINI_MESSAGE =
-  '미리 번역 후보의 표기 채우기는 로컬 모델 연결에서만 쓸 수 있어요.';
 const TERM_SCAN_BUSY_MESSAGE = '번역이 끝난 뒤 용어 정밀스캔을 시작할 수 있어요.';
 const TERM_SCAN_SAVED_MESSAGE = '저장된 회차가 있어야 용어 정밀스캔을 할 수 있어요.';
 const TERM_SCAN_FAILED_MESSAGE =
@@ -397,6 +432,12 @@ export interface RenewalController {
   changeConnection(input: Omit<ConnectionConfig, 'revision' | 'authRef'>): void;
   checkConnection(secret?: string): Promise<ConnectionCheckResult>;
   chooseModel(modelId: string): void;
+  /** 시스템 브라우저로 ChatGPT에 로그인한다. 결과는 chatgptNotice로 알린다. */
+  connectChatGpt(): Promise<void>;
+  cancelChatGptConnect(): void;
+  disconnectChatGpt(): Promise<void>;
+  acknowledgeChatGptWelcome(): void;
+  dismissChatGptNotice(): void;
   prepareBatch(range: ChapterRange | null, retranslate: boolean): Promise<void>;
   runBatch(retryUncertain?: boolean): Promise<void>;
   scanBatch(): Promise<void>;
@@ -508,6 +549,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     termScan: null,
     batchFillAvailable: Boolean(dependencies.rangeJudge),
     batchFill: null,
+    chatgptAccount: dependencies.chatgpt ? 'disconnected' : 'unavailable',
+    chatgptNotice: null,
+    chatgptWelcomed: false,
   };
   const listeners = new Set<() => void>();
   const history: Route[] = [];
@@ -558,6 +602,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     mode?: SelectedModel['translationMode'],
   ): RenewalSnapshot['translationMode'] {
     if (provider === 'gemini') return dependencies.streamingAvailable ? 'stream' : 'legacy';
+    // ChatGPT 계정 연결은 Responses 스트림만 받는다.
+    if (provider === 'chatgpt') return 'stream';
     return mode ?? dependencies.defaultTranslationMode ?? 'legacy';
   }
   function persistSettings() {
@@ -584,6 +630,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       ...(snapshot.lookupWikipedia ? { lookupWikipedia: true } : {}),
       ...(snapshot.lookupNamuwiki ? { lookupNamuwiki: true } : {}),
       ...(snapshot.onDeviceEmbedding ? { onDeviceEmbedding: true } : {}),
+      ...(snapshot.chatgptWelcomed ? { chatgptWelcomed: true } : {}),
       selection: snapshot.selectedModelId
         ? {
             connection: { ...snapshot.connection },
@@ -716,7 +763,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   }
   function requestTitleTranslation() {
     if (
-      snapshot.connection.provider === 'openai-compatible' &&
       snapshot.autoTranslate &&
       snapshot.work &&
       titlesByWork.has(snapshot.work.workId) &&
@@ -761,9 +807,9 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       termScanRunning() ||
       snapshot.pendingSaveChapter ||
       (automatic &&
-        (snapshot.connection.provider !== 'openai-compatible' ||
-          !snapshot.autoTranslate ||
-          !titlesByWork.has(snapshot.work.workId)))
+        (!snapshot.autoTranslate ||
+          !titlesByWork.has(snapshot.work.workId) ||
+          selectedGeminiModelUnavailable()))
     )
       return;
     const workId = snapshot.work.workId;
@@ -933,10 +979,19 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   function geminiTranslationKey(chapterId: string, connection: ConnectionConfig, modelId: string) {
     return JSON.stringify([chapterId, connection.authRef, modelId]);
   }
+  /** 선택한 원격 모델이 어느 회차에서든 404를 냈으면, 사용자가 모델을 바꾸기 전까지 제목도 자동으로 보내지 않는다. */
+  function selectedGeminiModelUnavailable(): boolean {
+    const { connection, selectedModelId } = snapshot;
+    if (!remoteProvider(connection.provider) || !selectedModelId) return false;
+    const model = JSON.stringify([connection.authRef, selectedModelId]);
+    return [...unavailableGeminiTranslations].some(
+      (key) => JSON.stringify((JSON.parse(key) as unknown[]).slice(1)) === model,
+    );
+  }
   function unavailableGeminiTranslation(chapterId: string): TranslationState | undefined {
     const { connection, selectedModelId } = snapshot;
     if (
-      connection.provider !== 'gemini' ||
+      !remoteProvider(connection.provider) ||
       !selectedModelId ||
       !unavailableGeminiTranslations.has(
         geminiTranslationKey(chapterId, connection, selectedModelId),
@@ -1414,9 +1469,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             lookupWikipedia: saved.lookupWikipedia ?? false,
             lookupNamuwiki: saved.lookupNamuwiki ?? false,
             onDeviceEmbedding: saved.onDeviceEmbedding ?? false,
+            chatgptWelcomed: saved.chatgptWelcomed ?? false,
           });
         }
         initialized = true;
+        void refreshChatGptAccount();
         void restoreOnDeviceEmbedding();
         runAutomaticTranslation();
       } catch {
@@ -2447,10 +2504,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       publish({ error: TERM_SCAN_CONNECTION_MESSAGE });
       return;
     }
-    if (snapshot.connection.provider !== 'openai-compatible') {
-      publish({ error: TERM_FILL_GEMINI_MESSAGE });
-      return;
-    }
     const batch = dependencies.batch;
     if (!batch) return;
     if (termScanRunning() || activeTranslation || dependencies.flow?.active || batch.active) {
@@ -2675,7 +2728,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           { autoGlossary: snapshot.autoGlossary && !repair },
         );
         const completed = dependencies.flow.getCompleted();
-        if (selectedModel.connection.provider === 'gemini') {
+        if (remoteProvider(selectedModel.connection.provider)) {
           const state = dependencies.flow.getSnapshot();
           const key = geminiTranslationKey(
             chapter.chapterId,
@@ -2710,7 +2763,6 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
         runAutomaticTranslation();
         requestTitleTranslation();
         if (
-          snapshot.connection.provider === 'openai-compatible' &&
           !snapshot.autoTranslate &&
           dependencies.flow?.getCompleted()?.source.chapterId === chapter.chapterId &&
           snapshot.chapter?.chapterId === chapter.chapterId &&
@@ -2810,7 +2862,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     }
   });
   async function adoptCompleted(value: CompletedTranslation, request: ActiveTranslation) {
-    if (value.provenance.generation?.mode !== 'colomo-local-v1')
+    if (value.provenance.generation?.mode !== 'paragraph-stream-v1')
       return openCompleted(value, request);
     // Saving must not replace the live reading surface or reset its scroll position.
     const recent = (await dependencies.library?.listRecent()) ?? [];
@@ -3310,7 +3362,111 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     if (unsubscribeLifecycle) void unsubscribeLifecycle().catch(() => {});
     listeners.clear();
   }
+  /** 네이티브의 연결 상태를 다시 읽는다. 로그인·해제 중에는 그 결과를 기다린다. */
+  async function refreshChatGptAccount(): Promise<void> {
+    const account = dependencies.chatgpt;
+    if (!account || disposed) return;
+    if (chatGptAccountBusy()) return;
+    let state: ChatGptAccountState;
+    try {
+      state = await account.status();
+    } catch {
+      state = 'reconnect';
+    }
+    // 읽는 동안 로그인·해제가 시작됐으면 그 결과가 상태를 정한다.
+    if (disposed || chatGptAccountBusy()) return;
+    publish({ chatgptAccount: state });
+  }
+  function chatGptAccountBusy(): boolean {
+    return snapshot.chatgptAccount === 'connecting' || snapshot.chatgptAccount === 'disconnecting';
+  }
+  async function connectChatGpt(): Promise<void> {
+    const account = dependencies.chatgpt;
+    if (!account || disposed || !initialized) return;
+    if (snapshot.chatgptAccount !== 'disconnected' && snapshot.chatgptAccount !== 'reconnect')
+      return;
+    publish({ chatgptAccount: 'connecting', chatgptNotice: null });
+    let outcome: ChatGptConnectOutcome;
+    try {
+      outcome = await account.connect();
+    } catch {
+      outcome = 'failed';
+    }
+    if (disposed) return;
+    let state: ChatGptAccountState;
+    try {
+      state = await account.status();
+    } catch {
+      state = 'reconnect';
+    }
+    if (disposed) return;
+    publish({ chatgptAccount: state, chatgptNotice: { kind: 'connect', outcome } });
+    // 로그인한 직후 같은 연결로 모델 목록을 읽는다. 다른 제공자를 쓰는 중이면 목록을 건드리지 않는다.
+    if (state === 'connected' && snapshot.connection.provider === 'chatgpt')
+      await checkConnection();
+  }
+  function cancelChatGptConnect(): void {
+    if (snapshot.chatgptAccount === 'connecting')
+      void dependencies.chatgpt?.cancelConnect().catch(() => undefined);
+  }
+  async function disconnectChatGpt(): Promise<void> {
+    const account = dependencies.chatgpt;
+    if (!account || disposed || !initialized) return;
+    if (snapshot.chatgptAccount === 'connecting' || snapshot.chatgptAccount === 'disconnecting')
+      return;
+    const usingChatGpt = snapshot.connection.provider === 'chatgpt';
+    // 번역·미리 번역·정밀스캔·제목 번역이 이 연결을 쓰는 중에는 해제하지 않는다.
+    if (
+      usingChatGpt &&
+      (activeTranslation ||
+        dependencies.flow?.active ||
+        dependencies.batch?.active ||
+        termScanRunning() ||
+        titleJob)
+    ) {
+      publish({ error: '번역이 끝난 뒤 ChatGPT 연결을 해제할 수 있어요.' });
+      return;
+    }
+    publish({ chatgptAccount: 'disconnecting', chatgptNotice: null });
+    if (usingChatGpt) {
+      catalogOperation++;
+      catalogAbort?.abort();
+      session = null;
+    }
+    let notice: ChatGptNotice;
+    try {
+      notice = { kind: 'disconnect', ...(await account.disconnect()) };
+    } catch {
+      notice = { kind: 'disconnect_failed' };
+    }
+    if (disposed) return;
+    let state: ChatGptAccountState;
+    try {
+      state = await account.status();
+    } catch {
+      state = 'reconnect';
+    }
+    if (disposed) return;
+    publish({
+      chatgptAccount: state,
+      chatgptNotice: notice,
+      ...(usingChatGpt ? { models: [], catalogStatus: 'idle' as const, catalogProblem: null } : {}),
+    });
+  }
+  function acknowledgeChatGptWelcome(): void {
+    if (snapshot.chatgptWelcomed) return;
+    publish({ chatgptWelcomed: true });
+    persistSettings();
+  }
+  function dismissChatGptNotice(): void {
+    if (snapshot.chatgptNotice) publish({ chatgptNotice: null });
+  }
   return {
+    connectChatGpt,
+    cancelChatGptConnect,
+    disconnectChatGpt,
+    acknowledgeChatGptWelcome,
+    dismissChatGptNotice,
     translateTitles,
     saveTitle,
     changeAutoTranslate(enabled) {

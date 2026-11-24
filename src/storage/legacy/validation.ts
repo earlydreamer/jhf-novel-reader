@@ -1,4 +1,4 @@
-import type { Chapter } from '../../contracts';
+import { PROVIDER_IDS, type Chapter, type ProviderId } from '../../contracts';
 import {
   createCacheKey,
   type Checkpoint,
@@ -76,7 +76,7 @@ async function common(value: Record<string, unknown>, source: unknown): Promise<
   const id = value.identity;
   url(id.canonicalUrl, true);
   text(id.sourceHash);
-  check(id.provider === 'openai-compatible' || id.provider === 'gemini');
+  check(PROVIDER_IDS.includes(id.provider as ProviderId));
   url(id.normalizedEndpoint);
   text(id.model);
   text(id.promptVersion);

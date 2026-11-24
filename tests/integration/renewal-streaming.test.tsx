@@ -268,7 +268,7 @@ test('live reader updates before model settlement, keeps position on save and op
   expect(screen.getByRole('article', { name: '번역 본문' })).toBe(preview);
   expect(preview.scrollTop).toBe(325);
   const saved = h.app.getSnapshot().version!;
-  expect(saved.provenance.generation?.mode).toBe('colomo-local-v1');
+  expect(saved.provenance.generation?.mode).toBe('paragraph-stream-v1');
   await waitFor(async () =>
     expect(await createLibraryStore(h.adapters.files).readPosition(saved.versionId)).toMatchObject({
       blockId: saved.blocks[2]!.id,

@@ -12,6 +12,7 @@ import { createNativePreferences, createNativePrivateFiles } from '../storage/na
 import { createNativeSecretStore } from '../storage/secrets';
 import type {
   AppLifecycle,
+  ChatGptAccount,
   ModelChoice,
   ModelTransport,
   SecretStore,
@@ -26,6 +27,8 @@ export interface ApplicationAdapters {
   readonly preferences: PreferenceBackend;
   readonly secrets: SecretStore;
   readonly lifecycle: AppLifecycle;
+  /** Android 앱의 ChatGPT 계정 연결. 없으면 ChatGPT 제공자를 쓸 수 없다. */
+  readonly chatgpt?: ChatGptAccount;
 }
 
 import { createRenewalController, type RenewalController } from './renewalController';
@@ -48,6 +51,9 @@ import { openSourceBrowser } from '../platform/browse';
 import { BROWSE_SITES } from '../platform/browseSites';
 import { normalizeOpenAICompatibleBaseUrl } from '../providers/endpoint';
 import { normalizeGeminiBaseUrl } from '../providers/gemini';
+import { listChatGptModels, normalizeChatGptBaseUrl } from '../providers/chatgpt';
+import { createChatGptProviderSession } from '../providers/chatgpt/session';
+import { nativeChatGptAccount } from '../platform/chatgpt';
 import { ReaderError } from '../contracts';
 import { createGuidanceRepository, type WorkGuidance } from '../translation/guidance';
 import { createAutoGlossary } from '../translation/autoGlossary';
@@ -71,6 +77,9 @@ export function createRenewalApplication(
         return createProviderSession(selection, adapters.modelTransport, adapters.secrets);
       case 'gemini':
         return createGeminiProviderSession(selection, adapters.modelTransport, adapters.secrets);
+      case 'chatgpt':
+        if (!adapters.chatgpt) throw new ReaderError('model_missing');
+        return createChatGptProviderSession(selection, adapters.chatgpt);
       default:
         throw new ReaderError('model_missing');
     }
@@ -132,6 +141,7 @@ export function createRenewalApplication(
     }),
     clock: adapters.clock,
     lifecycle: adapters.lifecycle,
+    chatgpt: adapters.chatgpt,
     embedding: capacitorEmbedding,
     onTermDecisionChange: (enabled: boolean) => {
       termDecisionGate.enabled = enabled;
@@ -150,6 +160,11 @@ export function createRenewalApplication(
           break;
         case 'gemini':
           baseUrl = normalizeGeminiBaseUrl(config.baseUrl);
+          break;
+        case 'chatgpt':
+          // 계정 토큰은 네이티브에 있다. 웹 화면에서 받은 인증값은 쓰지 않는다.
+          if (secret || !adapters.chatgpt) throw new ReaderError('model_list');
+          baseUrl = normalizeChatGptBaseUrl(config.baseUrl);
           break;
         default:
           throw new ReaderError('model_list');
@@ -182,6 +197,9 @@ export function createRenewalApplication(
               signal,
             );
             break;
+          case 'chatgpt':
+            models = await listChatGptModels(adapters.chatgpt!, signal);
+            break;
           default:
             throw new ReaderError('model_list');
         }
@@ -211,6 +229,7 @@ export function createNativeRenewalApplication(): RenewalController {
     preferences: createNativePreferences(),
     secrets: createNativeSecretStore(),
     lifecycle: capacitorLifecycle,
+    chatgpt: nativeChatGptAccount(),
     browse: (startUrl = BROWSE_SITES[0]!.startUrl) => openSourceBrowser(startUrl),
   });
 }

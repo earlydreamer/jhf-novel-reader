@@ -158,7 +158,8 @@ export function createProviderSession(
       )
         throw new ReaderError('invalid_output');
       if (snapshot.translationMode === 'stream') {
-        if (request.promptVersion !== 'colomo-local-v1') throw new ReaderError('invalid_output');
+        if (request.promptVersion !== 'paragraph-stream-v1')
+          throw new ReaderError('invalid_output');
         return translateLocalStream(
           request,
           snapshot,

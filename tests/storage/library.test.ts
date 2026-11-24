@@ -254,6 +254,40 @@ test('이전 생성 기록과 새 추정기 기록을 모두 재열고 알 수 �
   };
   await expect(store.commitVersion(unknown)).rejects.toThrow();
 });
+test('이전 문단 묶음 식별자로 저장한 번역은 새 식별자로 읽는다', async () => {
+  const memory = new Map<string, string>();
+  const files = {
+    read: async (p: string) => memory.get(p) ?? null,
+    write: async (p: string, t: string) => {
+      memory.set(p, t);
+    },
+  };
+  const version: CompletedTranslation = {
+    ...value,
+    versionId: 'paragraph-stream',
+    provenance: {
+      ...value.provenance,
+      provider: 'chatgpt',
+      promptVersion: 'paragraph-stream-v1',
+      generation: {
+        mode: 'paragraph-stream-v1',
+        contextTokens: 32768,
+        inputBudgetTokens: 8192,
+        maxOutputTokens: 16384,
+        segments: 2,
+      },
+    },
+  };
+  await createLibraryStore(files).commitVersion(version);
+  const path = [...memory.keys()].find((key) => key.startsWith('versions/paragraph-stream.'))!;
+  const envelope = JSON.parse(memory.get(path)!);
+  envelope.payload.provenance.promptVersion = 'colomo-local-v1';
+  envelope.payload.provenance.generation.mode = 'colomo-local-v1';
+  envelope.checksum = await digest([1, envelope.generation, envelope.payload]);
+  memory.set(path, JSON.stringify(envelope));
+
+  expect(await createLibraryStore(files).readVersion(version.versionId)).toEqual(version);
+});
 test('save_retry_is_idempotent', async () => {
   const memory = new Map<string, string>();
   let fail = true;

@@ -22,7 +22,8 @@ export interface Chapter {
 export interface SourceAdapter {
   getChapter(url: string, signal: AbortSignal): Promise<Chapter>;
 }
-export type ProviderId = 'openai-compatible' | 'gemini';
+export const PROVIDER_IDS = ['openai-compatible', 'gemini', 'chatgpt'] as const;
+export type ProviderId = (typeof PROVIDER_IDS)[number];
 /** Native only: reject unsupported platforms/errors, never use a plaintext fallback. */
 export interface SecretStore {
   get(ref: string): Promise<string | null>;
@@ -47,6 +48,12 @@ export const ERROR_CODES = [
   'guidance_unsupported',
   /** 로그인 전용·성인·지원하지 않는 언어처럼 앱이 열지 않기로 한 원문. */
   'source_unsupported',
+  /** 계정 연결이 끊겼거나 토큰 갱신 결과를 확인하지 못해 다시 로그인해야 한다. */
+  'reconnect_required',
+  /** 연결한 계정의 플랜으로는 이 기능을 쓸 수 없다. */
+  'plan_not_eligible',
+  /** 계정 플랜의 사용량 한도에 도달했다. */
+  'usage_limit',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 export type RequestOutcome = 'not_sent' | 'unknown' | 'received';
@@ -111,6 +118,34 @@ export interface ModelTransport {
   post(request: ModelRequest, signal: AbortSignal): Promise<HttpResponse>;
   streamPost?(
     request: ModelRequest,
+    signal: AbortSignal,
+    onData: (data: string) => void,
+  ): Promise<HttpResponse>;
+}
+/** ChatGPT 계정 연결 상태. 토큰과 계정 식별자는 네이티브 저장소에만 있고 웹 화면에는 오지 않는다. */
+export type ChatGptAccountState = 'disconnected' | 'connected' | 'reconnect';
+export type ChatGptConnectOutcome =
+  | 'connected'
+  | 'cancelled'
+  | 'denied'
+  | 'timeout'
+  | 'not_eligible'
+  | 'account_mismatch'
+  | 'already_connected'
+  | 'no_browser'
+  | 'failed';
+export interface ChatGptAccount {
+  status(): Promise<ChatGptAccountState>;
+  /** 시스템 브라우저로 로그인하고 결과를 돌려준다. 결과가 connected가 아니면 연결을 저장하지 않는다. */
+  connect(): Promise<ChatGptConnectOutcome>;
+  cancelConnect(): Promise<void>;
+  /** 원격 철회와 로컬 삭제의 결과를 나눠 돌려준다. */
+  disconnect(): Promise<{ readonly revoked: boolean; readonly hadSession: boolean }>;
+  /** 공식 모델 목록. 표시 대상만 오며, 2xx가 아니면 허용 어휘만 남긴 오류 본문이 온다. */
+  models(signal: AbortSignal): Promise<HttpResponse>;
+  /** Responses 스트림. 네이티브가 토큰을 붙이고 store:false·stream:true를 강제한다. */
+  respond(
+    body: Readonly<Record<string, unknown>>,
     signal: AbortSignal,
     onData: (data: string) => void,
   ): Promise<HttpResponse>;

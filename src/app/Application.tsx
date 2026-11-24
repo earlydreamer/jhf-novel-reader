@@ -165,9 +165,7 @@ function RouteScreen({
           onScanBatch={() => void controller.scanBatch()}
           onConfirmBatchCandidates={(choices) => void controller.confirmBatchCandidates(choices)}
           batchFill={state.batchFill}
-          fillAllowed={
-            state.batchFillAvailable && state.connection.provider === 'openai-compatible'
-          }
+          fillAllowed={state.batchFillAvailable}
           onFillBatch={() => void controller.fillBatchCandidates()}
           onCancelBatchFill={controller.cancelBatchFill}
           onCancelBatch={controller.cancelBatch}
@@ -199,6 +197,7 @@ function RouteScreen({
           paragraphRepair={state.paragraphRepair}
           translationAvailable={state.translationAvailable}
           selectedModelId={state.selectedModelId}
+          provider={state.connection.provider}
           connected={state.catalogStatus === 'connected' && !!state.selectedModelId}
           catalogStatus={state.catalogStatus}
           connectionConfigured={!!state.connection.baseUrl}
@@ -281,6 +280,7 @@ function RouteScreen({
           paragraphRepair={state.paragraphRepair}
           translationAvailable={state.translationAvailable}
           selectedModelId={state.selectedModelId}
+          provider={state.connection.provider}
           connected={state.catalogStatus === 'connected' && !!state.selectedModelId}
           catalogStatus={state.catalogStatus}
           connectionConfigured={!!state.connection.baseUrl}
@@ -375,6 +375,17 @@ function RouteScreen({
             onExport: backup.exportBackup,
             onRestore: backup.restoreBackup,
           }}
+          {...(state.chatgptAccount !== 'unavailable'
+            ? {
+                chatgpt: {
+                  onConnect: () => void controller.connectChatGpt(),
+                  onCancelConnect: controller.cancelChatGptConnect,
+                  onDisconnect: () => void controller.disconnectChatGpt(),
+                  onAcknowledgeWelcome: controller.acknowledgeChatGptWelcome,
+                  onDismissNotice: controller.dismissChatGptNotice,
+                },
+              }
+            : {})}
         />
       );
   }
