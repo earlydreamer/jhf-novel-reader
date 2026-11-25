@@ -878,3 +878,30 @@ test.each(['retranslateChapter', 'refreshSource'] as const)(
     }
   },
 );
+test('목차에서 돌아오면 문단 재번역으로 저장한 회차를 이전 요청 알림 없이 다시 연다 (#434)', async () => {
+  const h = harness(true);
+  await prepareStreaming(h);
+  h.app.changeAutoRetryFailed(false);
+  await h.app.selectChapter(h.app.getSnapshot().work!.chapters[0]!);
+  h.release();
+  await h.app.translate();
+  const original = h.app.getSnapshot().version!;
+  h.app.goHome();
+  await h.app.continueReading(original.versionId);
+  expect(h.app.getSnapshot().route.kind).toBe('reader');
+
+  h.setBroken(false);
+  await h.app.retryParagraphs([2]);
+  const repaired = h.app.getSnapshot().version!;
+  expect(repaired.versionId).not.toBe(original.versionId);
+
+  h.app.showContents();
+  expect(h.app.getSnapshot().route.kind).toBe('work');
+  h.app.back();
+  expect(h.app.getSnapshot()).toMatchObject({
+    route: { kind: 'reader', versionId: repaired.versionId },
+    version: { versionId: repaired.versionId },
+    error: null,
+  });
+  h.app.dispose();
+});

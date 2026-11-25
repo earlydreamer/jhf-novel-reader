@@ -1099,6 +1099,21 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       : route.kind === 'reader'
         ? (versionsById.get(route.versionId)?.source.workId ?? null)
         : null;
+  // 실시간 번역은 저장한 뒤에도 번역 경로에 머문다(#434). 그 경로를 그대로 쌓으면 돌아올 때
+  // 끝난 요청을 채택하지 않은 결과로 보고 알림을 띄우므로, 화면이 보여 주던 저장본으로 바꿔 쌓는다.
+  function adoptedRoute(route: Route): Route {
+    const version = snapshot.version;
+    if (
+      route.kind === 'translation' &&
+      !activeTranslation &&
+      version?.source.chapterId === route.chapterId &&
+      snapshot.translation.phase === 'ready' &&
+      snapshot.translation.completedVersionId === version.versionId &&
+      versionsById.has(version.versionId)
+    )
+      return { kind: 'reader', versionId: version.versionId };
+    return route;
+  }
   function navigate(route: Route): void {
     titleAbort?.abort();
     automaticRequest = null;
@@ -1113,7 +1128,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       chapterLevel(route) &&
       currentWork !== null &&
       currentWork === workIdOf(route);
-    if (!sameWorkChapterMove) history.push(snapshot.route);
+    if (!sameWorkChapterMove) history.push(adoptedRoute(snapshot.route));
     publish({ route, showOriginal: false, error: null, busy: false });
     if (route.kind === 'home') void refreshLibrary();
     if (route.kind === 'work') void verifyWorkRecent(route.workId);
