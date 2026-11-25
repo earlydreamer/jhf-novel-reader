@@ -44,7 +44,7 @@ function sourceOf(chapter: ChapterRef): SourceSnapshot {
   } as SourceSnapshot;
 }
 
-function fixture() {
+function fixture(code = 'usage_limit') {
   const data = new Map<string, string>();
   const files: PrivateFiles = {
     read: async (path) => data.get(path) ?? null,
@@ -60,13 +60,13 @@ function fixture() {
     getChapter: vi.fn(async (chapter: ChapterRef) => sourceOf(chapter)),
   };
   const library = { saveWorkPage: vi.fn(async () => {}), listVersions: vi.fn(async () => []) };
-  // 회차 흐름이 플랜 사용 한도로 실패한 상태를 흉내 낸다.
+  // 회차 흐름이 주어진 오류 코드로 실패한 상태를 흉내 낸다.
   const flow = {
     active: false,
     getSnapshot: () => ({
       phase: 'failed',
       pendingSave: null,
-      error: { code: 'usage_limit', delivery: 'received' },
+      error: { code, delivery: 'received' },
     }),
     getUnfinished: () => [],
     getCompleted: () => undefined,
@@ -91,5 +91,20 @@ it('플랜 사용 한도로 멈추면 한도 때문임을 알리고 다음 회�
   expect(h.flow.start).toHaveBeenCalledTimes(1);
   expect(state.record?.phase).toBe('paused');
   expect(state.error).toContain('사용 한도');
+  expect(state.error).toContain('다음 회차도 요청하지 않았어요');
+});
+
+it.each([
+  ['reconnect_required', '다시 로그인'],
+  ['plan_not_eligible', '플랜으로는'],
+])('%s로 멈추면 이유를 알리고 다음 회차는 요청하지 않는다 (#439)', async (code, reason) => {
+  const h = fixture(code);
+  await h.batch.prepare(page, selection, null, false);
+  await h.batch.run();
+
+  const state = h.batch.getSnapshot();
+  expect(h.flow.start).toHaveBeenCalledTimes(1);
+  expect(state.record?.phase).toBe('paused');
+  expect(state.error).toContain(reason);
   expect(state.error).toContain('다음 회차도 요청하지 않았어요');
 });

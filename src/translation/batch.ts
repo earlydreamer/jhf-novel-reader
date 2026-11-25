@@ -744,6 +744,12 @@ export function createBatchTranslation(dependencies: {
           else if (chapterState.error?.code === 'usage_limit')
             error =
               '계정 플랜의 사용 한도에 도달해 현재 회차는 저장하지 않았고 다음 회차도 요청하지 않았어요. 완료한 회차는 그대로 남아요. 사용량은 ChatGPT의 Settings > Usage에서 확인할 수 있어요.';
+          else if (chapterState.error?.code === 'reconnect_required')
+            error =
+              'ChatGPT 연결이 끊겨 현재 회차는 저장하지 않았고 다음 회차도 요청하지 않았어요. 완료한 회차는 그대로 남아요. 설정에서 다시 로그인한 뒤 재개해 주세요.';
+          else if (chapterState.error?.code === 'plan_not_eligible')
+            error =
+              '연결한 계정의 플랜으로는 이 번역을 요청할 수 없어 현재 회차는 저장하지 않았고 다음 회차도 요청하지 않았어요. 완료한 회차는 그대로 남아요.';
           else if (['source_access', 'source_parse'].includes(chapterState.error?.code ?? ''))
             error = '현재 회차의 원문을 읽지 못했어요. 원문을 확인한 뒤 다시 시작해 주세요.';
           publish({ error });
