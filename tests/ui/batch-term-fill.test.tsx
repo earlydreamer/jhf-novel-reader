@@ -406,7 +406,7 @@ test.each([
     render(<BatchPanel {...props} />);
     expect(
       screen.getByText(
-        '이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.',
+        '1화의 이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.',
       ),
     ).toBeVisible();
     expect(screen.queryByText(/비용은 들지 않아요/)).not.toBeInTheDocument();
@@ -417,7 +417,7 @@ test.each([
     expect(props.onRunBatch).toHaveBeenCalledWith(true);
     expect(
       screen.getByText(
-        '재개하지 않으려면 위에서 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.',
+        '재개하지 않으려면 1화를 뺀 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.',
       ),
     ).toBeVisible();
   },
@@ -441,13 +441,21 @@ test('확인 필요 상태는 Gemini 연결이면 중복·비용 문구와 기�
   render(<BatchPanel {...props} />);
   expect(
     screen.getByText(
-      '이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.',
+      '1화의 이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수 있어요.',
     ),
   ).toBeVisible();
   fireEvent.click(
     screen.getByRole('button', { name: '중복 처리 가능성을 확인하고 일괄 번역 재개' }),
   );
   expect(props.onRunBatch).toHaveBeenCalledWith(true);
+});
+
+test('확인 필요 상태는 결과를 모르는 회차를 밝히고 그 회차를 뺀 범위를 안내한다 (#433)', () => {
+  render(
+    <BatchPanel {...renderRecord(recordWith({ phase: 'unknown', scan: undefined, cursor: 1 }))} />,
+  );
+  expect(screen.getByText(/^2화의 이전 요청 결과를 확인할 수 없어요/)).toBeVisible();
+  expect(screen.getByText(/^재개하지 않으려면 2화를 뺀 범위를 새로 확인해 주세요/)).toBeVisible();
 });
 
 test('중단 상태는 범위를 새로 확인하라는 안내를 재개 버튼 다음에 보인다', () => {
