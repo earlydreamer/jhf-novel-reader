@@ -86,6 +86,22 @@ public class ChatGptLoopbackTest {
         }
     }
 
+    @Test public void deniedCallbackDoesNotShowSuccessPage() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (ChatGptLoopback loopback = new ChatGptLoopback("dev.example.app://chatgpt")) {
+            int port = loopback.port();
+            Future<Map<String, String>> result = executor.submit(() -> loopback.await("good", 10_000));
+            String shown = page(port, "/auth/callback?state=good&error=access_denied");
+            assertTrue(shown.startsWith("HTTP/1.1 200"));
+            assertTrue(shown.contains("ChatGPT에 로그인하지 않았어요"));
+            assertTrue(!shown.contains("로그인을 마쳤어요"));
+            assertTrue(shown.contains("href='dev.example.app://chatgpt'>앱으로 돌아가기</a>"));
+            assertEquals("access_denied", result.get(5, TimeUnit.SECONDS).get("error"));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     @Test public void closeEndsGraceAndRejectsUnsafeReturnLink() throws Exception {
         ChatGptLoopback loopback = new ChatGptLoopback();
         CountDownLatch done = new CountDownLatch(1);

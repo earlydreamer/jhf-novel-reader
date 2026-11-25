@@ -835,7 +835,7 @@ export function SettingsScreen({
 
       <section aria-labelledby="settings-translation">
         <h2 id="settings-translation">번역 옵션</h2>
-        {!gemini && state.streamingAvailable && onMode && (
+        {!gemini && !chatgpt && state.streamingAvailable && onMode && (
           <ListItem
             headline="로컬 번역 방식"
             supporting={modeLabels[state.translationMode]}

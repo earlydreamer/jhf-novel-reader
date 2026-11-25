@@ -15,6 +15,7 @@ import {
 import { ReaderError } from '../../src/contracts';
 import type { ConnectionConfig, ModelChoice } from '../../src/contracts/reading';
 import { GEMINI_BASE_URL } from '../../src/providers/gemini';
+import { CHATGPT_BASE_URL } from '../../src/providers/chatgpt';
 import type { BackupPlatform, BackupResult } from '../../src/platform/backup';
 import type { ShellPlatform } from '../../src/platform/shell';
 import type { ReadingSettings } from '../../src/storage/settings';
@@ -286,6 +287,24 @@ describe('Android 목록형 설정', () => {
 
     expect(screen.getAllByRole('switch')).toHaveLength(4);
     expect(screen.getByRole('switch', { name: '번역 전 용어집 자동 생성' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^로컬 번역 방식/ })).not.toBeInTheDocument();
+    value.controller.dispose();
+  });
+
+  it('ChatGPT 연결에서는 로컬 번역 방식을 숨긴다', async () => {
+    const value = await setup({
+      saved: {
+        schemaVersion: 2,
+        fontSize: 18,
+        selection: {
+          connection: { provider: 'chatgpt', baseUrl: CHATGPT_BASE_URL, revision: 4 },
+          modelId: 'generation',
+          translationMode: 'stream',
+        },
+      },
+    });
+
+    expect(screen.getByRole('button', { name: '제공자 ChatGPT' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /^로컬 번역 방식/ })).not.toBeInTheDocument();
     value.controller.dispose();
   });

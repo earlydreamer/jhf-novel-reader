@@ -7,6 +7,7 @@ import { createRenewalApplication } from '../../src/app/compose';
 import type { RenewalController } from '../../src/app/renewalController';
 import {
   ReaderError,
+  type AppLifecycle,
   type ChatGptAccount,
   type ChatGptAccountState,
   type ChatGptConnectOutcome,
@@ -96,6 +97,7 @@ function application(
   preferences = new Map<string, string>([
     [SETTINGS_KEY, JSON.stringify({ schemaVersion: 2, selection: null, fontSize: 18 })],
   ]),
+  lifecycle: AppLifecycle = { isActive: async () => true, subscribe: async () => async () => {} },
 ) {
   const app = createRenewalApplication({
     files: { read: async () => null, write: async () => {} },
@@ -110,7 +112,7 @@ function application(
       set: async () => {},
       remove: async () => {},
     },
-    lifecycle: { isActive: async () => true, subscribe: async () => async () => {} },
+    lifecycle,
     sourceTransport: createSourceTransport(unusedClient),
     modelTransport: createModelTransport(unusedClient),
     ...(account ? { chatgpt: account } : {}),
@@ -127,6 +129,18 @@ function shell(): ShellPlatform {
     setKeepAwake: vi.fn(),
     markReady: vi.fn(),
   };
+}
+
+function switchableLifecycle() {
+  let listener: (active: boolean) => void = () => {};
+  const lifecycle: AppLifecycle = {
+    isActive: async () => true,
+    subscribe: async (next) => {
+      listener = next;
+      return async () => {};
+    },
+  };
+  return { lifecycle, setActive: (active: boolean) => listener(active) };
 }
 
 afterEach(() => {
@@ -194,6 +208,42 @@ describe('ChatGPT 계정 연결', () => {
       await app.connectChatGpt();
       expect(fake.account.calls).toEqual(['connect', 'connect']);
     }
+  });
+
+  it('앱이 뒤에 있을 때 끝난 로그인은 앞으로 돌아온 뒤에 알리고 모델 목록을 읽는다', async () => {
+    for (const outcome of ['connected', 'denied'] as const) {
+      const fake = fakeAccount({ outcome });
+      const app$ = switchableLifecycle();
+      const { app } = application(fake.account, undefined, app$.lifecycle);
+      await app.initialize();
+      await waitFor(() => expect(app.getSnapshot().chatgptAccount).toBe('disconnected'));
+      app.changeConnection({ provider: 'chatgpt', baseUrl: CHATGPT_BASE_URL });
+
+      app$.setActive(false);
+      const login = app.connectChatGpt();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(app.getSnapshot().chatgptNotice).toBeNull();
+      expect(fake.account.calls).toEqual(['connect']);
+
+      app$.setActive(true);
+      await login;
+      expect(app.getSnapshot().chatgptNotice).toEqual({ kind: 'connect', outcome });
+      expect(fake.account.calls).toEqual(
+        outcome === 'connected' ? ['connect', 'models'] : ['connect'],
+      );
+    }
+  });
+
+  it('ChatGPT 요청을 보내지 못하면 주소 형식 오류가 아니라 연결 실패로 알린다', async () => {
+    const fake = fakeAccount({ outcome: 'connected' });
+    const { app } = application(fake.account);
+    await app.initialize();
+    app.changeConnection({ provider: 'chatgpt', baseUrl: CHATGPT_BASE_URL });
+    await app.connectChatGpt();
+
+    fake.failModels(new ReaderError('connection', 'not_sent'));
+    await app.checkConnection();
+    expect(app.getSnapshot().catalogProblem).toEqual({ reason: 'network' });
   });
 
   it('갱신 결과를 알 수 없거나 플랜 한도에 걸린 모델 목록은 이유를 나눠 알린다', async () => {
