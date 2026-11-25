@@ -137,7 +137,7 @@ final class ChatGptLoopback implements AutoCloseable {
         } catch (Exception ignored) {
             // 요청 주소·헤더·코드는 기록하지 않는다.
         }
-        respond(socket, matched);
+        respond(socket, matched, matched && query.containsKey("error"));
         return matched ? query : null;
     }
 
@@ -177,12 +177,18 @@ final class ChatGptLoopback implements AutoCloseable {
         + " viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round>"
         + "<path d='M7 7l10 10M17 7L7 17'/></svg></div>";
 
-    private void respond(Socket socket, boolean matched) {
-        String html = matched
-            ? page(CHECK, "ChatGPT 로그인을 마쳤어요",
-                returnUrl == null ? "이 창을 닫고 앱으로 돌아가 주세요." : "앱으로 돌아가면 연결이 끝나요.",
-                returnUrl == null ? "" : "<a class=btn href='" + returnUrl + "'>앱으로 돌아가기</a>")
-            : page(CROSS, "잘못된 요청이에요", "앱에서 로그인을 다시 시작해 주세요.", "");
+    private void respond(Socket socket, boolean matched, boolean refused) {
+        String back = returnUrl == null ? "" : "<a class=btn href='" + returnUrl + "'>앱으로 돌아가기</a>";
+        String html;
+        if (!matched) {
+            html = page(CROSS, "잘못된 요청이에요", "앱에서 로그인을 다시 시작해 주세요.", "");
+        } else if (refused) {
+            html = page(CROSS, "ChatGPT에 로그인하지 않았어요",
+                returnUrl == null ? "이 창을 닫고 앱으로 돌아가 주세요." : "앱으로 돌아가 다시 시도할 수 있어요.", back);
+        } else {
+            html = page(CHECK, "ChatGPT 로그인을 마쳤어요",
+                returnUrl == null ? "이 창을 닫고 앱으로 돌아가 주세요." : "앱으로 돌아가면 연결이 끝나요.", back);
+        }
         byte[] body = html.getBytes(StandardCharsets.UTF_8);
         try {
             socket.getOutputStream().write(((matched ? "HTTP/1.1 200 OK" : "HTTP/1.1 400 Bad Request")
