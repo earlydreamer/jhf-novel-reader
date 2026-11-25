@@ -741,6 +741,9 @@ export function createBatchTranslation(dependencies: {
           else if (chapterState.error?.code === 'input_limit')
             error =
               '현재 회차가 선택한 모델의 입력 한도를 넘었어요. 용어집·말투가 길면 항목을 줄이고 번역 범위를 다시 확인해 주세요. 연결 설정에서 모델 목록도 확인할 수 있어요.';
+          else if (chapterState.error?.code === 'usage_limit')
+            error =
+              '계정 플랜의 사용 한도에 도달해 현재 회차는 저장하지 않았고 다음 회차도 요청하지 않았어요. 완료한 회차는 그대로 남아요. 사용량은 ChatGPT의 Settings > Usage에서 확인할 수 있어요.';
           else if (['source_access', 'source_parse'].includes(chapterState.error?.code ?? ''))
             error = '현재 회차의 원문을 읽지 못했어요. 원문을 확인한 뒤 다시 시작해 주세요.';
           publish({ error });
