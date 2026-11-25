@@ -580,6 +580,12 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
   let initialization: Promise<void> | null = null,
     lifecycleEvents = 0;
   let unsubscribeLifecycle: (() => Promise<void>) | null = null;
+  const foregroundWaiters: (() => void)[] = [];
+  const releaseForegroundWaiters = () => foregroundWaiters.splice(0).forEach((resume) => resume());
+  function untilForeground(): Promise<void> {
+    if (foreground || disposed) return Promise.resolve();
+    return new Promise((resume) => foregroundWaiters.push(resume));
+  }
   let settingsQueue: Promise<void> = Promise.resolve();
   let settingsOperation = 0;
   const clock = dependencies.clock ?? { now: () => performance.now() };
@@ -1427,7 +1433,10 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
             chapterUpdates?.setForeground(active);
             dependencies.flow?.setForeground(active);
             dependencies.batch?.setForeground(active);
-            if (active) runAutomaticTranslation();
+            if (active) {
+              releaseForegroundWaiters();
+              runAutomaticTranslation();
+            }
           });
           if (disposed) {
             await unsubscribe();
@@ -1436,6 +1445,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
           unsubscribeLifecycle = unsubscribe;
           const active = await dependencies.lifecycle.isActive();
           if (lifecycleEvents === eventAtStart) foreground = active;
+          if (foreground) releaseForegroundWaiters();
         }
         if (disposed) return;
         const migration = await dependencies.migrateLegacy?.();
@@ -2327,7 +2337,11 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
       if (operation !== catalogOperation) return { kind: 'superseded' };
       session = null;
       const status = errorLabel(error);
-      const problem = problemOf(error);
+      const found = problemOf(error);
+      const problem: CatalogProblem =
+        snapshot.connection.provider === 'chatgpt' && found.reason === 'invalid_url'
+          ? { reason: 'network' }
+          : found;
       publish({
         catalogStatus: status,
         catalogProblem: problem,
@@ -3350,6 +3364,7 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     titleAbort?.abort();
     termScanAbort?.abort();
     disposed = true;
+    releaseForegroundWaiters();
     sourceOperation++;
     selectionOperation++;
     catalogOperation++;
@@ -3392,6 +3407,8 @@ export function createRenewalController(dependencies: RenewalDependencies = {}):
     } catch {
       outcome = 'failed';
     }
+    // 브라우저가 앞에 있는 동안 로그인이 끝난다. 이때 알리면 보이지 않고, 요청은 네이티브가 거절한다.
+    await untilForeground();
     if (disposed) return;
     let state: ChatGptAccountState;
     try {
