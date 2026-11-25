@@ -877,7 +877,37 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             : ''}
         </StatusPill>
       )}
-      {actionVisible && (
+      {selectionMode && (
+        <div
+          className={`nr-reader-float nr-reader-selection${activeFlow ? ' nr-reader-float--above-pill' : ''}`}
+          role="group"
+          aria-label="문단 선택 재번역"
+        >
+          <span>{selectedParagraphs.length}개 문단 선택</span>
+          <Button
+            variant="filled"
+            disabled={!selectedParagraphs.length || !mayRepair}
+            onClick={() => {
+              props.onRetryParagraphs?.([...selectedParagraphs].sort((a, b) => a - b));
+              setSelectionMode(false);
+              setSelectedParagraphs([]);
+            }}
+          >
+            선택 문단 다시 번역하기
+          </Button>
+          <Button
+            variant="text"
+            onClick={() => {
+              setSelectionMode(false);
+              setSelectedParagraphs([]);
+            }}
+          >
+            취소
+          </Button>
+        </div>
+      )}
+      {/* 문단을 고르는 동안에는 같은 자리의 번역 안내를 잠시 접는다. */}
+      {actionVisible && !selectionMode && (
         <div
           className={`nr-reader-float${activeFlow ? ' nr-reader-float--above-pill' : ''}`}
           role="region"
@@ -895,7 +925,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         ref={body}
         tabIndex={-1}
         aria-label={props.showOriginal ? '원문 본문' : version ? '번역 본문' : '번역 미리보기'}
-        className="nr-immersive-article"
+        className={`nr-immersive-article${selectionMode ? ' nr-immersive-article--selecting' : ''}`}
         lang={props.showOriginal ? 'ja' : 'ko'}
         onScroll={scrollArticle}
         onClick={articleClick}
@@ -944,31 +974,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           paragraphs.length > 0 && (
             <p className="nr-reader-caption">저장 전 미리보기 · 도착한 문단부터 읽을 수 있어요.</p>
           )}
-        {selectionMode && (
-          <div className="nr-reader-selection" role="group" aria-label="문단 선택 재번역">
-            <span>{selectedParagraphs.length}개 문단 선택</span>
-            <Button
-              variant="filled"
-              disabled={!selectedParagraphs.length || !mayRepair}
-              onClick={() => {
-                props.onRetryParagraphs?.([...selectedParagraphs].sort((a, b) => a - b));
-                setSelectionMode(false);
-                setSelectedParagraphs([]);
-              }}
-            >
-              선택 문단 다시 번역하기
-            </Button>
-            <Button
-              variant="text"
-              onClick={() => {
-                setSelectionMode(false);
-                setSelectedParagraphs([]);
-              }}
-            >
-              취소
-            </Button>
-          </div>
-        )}
         {paragraphs.length ? (
           paragraphs.map((text, index) => {
             const isFailed = !props.showOriginal && failed.includes(index);
