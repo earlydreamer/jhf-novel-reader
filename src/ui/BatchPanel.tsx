@@ -121,6 +121,8 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const retranslate = useRef<HTMLInputElement>(null);
   const record = props.batch?.record?.work.workId === props.workId ? props.batch.record : null;
   const active = props.batch?.active ?? false;
+  const uncertainOrdinal = record?.chapters[record.cursor]?.ordinal;
+  const uncertainChapter = uncertainOrdinal ? `${uncertainOrdinal}화` : '이 회차';
   const awaitingSave = props.batch?.record?.phase === 'saving';
   // 정밀스캔 채우기는 용어집 잠금을 쓰므로 진행 중에는 미리 번역 준비도 막는다.
   const filling = props.batchFill?.phase === 'running';
@@ -281,8 +283,8 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           {record.phase === 'unknown' && (
             <>
               <p>
-                이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로 처리되거나 비용이 생길 수
-                있어요.
+                {uncertainChapter}의 이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로
+                처리되거나 비용이 생길 수 있어요.
               </p>
               <button
                 disabled={!props.batchAvailable || props.globalBlocked || active}
@@ -290,8 +292,10 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
               >
                 중복 처리 가능성을 확인하고 일괄 번역 재개
               </button>
+              {/* 결과를 모르는 회차가 범위에 남으면 새로 확인해도 같은 확인에서 멈춘다(#433). */}
               <p>
-                재개하지 않으려면 위에서 범위를 새로 확인해 주세요. 완료한 회차는 그대로 남아요.
+                재개하지 않으려면 {uncertainChapter}를 뺀 범위를 새로 확인해 주세요. 완료한 회차는
+                그대로 남아요.
               </p>
             </>
           )}
