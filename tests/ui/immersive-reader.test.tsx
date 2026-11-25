@@ -1620,3 +1620,29 @@ test('saveTerm이 false를 돌려주면 저장하지 못했다고 알리고 창�
   ).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: '용어 편집하기' })).toBeInTheDocument();
 });
+
+test('문단 선택 막대는 본문 밖에 떠 있고 취소하면 사라진다', () => {
+  const blocks = source.paragraphs.map((_, index) => ({ id: `b${index}`, text: `번역 ${index}` }));
+  render(
+    <ImmersiveReader
+      {...props({
+        version: completed({ blocks }),
+        onRetryParagraphs: vi.fn(),
+        retryParagraphsAvailable: true,
+      })}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '읽기 메뉴 열기' }));
+  fireEvent.click(screen.getByRole('button', { name: '더보기' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '문단 골라 다시 번역하기' }));
+
+  const bar = screen.getByRole('group', { name: '문단 선택 재번역' });
+  const article = screen.getByRole('article', { name: '번역 본문' });
+  expect(article).not.toContainElement(bar);
+  expect(bar).toHaveClass('nr-reader-float');
+  expect(article).toHaveClass('nr-immersive-article--selecting');
+
+  fireEvent.click(within(bar).getByRole('button', { name: '취소' }));
+  expect(screen.queryByRole('group', { name: '문단 선택 재번역' })).not.toBeInTheDocument();
+  expect(article).not.toHaveClass('nr-immersive-article--selecting');
+});

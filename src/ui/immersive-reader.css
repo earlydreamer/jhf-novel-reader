@@ -127,8 +127,7 @@
 .nr-reader-heading,
 .nr-immersive-article > p,
 .nr-reader-end,
-.nr-reader-quality-note,
-.nr-reader-selection {
+.nr-reader-quality-note {
   inline-size: min(100%, var(--reading-max));
   margin-inline: auto;
 }
@@ -203,7 +202,6 @@
   background: color-mix(in srgb, var(--primary-container) 40%, transparent);
 }
 
-.nr-reader-selection,
 .nr-reader-end,
 .nr-reader-quality-note {
   box-sizing: border-box;
@@ -212,13 +210,6 @@
   border-radius: var(--shape-md);
   background: var(--surface-container-low);
   color: var(--on-surface);
-}
-
-.nr-reader-selection {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
 }
 
 .nr-reader-end {
@@ -349,6 +340,23 @@
   position: absolute;
   inset-block-start: 4px;
   inset-inline-end: 4px;
+}
+
+/* 문단 선택 재번역 막대: 아래쪽 문단을 골라도 그 자리에서 실행하도록 번역 안내와 같은 자리에 띄운다. */
+.nr-immersive-reader > .nr-reader-float.nr-reader-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: var(--shape-lg);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  box-shadow: var(--elevation-3);
+}
+
+/* 막대가 마지막 문단을 가리지 않게 선택하는 동안 아래 여백을 늘린다. */
+.nr-immersive-article.nr-immersive-article--selecting {
+  padding-block-end: calc(var(--toolbar) + 160px + var(--inset-bottom));
 }
 
 .nr-reader-sheet-body {
