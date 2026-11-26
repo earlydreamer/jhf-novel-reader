@@ -97,6 +97,10 @@
   inline-size: 100%;
   margin-block-start: 12px;
 }
+/* 미리 번역 패널의 단독 버튼(연결 설정하기 등)이 위 문단에 붙지 않게 둔다. */
+.nr-batch-panel > .nr-button {
+  margin-block: 4px 8px;
+}
 /* 나란히 놓는 버튼 묶음(폼 제출·대안 행동) */
 .nr-button-row {
   display: flex;

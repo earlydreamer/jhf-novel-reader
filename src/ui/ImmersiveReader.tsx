@@ -666,16 +666,11 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         {/* 연결 전에는 누를 수 없는 번역 버튼 대신 다음 행동인 연결 설정을 주 행동으로 둔다(#447).
             연결을 확인하는 동안은 피할 수 없는 잠금이라 비활성 번역 버튼을 그대로 보인다. */}
         {(props.connected && props.translationAvailable) || props.catalogStatus === 'checking' ? (
-          <Button
-            variant="filled"
-            size="m"
-            disabled={!canStartTranslation}
-            onClick={props.onTranslate}
-          >
+          <Button variant="filled" disabled={!canStartTranslation} onClick={props.onTranslate}>
             이 화 번역하기
           </Button>
         ) : (
-          <Button variant="filled" size="m" onClick={() => props.onSettings()}>
+          <Button variant="filled" onClick={() => props.onSettings()}>
             연결 설정하기
           </Button>
         )}
@@ -792,7 +787,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
               ? '새 번역을 저장했어요. 지금은 이전 번역을 읽고 있어요.'
               : '번역을 저장했어요.'}
           </p>
-          <Button variant="filled" size="m" onClick={props.onOpenSaved}>
+          <Button variant="filled" onClick={props.onOpenSaved}>
             저장된 번역 열기
           </Button>
         </div>
@@ -1057,12 +1052,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
                 {nextAvailable ? `${chapter.ordinal}화를 다 읽었어요.` : '마지막 화까지 읽었어요.'}
               </p>
               {nextAvailable && (
-                <Button
-                  variant="filled"
-                  size="m"
-                  disabled={props.busy}
-                  onClick={() => props.onAdjacent(1)}
-                >
+                <Button variant="filled" disabled={props.busy} onClick={() => props.onAdjacent(1)}>
                   {props.work!.chapters[chapterIndex + 1]!.ordinal}화 읽기
                 </Button>
               )}

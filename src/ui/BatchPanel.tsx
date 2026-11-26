@@ -270,12 +270,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             <p>후보 확인을 마쳤어요. 확정한 작품 용어집으로 각 회차를 순서대로 번역해요.</p>
           )}
           {record.phase === 'prepared' && (!record.scan || record.scan.status === 'confirmed') && (
-            <Button
-              variant="filled"
-              size="m"
-              disabled={!canPrepare}
-              onClick={() => props.onRunBatch?.()}
-            >
+            <Button variant="filled" disabled={!canPrepare} onClick={() => props.onRunBatch?.()}>
               확인한 회차 번역 시작
             </Button>
           )}
@@ -284,7 +279,6 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
               <p>일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.</p>
               <Button
                 variant="filled"
-                size="m"
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.()}
               >

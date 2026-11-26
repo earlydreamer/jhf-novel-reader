@@ -273,7 +273,6 @@ export function WorkScreen({
         </p>
         <Button
           variant="filled"
-          size="m"
           className="nr-work-continue"
           disabled={
             busy ||

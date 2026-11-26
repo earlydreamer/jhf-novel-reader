@@ -415,16 +415,19 @@
   font: var(--type-label-large);
 }
 
+/* 위아래 선택 줄과 같은 3칸 격자에 [− 값 +]를 놓아 세로 열을 맞춘다. 라벨은 legend처럼 위 줄을 쓴다. */
 .nr-reader-font-control {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  min-block-size: var(--touch-target);
+  margin-block: 8px;
 }
 
 /* 라벨은 시작 쪽, [– 값 +]는 끝 쪽에 묶고 –·+는 테두리 있는 원형 버튼으로 보인다(#171). */
 .nr-reader-font-control > span {
+  grid-column: 1 / -1;
   margin-inline-end: auto;
   color: var(--on-surface-variant);
   font: var(--type-label-large);
@@ -432,7 +435,7 @@
 
 /* −·+도 다른 버튼과 같은 시각 40px로 두고 터치 영역은 48px을 유지한다. */
 .nr-reader-font-control > .nr-reader-symbol-button {
-  min-inline-size: var(--button-s);
+  inline-size: 100%;
   min-block-size: var(--button-s);
   border: 1px solid var(--outline);
   color: var(--primary);
