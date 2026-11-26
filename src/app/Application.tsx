@@ -485,6 +485,7 @@ function ShellAppBar({
           : routeTitles[state.route.kind]
       }
       titleAs="span"
+      revealTitleAfter={state.route.kind === 'work' ? '.nr-work-heading h1' : undefined}
       navigation={<IconButton icon="arrow_back" label="뒤로 가기" onClick={controller.back} />}
       actions={
         <>

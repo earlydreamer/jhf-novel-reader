@@ -3,6 +3,7 @@ import type { CandidateChoice } from '../translation/batch';
 import type { NameCandidate } from '../translation/scan';
 import type { TermScanChange } from '../translation/termScanRun';
 import { ConfidenceBadges } from './TermScanPanel';
+import { Button } from './components/Button';
 
 export function CandidateReview({
   candidates,
@@ -122,23 +123,24 @@ export function CandidateReview({
         })}
         {candidates.length > pageSize && (
           <nav aria-label="후보 페이지">
-            <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
+            <Button variant="text" disabled={page === 0} onClick={() => setPage(page - 1)}>
               이전 후보
-            </button>
+            </Button>
             <span>
               {page + 1}/{Math.ceil(candidates.length / pageSize)}
             </span>
-            <button
-              type="button"
+            <Button
+              variant="text"
               disabled={(page + 1) * pageSize >= candidates.length}
               onClick={() => setPage(page + 1)}
             >
               다음 후보
-            </button>
+            </Button>
           </nav>
         )}
         {selected.length > 0 ? (
-          <button
+          <Button
+            variant="filled"
             disabled={selected.some((candidate) => !targets.get(candidate.source)?.trim())}
             onClick={() =>
               onConfirm?.(
@@ -150,11 +152,11 @@ export function CandidateReview({
             }
           >
             선택한 {selected.length}개 표기 확정
-          </button>
+          </Button>
         ) : (
-          <button onClick={() => onConfirm?.([])}>
+          <Button variant="filled" onClick={() => onConfirm?.([])}>
             {candidates.length ? '새 후보를 사용하지 않고 확인 완료' : '후보 확인 완료'}
-          </button>
+          </Button>
         )}
       </fieldset>
     </section>

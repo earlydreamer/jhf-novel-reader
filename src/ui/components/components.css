@@ -140,6 +140,10 @@
 .nr-button--outlined:disabled {
   background: transparent;
 }
+/* 비활성 아웃라인 버튼도 테두리(on-surface 12%)를 남겨 글자만 떠 보이지 않게 한다(M3). */
+.nr-button--outlined:disabled {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-surface) 12%, transparent);
+}
 .nr-button:disabled::before {
   display: none;
 }
@@ -541,6 +545,13 @@ label.nr-list-item__main:has(> input:disabled)::before {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 화면 안 제목이 보이는 동안 숨긴 앱바 제목. 자리는 유지해 동작 버튼이 움직이지 않는다. */
+.nr-top-app-bar__title--concealed {
+  opacity: 0;
+}
+.nr-top-app-bar__title {
+  transition: opacity var(--duration-short) var(--ease-standard);
 }
 .nr-top-app-bar__navigation + .nr-top-app-bar__title {
   margin-inline-start: 0;
