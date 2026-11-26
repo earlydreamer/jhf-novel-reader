@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react';
 import { displayedTitle, type SavedTitle } from '../translation/titles';
+import { Button } from './components/Button';
 
 export interface TitleControls {
   entries: readonly SavedTitle[];
@@ -49,14 +50,16 @@ export function TitleHeading({
       {!inline && <h1>{title}</h1>}
       {controls && (
         <div className="nr-title-actions">
-          <button
+          <Button
+            variant="outlined"
             aria-label={`${label} ${entry ? '재번역' : '번역'}`}
             disabled={controls.busy || saving}
             onClick={() => void controls.onTranslate(titleKey)}
           >
             {entry ? '제목 재번역' : '제목 번역'}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outlined"
             aria-label={`${label} 수정`}
             disabled={saving}
             onClick={() => {
@@ -66,7 +69,7 @@ export function TitleHeading({
             }}
           >
             제목 수정
-          </button>
+          </Button>
           {entry?.origin === 'user' && <span>직접 수정됨</span>}
         </div>
       )}
@@ -87,12 +90,14 @@ export function TitleHeading({
               onChange={(event) => setDraft(event.target.value)}
             />
           </label>
-          <button type="submit" disabled={saving || !draft.trim()}>
-            제목 저장
-          </button>
-          <button type="button" disabled={saving} onClick={() => setEditing(false)}>
-            취소
-          </button>
+          <div className="nr-button-row">
+            <Button variant="filled" type="submit" disabled={saving || !draft.trim()}>
+              제목 저장
+            </Button>
+            <Button variant="text" disabled={saving} onClick={() => setEditing(false)}>
+              취소
+            </Button>
+          </div>
           {error && <p role="alert">{error}</p>}
         </form>
       )}

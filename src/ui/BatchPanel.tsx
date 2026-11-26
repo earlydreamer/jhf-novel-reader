@@ -142,7 +142,9 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
         <p>연결 설정에서 서버와 모델을 확인하면 번역 대상을 준비할 수 있어요.</p>
       )}
       {!props.batchAvailable && !active && (
-        <button onClick={props.onSettings}>일괄 번역 연결 설정</button>
+        <Button variant="tonal" onClick={props.onSettings}>
+          일괄 번역 연결 설정
+        </Button>
       )}
       <form
         onSubmit={(event) => {
@@ -185,13 +187,17 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             <input ref={retranslate} type="checkbox" />
             이미 번역한 회차도 다시 번역
           </label>
-          <button type="submit">범위 확인</button>
-          <button
-            type="button"
-            onClick={() => props.onPrepareBatch?.(null, retranslate.current?.checked ?? false)}
-          >
-            전체 회차 확인
-          </button>
+          <div className="nr-button-row">
+            <Button variant="tonal" type="submit">
+              범위 확인
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => props.onPrepareBatch?.(null, retranslate.current?.checked ?? false)}
+            >
+              전체 회차 확인
+            </Button>
+          </div>
         </fieldset>
       </form>
       {props.batch?.preparing && <p role="status">전체 목차와 번역할 회차를 확인하고 있어요.</p>}
@@ -233,9 +239,9 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
                 선택한 범위 전체에서 후보를 한 번 확인해요. 작품 용어집에서 편집한 항목은 먼저
                 저장해 주세요.
               </p>
-              <button disabled={!canPrepare} onClick={props.onScanBatch}>
+              <Button variant="tonal" disabled={!canPrepare} onClick={props.onScanBatch}>
                 범위 고유명사 후보 스캔
-              </button>
+              </Button>
             </>
           )}
           {record.phase === 'prepared' && record.scan?.status === 'review' && (
@@ -264,19 +270,26 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             <p>후보 확인을 마쳤어요. 확정한 작품 용어집으로 각 회차를 순서대로 번역해요.</p>
           )}
           {record.phase === 'prepared' && (!record.scan || record.scan.status === 'confirmed') && (
-            <button disabled={!canPrepare} onClick={() => props.onRunBatch?.()}>
+            <Button
+              variant="filled"
+              size="m"
+              disabled={!canPrepare}
+              onClick={() => props.onRunBatch?.()}
+            >
               확인한 회차 번역 시작
-            </button>
+            </Button>
           )}
           {record.phase === 'paused' && (
             <>
               <p>일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.</p>
-              <button
+              <Button
+                variant="filled"
+                size="m"
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.()}
               >
                 남은 회차 번역 재개
-              </button>
+              </Button>
               <p>재개하지 않으려면 위에서 범위를 새로 확인해 주세요.</p>
             </>
           )}
@@ -286,12 +299,13 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
                 {uncertainChapter}의 이전 요청 결과를 확인할 수 없어요. 다시 요청하면 중복으로
                 처리되거나 비용이 생길 수 있어요.
               </p>
-              <button
+              <Button
+                variant="outlined"
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.(true)}
               >
                 중복 처리 가능성을 확인하고 일괄 번역 재개
-              </button>
+              </Button>
               {/* 결과를 모르는 회차가 범위에 남으면 새로 확인해도 같은 확인에서 멈춘다(#433). */}
               <p>
                 재개하지 않으려면 {uncertainChapter}를 뺀 범위를 새로 확인해 주세요. 완료한 회차는
@@ -302,9 +316,9 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           {record.phase === 'saving' && (
             <>
               <p>완료한 번역을 저장하지 못했어요. 새로 요청하기 전에 저장을 마쳐야 해요.</p>
-              <button disabled={active} onClick={props.onRetryBatchSave}>
+              <Button variant="tonal" disabled={active} onClick={props.onRetryBatchSave}>
                 모델 요청 없이 일괄 결과 저장 다시 시도
-              </button>
+              </Button>
             </>
           )}
           {record.phase === 'complete' && (
@@ -312,7 +326,11 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           )}
         </div>
       )}
-      {active && <button onClick={props.onCancelBatch}>일괄 번역 중단</button>}
+      {active && (
+        <Button variant="text" onClick={props.onCancelBatch}>
+          일괄 번역 중단
+        </Button>
+      )}
     </section>
   );
 }
