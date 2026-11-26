@@ -363,7 +363,7 @@ test('UI offers range and all preview with a separate explicit start action', as
   await settle(run, 1);
   expect(harness.app.getSnapshot().batch?.record?.phase).toBe('complete');
   expect(
-    screen.getByText('일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.'),
+    screen.getByText('미리 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.'),
   ).toBeInTheDocument();
   expect(harness.posts()).toHaveLength(4);
   expect(screen.getByRole('heading', { name: '합성 작품' })).toBeInTheDocument();
@@ -849,7 +849,7 @@ test('candidate UI requires a checked item and spelling, refreshes the editor af
   await waitFor(() => expect(screen.getByLabelText('용어 1 한국어 표기')).toHaveValue('알베르트'));
   expect(harness.posts()).toHaveLength(0);
   fireEvent.click(start);
-  await screen.findByText('일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.');
+  await screen.findByText('미리 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.');
   await harness.app.continueReading(
     (await harness.library.listVersions('n1234ab/1'))[0]!.versionId,
   );

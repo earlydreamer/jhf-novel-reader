@@ -34,7 +34,7 @@ const FEATURES = {
   autoGlossary: '자동 용어집',
   termScan: '용어 정밀스캔',
   termFill: '미리 번역 후보의 표기 채우기',
-  batch: '구간 일괄 번역',
+  batch: '구간 미리 번역',
 } as const;
 type Feature = keyof typeof FEATURES;
 
@@ -544,7 +544,7 @@ const CHECKS: Record<Feature, (provider: ProviderId) => Promise<boolean>> = {
     await h.connect();
     await h.app.openWork(workUrl);
     await h.app.prepareBatch({ first: 1, last: 2 }, false);
-    // 일괄 번역은 후보 스캔과 확인을 거친 뒤 실행한다.
+    // 미리 번역은 후보 스캔과 확인을 거친 뒤 실행한다.
     if (h.app.getSnapshot().batch?.record?.scan?.status === 'pending') await h.app.scanBatch();
     if (h.app.getSnapshot().batch?.record?.scan?.status === 'review')
       await h.app.confirmBatchCandidates([]);

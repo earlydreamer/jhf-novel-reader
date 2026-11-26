@@ -24,7 +24,7 @@ const page: WorkPage = {
   nextPageUrl: null,
   complete: true,
 };
-// 일괄 번역은 회차 흐름의 오류 코드만 보고 안내를 고른다. 제공자 연결 형태는 결과에 영향을 주지 않는다.
+// 미리 번역은 회차 흐름의 오류 코드만 보고 안내를 고른다. 제공자 연결 형태는 결과에 영향을 주지 않는다.
 const selection: SelectedModel = {
   connection: { provider: 'openai-compatible', baseUrl: 'http://localhost:1234', revision: 1 },
   modelId: 'local',
