@@ -159,6 +159,11 @@ describe('Android 목록형 설정', () => {
     );
     const dialog = screen.getByRole('dialog', { name: '오픈소스 라이선스' });
     expect(dialog).toHaveClass('nr-dialog--fullscreen');
+    // 앱 코드는 #278에서 MIT로 정했다. 저장소 LICENSE·package.json과 같은 안내를 보인다(#451).
+    expect(
+      await within(dialog).findByText(/JHF Novel Reader는 MIT 라이선스로 배포해요\./),
+    ).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent('아직 정하지 않았어요');
     for (const name of ['react', 'androidx.core:core', 'Pretendard Variable']) {
       expect(
         await within(dialog).findByText(name, { selector: '.nr-license__name' }),
