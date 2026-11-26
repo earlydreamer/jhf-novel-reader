@@ -86,6 +86,7 @@
 }
 .nr-work-heading__original {
   color: var(--on-surface-variant);
+  font: var(--type-body-medium);
   overflow-wrap: anywhere;
 }
 .nr-work-heading__meta {
@@ -107,15 +108,6 @@
 }
 .nr-work-chapters .nr-list-item {
   border-radius: var(--shape-md);
-}
-.nr-work-chapters .nr-list-item__trailing button {
-  min-inline-size: var(--touch-target);
-  min-block-size: var(--touch-target);
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  font-size: 24px;
 }
 .nr-work-selected-hint {
   display: block;
@@ -357,6 +349,20 @@
    버튼·진행 막대 같은 컴포넌트의 자체 padding을 건드리지 않도록 margin으로 맞춘다. */
 .nr-settings > section > :not(.nr-list-item, .nr-switch-row) {
   margin-inline: 16px;
+}
+/* 섹션 제목은 목록 제목(16px)보다 작은 강조색 라벨로 구획만 나눈다(M3 목록 소제목). */
+.nr-settings > section > h2 {
+  margin-block: 32px 4px;
+  color: var(--primary);
+  font: var(--type-label-large);
+}
+.nr-settings > section:first-of-type > h2 {
+  margin-block-start: 8px;
+}
+/* 설명 문단은 스위치 설명과 같은 보조 텍스트 위계로 둔다. 오류 문단은 오류 색을 유지한다. */
+.nr-settings > section > p:not([role='alert']) {
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
 }
 
 .nr-model-picker__search {

@@ -12,6 +12,7 @@ import { NewChapterBadge } from './ChapterUpdateControl';
 import type { ChapterUpdateStatus } from '../app/chapterUpdates';
 import { BottomSheet, Dialog } from './components/Modal';
 import { Button } from './components/Button';
+import { IconButton } from './components/IconButton';
 import { ListItem } from './components/ListItem';
 import { useSnackbar } from './components/Snackbar';
 import type { RenewalSnapshot, WorkRecentSnapshot } from '../app/renewalController';
@@ -380,13 +381,11 @@ export function WorkScreen({
                   }}
                   onClick={() => onSelect(chapter)}
                   trailing={
-                    <button
-                      type="button"
-                      aria-label={`${chapter.ordinal}화 메뉴`}
+                    <IconButton
+                      icon="more_vert"
+                      label={`${chapter.ordinal}화 메뉴`}
                       onClick={() => openSheet(chapter)}
-                    >
-                      ⋮
-                    </button>
+                    />
                   }
                 />
               </div>
@@ -585,7 +584,7 @@ export function WorkScreen({
         />
       </Dialog>
       {recentChapterId && !recentIsLoaded && (
-        <span className="sr-only">최근 읽은 회차는 현재 목차 범위에 없어요.</span>
+        <span className="nr-visually-hidden">최근 읽은 회차는 현재 목차 범위에 없어요.</span>
       )}
     </section>
   );
