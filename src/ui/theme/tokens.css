@@ -81,8 +81,13 @@
   --state-dragged: 0.16;
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
   --ease-spring: linear(0, 0.2 6%, 0.6 16%, 0.92 28%, 1.04 40%, 1.02 55%, 1);
+  --ease-spring-snappy: linear(0, 0.35 8%, 0.85 20%, 1.05 34%, 1.01 52%, 1);
+  --duration-press: 100ms;
   --duration-short: 150ms;
+  --duration-medium: 220ms;
   --duration-enter: 300ms;
   --duration-exit: 200ms;
 

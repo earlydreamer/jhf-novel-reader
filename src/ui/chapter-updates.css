@@ -10,6 +10,17 @@
   vertical-align: middle;
   white-space: nowrap;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .nr-new-chapter-badge {
+    animation: nr-badge-in var(--duration-medium) var(--ease-spring-snappy);
+  }
+}
+@keyframes nr-badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
 .nr-library__update-error {
   display: block;
   color: var(--error);

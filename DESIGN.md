@@ -97,9 +97,9 @@ Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang
 - 모양: `--shape-xs 4px` · `--shape-sm 8px`(칩·메뉴) · `--shape-md 12px`(카드·대화상자 선택 행) · `--shape-lg 16px`(FAB) · `--shape-xl 28px`(시트 위 모서리·대화상자) · `--shape-full`(버튼·알약·툴바).
 - 크기: 터치 영역 최소 48px. 버튼은 S 40px가 기본입니다. 버튼 M 56px은 그 화면에 행동이 하나뿐인 경우(서재의 `작품 찾기` Extended FAB 같은 떠 있는 단독 행동)에만 씁니다. 아이콘 버튼 40px(영역 48). 체크박스·라디오 시각 크기 20px(라벨 행 48px). 앱바 64px. 목록 행 56·72px. Extended FAB 56px. 플로팅 툴바 64px.
 - 높이: 깊이는 `surface-container-*` 톤으로 나눕니다. 폼 묶음(`<fieldset>`)도 1px 외곽선 대신 `--surface-container-low` 표면 카드로 표현합니다. 그림자는 FAB·플로팅 툴바·메뉴·대화상자에만 씁니다.
-- 상태 레이어: 호버 8%, 포커스 10%, 눌림 10%, 드래그 16%. 비활성은 내용 38%·면 12%. 클릭할 수 없는 정적 정보 행(`div.nr-list-item__main`)에는 커서와 상태 레이어를 붙이지 않습니다.
+- 상태 레이어: 호버 8%, 포커스 10%, 눌림 10%, 드래그 16%. 비활성은 내용 38%·면 12%. 클릭할 수 없는 정적 정보 행(`div.nr-list-item__main`)에는 커서와 상태 레이어를 붙이지 않습니다. 스위치 행(`.nr-switch-row`)과 리더 상징 버튼(`.nr-reader-symbol-button`)도 같은 상태 레이어를 쓰고, 원형 아이콘·상징 버튼의 상태 레이어는 중앙에서 부드럽게 퍼집니다.
 - 포커스·선택: `:focus-visible`에서 `3px solid var(--primary)`, 간격 2px. 텍스트 선택(`::selection`)은 `--primary-container`/`--on-primary-container`, 입력 커서(`caret-color`)는 `--primary`를 씁니다.
-- 모션: `transform`·`opacity`만. 표준 이징 `cubic-bezier(0.2, 0, 0, 1)`, 짧은 전환 150ms, 시트·대화상자 열기 300ms·닫기 200ms. `prefers-reduced-motion: reduce`이면 전환 0ms.
+- 모션: 이동·크기·회전 애니메이션은 `transform`·`opacity`만 씁니다. 이징은 `--ease-standard`(`cubic-bezier(0.2, 0, 0, 1)`), `--ease-decelerate`(`cubic-bezier(0.05, 0.7, 0.1, 1)`), `--ease-accelerate`(`cubic-bezier(0.3, 0, 0.8, 0.15)`), `--ease-spring`, `--ease-spring-snappy`를 두고, 지속 시간은 눌림 100ms(`--duration-press`)·짧은 전환 150ms(`--duration-short`)·중간 전환 220ms(`--duration-medium`)·열기 300ms(`--duration-enter`)·닫기 200ms(`--duration-exit`)를 사용합니다. 버튼·아이콘 버튼·칩·카드·FAB·스위치·메뉴·대화상자·바텀시트·스낵바·상태 알약에 눌림·등장·상태 전환 피드백을 두고, 아이콘은 방향·역할별 마이크로 인터랙션(회전·이동·`aria-busy="true"` 회전·`aria-expanded="true"` 활성 면)을 제공합니다. 터치 기기의 호버 고착을 막기 위해 `:hover` 이동·회전은 `hover: hover` 장치로 한정합니다. `prefers-reduced-motion: reduce`이면 전환·애니메이션 0ms 및 반복 1회로 제한하고 비결정형 진행 막대는 정적 표현으로 전환합니다.
 
 ## 3. 버튼 위계
 
@@ -123,7 +123,7 @@ Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang
 - 아이콘만 있는 버튼은 `aria-label`이 필수입니다.
 - 버튼은 `Button` 컴포넌트로 3절의 위계를 고릅니다. 클래스 없는 `<button>`을 새로 쓰지 않습니다.
 - 입력칸은 채움형(`--surface-container-highest` 면, 아래 `--outline` 테두리, 포커스 시 `2px solid var(--primary)`) 한 가지만 씁니다. 대화상자·시트 안에서도 같습니다.
-- 대화상자와 바텀시트는 열리면 제목으로 포커스를 옮기고, 닫히면 연 요소로 돌려줍니다. Esc, 스크림 탭, 시스템 뒤로 가기로 닫힙니다.
+- 대화상자와 바텀시트는 열리면 제목으로 포커스를 옮기고, 닫히면 연 요소로 돌려줍니다. Esc, 스크림 탭, 시스템 뒤로 가기로 닫히며, 내부 스크롤 영역은 `overscroll-behavior: contain`으로 배경 스크롤 전파를 막습니다.
 - 대화상자 안 라디오 선택 목록은 `--shape-md` 모서리를 쓰고 텍스트 시작선을 대화상자 제목과 맞춥니다.
 - **하지 않는 것**: 컬러 팔레트·폰트 패밀리를 화면별로 임의 재정의하지 않습니다. 클릭 불가 정보 행에 포인터·호버 반응을 넣지 않습니다. 중첩 카드나 불필요한 1px 박스 테두리를 쌓지 않습니다.
 

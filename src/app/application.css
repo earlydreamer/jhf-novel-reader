@@ -4,6 +4,19 @@
   background: var(--surface);
   color: var(--on-surface);
 }
+/* 화면 전환 시 고정 요소(FAB·메뉴)의 기준 좌표에 영향을 주지 않도록 opacity만 전환한다. */
+@media (prefers-reduced-motion: no-preference) {
+  .nr-library,
+  .nr-work-screen,
+  .nr-settings {
+    animation: nr-screen-in var(--duration-medium) var(--ease-decelerate);
+  }
+}
+@keyframes nr-screen-in {
+  from {
+    opacity: 0;
+  }
+}
 :where(.nr-screen) {
   box-sizing: border-box;
   max-inline-size: var(--content-max);
@@ -234,10 +247,15 @@
   text-align: start;
   text-decoration: none;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--duration-short) var(--ease-standard);
 }
-.nr-sheet-action:hover,
-.nr-sheet-action:focus-visible {
+.nr-sheet-action:not(:disabled):hover,
+.nr-sheet-action:not(:disabled):focus-visible {
   background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+}
+.nr-sheet-action:not(:disabled):active {
+  background: color-mix(in srgb, var(--on-surface) 10%, transparent);
 }
 .nr-sheet-action:disabled {
   cursor: default;
@@ -247,6 +265,13 @@
   color: var(--error);
   margin-block-start: var(--space-1);
   border-block-start: 1px solid var(--outline-variant);
+}
+.nr-sheet-action--danger:not(:disabled):hover,
+.nr-sheet-action--danger:not(:disabled):focus-visible {
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+.nr-sheet-action--danger:not(:disabled):active {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 .nr-sheet-action__supporting {
   color: var(--on-surface-variant);
@@ -263,6 +288,8 @@
   color: var(--on-primary-container);
 }
 .nr-batch-progress-card > button {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex: 1;
   align-items: center;
@@ -270,9 +297,24 @@
   min-block-size: var(--touch-target);
   padding: 4px 8px;
   border: 0;
+  border-radius: var(--shape-sm);
   background: transparent;
   color: inherit;
   text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--duration-short) var(--ease-standard),
+    transform var(--duration-medium) var(--ease-spring-snappy);
+}
+.nr-batch-progress-card > button:hover,
+.nr-batch-progress-card > button:focus-visible {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.nr-batch-progress-card > button:active {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  transform: scale(0.985);
+  transition-duration: var(--duration-press);
 }
 [hidden].nr-modal {
   display: none !important;
@@ -288,6 +330,11 @@
   color: var(--on-primary-container);
   font: var(--type-label-large);
   cursor: pointer;
+  transition: transform var(--duration-medium) var(--ease-spring-snappy);
+}
+:where(.nr-screen) :where(button:not([class]):not(:disabled)):active {
+  transform: scale(0.97);
+  transition-duration: var(--duration-press);
 }
 :where(.nr-screen) :where(button:not([class])):disabled {
   cursor: default;
@@ -376,6 +423,19 @@
   display: flex;
   align-items: center;
   cursor: pointer;
+  border-radius: var(--shape-sm);
+  transition: background-color var(--duration-short) var(--ease-standard);
+}
+@media (prefers-reduced-motion: no-preference) {
+  :where(.nr-screen) :where(details[open] > :not(summary)) {
+    animation: nr-details-in var(--duration-short) var(--ease-decelerate);
+  }
+}
+@keyframes nr-details-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 :where(.nr-screen) ol,
 :where(.nr-screen) ul {
@@ -466,6 +526,20 @@
   min-block-size: var(--touch-target);
   padding-block: 12px;
   cursor: pointer;
+  border-radius: var(--shape-sm);
+  transition: background-color var(--duration-short) var(--ease-standard);
+}
+.nr-license > summary:hover,
+.nr-license > summary:focus-visible {
+  background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+}
+.nr-license > summary:active {
+  background: color-mix(in srgb, var(--on-surface) 10%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nr-license[open] > .nr-license__text {
+    animation: nr-details-in var(--duration-short) var(--ease-decelerate);
+  }
 }
 .nr-license__name {
   color: var(--on-surface);
