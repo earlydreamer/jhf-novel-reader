@@ -396,9 +396,10 @@
   padding-inline: 0;
 }
 
+/* 선택지는 글자 수와 상관없이 같은 폭의 칸으로 나란히 둔다. */
 .nr-reader-sheet-body fieldset {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 8px 0;
   padding: 0;
@@ -429,9 +430,18 @@
   font: var(--type-label-large);
 }
 
+/* −·+도 다른 버튼과 같은 시각 40px로 두고 터치 영역은 48px을 유지한다. */
 .nr-reader-font-control > .nr-reader-symbol-button {
+  min-inline-size: var(--button-s);
+  min-block-size: var(--button-s);
   border: 1px solid var(--outline);
   color: var(--primary);
+}
+
+.nr-reader-font-control > .nr-reader-symbol-button::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .nr-reader-font-control output {

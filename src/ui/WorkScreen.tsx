@@ -263,9 +263,11 @@ export function WorkScreen({
           label="작품 제목"
           controls={titles}
         />
-        <p lang="ja" className="nr-work-heading__original">
-          {work.title}
-        </p>
+        {displayedTitle(selectedTitles, work.workId, work.title) !== work.title && (
+          <p lang="ja" className="nr-work-heading__original">
+            {work.title}
+          </p>
+        )}
         <p className="nr-work-heading__meta">
           {total !== null ? `전체 ${total}화 · ${savedCount}화 저장됨` : `${savedCount}화 저장됨`}
         </p>

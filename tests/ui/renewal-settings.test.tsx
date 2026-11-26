@@ -132,15 +132,15 @@ describe('Android 목록형 설정', () => {
     expect(screen.queryByRole('button', { name: '버전' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: '오픈소스 라이선스 포함된 오픈소스와 라이선스',
+        name: '오픈소스 라이선스',
       }),
-    ).toHaveTextContent('포함된 오픈소스와 라이선스');
+    ).not.toHaveTextContent('포함된 오픈소스와 라이선스');
     expect(screen.getByText('아직 기록이 없어요')).toBeVisible();
     expect(screen.queryByRole('button', { name: '최근 번역 시간' })).not.toBeInTheDocument();
     expect(document.querySelector('details')).toBeNull();
     fireEvent.click(
       screen.getByRole('button', {
-        name: '오픈소스 라이선스 포함된 오픈소스와 라이선스',
+        name: '오픈소스 라이선스',
       }),
     );
     expect(screen.getByRole('dialog', { name: '오픈소스 라이선스' })).not.toHaveTextContent(
@@ -154,7 +154,7 @@ describe('Android 목록형 설정', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: '오픈소스 라이선스 포함된 오픈소스와 라이선스',
+        name: '오픈소스 라이선스',
       }),
     );
     const dialog = screen.getByRole('dialog', { name: '오픈소스 라이선스' });
@@ -197,9 +197,7 @@ describe('Android 목록형 설정', () => {
     const info = screen.getByRole('region', { name: '정보' });
     expect(within(info).queryByText('버전')).not.toBeInTheDocument();
     expect(within(info).queryByText('최근 번역 시간')).not.toBeInTheDocument();
-    expect(
-      within(info).getByRole('button', { name: '오픈소스 라이선스 포함된 오픈소스와 라이선스' }),
-    ).toBeVisible();
+    expect(within(info).getByRole('button', { name: '오픈소스 라이선스' })).toBeVisible();
     const translation = screen.getByRole('region', { name: '번역 옵션' });
     expect(within(translation).getByText('최근 번역 시간')).toBeVisible();
     expect(within(translation).getByText('아직 기록이 없어요')).toBeVisible();
@@ -540,13 +538,11 @@ describe('Android 목록형 설정', () => {
     value.controller.dispose();
   });
 
-  it('인증값이 없을 때 인증값 입력은 비워 두라는 안내를 설명으로 연결한다', async () => {
+  it('인증값이 없을 때 인증값 입력은 보안 저장소 안내를 설명으로 연결한다', async () => {
     const value = await setup();
     const input = screen.getByLabelText('인증값 (선택)');
 
-    expect(input).toHaveAccessibleDescription(
-      '인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.',
-    );
+    expect(input).toHaveAccessibleDescription('인증값은 이 기기의 보안 저장소에 저장해요.');
     value.controller.dispose();
   });
 
@@ -623,11 +619,7 @@ describe('OpenAI 호환 서버 주소 프리셋', () => {
 
     expect(screen.getByLabelText('서버 주소')).toHaveAttribute('placeholder', '192.168.0.10');
     expect(screen.getByLabelText('포트')).toHaveAttribute('placeholder', '1234');
-    expect(
-      screen.getByText(
-        'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.',
-      ),
-    ).toBeVisible();
+    expect(screen.getByText('PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요.')).toBeVisible();
     value.controller.dispose();
   });
 

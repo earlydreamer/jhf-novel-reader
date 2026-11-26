@@ -143,7 +143,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
       )}
       {!props.batchAvailable && !active && (
         <Button variant="tonal" onClick={props.onSettings}>
-          일괄 번역 연결 설정
+          연결 설정하기
         </Button>
       )}
       <form

@@ -10,6 +10,7 @@ import { IconButton } from './components/IconButton';
 import { BROWSE_SITES } from '../platform/browseSites';
 import brandLogo from './assets/brand-logo.png';
 import { NewChapterBadge } from './ChapterUpdateControl';
+import { withoutOrdinalPrefix } from './chapterTitle';
 import './home.css';
 
 export interface HomeScreenProps {
@@ -129,7 +130,10 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
               <span
                 lang={titleLang(state.recentTitles, recentChapter.chapterId, recentChapter.title)}
               >
-                {state.recentTitles[recentChapter.chapterId] ?? recentChapter.title}
+                {withoutOrdinalPrefix(
+                  state.recentTitles[recentChapter.chapterId] ?? recentChapter.title,
+                  recentChapter.ordinal,
+                )}
               </span>
             ) : (
               mostRecent.chapterId
@@ -148,9 +152,9 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
               <img className="nr-library__brand" src={brandLogo} alt="" width={160} height={160} />
             </div>
             <h1>읽고 싶은 작품을 찾아보세요</h1>
-            <p>원문 사이트에서 작품을 찾거나 URL을 입력하면 서재에 담겨요.</p>
             <p className="nr-library__hint">
-              아래 ‘작품 찾기’로 작품을 찾거나, 위의 링크 버튼에 작품 또는 회차 URL을 입력해 주세요.
+              아래 ‘작품 찾기’로 작품을 찾거나, 위의 링크 버튼에 작품 또는 회차 URL을 입력하면
+              서재에 담겨요.
             </p>
           </div>
         ) : null
