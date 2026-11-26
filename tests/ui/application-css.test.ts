@@ -139,7 +139,12 @@ describe('immersive-reader.css font control and sheet title (#171)', () => {
       (rule) => rule.selector === '.nr-reader-font-control > span',
     );
     expect(label?.body).toMatch(/margin-inline-end:\s*auto;/);
-    expect(label?.body).toMatch(/font:\s*var\(--type-title-medium\);/);
+    // 항목 라벨은 legend와 같은 글자 위계이고, 시트 제목(title-medium)보다 한 단계 낮다(#443).
+    const legend = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-sheet-body legend',
+    );
+    expect(label?.body).toMatch(/font:\s*var\(--type-label-large\);/);
+    expect(legend?.body).toMatch(/font:\s*var\(--type-label-large\);/);
   });
 
   it('글자 크기 −·+ 버튼은 테두리 있는 원형 버튼으로 보인다', () => {

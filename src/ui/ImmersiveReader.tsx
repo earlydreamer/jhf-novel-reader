@@ -1045,7 +1045,12 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             <div className="nr-reader-end" role="status">
               <p>{chapter.ordinal}화를 다 읽었어요.</p>
               {nextAvailable ? (
-                <Button variant="filled" disabled={props.busy} onClick={() => props.onAdjacent(1)}>
+                <Button
+                  variant="filled"
+                  size="m"
+                  disabled={props.busy}
+                  onClick={() => props.onAdjacent(1)}
+                >
                   {props.work!.chapters[chapterIndex + 1]!.ordinal}화 읽기
                 </Button>
               ) : (

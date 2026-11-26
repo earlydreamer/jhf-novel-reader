@@ -75,13 +75,17 @@ Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang
 
 | 토큰 | 크기/행간 | 굵기 | 용도 |
 |---|---|---|---|
-| `--type-headline-small` | 24/32 | 600 | 목차 헤더 작품 제목, 빈 상태 제목 |
-| `--type-title-large` | 22/28 | 600 | 앱바 제목 |
-| `--type-title-medium` | 16/24 | 600 | 시트·대화상자 제목 |
-| `--type-body-large` | 16/24 | 400 | 목록 1행, UI 본문 |
-| `--type-body-medium` | 14/20 | 400 | 보조 줄, 설명 |
-| `--type-label-large` | 14/20 | 600 | 버튼 |
+| `--type-headline-small` | 24/32 | 600 | 목차 헤더 작품 제목, 리더 회차 제목, 빈 상태 제목, 대화상자 제목 |
+| `--type-title-large` | 22/28 | 600 | 앱바 제목, 전체 화면 대화상자 제목 |
+| `--type-title-medium` | 16/24 | 600 | 바텀시트 제목, 화면 안 소제목 |
+| `--type-body-large` | 16/24 | 400 | 목록 1행, UI 본문, 안내 카드 문구 |
+| `--type-body-medium` | 14/20 | 400 | 보조 줄, 설명, 입력 도움말 |
+| `--type-body-small` | 12/16 | 400 | 캡션, 근거 |
+| `--type-label-large` | 14/20 | 600 | 버튼, 설정 섹션 제목(`--primary`), 시트 안 항목 라벨(`--on-surface-variant`) |
 | `--type-label-medium` | 12/16 | 500 | 칩, 메타, 상태 알약 |
+
+- 설명 문단은 목록 제목과 같은 무게로 두지 않습니다. 설정·폼의 설명은 `body-medium`과 `--on-surface-variant`를 씁니다.
+- 리더 안내(번역 시작·연결·회차 끝 카드)는 본문 글자 크기·행간 설정을 따르지 않고 위 UI 글자 위계를 씁니다.
 
 리더 본문은 기본 18px, 줄 간격 1.6·1.8·2.0(기본 1.8), 글자 크기 범위 10~48px. 숫자는 `tabular-nums`, 제목은 `text-wrap: balance`, 본문은 `text-wrap: pretty`.
 
@@ -112,6 +116,8 @@ Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang
 
 - 아이콘은 Material Symbols Outlined(Apache-2.0)에서 쓰는 것만 `src/ui/icons/`에 복사합니다. `Icon` 컴포넌트가 CSS 마스크로 `currentColor`를 입힙니다.
 - 아이콘만 있는 버튼은 `aria-label`이 필수입니다.
+- 버튼은 `Button` 컴포넌트로 3절의 위계를 고릅니다. 클래스 없는 `<button>`을 새로 쓰지 않습니다.
+- 입력칸은 채움형(`--surface-container-highest` 면, 아래 `--outline` 테두리) 한 가지만 씁니다. 대화상자·시트 안에서도 같습니다.
 - 대화상자와 바텀시트는 열리면 제목으로 포커스를 옮기고, 닫히면 연 요소로 돌려줍니다. Esc, 스크림 탭, 시스템 뒤로 가기로 닫힙니다.
 
 ## 5. 내비게이션
