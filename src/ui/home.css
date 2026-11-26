@@ -3,6 +3,9 @@
   /* 마지막 작품이 고정된 작품 찾기 버튼에 가리지 않을 만큼만 비운다. */
   padding-block-end: calc(var(--fab) + 16px);
 }
+.nr-library > :not(dialog, .nr-menu-anchor) + :not(dialog, .nr-menu-anchor) {
+  margin-block-start: var(--space-5);
+}
 .nr-library__empty {
   display: grid;
   min-block-size: 45dvh;
@@ -11,7 +14,7 @@
   text-align: center;
 }
 .nr-library__empty h1 {
-  margin-block-end: 4px;
+  margin-block-end: var(--space-2);
 }
 .nr-library__brand-wrap {
   position: relative;
@@ -68,7 +71,8 @@
   animation-delay: 2.2s;
 }
 .nr-library__hint {
-  margin-block-start: 4px;
+  max-inline-size: 32ch;
+  margin-block-start: var(--space-2);
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
 }
@@ -98,23 +102,39 @@
     animation: none;
   }
 }
+.nr-library__continue-content {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
 .nr-library__continue-label {
   display: block;
-  font: var(--type-label-large);
+  font: var(--type-label-medium);
+  letter-spacing: 0.02em;
 }
 .nr-library__continue-title {
   font: var(--type-title-medium);
+  letter-spacing: var(--tracking-title);
+  overflow-wrap: anywhere;
 }
 .nr-library__continue-chapter {
   font: var(--type-body-medium);
+  font-variant-numeric: tabular-nums;
+}
+.nr-library__continue-arrow {
+  display: flex;
+  flex: none;
+  color: inherit;
 }
 .nr-library .nr-card--interactive {
   display: grid;
-  gap: 4px;
-  min-block-size: 112px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
 }
 .nr-library__list {
-  margin: 0;
+  margin: 0 calc(var(--space-4) * -1);
   padding: 0;
   list-style: none;
   overflow: visible;
@@ -123,6 +143,9 @@
   position: relative;
   overflow: visible;
   border-block-end: 1px solid var(--outline-variant);
+}
+.nr-library__list > li:last-child {
+  border-block-end: 0;
 }
 .nr-library__list .nr-menu {
   inset-inline-end: 0;

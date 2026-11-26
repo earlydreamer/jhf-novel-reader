@@ -71,7 +71,7 @@ export function CandidateReview({
   const selected = candidates.filter((candidate) => chosen.get(candidate.source));
   const pageSize = 20;
   return (
-    <section aria-label="고유명사 후보 확인">
+    <section className="nr-candidate-review" aria-label="고유명사 후보 확인">
       <h3>고유명사 후보 {candidates.length}개</h3>
       <p>
         루비와 반복되는 카타카나에서 후보를 찾았어요. 일반 단어도 섞일 수 있어요. 사용할 항목만

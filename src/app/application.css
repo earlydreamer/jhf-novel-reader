@@ -15,8 +15,9 @@
   margin-block-start: 16px;
 }
 :where(.nr-screen) h1 {
-  margin: 8px 0 16px;
+  margin: var(--space-2) 0 var(--space-4);
   font: var(--type-headline-small);
+  letter-spacing: var(--tracking-headline);
   text-wrap: balance;
 }
 :where(.nr-screen) h1:focus {
@@ -24,8 +25,9 @@
 }
 :where(.nr-screen) h2,
 :where(.nr-screen) h3 {
-  margin: 24px 0 8px;
+  margin: var(--space-6) 0 var(--space-2);
   font: var(--type-title-medium);
+  letter-spacing: var(--tracking-title);
 }
 :where(.nr-screen) p {
   margin: 8px 0;
@@ -73,78 +75,137 @@
   margin-block-start: 16px;
 }
 .nr-work-heading {
-  padding: 12px 0 20px;
+  padding: var(--space-2) 0 var(--space-4);
 }
 .nr-work-pages {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
+  font: var(--type-body-medium);
+  font-variant-numeric: tabular-nums;
 }
 .nr-work-heading .nr-title h1 {
-  margin-block: 4px 8px;
+  margin-block: var(--space-1) var(--space-2);
 }
 .nr-work-heading__original {
+  margin: 0 0 var(--space-1);
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
   overflow-wrap: anywhere;
 }
 .nr-work-heading__meta {
+  margin: 0;
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
+  font-variant-numeric: tabular-nums;
 }
 .nr-work-continue {
   inline-size: 100%;
-  margin-block-start: 12px;
+  max-inline-size: 420px;
+  margin-block-start: var(--space-4);
 }
-/* 미리 번역 패널의 단독 버튼(연결 설정하기 등)이 위 문단에 붙지 않게 둔다. */
-.nr-batch-panel > .nr-button {
-  margin-block: 4px 8px;
+/* 화면 안에 단독으로 놓이는 텍스트 버튼은 패딩만큼 당겨 왼쪽 기준선을 맞춘다. */
+.nr-work-screen > .nr-button--text {
+  margin-inline-start: -12px;
 }
-/* 용어집 편집: 설명 문단은 보조 텍스트로, 바깥 묶음은 상자 없이 둔다(용어마다 상자가 이미 있다). */
-.nr-guidance-panel > p:not([role]) {
+/* 전체 화면 패널의 안내 문단은 보조 텍스트 위계로 통일한다. */
+.nr-batch-panel > p:not([role]),
+.nr-guidance-panel > p:not([role]),
+.nr-term-scan > p:not([role]),
+.nr-term-scan section > p:not([role]),
+.nr-candidate-review > p:not([role]) {
+  margin-block: 0 var(--space-3);
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
 }
+/* 미리 번역 패널의 단독 버튼(연결 설정하기 등)이 위 문단에 붙지 않게 둔다. */
+.nr-batch-panel > .nr-button {
+  margin-block: var(--space-1) var(--space-3);
+}
+/* 용어집 편집: 바깥 묶음은 상자 없이 둔다(용어마다 tonal 카드가 이미 있다). */
 .nr-guidance-panel > .nr-guidance-fields {
-  margin: 16px 0 0;
+  margin: var(--space-4) 0 0;
   padding: 0;
   border: 0;
+  background: transparent;
+}
+.nr-guidance-term-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.nr-guidance-term-pair > label {
+  margin-block: var(--space-2);
+}
+@media (max-width: 340px) {
+  .nr-guidance-term-pair {
+    grid-template-columns: 1fr;
+  }
+}
+.nr-guidance-fields fieldset > .nr-button--text {
+  margin-block-start: var(--space-1);
+  margin-inline-start: -12px;
 }
 /* 미리 번역 대상·진행 카드: 첫 줄(확정 범위)이 제목, 나머지는 보조 정보 */
 /* .nr-card(display: block)가 뒤에 로드되므로 두 클래스로 특이도를 올린다. */
 .nr-card.nr-batch-record {
   display: grid;
-  gap: 8px;
-  margin-block: 16px;
+  gap: var(--space-2);
+  margin-block: var(--space-4);
 }
 .nr-batch-record > p {
   margin: 0;
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
+  font-variant-numeric: tabular-nums;
 }
 .nr-batch-record > p:first-child {
   color: var(--on-surface);
   font: var(--type-title-medium);
+  letter-spacing: var(--tracking-title);
 }
 /* 나란히 놓는 버튼 묶음(폼 제출·대안 행동) */
 .nr-button-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-block-start: 12px;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
 }
 .nr-work-chapters {
   list-style: none;
   padding: 0 !important;
-  margin: 0;
+  margin: 0 calc(var(--space-4) * -1);
 }
 .nr-work-chapters > li {
-  margin-block: 4px;
+  margin-block: 0;
+  border-block-end: 1px solid var(--outline-variant);
 }
-.nr-work-chapters .nr-list-item {
+.nr-work-chapters > li:last-child {
+  border-block-end: 0;
+}
+.nr-work-chapters > li:has(.nr-list-item--current) {
+  border-block-end-color: transparent;
+  padding-block: var(--space-1);
+}
+.nr-work-chapters .nr-list-item--current {
+  margin-inline: var(--space-2);
   border-radius: var(--shape-md);
+}
+.nr-work-chapters .nr-list-item--current .nr-list-item__main {
+  padding-inline: var(--space-2);
+}
+.nr-chapter-ordinal {
+  display: inline-block;
+  min-inline-size: 3.2ch;
+  margin-inline-end: var(--space-2);
+  color: var(--on-surface-variant);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.nr-list-item--current .nr-chapter-ordinal {
+  color: inherit;
 }
 .nr-work-selected-hint {
   display: block;
@@ -184,6 +245,8 @@
 }
 .nr-sheet-action--danger {
   color: var(--error);
+  margin-block-start: var(--space-1);
+  border-block-start: 1px solid var(--outline-variant);
 }
 .nr-sheet-action__supporting {
   color: var(--on-surface-variant);
@@ -233,17 +296,19 @@
 }
 :where(.nr-screen) label {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   min-inline-size: 0;
-  margin-block: 12px;
+  margin-block: var(--space-3);
   color: var(--on-surface-variant);
-  font: var(--type-body-medium);
+  font: var(--type-label-large);
+  font-weight: 500;
 }
 /* 체크박스·라디오 라벨은 한 행으로 둔다. :where로 특이도를 0으로 맞춰 컴포넌트 클래스를 이긴다. */
 :where(.nr-screen) label:where(:has(> input[type='checkbox'], > input[type='radio'])) {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-block-size: var(--touch-target);
   color: var(--on-surface);
   font: var(--type-body-large);
 }
@@ -252,30 +317,54 @@
   box-sizing: border-box;
   inline-size: 100%;
   min-block-size: var(--touch-target);
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   border: 0;
   border-block-end: 1px solid var(--outline);
   border-radius: var(--shape-xs) var(--shape-xs) 0 0;
   background: var(--surface-container-highest);
   color: var(--on-surface);
   font: var(--type-body-large);
+  transition: border-color var(--duration-short) var(--ease-standard);
+}
+:where(.nr-screen)
+  :where(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
+    select:focus,
+    textarea:focus
+  ) {
+  border-block-end: 2px solid var(--primary);
 }
 :where(.nr-screen) textarea {
-  padding-block: 12px;
+  padding-block: var(--space-3);
+}
+:where(.nr-screen) :where(input[type='checkbox'], input[type='radio']) {
+  inline-size: 20px;
+  block-size: 20px;
+  flex: none;
+  margin: 0;
 }
 :where(.nr-screen) :where(input[type='checkbox'], input[type='radio'], input[type='range']) {
   accent-color: var(--primary-fill);
 }
 :where(.nr-screen) fieldset {
   min-inline-size: 0;
-  margin: 16px 0;
-  padding: 8px 16px 16px;
-  border: 1px solid var(--outline-variant);
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border: 0;
   border-radius: var(--shape-md);
+  background: var(--surface-container-low);
 }
 :where(.nr-screen) legend {
-  padding: 0 4px;
+  float: inline-start;
+  inline-size: 100%;
+  margin-block-end: var(--space-3);
+  padding: 0;
+  color: var(--on-surface);
   font: var(--type-title-medium);
+  letter-spacing: var(--tracking-title);
+}
+:where(.nr-screen) fieldset > legend + * {
+  clear: both;
 }
 :where(.nr-screen) details {
   padding: 8px 16px;
@@ -337,6 +426,18 @@
 .nr-title form {
   overflow-wrap: anywhere;
 }
+.nr-candidate {
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--outline-variant);
+}
+.nr-candidate:last-of-type {
+  border-block-end: 0;
+}
+.nr-candidate > p {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
+}
 .nr-title {
   min-inline-size: 0;
   overflow-wrap: anywhere;
@@ -344,12 +445,13 @@
 .nr-address-preset {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 7.5rem;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .nr-address-ports {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
 }
 /* 구분선 목록 행: 화면 공통 details 카드 배경·모서리를 쓰지 않는다. */
 .nr-license {
@@ -386,6 +488,15 @@
   overflow-wrap: anywhere;
 }
 
+/* 설정 화면은 화면 여백을 풀블리드로 펼쳐 목록 행 터치 영역을 끝까지 채우고, 모든 텍스트는 16px 기준선에 맞춘다. */
+.nr-settings {
+  margin-inline: calc(var(--space-4) * -1);
+}
+.nr-settings > section + section {
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--outline-variant);
+}
 /* 설정 섹션 안에서 목록 항목(안쪽 16px)이 아닌 내용도 같은 왼쪽 선에서 시작한다(#270).
    버튼·진행 막대 같은 컴포넌트의 자체 padding을 건드리지 않도록 margin으로 맞춘다. */
 .nr-settings > section > :not(.nr-list-item, .nr-switch-row) {
@@ -393,17 +504,22 @@
 }
 /* 섹션 제목은 목록 제목(16px)보다 작은 강조색 라벨로 구획만 나눈다(M3 목록 소제목). */
 .nr-settings > section > h2 {
-  margin-block: 32px 4px;
+  margin-block: 0 var(--space-2);
   color: var(--primary);
   font: var(--type-label-large);
+  letter-spacing: 0;
 }
 .nr-settings > section:first-of-type > h2 {
-  margin-block-start: 8px;
+  margin-block-start: var(--space-2);
 }
-/* 설명 문단은 스위치 설명과 같은 보조 텍스트 위계로 둔다. 오류 문단은 오류 색을 유지한다. */
+/* 설명 문단은 위 입력칸에 가깝고 다음 항목과 떨어지도록 비대칭 여백을 둔다. 오류 문단은 오류 색을 유지한다. */
 .nr-settings > section > p:not([role='alert']) {
+  margin-block: var(--space-1) var(--space-4);
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
+}
+.nr-settings > section > .nr-button {
+  margin-block: var(--space-2);
 }
 
 .nr-model-picker__search {
@@ -418,30 +534,33 @@
 .nr-settings-footer {
   display: grid;
   justify-items: center;
-  gap: 4px;
-  margin-block-start: 32px;
-  padding-block: 24px 8px;
+  gap: var(--space-1);
+  margin-block-start: var(--space-6);
+  padding-block: var(--space-6) var(--space-4);
+  border-block-start: 1px solid var(--outline-variant);
   text-align: center;
 }
 .nr-settings-footer__logo {
   inline-size: 96px;
   block-size: auto;
-  margin-block-end: 8px;
+  margin-block-end: var(--space-2);
 }
 .nr-settings-footer__name {
   margin: 0;
   color: var(--on-surface);
   font: var(--type-title-medium);
+  letter-spacing: var(--tracking-title);
 }
 .nr-settings-footer__version {
   margin: 0;
   color: var(--on-surface-variant);
   font: var(--type-body-medium);
+  font-variant-numeric: tabular-nums;
 }
 .nr-guidance-origin {
   display: inline-block;
-  margin-inline-start: 8px;
-  padding: 0 8px;
+  margin-block-end: var(--space-2);
+  padding: 2px var(--space-2);
   border-radius: var(--shape-full);
   background: var(--secondary-container);
   color: var(--on-secondary-container);
@@ -465,10 +584,19 @@
   padding: 0;
 }
 .nr-scan-list > li {
-  padding: 12px 0;
+  padding: var(--space-3) 0;
 }
 .nr-scan-list > li + li {
   border-block-start: 1px solid var(--outline-variant);
+}
+.nr-scan-list > li > .nr-button--text {
+  margin-inline-start: -12px;
+}
+.nr-scan-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: var(--space-1) 0;
 }
 .nr-scan-evidence {
   margin: 4px 0;
@@ -478,7 +606,7 @@
 }
 .nr-scan-confidence {
   display: inline-block;
-  padding: 0 8px;
+  padding: 2px var(--space-2);
   border-radius: var(--shape-full);
   font: var(--type-label-medium);
 }

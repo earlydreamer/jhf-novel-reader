@@ -252,13 +252,33 @@ export function GuidancePanel({
                 한 글자이거나 짧은 히라가나 원문은 다른 단어 안에도 들어 있어서 번역에 쓰지 않아요.
               </p>
             )}
-            {(['source', 'target', 'category', 'note'] as const).map((key) => (
+            <div className="nr-guidance-term-pair">
+              {(['source', 'target'] as const).map((key) => (
+                <label key={key}>
+                  {{ source: '원문', target: '한국어 표기' }[key]}
+                  <input
+                    aria-label={`용어 ${index + 1} ${{ source: '원문', target: '한국어 표기' }[key]}`}
+                    value={term[key]}
+                    maxLength={80}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        terms: draft.terms.map((entry, i) =>
+                          i === index ? { ...humanized(entry), [key]: event.target.value } : entry,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            {(['category', 'note'] as const).map((key) => (
               <label key={key}>
-                {{ source: '원문', target: '한국어 표기', category: '분류', note: '설명' }[key]}
+                {{ category: '분류', note: '설명' }[key]}
                 <input
-                  aria-label={`용어 ${index + 1} ${{ source: '원문', target: '한국어 표기', category: '분류', note: '설명' }[key]}`}
+                  aria-label={`용어 ${index + 1} ${{ category: '분류', note: '설명' }[key]}`}
                   value={term[key]}
-                  maxLength={key === 'note' ? 300 : key === 'category' ? 40 : 80}
+                  maxLength={key === 'note' ? 300 : 40}
                   onChange={(event) =>
                     change({
                       ...draft,
@@ -376,22 +396,26 @@ export function GuidancePanel({
                 </Button>
               </fieldset>
             ))}
-            <Button
-              variant="outlined"
-              onClick={() =>
-                change({
-                  ...draft,
-                  voices: [...draft.voices, { name: '', aliases: [], instruction: '' }],
-                })
-              }
-            >
-              캐릭터 추가
-            </Button>
+            <div className="nr-button-row">
+              <Button
+                variant="outlined"
+                onClick={() =>
+                  change({
+                    ...draft,
+                    voices: [...draft.voices, { name: '', aliases: [], instruction: '' }],
+                  })
+                }
+              >
+                캐릭터 추가
+              </Button>
+            </div>
           </>
         )}
-        <Button variant="filled" data-guidance-save onClick={() => void save()}>
-          {shared ? '공용 용어집 저장' : '용어집·말투 저장'}
-        </Button>
+        <div className="nr-button-row">
+          <Button variant="filled" data-guidance-save onClick={() => void save()}>
+            {shared ? '공용 용어집 저장' : '용어집·말투 저장'}
+          </Button>
+        </div>
       </fieldset>
       {busy && <p>용어집 처리 중…</p>}
       {message && <p role="status">{message}</p>}

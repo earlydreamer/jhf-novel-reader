@@ -331,20 +331,69 @@ describe('home.css library scroll', () => {
 });
 
 describe('CSS 토큰 참조', () => {
-  it('src의 CSS가 쓰는 var(--type-…) 토큰은 모두 tokens.css에 정의돼 있다', () => {
+  it('src의 CSS가 쓰는 var(--type-…), var(--space-…), var(--tracking-…) 토큰은 모두 tokens.css에 정의돼 있다', () => {
     const tokens = readFileSync('src/ui/theme/tokens.css', 'utf8');
-    const defined = new Set([...tokens.matchAll(/--(type-[\w-]+)\s*:/g)].map((match) => match[1]));
+    const defined = new Set(
+      [...tokens.matchAll(/--((?:type|space|tracking)-[\w-]+)\s*:/g)].map((match) => match[1]),
+    );
     const sheets = readdirSync('src', { recursive: true })
       .map(String)
       .filter((file) => file.endsWith('.css'));
     const missing: string[] = [];
     for (const sheet of sheets) {
       const source = readFileSync(join('src', sheet), 'utf8');
-      for (const match of source.matchAll(/var\(--(type-[\w-]+)/g)) {
+      for (const match of source.matchAll(/var\(--((?:type|space|tracking)-[\w-]+)/g)) {
         if (!defined.has(match[1]!)) missing.push(`${sheet}: --${match[1]}`);
       }
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe('디자인 시스템 상호작용·접근성 계약 (#455)', () => {
+  it('정적 목록 행(div.nr-list-item__main)은 포인터 커서나 상태 레이어를 가지지 않는다', () => {
+    const baseMain = rules(componentsCss).find((rule) => rule.selector === '.nr-list-item__main');
+    expect(baseMain?.body).not.toMatch(/cursor:\s*pointer/);
+    const interactiveMain = rules(componentsCss).find((rule) =>
+      selectorParts(rule.selector).includes('button.nr-list-item__main'),
+    );
+    expect(interactiveMain).toBeDefined();
+  });
+
+  it('리더 숨김 버튼(.nr-reader-reveal)은 기본 버튼 여백·테두리를 지워 숨김 상태에서 잘리지 않는다', () => {
+    const reveal = rules(readerCss).find((rule) => rule.selector === '.nr-reader-reveal');
+    expect(reveal?.body).toMatch(/padding:\s*0;/);
+    expect(reveal?.body).toMatch(/border:\s*0;/);
+  });
+
+  it('체크박스와 라디오 입력은 최소 20px 시각 크기를 유지한다', () => {
+    const radio = rules(componentsCss).find((rule) => rule.selector === '.nr-list-item__radio');
+    expect(radio?.body).toMatch(/inline-size:\s*20px;/);
+    expect(radio?.body).toMatch(/block-size:\s*20px;/);
+    const screenInputs = rules(css).find(
+      (rule) =>
+        rule.selector === ":where(.nr-screen) :where(input[type='checkbox'], input[type='radio'])",
+    );
+    expect(screenInputs?.body).toMatch(/inline-size:\s*20px;/);
+    expect(screenInputs?.body).toMatch(/block-size:\s*20px;/);
+  });
+
+  it('보기 설정 시트의 fieldset·legend는 공통 float·배경을 해제해 3열 그리드를 유지한다', () => {
+    const viewFieldset = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-sheet-body fieldset',
+    );
+    const viewLegend = rules(readerCss).find(
+      (rule) => rule.selector === '.nr-reader-sheet-body legend',
+    );
+    expect(viewFieldset?.body).toMatch(/background:\s*transparent;/);
+    expect(viewLegend?.body).toMatch(/float:\s*none;/);
+  });
+
+  it('서재 화면의 형제 간격 규칙은 dialog와 FAB 메뉴 앵커를 건드리지 않는다', () => {
+    const homeCss = readFileSync('src/ui/home.css', 'utf8');
+    const spacing = rules(homeCss).find((rule) => rule.selector.startsWith('.nr-library >'));
+    expect(spacing?.selector).toContain(':not(dialog');
+    expect(spacing?.selector).not.toBe('.nr-library > * + *');
   });
 });
 
