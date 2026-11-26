@@ -19,11 +19,11 @@ git remote add upstream https://github.com/earlydreamer/jhf-novel-reader.git
 git fetch upstream
 ```
 
-이슈마다 별도 브랜치와 작업 폴더를 만듭니다. `<issue>`와 `<short-slug>`는 실제 이슈 번호와 짧은 설명으로 바꿉니다.
+이슈마다 별도 브랜치와 작업 폴더를 만듭니다. `<type>`은 커밋 타입(`feat`, `fix`, `style`, `refactor`, `docs`, `test`, `chore` 등)을 사용하고, `<issue>`와 `<short-slug>`는 실제 이슈 번호와 짧은 설명으로 바꿉니다. 워크트리는 저장소 안 `.worktrees/` 아래에 모아 상위 폴더가 흩어지지 않게 합니다.
 
 ```sh
-git worktree add -b codex/<issue>-<short-slug> ../jhf-<issue> upstream/main
-cd ../jhf-<issue>
+git worktree add -b <type>/<issue>-<short-slug> .worktrees/<issue>-<short-slug> upstream/main
+cd .worktrees/<issue>-<short-slug>
 ```
 
 직접 쓰기 권한이 있다면 원본 저장소를 clone합니다. 이 경우 위 명령의 `upstream/main`을 `origin/main`으로 바꾸고, 원본 저장소의 작업 브랜치에 push합니다. 직접 쓰기 권한이 있어도 변경은 PR로 검토합니다.
@@ -60,7 +60,7 @@ npm run build
 ```sh
 git add <changed-file>
 git commit -m "docs: 개발 환경 안내 수정 (#123)"
-git push -u origin codex/<issue>-<short-slug>
+git push -u origin docs/123-dev-checks
 ```
 
 이슈·PR·댓글은 [GitHub 글 작성 기준](docs/github-writing.md)에 따라 `~합니다 / ~했습니다`로 직접 서술합니다. 문제·변경 결과·검증 근거를 적고 대화 중계 표현이나 작성 도구별 인사·서명은 붙이지 않습니다.

@@ -70,7 +70,7 @@
 .nr-library__hint {
   margin-block-start: 4px;
   color: var(--on-surface-variant);
-  font: var(--type-body-small);
+  font: var(--type-body-medium);
 }
 @keyframes nr-library-float {
   0%,

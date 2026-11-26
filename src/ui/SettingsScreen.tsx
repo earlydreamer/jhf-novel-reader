@@ -436,7 +436,7 @@ function LocalServerAddress({
           <p id={addressHelpId}>
             {composePresetAddress(host, port)
               ? `완성 주소: ${composePresetAddress(host, port)}`
-              : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요. 기본 포트는 LM Studio 1234, Ollama 11434, llama.cpp 서버 8080이에요.'}
+              : 'PC의 LAN 주소나 VPN 주소와 서버 포트를 적어 주세요.'}
           </p>
         </>
       )}
@@ -781,7 +781,7 @@ export function SettingsScreen({
             <p id={secretHelpId}>
               {gemini
                 ? 'Gemini API 키는 연결을 확인한 뒤 이 기기의 보안 저장소에 저장해요.'
-                : '인증값은 이 기기의 보안 저장소에 저장해요. 인증이 없는 서버라면 비워 두세요.'}
+                : '인증값은 이 기기의 보안 저장소에 저장해요.'}
             </p>
           </>
         )}
@@ -1018,12 +1018,7 @@ export function SettingsScreen({
 
       <section aria-labelledby="settings-info">
         <h2 id="settings-info">정보</h2>
-        <ListItem
-          headline="오픈소스 라이선스"
-          supporting="포함된 오픈소스와 라이선스"
-          navigates
-          onClick={() => setLicensesOpen(true)}
-        />
+        <ListItem headline="오픈소스 라이선스" navigates onClick={() => setLicensesOpen(true)} />
       </section>
 
       <footer className="nr-settings-footer">

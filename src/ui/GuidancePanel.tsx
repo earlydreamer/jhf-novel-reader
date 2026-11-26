@@ -180,8 +180,8 @@ export function GuidancePanel({
       ) : (
         <p>
           이 작품에서 직접 저장한 항목 중 원문에 이름·별칭이 나오는 항목만 번역에 적용해요. 화자가
-          불확실한 대사는 추측하지 않도록 전달해요. 용어집이 길어 입력 예산이 부족하면 항목을 줄인
-          뒤 다시 시작해 주세요.
+          불확실한 대사는 추측하지 않도록 전달해요. 용어집이 너무 길어 한 번에 전달하지 못하면
+          항목을 줄인 뒤 다시 시작해 주세요.
         </p>
       )}
       <p>
@@ -198,8 +198,8 @@ export function GuidancePanel({
           <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
         </label>
       )}
-      <fieldset disabled={!canSave}>
-        <legend>용어집</legend>
+      <fieldset className="nr-guidance-fields" disabled={!canSave}>
+        <legend className="nr-visually-hidden">용어집</legend>
         {!shared && (
           <label>
             이전 이야기 요약 (선택, 이름 없이 400자 이내)

@@ -143,7 +143,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
       )}
       {!props.batchAvailable && !active && (
         <Button variant="tonal" onClick={props.onSettings}>
-          일괄 번역 연결 설정
+          연결 설정하기
         </Button>
       )}
       <form
@@ -209,11 +209,18 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
       )}
       {props.batch?.error && <p role="alert">{props.batch.error}</p>}
       {record && (
-        <div aria-label="확정한 번역 대상">
+        <div className="nr-card nr-card--filled nr-batch-record" aria-label="확정한 번역 대상">
           <p>
             확정 범위: {record.chapters[0]!.ordinal}–
             {record.chapters[record.chapters.length - 1]!.ordinal}화 · 총 {record.chapters.length}화
           </p>
+          {/* 진행 막대는 카드 제목 바로 아래에 둬서 다른 줄의 밑줄처럼 읽히지 않게 한다. */}
+          {active && record.chapters.length > 0 && (
+            <LinearProgress
+              label="미리 번역 진행률"
+              value={record.cursor / record.chapters.length}
+            />
+          )}
           <p>모델: {readableModelName(record.selection.modelId)}</p>
           <p>
             {record.retranslate
@@ -270,12 +277,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             <p>후보 확인을 마쳤어요. 확정한 작품 용어집으로 각 회차를 순서대로 번역해요.</p>
           )}
           {record.phase === 'prepared' && (!record.scan || record.scan.status === 'confirmed') && (
-            <Button
-              variant="filled"
-              size="m"
-              disabled={!canPrepare}
-              onClick={() => props.onRunBatch?.()}
-            >
+            <Button variant="filled" disabled={!canPrepare} onClick={() => props.onRunBatch?.()}>
               확인한 회차 번역 시작
             </Button>
           )}
@@ -284,7 +286,6 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
               <p>일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.</p>
               <Button
                 variant="filled"
-                size="m"
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.()}
               >

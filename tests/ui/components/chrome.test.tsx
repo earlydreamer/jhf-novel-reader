@@ -59,6 +59,26 @@ describe('TopAppBar', () => {
     heading.remove();
   });
 
+  it('창이 아닌 내부 영역이 스크롤돼도 앱바 제목을 다시 판정한다', () => {
+    const article = document.createElement('article');
+    const heading = document.createElement('h1');
+    heading.className = 'inner-heading';
+    article.append(heading);
+    document.body.append(article);
+    let headingBottom = 200;
+    heading.getBoundingClientRect = () => ({ bottom: headingBottom }) as DOMRect;
+    render(<TopAppBar title="1화 제목" titleAs="span" revealTitleAfter=".inner-heading" />);
+    const title = document.querySelector('.nr-top-app-bar__title')!;
+    expect(title).toHaveClass('nr-top-app-bar__title--concealed');
+
+    headingBottom = -10;
+    act(() => {
+      article.dispatchEvent(new Event('scroll'));
+    });
+    expect(title).not.toHaveClass('nr-top-app-bar__title--concealed');
+    article.remove();
+  });
+
   it('지정한 화면 제목이 없으면 앱바 제목을 그대로 보인다', () => {
     render(<TopAppBar title="합성 작품" titleAs="span" revealTitleAfter=".missing" />);
     expect(document.querySelector('.nr-top-app-bar__title')).not.toHaveClass(
