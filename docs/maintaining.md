@@ -15,7 +15,8 @@
 ## 워크트리와 브랜치
 
 - 이슈마다 전용 워크트리와 브랜치를 사용합니다. 다음 독립 기능을 같은 워크트리·브랜치에서 계속 구현하지 않습니다.
-- 브랜치는 `codex/<issue>-<short-slug>` 형식으로 만듭니다. 예: `codex/82-local-streaming`, `codex/87-title-translation`.
+- 워크트리는 저장소 내부 단일 경로 `.worktrees/<issue>-<short-slug>`에 생성해 상위 디렉터리가 파편화되지 않게 합니다(`.gitignore`에 `/.worktrees/` 등록).
+- 브랜치는 작성 도구에 종속되지 않는 작업 타입 기반 `<type>/<issue>-<short-slug>` 형식으로 만듭니다. 타입은 커밋 타입(`feat`, `fix`, `refactor`, `style`, `docs`, `test`, `build`, `ci`, `chore`)과 맞춥니다. 예: `feat/82-local-streaming`, `fix/83-save-queue`, `style/455-design-system-ux`, `docs/456-branch-worktree-policy`. 기존에 생성된 미병합 브랜치 이력은 유지하고 새 작업부터 적용합니다.
 - 저장소 기본 브랜치에서 시작합니다. 미병합 선행 작업이 필요하면 그 브랜치에서 시작하고 이슈·PR에 선행 이슈, base 브랜치, 병합 순서를 기록합니다.
 - 스택 PR에서도 각 PR의 diff는 선행 브랜치에 추가한 해당 기능만 포함해야 합니다. 후속 PR의 전체 누적 diff를 기능별 분리의 근거로 삼지 않습니다.
 - 다른 워크트리의 수정과 untracked 파일을 보존합니다. 사용자 작업을 자동 reset·clean·stash하거나 다른 기능 브랜치로 옮기지 않습니다.
