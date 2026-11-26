@@ -732,15 +732,20 @@ label.nr-list-item__main:has(> input:disabled)::before {
   gap: 8px;
 }
 .nr-status-pill__action {
-  min-block-size: var(--touch-target);
+  position: relative;
+  block-size: var(--button-s);
   padding: 0 12px;
   border: 0;
   border-radius: var(--shape-full);
   background: transparent;
   color: inherit;
   font: var(--type-label-large);
-  text-decoration: underline;
   cursor: pointer;
+}
+.nr-status-pill__action::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
 }
 
 /* Snackbar */

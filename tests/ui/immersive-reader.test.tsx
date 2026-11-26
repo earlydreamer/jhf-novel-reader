@@ -1715,6 +1715,22 @@ describe('같은 내용을 두 번 말하지 않는다(#449)', () => {
     ).toBeInTheDocument();
   });
 
+  test('번역 중 첫 문단을 기다릴 때는 본문 안내를 한 번만 보인다', () => {
+    render(
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version: null,
+          translationActive: true,
+          translation: { phase: 'translating', elapsedMs: 10 },
+        })}
+      />,
+    );
+    const article = screen.getByRole('article', { name: '번역 미리보기' });
+    expect(article).toHaveTextContent('첫 문단이 도착하면 여기서 바로 읽을 수 있어요.');
+    expect(article).not.toHaveTextContent('다음 문단을 번역하고 있어요');
+  });
+
   test('마지막 화에서는 다 읽었다는 문장을 한 번만 보인다', () => {
     render(<ImmersiveReader {...props()} />);
     const end = document.querySelector('.nr-reader-end')!;

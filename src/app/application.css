@@ -101,6 +101,32 @@
 .nr-batch-panel > .nr-button {
   margin-block: 4px 8px;
 }
+/* 용어집 편집: 설명 문단은 보조 텍스트로, 바깥 묶음은 상자 없이 둔다(용어마다 상자가 이미 있다). */
+.nr-guidance-panel > p:not([role]) {
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
+}
+.nr-guidance-panel > .nr-guidance-fields {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+/* 미리 번역 대상·진행 카드: 첫 줄(확정 범위)이 제목, 나머지는 보조 정보 */
+/* .nr-card(display: block)가 뒤에 로드되므로 두 클래스로 특이도를 올린다. */
+.nr-card.nr-batch-record {
+  display: grid;
+  gap: 8px;
+  margin-block: 16px;
+}
+.nr-batch-record > p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font: var(--type-body-medium);
+}
+.nr-batch-record > p:first-child {
+  color: var(--on-surface);
+  font: var(--type-title-medium);
+}
 /* 나란히 놓는 버튼 묶음(폼 제출·대안 행동) */
 .nr-button-row {
   display: flex;

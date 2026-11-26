@@ -209,11 +209,18 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
       )}
       {props.batch?.error && <p role="alert">{props.batch.error}</p>}
       {record && (
-        <div aria-label="확정한 번역 대상">
+        <div className="nr-card nr-card--filled nr-batch-record" aria-label="확정한 번역 대상">
           <p>
             확정 범위: {record.chapters[0]!.ordinal}–
             {record.chapters[record.chapters.length - 1]!.ordinal}화 · 총 {record.chapters.length}화
           </p>
+          {/* 진행 막대는 카드 제목 바로 아래에 둬서 다른 줄의 밑줄처럼 읽히지 않게 한다. */}
+          {active && record.chapters.length > 0 && (
+            <LinearProgress
+              label="미리 번역 진행률"
+              value={record.cursor / record.chapters.length}
+            />
+          )}
           <p>모델: {readableModelName(record.selection.modelId)}</p>
           <p>
             {record.retranslate

@@ -676,11 +676,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         )}
       </div>
     ),
-    props.route === 'translation' && activeFlow && !paragraphs.length && (
-      <p key="translating-note" className="nr-reader-note">
-        다음 문단을 번역하고 있어요…
-      </p>
-    ),
   ];
   // 버튼이 있는 행동 안내는 본문 흐름 밖의 떠 있는 카드로 띄운다(#150). 같은 상태에서 닫으면 상태가 바뀔 때까지 다시 나오지 않는다.
   const actionNotices = [
