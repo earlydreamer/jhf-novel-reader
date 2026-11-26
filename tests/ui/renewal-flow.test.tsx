@@ -771,7 +771,9 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('connection'));
     expect(controller.getSnapshot().selectedModelId).toBe('fixture-hymt2');
-    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
+    // 연결 전에는 누를 수 없는 번역 버튼 대신 연결 설정을 주 행동으로 보인다(#447).
+    expect(screen.queryByRole('button', { name: '이 화 번역하기' })).toBeNull();
+    expect(screen.getByRole('button', { name: '연결 설정하기' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: '연결 다시 확인' }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeEnabled(),
@@ -827,7 +829,8 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await waitFor(() => expect(controller.getSnapshot().catalogStatus).toBe('model_missing'));
     expect(controller.getSnapshot().selectedModelId).toBeNull();
-    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '이 화 번역하기' })).toBeNull();
+    expect(screen.getByRole('button', { name: '연결 설정하기' })).toBeEnabled();
     expect(value.generate).not.toHaveBeenCalled();
     controller.dispose();
   });
@@ -837,7 +840,8 @@ describe('renewal first reading screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
     expect(value.generate).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '이 화 번역하기' })).toBeNull();
+    expect(screen.getByRole('button', { name: '연결 설정하기' })).toBeEnabled();
   });
   it('saved_chapter_opens_without_settings', async () => {
     const value = await setup(true);
@@ -850,7 +854,7 @@ describe('renewal first reading screens', () => {
     await setup();
     fireEvent.click(screen.getByRole('button', { name: '2화 제목' }));
     await screen.findByRole('heading', { name: '2화 제목' });
-    fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
+    fireEvent.click(screen.getByRole('button', { name: '연결 설정하기' }));
     await screen.findByRole('heading', { name: '설정' });
     fireEvent.click(screen.getByRole('button', { name: '뒤로 가기' }));
     expect(screen.getByRole('heading', { name: '2화 제목' })).toBeVisible();
@@ -877,7 +881,7 @@ describe('renewal first reading screens', () => {
     const value = await setup(false, true);
     fireEvent.click(screen.getByRole('button', { name: '1화 제목' }));
     await screen.findByRole('heading', { name: '1화 제목' });
-    fireEvent.click(screen.getByRole('button', { name: '연결 설정' }));
+    fireEvent.click(screen.getByRole('button', { name: '연결 설정하기' }));
     fireEvent.change(screen.getByLabelText('서버 주소'), { target: { value: '192.168.1.2' } });
     fireEvent.change(screen.getByLabelText('포트'), { target: { value: '1234' } });
     fireEvent.click(screen.getByRole('button', { name: '연결 확인하기' }));
@@ -1076,7 +1080,7 @@ describe('renewal reading affordances', () => {
     revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '다음 화' }));
     await screen.findByRole('heading', { name: '2화 제목' });
-    expect(screen.getByRole('button', { name: '이 화 번역하기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '연결 설정하기' })).toBeEnabled();
     expect(value.generate).not.toHaveBeenCalled();
     revealReaderBars();
     fireEvent.click(screen.getByRole('button', { name: '목차로 돌아가기' }));

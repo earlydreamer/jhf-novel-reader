@@ -663,17 +663,20 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             ? '이 회차를 번역하면 여기서 읽을 수 있어요.'
             : '번역 서버를 연결하면 바로 읽을 수 있어요.'}
         </p>
-        <Button
-          variant="filled"
-          size="m"
-          disabled={!canStartTranslation}
-          onClick={props.onTranslate}
-        >
-          이 화 번역하기
-        </Button>
-        {(!props.connected || !props.translationAvailable) && (
-          <Button variant="tonal" onClick={() => props.onSettings()}>
-            연결 설정
+        {/* 연결 전에는 누를 수 없는 번역 버튼 대신 다음 행동인 연결 설정을 주 행동으로 둔다(#447).
+            연결을 확인하는 동안은 피할 수 없는 잠금이라 비활성 번역 버튼을 그대로 보인다. */}
+        {(props.connected && props.translationAvailable) || props.catalogStatus === 'checking' ? (
+          <Button
+            variant="filled"
+            size="m"
+            disabled={!canStartTranslation}
+            onClick={props.onTranslate}
+          >
+            이 화 번역하기
+          </Button>
+        ) : (
+          <Button variant="filled" size="m" onClick={() => props.onSettings()}>
+            연결 설정하기
           </Button>
         )}
       </div>
