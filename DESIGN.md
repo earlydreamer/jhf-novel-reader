@@ -116,6 +116,8 @@ Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang
 
 - 아이콘은 Material Symbols Outlined(Apache-2.0)에서 쓰는 것만 `src/ui/icons/`에 복사합니다. `Icon` 컴포넌트가 CSS 마스크로 `currentColor`를 입힙니다.
 - 아이콘만 있는 버튼은 `aria-label`이 필수입니다.
+- 버튼은 `Button` 컴포넌트로 3절의 위계를 고릅니다. 클래스 없는 `<button>`을 새로 쓰지 않습니다.
+- 입력칸은 채움형(`--surface-container-highest` 면, 아래 `--outline` 테두리) 한 가지만 씁니다. 대화상자·시트 안에서도 같습니다.
 - 대화상자와 바텀시트는 열리면 제목으로 포커스를 옮기고, 닫히면 연 요소로 돌려줍니다. Esc, 스크림 탭, 시스템 뒤로 가기로 닫힙니다.
 
 ## 5. 내비게이션
