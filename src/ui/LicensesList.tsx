@@ -46,8 +46,8 @@ export function LicensesList(): JSX.Element {
   return (
     <>
       <p>
-        이 앱에 포함된 오픈소스 구성 요소와 라이선스예요. JHF Novel Reader 자체 라이선스는 아직
-        정하지 않았어요.
+        이 앱에 포함된 오픈소스 구성 요소와 라이선스예요. JHF Novel Reader는 MIT 라이선스로
+        배포해요.
       </p>
       {data.sections.map((section) => (
         <section key={section.id}>
