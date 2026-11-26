@@ -844,7 +844,8 @@ test('source access failures keep their specific guidance and explicit retry act
   expect(onRefreshSource).not.toHaveBeenCalled();
 });
 
-test('원문 변경 안내는 번역 본문 안에서 회차 제목보다 앞에 놓인다', () => {
+// 안내는 상태바와 겹치지 않게 본문 흐름 안에 두고(#109), 회차 제목 아래 본문 자리에 놓는다(#449).
+test('원문 변경 안내는 번역 본문 안에서 회차 제목 아래에 놓인다', () => {
   render(<ImmersiveReader {...props({ sourceChange: 'unavailable' })} />);
 
   const article = screen.getByRole('article', { name: '번역 본문' });
@@ -852,7 +853,7 @@ test('원문 변경 안내는 번역 본문 안에서 회차 제목보다 앞에
   const heading = screen.getByRole('heading', { level: 1 });
   expect(notice).toHaveAttribute('role', 'status');
   expect(article).toContainElement(notice);
-  expect(notice.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(heading.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test('번역 실패 카드는 본문 흐름 밖의 떠 있는 안내에 표시된다', () => {

@@ -614,7 +614,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     model_missing: '선택한 모델을 서버에서 찾지 못했어요. 연결 설정에서 모델을 다시 선택해 주세요.',
   };
 
-  // 안내 카드는 본문 흐름 안(article 첫 자식)의 컨테이너에 모아 상태바·화면 가장자리에 붙지 않게 한다.
+  // 안내 카드는 본문 흐름 안(회차 머리 바로 아래)의 컨테이너에 모아 상태바·화면 가장자리에 붙지 않게 한다.
   const notices = [
     props.sourceChange === 'checking' && (
       <p key="source-checking" className="nr-reader-note" role="status">
@@ -949,7 +949,6 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           }
         }}
       >
-        {hasNotices && <div className="nr-reader-notices">{notices}</div>}
         <header className="nr-reader-heading">
           {withoutOrdinalPrefix(title, chapter.ordinal) === title && (
             <span className="nr-reader-ordinal">{chapter.ordinal}화</span>
@@ -972,6 +971,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             </p>
           )}
         </header>
+        {/* 안내는 제목 아래 본문 자리에 둔다. 아직 본문이 없을 때 빈 영역 대신 다음 행동이 보인다. */}
+        {hasNotices && <div className="nr-reader-notices">{notices}</div>}
         {props.translation.phase === 'translating' &&
           livePreview !== undefined &&
           paragraphs.length > 0 && (
