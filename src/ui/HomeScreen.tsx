@@ -117,10 +117,13 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
           label="이어서 읽기"
         >
           <span className="nr-library__continue-label">이어서 읽기</span>
-          <strong lang={titleLang(state.recentTitles, recentWork.workId, recentWork.title)}>
+          <strong
+            className="nr-library__continue-title"
+            lang={titleLang(state.recentTitles, recentWork.workId, recentWork.title)}
+          >
             {state.recentTitles[recentWork.workId] ?? recentWork.title}
           </strong>
-          <span>
+          <span className="nr-library__continue-chapter">
             {recentChapter?.ordinal ?? mostRecent.chapterId.split('/').at(-1)}화 ·{' '}
             {recentChapter ? (
               <span

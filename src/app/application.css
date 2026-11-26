@@ -94,8 +94,15 @@
   font: var(--type-body-medium);
 }
 .nr-work-continue {
-  min-block-size: var(--touch-target);
   inline-size: 100%;
+  margin-block-start: 12px;
+}
+/* 나란히 놓는 버튼 묶음(폼 제출·대안 행동) */
+.nr-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-block-start: 12px;
 }
 .nr-work-chapters {
@@ -314,7 +321,11 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+/* 구분선 목록 행: 화면 공통 details 카드 배경·모서리를 쓰지 않는다. */
 .nr-license {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   border-block-end: 1px solid var(--outline-variant);
 }
 .nr-license > summary {

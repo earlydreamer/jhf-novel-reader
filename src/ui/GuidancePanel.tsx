@@ -7,6 +7,7 @@ import {
   type WorkGuidance,
 } from '../translation/guidance';
 import { DEFAULT_SHARED_TERMS } from '../translation/preset';
+import { Button } from './components/Button';
 
 /** 원문이나 별칭에 번역 제외 대상(한 글자·짧은 히라가나)이 있는지. 아직 비어 있는 입력칸은 세지 않는다. */
 const hasUnsafeName = (term: GuidanceTerm) =>
@@ -286,17 +287,18 @@ export function GuidancePanel({
                 }
               />
             </label>
-            <button
-              type="button"
+            <Button
+              variant="text"
+              tone="danger"
               onClick={() => change({ ...draft, terms: draft.terms.filter((_, i) => i !== index) })}
             >
               용어 {index + 1} 삭제
-            </button>
+            </Button>
           </fieldset>
         ))}
         {shared && searchKey && !shownTerms.length && <p>해당하는 공용 용어가 없어요.</p>}
-        <button
-          type="button"
+        <Button
+          variant="outlined"
           onClick={() => {
             if (shared) setSearch('');
             change({
@@ -309,7 +311,7 @@ export function GuidancePanel({
           }}
         >
           용어 추가
-        </button>
+        </Button>
         {!shared && (
           <>
             <h3>캐릭터 말투</h3>
@@ -363,18 +365,19 @@ export function GuidancePanel({
                     }
                   />
                 </label>
-                <button
-                  type="button"
+                <Button
+                  variant="text"
+                  tone="danger"
                   onClick={() =>
                     change({ ...draft, voices: draft.voices.filter((_, i) => i !== index) })
                   }
                 >
                   캐릭터 {index + 1} 삭제
-                </button>
+                </Button>
               </fieldset>
             ))}
-            <button
-              type="button"
+            <Button
+              variant="outlined"
               onClick={() =>
                 change({
                   ...draft,
@@ -383,18 +386,18 @@ export function GuidancePanel({
               }
             >
               캐릭터 추가
-            </button>
+            </Button>
           </>
         )}
-        <button type="button" data-guidance-save onClick={() => void save()}>
+        <Button variant="filled" data-guidance-save onClick={() => void save()}>
           {shared ? '공용 용어집 저장' : '용어집·말투 저장'}
-        </button>
+        </Button>
       </fieldset>
       {busy && <p>용어집 처리 중…</p>}
       {message && <p role="status">{message}</p>}
       {(conflict || (!busy && !available)) && (
-        <button
-          type="button"
+        <Button
+          variant="outlined"
           disabled={busy}
           onClick={() => {
             dirtyRef.current = false;
@@ -405,7 +408,7 @@ export function GuidancePanel({
           }}
         >
           {dirty ? '입력한 변경을 버리고 다시 읽기' : '용어집 다시 읽기'}
-        </button>
+        </Button>
       )}
     </div>
   );

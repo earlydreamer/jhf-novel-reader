@@ -271,6 +271,7 @@ export function WorkScreen({
         </p>
         <Button
           variant="filled"
+          size="m"
           className="nr-work-continue"
           disabled={
             busy ||
@@ -288,9 +289,9 @@ export function WorkScreen({
         {currentRecentStatus === 'error' && (
           <p role="alert">
             최근 읽은 회차를 확인하지 못했어요. 다시 시도해 주세요.{' '}
-            <button type="button" onClick={() => onRetryContinue?.()}>
+            <Button variant="text" onClick={() => onRetryContinue?.()}>
               다시 시도
-            </button>
+            </Button>
           </p>
         )}
       </header>

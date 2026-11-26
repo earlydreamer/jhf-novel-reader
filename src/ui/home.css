@@ -102,6 +102,12 @@
   display: block;
   font: var(--type-label-large);
 }
+.nr-library__continue-title {
+  font: var(--type-title-medium);
+}
+.nr-library__continue-chapter {
+  font: var(--type-body-medium);
+}
 .nr-library .nr-card--interactive {
   display: grid;
   gap: 4px;
@@ -121,27 +127,6 @@
 .nr-library__list .nr-menu {
   inset-inline-end: 0;
   max-inline-size: min(17.5rem, calc(100vw - 24px));
-}
-.nr-library__url-form label {
-  display: grid;
-  gap: 8px;
-  color: var(--on-surface-variant);
-  font: var(--type-body-large);
-}
-.nr-library__url-form input {
-  box-sizing: border-box;
-  inline-size: 100%;
-  min-block-size: var(--touch-target);
-  padding-inline: 12px;
-  border: 1px solid var(--outline);
-  border-radius: var(--shape-sm);
-  background: var(--surface-container-lowest);
-  color: var(--on-surface);
-  font: var(--type-body-large);
-}
-.nr-library__url-form input:focus-visible {
-  outline: 3px solid var(--primary);
-  outline-offset: 2px;
 }
 .nr-library .nr-notice {
   margin-block-end: 16px;
