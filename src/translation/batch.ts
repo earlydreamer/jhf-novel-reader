@@ -765,7 +765,7 @@ export function createBatchTranslation(dependencies: {
     } catch {
       publish({
         record: state.record ? { ...state.record, phase: 'unknown' } : null,
-        error: '일괄 번역 상태를 저장하지 못했어요. 저장본을 확인한 뒤 다시 시도해 주세요.',
+        error: '미리 번역 상태를 저장하지 못했어요. 저장본을 확인한 뒤 다시 시도해 주세요.',
       });
     } finally {
       publish({ active: false, chapterProgress: undefined });

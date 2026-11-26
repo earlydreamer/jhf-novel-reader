@@ -202,7 +202,7 @@ it('번역 제목이 없는 서재 행은 원문을 일본어로 표시하고 �
   controller.dispose();
 });
 
-it('서재 일괄 번역 카드는 번역 제목이 있으면 번역 제목을 보여 준다(#270)', async () => {
+it('서재 미리 번역 카드는 번역 제목이 있으면 번역 제목을 보여 준다(#270)', async () => {
   const translated = work('n5678bb', '번역 대상 작품');
   const { library } = libraryHarness([translated]);
   const titles: TitleRepository = {
@@ -259,9 +259,9 @@ it('서재 일괄 번역 카드는 번역 제목이 있으면 번역 제목을 �
   await screen.findByText('번역된 작품');
   act(() => emitBatch(running));
 
-  const card = await screen.findByLabelText('일괄 번역 상태');
+  const card = await screen.findByLabelText('미리 번역 상태');
   await waitFor(() =>
-    expect(card).toHaveTextContent('번역된 작품의 일괄 번역을 이어서 확인할 수 있어요.'),
+    expect(card).toHaveTextContent('번역된 작품의 미리 번역을 이어서 확인할 수 있어요.'),
   );
   expect(card).not.toHaveTextContent('번역 대상 작품');
   expect(within(card).getByText('번역된 작품')).not.toHaveAttribute('lang');
@@ -313,7 +313,7 @@ it('미리 번역이 중단·시작 전이면 서재 카드를 숨기고, 확인
       error: null,
     }),
   );
-  expect(screen.queryByLabelText('일괄 번역 상태')).toBeNull();
+  expect(screen.queryByLabelText('미리 번역 상태')).toBeNull();
   act(() =>
     emitBatch({
       record: { ...record, phase: 'prepared' },
@@ -322,7 +322,7 @@ it('미리 번역이 중단·시작 전이면 서재 카드를 숨기고, 확인
       error: null,
     }),
   );
-  expect(screen.queryByLabelText('일괄 번역 상태')).toBeNull();
+  expect(screen.queryByLabelText('미리 번역 상태')).toBeNull();
   act(() =>
     emitBatch({
       record: { ...record, phase: 'unknown' },
@@ -331,7 +331,7 @@ it('미리 번역이 중단·시작 전이면 서재 카드를 숨기고, 확인
       error: null,
     }),
   );
-  await screen.findByLabelText('일괄 번역 상태');
+  await screen.findByLabelText('미리 번역 상태');
   controller.dispose();
 });
 
@@ -380,12 +380,12 @@ it('미리 번역 안내를 닫으면 저장하고 닫힌 기록은 다시 표�
   await screen.findByText('번역 대상 작품');
   act(() => emitBatch(running));
 
-  const card = await screen.findByLabelText('일괄 번역 상태');
-  fireEvent.click(within(card).getByRole('button', { name: '일괄 번역 안내 닫기' }));
+  const card = await screen.findByLabelText('미리 번역 상태');
+  fireEvent.click(within(card).getByRole('button', { name: '미리 번역 안내 닫기' }));
   expect(dismissNotice).toHaveBeenCalledTimes(1);
 
   act(() => emitBatch({ ...running, record: { ...running.record!, dismissed: true } }));
-  await waitFor(() => expect(screen.queryByLabelText('일괄 번역 상태')).toBeNull());
+  await waitFor(() => expect(screen.queryByLabelText('미리 번역 상태')).toBeNull());
   controller.dispose();
 });
 
@@ -1443,7 +1443,7 @@ describe('회차 저장본 삭제 컨트롤러', () => {
     controller.dispose();
   });
 
-  it('번역 중이거나 일괄 번역이 실행 중인 회차 저장본 삭제는 막고 저장소를 부르지 않는다', async () => {
+  it('번역 중이거나 미리 번역이 실행 중인 회차 저장본 삭제는 막고 저장소를 부르지 않는다', async () => {
     const target = work('n2121cc', '막히는 회차 작품');
     const chapter = target.chapters[0]!;
     const { library } = libraryHarness([target]);
@@ -1486,7 +1486,7 @@ describe('회차 저장본 삭제 컨트롤러', () => {
     expect(library.removeChapterVersions).not.toHaveBeenCalled();
   });
 
-  it('저장 대기·결과 불명 요청·멈춘 일괄 번역 기록은 회차 저장본 삭제를 막지 않고 저장 대기를 비운다', async () => {
+  it('저장 대기·결과 불명 요청·멈춘 미리 번역 기록은 회차 저장본 삭제를 막지 않고 저장 대기를 비운다', async () => {
     const target = work('n2525ee', '정리되는 회차 작품');
     const chapter = target.chapters[0]!;
     const saved = savedVersion(target);
@@ -1666,7 +1666,7 @@ describe('목차 회차 시트의 저장본 삭제', () => {
       message: '이 화를 번역하고 있어요. 번역을 중단한 뒤 다시 삭제해 주세요.',
     },
     {
-      title: '일괄 번역 중',
+      title: '미리 번역 중',
       remove: {
         removed: false as const,
         cleanupComplete: false,

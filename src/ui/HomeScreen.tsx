@@ -68,10 +68,10 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
       {state.batch?.record &&
         !['complete', 'paused', 'prepared'].includes(state.batch.record.phase) &&
         !state.batch.record.dismissed && (
-          <aside className="nr-notice nr-notice--closable" aria-label="일괄 번역 상태">
+          <aside className="nr-notice nr-notice--closable" aria-label="미리 번역 상태">
             <IconButton
               icon="close"
-              label="일괄 번역 안내 닫기"
+              label="미리 번역 안내 닫기"
               className="nr-notice__close"
               onClick={props.onDismissBatchNotice}
             />
@@ -86,10 +86,10 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
                 {state.recentTitles[state.batch.record.work.workId] ??
                   state.batch.record.work.title}
               </span>
-              의 일괄 번역을 이어서 확인할 수 있어요.
+              의 미리 번역을 이어서 확인할 수 있어요.
             </p>
             <Button variant="text" onClick={props.onOpenBatch}>
-              일괄 번역 보기
+              미리 번역 보기
             </Button>
           </aside>
         )}

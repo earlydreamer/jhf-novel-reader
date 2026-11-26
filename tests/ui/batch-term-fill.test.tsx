@@ -412,7 +412,7 @@ test.each([
     expect(screen.queryByText(/비용은 들지 않아요/)).not.toBeInTheDocument();
     expect(props.onRunBatch).not.toHaveBeenCalled();
     fireEvent.click(
-      screen.getByRole('button', { name: '중복 처리 가능성을 확인하고 일괄 번역 재개' }),
+      screen.getByRole('button', { name: '중복 처리 가능성을 확인하고 미리 번역 재개' }),
     );
     expect(props.onRunBatch).toHaveBeenCalledWith(true);
     expect(
@@ -445,7 +445,7 @@ test('확인 필요 상태는 Gemini 연결이면 중복·비용 문구와 기�
     ),
   ).toBeVisible();
   fireEvent.click(
-    screen.getByRole('button', { name: '중복 처리 가능성을 확인하고 일괄 번역 재개' }),
+    screen.getByRole('button', { name: '중복 처리 가능성을 확인하고 미리 번역 재개' }),
   );
   expect(props.onRunBatch).toHaveBeenCalledWith(true);
 });
@@ -460,7 +460,7 @@ test('확인 필요 상태는 결과를 모르는 회차를 밝히고 그 회차
 
 test('중단 상태는 범위를 새로 확인하라는 안내를 재개 버튼 다음에 보인다', () => {
   render(<BatchPanel {...renderRecord(recordWith({ phase: 'paused', scan: undefined }))} />);
-  expect(screen.getByText('일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.')).toBeVisible();
+  expect(screen.getByText('미리 번역이 중단됐어요. 완료본은 그대로 남아 있어요.')).toBeVisible();
   expect(screen.getByText('재개하지 않으려면 위에서 범위를 새로 확인해 주세요.')).toBeVisible();
 });
 

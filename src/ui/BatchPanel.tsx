@@ -136,7 +136,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
   const firstDefault = record?.chapters[0]?.ordinal ?? 1;
   const lastDefault = record?.chapters.at(-1)?.ordinal ?? props.lastOrdinal;
   return (
-    <section className="nr-batch-panel" aria-label="일괄 번역">
+    <section className="nr-batch-panel" aria-label="미리 번역">
       <p>범위나 전체 회차를 확인한 뒤 시작해 주세요. 완료한 회차는 저장본으로 읽을 수 있어요.</p>
       {!props.batchAvailable && !active && (
         <p>연결 설정에서 서버와 모델을 확인하면 번역 대상을 준비할 수 있어요.</p>
@@ -283,7 +283,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
           )}
           {record.phase === 'paused' && (
             <>
-              <p>일괄 번역이 중단됐어요. 완료본은 그대로 남아 있어요.</p>
+              <p>미리 번역이 중단됐어요. 완료본은 그대로 남아 있어요.</p>
               <Button
                 variant="filled"
                 disabled={!props.batchAvailable || props.globalBlocked || active}
@@ -305,7 +305,7 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
                 disabled={!props.batchAvailable || props.globalBlocked || active}
                 onClick={() => props.onRunBatch?.(true)}
               >
-                중복 처리 가능성을 확인하고 일괄 번역 재개
+                중복 처리 가능성을 확인하고 미리 번역 재개
               </Button>
               {/* 결과를 모르는 회차가 범위에 남으면 새로 확인해도 같은 확인에서 멈춘다(#433). */}
               <p>
@@ -318,18 +318,18 @@ export function BatchPanel(props: BatchPanelProps): JSX.Element {
             <>
               <p>완료한 번역을 저장하지 못했어요. 새로 요청하기 전에 저장을 마쳐야 해요.</p>
               <Button variant="tonal" disabled={active} onClick={props.onRetryBatchSave}>
-                모델 요청 없이 일괄 결과 저장 다시 시도
+                모델 요청 없이 미리 번역 결과 저장 다시 시도
               </Button>
             </>
           )}
           {record.phase === 'complete' && (
-            <p>일괄 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.</p>
+            <p>미리 번역을 마쳤어요. 목차에서 저장된 회차를 열어 읽을 수 있어요.</p>
           )}
         </div>
       )}
       {active && (
         <Button variant="text" onClick={props.onCancelBatch}>
-          일괄 번역 중단
+          미리 번역 중단
         </Button>
       )}
     </section>
