@@ -11,3 +11,5 @@ android/keystore.properties
 
 # 개인 실행 기록과 임시 검증 자료
 /.local-work-records/
+# 이슈별 작업 워크트리
+/.worktrees/
