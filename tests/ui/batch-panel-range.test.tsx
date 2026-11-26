@@ -69,3 +69,16 @@ test('기록이 있으면 그 범위를 채우고 기록이 바뀌면 칸도 갱
   expect(screen.getByLabelText('시작 회차')).toHaveValue(3);
   expect(screen.getByLabelText('끝 회차')).toHaveValue(4);
 });
+
+test('진행 중인 미리 번역은 대상 카드에 진행 막대를 보인다(#449)', () => {
+  const value = state('batch-running', chapters);
+  const running: BatchState = {
+    ...value,
+    active: true,
+    record: { ...value.record!, phase: 'running', cursor: 1 },
+  };
+  render(<BatchPanel workId="n1234ab" batch={running} batchAvailable lastOrdinal={5} />);
+  const card = screen.getByLabelText('확정한 번역 대상');
+  expect(card).toHaveClass('nr-card');
+  expect(screen.getByRole('progressbar', { name: '미리 번역 진행률' })).toBeInTheDocument();
+});

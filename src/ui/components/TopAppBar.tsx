@@ -29,10 +29,11 @@ export function TopAppBar({
     update();
     // 화면 제목은 앱바보다 늦게 그려질 수 있어 다음 프레임에 한 번 더 확인한다.
     const frame = requestAnimationFrame(update);
-    window.addEventListener('scroll', update, { passive: true });
+    // 리더처럼 창이 아닌 내부 영역이 스크롤되는 화면도 따라가도록 캡처 단계에서 듣는다.
+    window.addEventListener('scroll', update, { passive: true, capture: true });
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', update);
+      window.removeEventListener('scroll', update, { capture: true });
     };
   }, [revealTitleAfter, title]);
   const Title = titleAs;

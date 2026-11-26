@@ -406,7 +406,7 @@ it('새 작품을 URL로 열고 서재로 돌아오면 즉시 목록에 등록�
   );
   expect(
     screen.getByText(
-      '아래 ‘작품 찾기’로 작품을 찾거나, 위의 링크 버튼에 작품 또는 회차 URL을 입력해 주세요.',
+      '아래 ‘작품 찾기’로 작품을 찾거나, 위의 링크 버튼에 작품 또는 회차 URL을 입력하면 서재에 담겨요.',
     ),
   ).toBeVisible();
   expect(screen.getByRole('button', { name: '작품 찾기' })).toHaveClass('nr-fab');

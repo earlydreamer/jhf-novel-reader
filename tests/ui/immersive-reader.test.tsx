@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { ReaderError } from '../../src/contracts';
 import type { CompletedTranslation, ChapterRef, WorkPage } from '../../src/contracts/reading';
 import { runTopBackHandler } from '../../src/ui/shell/backStack';
@@ -844,7 +844,8 @@ test('source access failures keep their specific guidance and explicit retry act
   expect(onRefreshSource).not.toHaveBeenCalled();
 });
 
-test('원문 변경 안내는 번역 본문 안에서 회차 제목보다 앞에 놓인다', () => {
+// 안내는 상태바와 겹치지 않게 본문 흐름 안에 두고(#109), 회차 제목 아래 본문 자리에 놓는다(#449).
+test('원문 변경 안내는 번역 본문 안에서 회차 제목 아래에 놓인다', () => {
   render(<ImmersiveReader {...props({ sourceChange: 'unavailable' })} />);
 
   const article = screen.getByRole('article', { name: '번역 본문' });
@@ -852,7 +853,7 @@ test('원문 변경 안내는 번역 본문 안에서 회차 제목보다 앞에
   const heading = screen.getByRole('heading', { level: 1 });
   expect(notice).toHaveAttribute('role', 'status');
   expect(article).toContainElement(notice);
-  expect(notice.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(heading.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test('번역 실패 카드는 본문 흐름 밖의 떠 있는 안내에 표시된다', () => {
@@ -1645,4 +1646,95 @@ test('문단 선택 막대는 본문 밖에 떠 있고 취소하면 사라진다
   fireEvent.click(within(bar).getByRole('button', { name: '취소' }));
   expect(screen.queryByRole('group', { name: '문단 선택 재번역' })).not.toBeInTheDocument();
   expect(article).not.toHaveClass('nr-immersive-article--selecting');
+});
+
+describe('같은 내용을 두 번 말하지 않는다(#449)', () => {
+  test('제목이 이미 화수로 시작하면 위의 화수 라벨을 빼고, 아니면 보인다', () => {
+    const { container, rerender } = render(
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version: null,
+          chapter: { ...chapter, title: '1화 첫 만남' },
+        })}
+      />,
+    );
+    expect(container.querySelector('.nr-reader-ordinal')).toBeNull();
+    rerender(
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version: null,
+          chapter: { ...chapter, title: '첫 만남' },
+        })}
+      />,
+    );
+    expect(container.querySelector('.nr-reader-ordinal')).toHaveTextContent('1화');
+  });
+
+  test('번역 시작 카드가 보이는 동안 빈 본문 안내를 겹쳐 보이지 않는다', () => {
+    render(<ImmersiveReader {...props({ route: 'translation', version: null })} />);
+    const article = screen.getByRole('article', { name: '번역 미리보기' });
+    expect(article).toHaveTextContent('이 회차를 번역하면 여기서 읽을 수 있어요.');
+    expect(article).not.toHaveTextContent('번역을 시작하면 이 화면에서 읽을 수 있어요.');
+  });
+
+  test('연결을 확인한 적이 없으면 막연한 연결 안내 없이 카드 하나로 안내한다', () => {
+    render(
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version: null,
+          connected: false,
+          catalogStatus: 'idle',
+          selectedModelId: null,
+        })}
+      />,
+    );
+    const article = screen.getByRole('article', { name: '번역 미리보기' });
+    expect(article).not.toHaveTextContent('연결 상태를 확인해 주세요.');
+    expect(article).toHaveTextContent('번역 서버를 연결하면 바로 읽을 수 있어요.');
+  });
+
+  test('선택한 모델을 찾지 못하면 그 원인을 알린다', () => {
+    render(
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version: null,
+          connected: false,
+          catalogStatus: 'model_missing',
+          selectedModelId: null,
+        })}
+      />,
+    );
+    expect(
+      screen.getByText(
+        '선택한 모델을 서버에서 찾지 못했어요. 연결 설정에서 모델을 다시 선택해 주세요.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  test('번역 중 첫 문단을 기다릴 때는 본문 안내를 한 번만 보인다', () => {
+    render(
+      <ImmersiveReader
+        {...props({
+          route: 'translation',
+          version: null,
+          translationActive: true,
+          translation: { phase: 'translating', elapsedMs: 10 },
+        })}
+      />,
+    );
+    const article = screen.getByRole('article', { name: '번역 미리보기' });
+    expect(article).toHaveTextContent('첫 문단이 도착하면 여기서 바로 읽을 수 있어요.');
+    expect(article).not.toHaveTextContent('다음 문단을 번역하고 있어요');
+  });
+
+  test('마지막 화에서는 다 읽었다는 문장을 한 번만 보인다', () => {
+    render(<ImmersiveReader {...props()} />);
+    const end = document.querySelector('.nr-reader-end')!;
+    expect(end).toHaveTextContent('마지막 화까지 읽었어요.');
+    expect(end).not.toHaveTextContent('1화를 다 읽었어요.');
+  });
 });

@@ -36,6 +36,7 @@ import { useSnackbar, useSnackbarOffset } from './components/Snackbar';
 import { TopAppBar } from './components/TopAppBar';
 import type { ReaderGlossary } from './readerGlossary';
 import { TermEditor } from './TermEditor';
+import { withoutOrdinalPrefix } from './chapterTitle';
 import { GuidanceDialog } from './GuidanceDialog';
 import type { GuidancePanelProps } from './GuidancePanel';
 import { paragraphTerms, sourceRanges, splitByRanges, translatedRanges } from './termHighlight';
@@ -610,9 +611,10 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
     model_list: '서버의 모델 목록을 확인하지 못했어요. 다시 확인해 주세요.',
     empty: '사용할 수 있는 모델이 없어요. 서버에서 모델을 확인해 주세요.',
     unavailable: '서버 연결을 확인할 수 없어요. 연결 설정을 확인해 주세요.',
+    model_missing: '선택한 모델을 서버에서 찾지 못했어요. 연결 설정에서 모델을 다시 선택해 주세요.',
   };
 
-  // 안내 카드는 본문 흐름 안(article 첫 자식)의 컨테이너에 모아 상태바·화면 가장자리에 붙지 않게 한다.
+  // 안내 카드는 본문 흐름 안(회차 머리 바로 아래)의 컨테이너에 모아 상태바·화면 가장자리에 붙지 않게 한다.
   const notices = [
     props.sourceChange === 'checking' && (
       <p key="source-checking" className="nr-reader-note" role="status">
@@ -634,9 +636,9 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         저장된 연결의 서버와 모델 목록을 확인하고 있어요.
       </p>
     ),
-    props.route === 'translation' && catalogUnavailable && props.catalogStatus !== 'checking' && (
+    props.route === 'translation' && catalogUnavailable && catalogMessage[props.catalogStatus] && (
       <p key="catalog-unavailable" className="nr-reader-note" role="status">
-        {catalogMessage[props.catalogStatus] ?? '연결 상태를 확인해 주세요.'}
+        {catalogMessage[props.catalogStatus]}
       </p>
     ),
     props.route === 'translation' && props.connectionConfigured && catalogUnavailable && (
@@ -664,25 +666,15 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         {/* 연결 전에는 누를 수 없는 번역 버튼 대신 다음 행동인 연결 설정을 주 행동으로 둔다(#447).
             연결을 확인하는 동안은 피할 수 없는 잠금이라 비활성 번역 버튼을 그대로 보인다. */}
         {(props.connected && props.translationAvailable) || props.catalogStatus === 'checking' ? (
-          <Button
-            variant="filled"
-            size="m"
-            disabled={!canStartTranslation}
-            onClick={props.onTranslate}
-          >
+          <Button variant="filled" disabled={!canStartTranslation} onClick={props.onTranslate}>
             이 화 번역하기
           </Button>
         ) : (
-          <Button variant="filled" size="m" onClick={() => props.onSettings()}>
+          <Button variant="filled" onClick={() => props.onSettings()}>
             연결 설정하기
           </Button>
         )}
       </div>
-    ),
-    props.route === 'translation' && activeFlow && !paragraphs.length && (
-      <p key="translating-note" className="nr-reader-note">
-        다음 문단을 번역하고 있어요…
-      </p>
     ),
   ];
   // 버튼이 있는 행동 안내는 본문 흐름 밖의 떠 있는 카드로 띄운다(#150). 같은 상태에서 닫으면 상태가 바뀔 때까지 다시 나오지 않는다.
@@ -790,7 +782,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
               ? '새 번역을 저장했어요. 지금은 이전 번역을 읽고 있어요.'
               : '번역을 저장했어요.'}
           </p>
-          <Button variant="filled" size="m" onClick={props.onOpenSaved}>
+          <Button variant="filled" onClick={props.onOpenSaved}>
             저장된 번역 열기
           </Button>
         </div>
@@ -846,6 +838,7 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
         <TopAppBar
           title={title}
           titleAs="span"
+          revealTitleAfter=".nr-reader-heading h1"
           navigation={
             <IconButton icon="arrow_back" label="목차로 돌아가기" onClick={props.onBack} />
           }
@@ -951,9 +944,10 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           }
         }}
       >
-        {hasNotices && <div className="nr-reader-notices">{notices}</div>}
         <header className="nr-reader-heading">
-          <span className="nr-reader-ordinal">{chapter.ordinal}화</span>
+          {withoutOrdinalPrefix(title, chapter.ordinal) === title && (
+            <span className="nr-reader-ordinal">{chapter.ordinal}화</span>
+          )}
           <h1>{title}</h1>
           <button
             type="button"
@@ -972,6 +966,8 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             </p>
           )}
         </header>
+        {/* 안내는 제목 아래 본문 자리에 둔다. 아직 본문이 없을 때 빈 영역 대신 다음 행동이 보인다. */}
+        {hasNotices && <div className="nr-reader-notices">{notices}</div>}
         {props.translation.phase === 'translating' &&
           livePreview !== undefined &&
           paragraphs.length > 0 && (
@@ -1017,11 +1013,13 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
             );
           })
         ) : props.route === 'translation' ? (
-          <p className="nr-reader-empty">
-            {activeFlow
-              ? '첫 문단이 도착하면 여기서 바로 읽을 수 있어요.'
-              : '번역을 시작하면 이 화면에서 읽을 수 있어요.'}
-          </p>
+          !(props.translation.phase === 'idle' && !active) && (
+            <p className="nr-reader-empty">
+              {activeFlow
+                ? '첫 문단이 도착하면 여기서 바로 읽을 수 있어요.'
+                : '번역을 시작하면 이 화면에서 읽을 수 있어요.'}
+            </p>
+          )
         ) : (
           <p className="nr-reader-empty">저장된 번역을 찾지 못했어요.</p>
         )}
@@ -1046,18 +1044,13 @@ export function ImmersiveReader(props: ImmersiveReaderProps): JSX.Element {
           chapterIndex >= 0 &&
           (nextAvailable || props.work?.complete) && (
             <div className="nr-reader-end" role="status">
-              <p>{chapter.ordinal}화를 다 읽었어요.</p>
-              {nextAvailable ? (
-                <Button
-                  variant="filled"
-                  size="m"
-                  disabled={props.busy}
-                  onClick={() => props.onAdjacent(1)}
-                >
+              <p>
+                {nextAvailable ? `${chapter.ordinal}화를 다 읽었어요.` : '마지막 화까지 읽었어요.'}
+              </p>
+              {nextAvailable && (
+                <Button variant="filled" disabled={props.busy} onClick={() => props.onAdjacent(1)}>
                   {props.work!.chapters[chapterIndex + 1]!.ordinal}화 읽기
                 </Button>
-              ) : (
-                <p>마지막 화까지 읽었어요.</p>
               )}
             </div>
           )}
