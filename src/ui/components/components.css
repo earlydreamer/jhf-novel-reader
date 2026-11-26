@@ -542,6 +542,13 @@ label.nr-list-item__main:has(> input:disabled)::before {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 화면 안 제목이 보이는 동안 숨긴 앱바 제목. 자리는 유지해 동작 버튼이 움직이지 않는다. */
+.nr-top-app-bar__title--concealed {
+  opacity: 0;
+}
+.nr-top-app-bar__title {
+  transition: opacity var(--duration-short) var(--ease-standard);
+}
 .nr-top-app-bar__navigation + .nr-top-app-bar__title {
   margin-inline-start: 0;
 }

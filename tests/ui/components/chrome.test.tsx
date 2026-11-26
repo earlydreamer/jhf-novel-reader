@@ -38,6 +38,33 @@ describe('TopAppBar', () => {
     expect(screen.getByRole('banner')).toHaveTextContent('목차');
     expect(screen.getByRole('button', { name: '뒤로 가기' })).toBeVisible();
   });
+
+  it('화면 제목이 앱바 아래로 사라질 때까지 앱바 제목을 숨긴다', () => {
+    const heading = document.createElement('h1');
+    heading.className = 'page-heading';
+    document.body.append(heading);
+    let headingBottom = 200;
+    heading.getBoundingClientRect = () => ({ bottom: headingBottom }) as DOMRect;
+    render(<TopAppBar title="합성 작품" titleAs="span" revealTitleAfter=".page-heading" />);
+    const title = document.querySelector('.nr-top-app-bar__title')!;
+    expect(title).toHaveClass('nr-top-app-bar__title--concealed');
+    expect(title).toHaveAttribute('aria-hidden', 'true');
+
+    headingBottom = -10;
+    act(() => {
+      window.dispatchEvent(new Event('scroll'));
+    });
+    expect(title).not.toHaveClass('nr-top-app-bar__title--concealed');
+    expect(title).not.toHaveAttribute('aria-hidden');
+    heading.remove();
+  });
+
+  it('지정한 화면 제목이 없으면 앱바 제목을 그대로 보인다', () => {
+    render(<TopAppBar title="합성 작품" titleAs="span" revealTitleAfter=".missing" />);
+    expect(document.querySelector('.nr-top-app-bar__title')).not.toHaveClass(
+      'nr-top-app-bar__title--concealed',
+    );
+  });
 });
 
 describe('ExtendedFab', () => {
