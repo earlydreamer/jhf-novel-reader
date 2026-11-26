@@ -30,6 +30,14 @@ body {
   outline: 3px solid var(--primary);
   outline-offset: 2px;
 }
+::selection {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+input,
+textarea {
+  caret-color: var(--primary);
+}
 /* 화면에는 숨기고 보조 기술에만 읽히는 문구 */
 .nr-visually-hidden {
   position: absolute;

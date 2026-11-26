@@ -1149,6 +1149,7 @@ export function SettingsScreen({
             </Button>
             <Button
               variant="text"
+              tone="danger"
               onClick={() => {
                 setChatGptDisconnectOpen(false);
                 chatGptActions?.onDisconnect();
@@ -1385,7 +1386,7 @@ export function SettingsScreen({
             <Button variant="text" onClick={() => setEmbeddingRemoveConfirm(false)}>
               취소
             </Button>
-            <Button variant="text" onClick={confirmRemoveEmbedding}>
+            <Button variant="text" tone="danger" onClick={confirmRemoveEmbedding}>
               지우기
             </Button>
           </>

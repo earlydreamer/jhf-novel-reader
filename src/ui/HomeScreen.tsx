@@ -6,6 +6,7 @@ import { Card } from './components/Card';
 import { Dialog } from './components/Modal';
 import { Menu } from './components/Menu';
 import { ListItem } from './components/ListItem';
+import { Icon } from './components/Icon';
 import { IconButton } from './components/IconButton';
 import { BROWSE_SITES } from '../platform/browseSites';
 import brandLogo from './assets/brand-logo.png';
@@ -117,27 +118,32 @@ export function HomeScreen(props: HomeScreenProps): JSX.Element {
           onClick={() => props.onContinue(mostRecent.versionId)}
           label="이어서 읽기"
         >
-          <span className="nr-library__continue-label">이어서 읽기</span>
-          <strong
-            className="nr-library__continue-title"
-            lang={titleLang(state.recentTitles, recentWork.workId, recentWork.title)}
-          >
-            {state.recentTitles[recentWork.workId] ?? recentWork.title}
-          </strong>
-          <span className="nr-library__continue-chapter">
-            {recentChapter?.ordinal ?? mostRecent.chapterId.split('/').at(-1)}화 ·{' '}
-            {recentChapter ? (
-              <span
-                lang={titleLang(state.recentTitles, recentChapter.chapterId, recentChapter.title)}
-              >
-                {withoutOrdinalPrefix(
-                  state.recentTitles[recentChapter.chapterId] ?? recentChapter.title,
-                  recentChapter.ordinal,
-                )}
-              </span>
-            ) : (
-              mostRecent.chapterId
-            )}
+          <span className="nr-library__continue-content">
+            <span className="nr-library__continue-label">이어서 읽기</span>
+            <strong
+              className="nr-library__continue-title"
+              lang={titleLang(state.recentTitles, recentWork.workId, recentWork.title)}
+            >
+              {state.recentTitles[recentWork.workId] ?? recentWork.title}
+            </strong>
+            <span className="nr-library__continue-chapter">
+              {recentChapter?.ordinal ?? mostRecent.chapterId.split('/').at(-1)}화 ·{' '}
+              {recentChapter ? (
+                <span
+                  lang={titleLang(state.recentTitles, recentChapter.chapterId, recentChapter.title)}
+                >
+                  {withoutOrdinalPrefix(
+                    state.recentTitles[recentChapter.chapterId] ?? recentChapter.title,
+                    recentChapter.ordinal,
+                  )}
+                </span>
+              ) : (
+                mostRecent.chapterId
+              )}
+            </span>
+          </span>
+          <span className="nr-library__continue-arrow" aria-hidden="true">
+            <Icon name="chevron_right" />
           </span>
         </Card>
       )}

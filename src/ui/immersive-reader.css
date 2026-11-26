@@ -81,6 +81,9 @@
   inset-inline-start: 50%;
   inline-size: 1px;
   block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
@@ -91,6 +94,7 @@
   inset-inline-start: max(8px, var(--inset-left));
   inline-size: auto;
   block-size: var(--touch-target);
+  margin: 0;
   padding-inline: 16px;
   overflow: visible;
   clip-path: none;
@@ -134,19 +138,21 @@
 }
 
 .nr-reader-heading {
-  padding-block-start: 8px;
-  padding-block-end: 20px;
+  padding-block-start: var(--space-3);
+  padding-block-end: var(--space-6);
 }
 
 .nr-reader-ordinal {
   color: var(--reading-on-surface-variant);
   font: var(--type-label-medium);
+  font-variant-numeric: tabular-nums;
 }
 
 .nr-reader-heading h1 {
-  margin: 8px 0 4px;
+  margin: var(--space-2) 0 var(--space-1);
   color: var(--reading-on-surface);
   font: var(--type-headline-small);
+  letter-spacing: var(--tracking-headline);
   text-wrap: balance;
 }
 
@@ -190,6 +196,12 @@
 .nr-reader-paragraph--failed {
   padding-inline-start: 12px;
   border-inline-start: 3px solid var(--error);
+}
+
+.nr-reader-paragraph--failed .nr-button--text {
+  display: inline-flex;
+  margin-block-start: var(--space-1);
+  margin-inline-start: -12px;
 }
 
 .nr-reader-failed-label {
@@ -263,7 +275,8 @@
 /* 흐름 안 안내 카드: 다른 카드처럼 모서리를 두고, 문구 한 줄 아래에 행동을 시작 쪽부터 놓는다. */
 .nr-reader-notices > .nr-reader-notice {
   justify-content: flex-start;
-  padding: 16px;
+  gap: var(--space-3);
+  padding: var(--space-5);
   border-radius: var(--shape-md);
 }
 
@@ -385,15 +398,17 @@
 
 .nr-reader-sheet-body {
   display: grid;
-  gap: 8px;
-  padding: 8px 24px 16px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-6) var(--space-5);
   color: var(--on-surface);
   font: var(--type-body-large);
 }
 
 /* 공용 스위치 행의 좌우 여백은 시트 본문 여백과 겹치므로 리더 시트 안에서는 뺀다. */
 .nr-reader-sheet-body .nr-switch-row {
-  padding-inline: 0;
+  margin-block-start: var(--space-1);
+  padding: var(--space-4) 0 var(--space-2);
+  border-block-start: 1px solid var(--outline-variant);
 }
 
 /* 선택지는 글자 수와 상관없이 같은 폭의 칸으로 나란히 둔다. */
@@ -404,15 +419,19 @@
   margin: 8px 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
-/* 시트 제목(title-medium)보다 한 단계 낮은 항목 라벨 */
+/* 시트 제목(title-medium)보다 한 단계 낮은 항목 라벨. 공통 fieldset의 float을 해제해 3열 그리드를 유지한다. */
 .nr-reader-sheet-body legend {
+  float: none;
   inline-size: 100%;
   margin-block-end: 8px;
   padding-inline: 0;
   color: var(--on-surface-variant);
   font: var(--type-label-large);
+  letter-spacing: normal;
 }
 
 /* 위아래 선택 줄과 같은 3칸 격자에 [− 값 +]를 놓아 세로 열을 맞춘다. 라벨은 legend처럼 위 줄을 쓴다. */
@@ -449,6 +468,7 @@
 
 .nr-reader-font-control output {
   min-inline-size: 64px;
+  font: var(--type-title-medium);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -542,6 +562,10 @@
   gap: 4px;
   padding: 4px;
   border-radius: var(--shape-full);
+}
+.nr-reader-toolbar__center > .nr-reader-symbol-button {
+  padding-inline: var(--space-4);
+  font: var(--type-label-large);
 }
 
 @media (max-width: 600px) {

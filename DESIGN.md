@@ -71,31 +71,34 @@ Very Peri `#6667AB`는 라이트 테마의 채움 면(`--primary-fill`)입니다
 
 ### 2.3 타이포
 
-Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang="ja"`)은 시스템 일본어 글꼴로 대체됩니다. 크기는 `rem`(Android 글꼴 크기 설정을 따릅니다).
+Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang="ja"`)은 시스템 일본어 글꼴로 대체됩니다. 크기는 `rem`(Android 글꼴 크기 설정을 따릅니다). 제목과 본문, 보조 문구가 크기·굵기·색 3단 위계로 즉시 구분되도록 6단계(24 / 20 / 18 / 16 / 14 / 12px)를 사용합니다.
 
-| 토큰 | 크기/행간 | 굵기 | 용도 |
-|---|---|---|---|
-| `--type-headline-small` | 24/32 | 600 | 목차 헤더 작품 제목, 리더 회차 제목, 빈 상태 제목, 대화상자 제목 |
-| `--type-title-large` | 22/28 | 600 | 앱바 제목, 전체 화면 대화상자 제목 |
-| `--type-title-medium` | 16/24 | 600 | 바텀시트 제목, 화면 안 소제목 |
-| `--type-body-large` | 16/24 | 400 | 목록 1행, UI 본문, 안내 카드 문구 |
-| `--type-body-medium` | 14/20 | 400 | 보조 줄, 설명, 입력 도움말 |
-| `--type-body-small` | 12/16 | 400 | 캡션, 근거 |
-| `--type-label-large` | 14/20 | 600 | 버튼, 설정 섹션 제목(`--primary`), 시트 안 항목 라벨(`--on-surface-variant`) |
-| `--type-label-medium` | 12/16 | 500 | 칩, 메타, 상태 알약 |
+| 토큰 | 크기/행간 | 굵기 | 자간 | 용도 |
+|---|---|---|---|---|
+| `--type-headline-small` | 24/32 | 700 | `-0.02em` (`--tracking-headline`) | 목차 헤더 작품 제목, 리더 회차 제목, 빈 상태 제목, 대화상자 제목 |
+| `--type-title-large` | 20/28 | 600 | `-0.015em` (`--tracking-title`) | 앱바 제목, 전체 화면 대화상자 제목 |
+| `--type-title-medium` | 18/26 | 600 | `-0.015em` (`--tracking-title`) | 바텀시트 제목, 이어서 읽기 작품 제목, 화면 안 소제목·카드 제목 |
+| `--type-body-large` | 16/24 | 400 (목록·스위치 제목 500) | 기본 | 목록 1행, UI 본문, 안내 카드 문구 |
+| `--type-body-medium` | 14/21 | 400 | 기본 | 보조 줄, 다줄 설명, 입력 도움말 |
+| `--type-body-small` | 12/18 | 400 | 기본 | 캡션, 근거, 라이선스 원문 |
+| `--type-label-large` | 14/20 | 600 (입력 라벨 500) | 기본 | 버튼, 설정 섹션 제목(`--primary`), 시트·폼 항목 라벨(`--on-surface-variant`) |
+| `--type-label-medium` | 12/16 | 600 | 기본 | 배지(`새 회차`), 메타 태그, 상태 알약 |
 
-- 설명 문단은 목록 제목과 같은 무게로 두지 않습니다. 설정·폼의 설명은 `body-medium`과 `--on-surface-variant`를 씁니다.
+- 설명 문단은 목록 제목과 같은 무게로 두지 않습니다. 설정·미리 번역·용어집·정밀스캔·후보 검토·라이선스의 안내 문단은 모두 `body-medium`(14/21)과 `--on-surface-variant`로 통일합니다.
+- 목록 항목(`ListItem`)과 스위치 행(`Switch`)은 제목(`500`)과 보조 줄(`400`, `--on-surface-variant`) 사이에 `4px`(`--space-1`) 간격을 둡니다.
 - 리더 안내(번역 시작·연결·회차 끝 카드)는 본문 글자 크기·행간 설정을 따르지 않고 위 UI 글자 위계를 씁니다.
 
 리더 본문은 기본 18px, 줄 간격 1.6·1.8·2.0(기본 1.8), 글자 크기 범위 10~48px. 숫자는 `tabular-nums`, 제목은 `text-wrap: balance`, 본문은 `text-wrap: pretty`.
 
-### 2.4 모양·크기·높이·모션
+### 2.4 스페이싱·모양·크기·높이·모션
 
-- 모양: `--shape-xs 4px` · `--shape-sm 8px`(칩·메뉴) · `--shape-md 12px`(카드) · `--shape-lg 16px`(FAB) · `--shape-xl 28px`(시트 위 모서리·대화상자) · `--shape-full`(버튼·알약·툴바).
-- 크기: 터치 영역 최소 48px. 버튼은 S 40px가 기본입니다. 버튼 M 56px은 그 화면에 행동이 하나뿐인 경우(서재의 `작품 찾기` Extended FAB 같은 떠 있는 단독 행동)에만 씁니다. 아이콘 버튼 40px(영역 48). 앱바 64px. 목록 행 56·72px. Extended FAB 56px. 플로팅 툴바 64px.
-- 높이: 깊이는 `surface-container-*` 톤으로 나눕니다. 그림자는 FAB·플로팅 툴바·메뉴·대화상자에만.
-- 상태 레이어: 호버 8%, 포커스 10%, 눌림 10%, 드래그 16%. 비활성은 내용 38%·면 12%.
-- 포커스: `:focus-visible`에서 `3px solid var(--primary)`, 간격 2px.
+- 스페이싱: 비선형 스케일 토큰 `--space-1 4px`(제목–설명 간격) · `--space-2 8px`(컨트롤 간격·인라인 묶음) · `--space-3 12px`(행 상하 패딩·입력칸 묶음) · `--space-4 16px`(화면 좌우 기준선·카드 기본 패딩) · `--space-5 20px`(강조 카드 패딩·그룹 간격) · `--space-6 24px`(섹션 상단·대화상자 패딩) · `--space-8 32px`(화면 하단 여백). 그룹 안 간격은 항상 그룹 사이 간격보다 좁게 두고, 소제목은 아래보다 위 여백을 넓게 둡니다.
+- 기준선(keyline): 서재 목록·목차 목록·설정 화면은 목록 행을 좌우 끝까지 펼쳐(풀블리드) 터치 영역을 확보하고, 모든 텍스트·입력칸·버튼·섹션 제목의 시작선은 좌우 `16px`에 맞춥니다. 전체 화면 대화상자 본문도 `--content-max(840px)`로 폭을 제한해 넓은 화면에서 과도하게 늘어나지 않게 합니다.
+- 모양: `--shape-xs 4px` · `--shape-sm 8px`(칩·메뉴) · `--shape-md 12px`(카드·대화상자 선택 행) · `--shape-lg 16px`(FAB) · `--shape-xl 28px`(시트 위 모서리·대화상자) · `--shape-full`(버튼·알약·툴바).
+- 크기: 터치 영역 최소 48px. 버튼은 S 40px가 기본입니다. 버튼 M 56px은 그 화면에 행동이 하나뿐인 경우(서재의 `작품 찾기` Extended FAB 같은 떠 있는 단독 행동)에만 씁니다. 아이콘 버튼 40px(영역 48). 체크박스·라디오 시각 크기 20px(라벨 행 48px). 앱바 64px. 목록 행 56·72px. Extended FAB 56px. 플로팅 툴바 64px.
+- 높이: 깊이는 `surface-container-*` 톤으로 나눕니다. 폼 묶음(`<fieldset>`)도 1px 외곽선 대신 `--surface-container-low` 표면 카드로 표현합니다. 그림자는 FAB·플로팅 툴바·메뉴·대화상자에만 씁니다.
+- 상태 레이어: 호버 8%, 포커스 10%, 눌림 10%, 드래그 16%. 비활성은 내용 38%·면 12%. 클릭할 수 없는 정적 정보 행(`div.nr-list-item__main`)에는 커서와 상태 레이어를 붙이지 않습니다.
+- 포커스·선택: `:focus-visible`에서 `3px solid var(--primary)`, 간격 2px. 텍스트 선택(`::selection`)은 `--primary-container`/`--on-primary-container`, 입력 커서(`caret-color`)는 `--primary`를 씁니다.
 - 모션: `transform`·`opacity`만. 표준 이징 `cubic-bezier(0.2, 0, 0, 1)`, 짧은 전환 150ms, 시트·대화상자 열기 300ms·닫기 200ms. `prefers-reduced-motion: reduce`이면 전환 0ms.
 
 ## 3. 버튼 위계
@@ -119,8 +122,10 @@ Pretendard Variable을 번들합니다(`src/ui/theme/fonts/`, OFL). 원문(`lang
 - 아이콘은 Material Symbols Outlined(Apache-2.0)에서 쓰는 것만 `src/ui/icons/`에 복사합니다. `Icon` 컴포넌트가 CSS 마스크로 `currentColor`를 입힙니다.
 - 아이콘만 있는 버튼은 `aria-label`이 필수입니다.
 - 버튼은 `Button` 컴포넌트로 3절의 위계를 고릅니다. 클래스 없는 `<button>`을 새로 쓰지 않습니다.
-- 입력칸은 채움형(`--surface-container-highest` 면, 아래 `--outline` 테두리) 한 가지만 씁니다. 대화상자·시트 안에서도 같습니다.
+- 입력칸은 채움형(`--surface-container-highest` 면, 아래 `--outline` 테두리, 포커스 시 `2px solid var(--primary)`) 한 가지만 씁니다. 대화상자·시트 안에서도 같습니다.
 - 대화상자와 바텀시트는 열리면 제목으로 포커스를 옮기고, 닫히면 연 요소로 돌려줍니다. Esc, 스크림 탭, 시스템 뒤로 가기로 닫힙니다.
+- 대화상자 안 라디오 선택 목록은 `--shape-md` 모서리를 쓰고 텍스트 시작선을 대화상자 제목과 맞춥니다.
+- **하지 않는 것**: 컬러 팔레트·폰트 패밀리를 화면별로 임의 재정의하지 않습니다. 클릭 불가 정보 행에 포인터·호버 반응을 넣지 않습니다. 중첩 카드나 불필요한 1px 박스 테두리를 쌓지 않습니다.
 
 ## 5. 내비게이션
 
