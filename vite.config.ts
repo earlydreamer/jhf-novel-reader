@@ -44,6 +44,7 @@ export default defineConfig({
     testTimeout: 20_000,
     setupFiles: ['tests/setup/testing-library.ts'],
     // .superpowers/는 git-ignored 검증·인계 작업 폴더다. 그 안의 테스트 사본을 수집하지 않는다(#101).
-    exclude: [...configDefaults.exclude, '.superpowers/**'],
+    // .worktrees/는 저장소 안에 둔 이슈별 워크트리다. 다른 브랜치의 테스트 사본을 수집하지 않는다(#461).
+    exclude: [...configDefaults.exclude, '.superpowers/**', '.worktrees/**'],
   },
 });
