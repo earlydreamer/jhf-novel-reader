@@ -89,8 +89,13 @@
         --state-dragged: 0.16;
 
         --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+        --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+        --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
         --ease-spring: linear(0, 0.2 6%, 0.6 16%, 0.92 28%, 1.04 40%, 1.02 55%, 1);
+        --ease-spring-snappy: linear(0, 0.35 8%, 0.85 20%, 1.05 34%, 1.01 52%, 1);
+        --duration-press: 100ms;
         --duration-short: 150ms;
+        --duration-medium: 220ms;
         --duration-enter: 300ms;
         --duration-exit: 200ms;
 
@@ -167,6 +172,7 @@
         background-color: currentColor;
         -webkit-mask: var(--nr-icon) center / contain no-repeat;
         mask: var(--nr-icon) center / contain no-repeat;
+        transition: transform var(--duration-medium) var(--ease-spring-snappy);
       }
 
       /* 상태 레이어: 호버 8%, 포커스·눌림 10%. 정적 목록 행(div.nr-list-item__main)은 제외한다. */
@@ -176,6 +182,7 @@
       .nr-card--interactive,
       button.nr-list-item__main,
       label.nr-list-item__main,
+      .nr-switch-row,
       .nr-menu__item,
       .nr-fab,
       .nr-status-pill__action,
@@ -190,6 +197,7 @@
       .nr-card--interactive::before,
       button.nr-list-item__main::before,
       label.nr-list-item__main::before,
+      .nr-switch-row::before,
       .nr-menu__item::before,
       .nr-fab::before,
       .nr-status-pill__action::before,
@@ -211,6 +219,7 @@
           .nr-card--interactive,
           button.nr-list-item__main,
           label.nr-list-item__main,
+          .nr-switch-row,
           .nr-menu__item,
           .nr-fab,
           .nr-status-pill__action,
@@ -225,6 +234,7 @@
           .nr-card--interactive,
           button.nr-list-item__main,
           label.nr-list-item__main,
+          .nr-switch-row,
           .nr-menu__item,
           .nr-fab,
           .nr-status-pill__action,
@@ -239,6 +249,7 @@
           .nr-card--interactive,
           button.nr-list-item__main,
           label.nr-list-item__main,
+          .nr-switch-row,
           .nr-menu__item,
           .nr-fab,
           .nr-status-pill__action,
@@ -259,6 +270,19 @@
         font: var(--type-label-large);
         white-space: nowrap;
         cursor: pointer;
+        transition:
+          transform var(--duration-medium) var(--ease-spring-snappy),
+          background-color var(--duration-short) var(--ease-standard),
+          color var(--duration-short) var(--ease-standard),
+          box-shadow var(--duration-short) var(--ease-standard);
+      }
+      .nr-button:not(:disabled):active {
+        transform: scale(0.97);
+        transition-duration: var(--duration-press);
+      }
+      .nr-button:not(:disabled):active > .nr-icon {
+        transform: scale(0.92);
+        transition-duration: var(--duration-press);
       }
       .nr-button--s {
         block-size: var(--button-s);
@@ -331,6 +355,19 @@
         background: transparent;
         color: var(--on-surface-variant);
         cursor: pointer;
+        transition:
+          transform var(--duration-medium) var(--ease-spring-snappy),
+          background-color var(--duration-short) var(--ease-standard),
+          color var(--duration-short) var(--ease-standard);
+      }
+      .nr-icon-button::before {
+        transform: scale(0.8);
+        transition:
+          opacity var(--duration-short) var(--ease-standard),
+          transform var(--duration-medium) var(--ease-spring-snappy);
+      }
+      .nr-icon-button:not(:disabled):is(:hover, :focus-visible, :active)::before {
+        transform: scale(1);
       }
       .nr-icon-button::after {
         content: '';
@@ -341,13 +378,148 @@
         background: var(--secondary-container);
         color: var(--on-secondary-container);
       }
+      .nr-icon-button[aria-expanded='true'] {
+        background: var(--secondary-container);
+        color: var(--on-secondary-container);
+      }
       .nr-icon-button[aria-pressed='true'] {
         background: var(--primary-container);
         color: var(--on-primary-container);
       }
+      .nr-icon-button:not(:disabled):active {
+        transform: scale(0.92);
+        transition-duration: var(--duration-press);
+      }
       .nr-icon-button:disabled {
         cursor: default;
         color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+      }
+      .nr-icon-button:disabled::before {
+        display: none;
+      }
+      /* 새 회차 확인처럼 진행 중인 아이콘 버튼은 비활성 회색 대신 주색으로 진행 상태를 유지한다. */
+      .nr-icon-button[aria-busy='true'] {
+        color: var(--primary);
+      }
+
+      /* 아이콘별 의미 기반 마이크로 인터랙션(터치 환경의 hover 고착을 피하기 위해 :hover는 hover 장치로 한정한다). */
+      @media (hover: hover) {
+        :is(.nr-icon-button, .nr-button):not(:disabled):hover > .nr-icon[data-icon='arrow_back'] {
+          transform: translateX(-2px);
+        }
+        :is(button.nr-list-item__main:not(:disabled), .nr-card--interactive:not(:disabled)):hover
+          .nr-icon[data-icon='chevron_right'] {
+          transform: translateX(3px);
+        }
+        .nr-icon-button:not(:disabled):hover > .nr-icon[data-icon='settings'] {
+          transform: rotate(30deg);
+        }
+        .nr-icon-button:not(:disabled):hover > .nr-icon[data-icon='close'] {
+          transform: rotate(90deg);
+        }
+        .nr-icon-button:not(:disabled):hover > .nr-icon[data-icon='link'] {
+          transform: rotate(-12deg) scale(1.08);
+        }
+        :is(.nr-fab, .nr-icon-button):not(:disabled):hover > .nr-icon[data-icon='search'] {
+          transform: rotate(-8deg) scale(1.08);
+        }
+        .nr-icon-button:not(:disabled):hover > .nr-icon[data-icon='more_vert'] {
+          transform: scale(1.08);
+        }
+        .nr-icon-button:not(:disabled):not([aria-busy='true']):hover > .nr-icon[data-icon='refresh'] {
+          transform: rotate(35deg);
+        }
+        :is(.nr-menu__item, .nr-button):not(:disabled):hover > .nr-icon[data-icon='delete'] {
+          transform: translateY(-1px) rotate(-6deg) scale(1.08);
+        }
+      }
+      :is(.nr-icon-button, .nr-button):not(:disabled):focus-visible > .nr-icon[data-icon='arrow_back'] {
+        transform: translateX(-2px);
+      }
+      :is(.nr-icon-button, .nr-button):not(:disabled):active > .nr-icon[data-icon='arrow_back'] {
+        transform: translateX(-4px) scale(0.92);
+        transition-duration: var(--duration-press);
+      }
+      :is(button.nr-list-item__main:not(:disabled), .nr-card--interactive:not(:disabled)):focus-visible
+        .nr-icon[data-icon='chevron_right'] {
+        transform: translateX(3px);
+      }
+      :is(button.nr-list-item__main:not(:disabled), .nr-card--interactive:not(:disabled)):active
+        .nr-icon[data-icon='chevron_right'] {
+        transform: translateX(5px) scale(0.95);
+        transition-duration: var(--duration-press);
+      }
+      .nr-icon-button:not(:disabled):focus-visible > .nr-icon[data-icon='settings'] {
+        transform: rotate(30deg);
+      }
+      .nr-icon-button:not(:disabled):active > .nr-icon[data-icon='settings'] {
+        transform: rotate(60deg) scale(0.92);
+        transition-duration: var(--duration-press);
+      }
+      .nr-icon-button:not(:disabled):focus-visible > .nr-icon[data-icon='close'] {
+        transform: rotate(90deg);
+      }
+      .nr-icon-button:not(:disabled):active > .nr-icon[data-icon='close'] {
+        transform: rotate(90deg) scale(0.86);
+        transition-duration: var(--duration-press);
+      }
+      .nr-icon-button:not(:disabled):focus-visible > .nr-icon[data-icon='link'] {
+        transform: rotate(-12deg) scale(1.08);
+      }
+      .nr-icon-button:not(:disabled):active > .nr-icon[data-icon='link'] {
+        transform: rotate(-12deg) scale(0.9);
+        transition-duration: var(--duration-press);
+      }
+      :is(.nr-fab, .nr-icon-button):not(:disabled):focus-visible > .nr-icon[data-icon='search'] {
+        transform: rotate(-8deg) scale(1.08);
+      }
+      :is(.nr-fab, .nr-icon-button):not(:disabled):active > .nr-icon[data-icon='search'] {
+        transform: scale(0.9);
+        transition-duration: var(--duration-press);
+      }
+      .nr-fab[aria-expanded='true'] > .nr-icon[data-icon='search'] {
+        transform: rotate(12deg) scale(1.04);
+      }
+      .nr-icon-button:not(:disabled):focus-visible > .nr-icon[data-icon='more_vert'] {
+        transform: scale(1.08);
+      }
+      .nr-icon-button:not(:disabled):active > .nr-icon[data-icon='more_vert'] {
+        transform: scale(0.9);
+        transition-duration: var(--duration-press);
+      }
+      .nr-icon-button:not(:disabled):not([aria-busy='true']):focus-visible
+        > .nr-icon[data-icon='refresh'] {
+        transform: rotate(35deg);
+      }
+      .nr-icon-button:not(:disabled):not([aria-busy='true']):active > .nr-icon[data-icon='refresh'] {
+        transform: rotate(90deg) scale(0.92);
+        transition-duration: var(--duration-press);
+      }
+      :is(.nr-menu__item, .nr-button):not(:disabled):focus-visible > .nr-icon[data-icon='delete'] {
+        transform: translateY(-1px) rotate(-6deg) scale(1.08);
+      }
+      :is(.nr-menu__item, .nr-button):not(:disabled):active > .nr-icon[data-icon='delete'] {
+        transform: scale(0.9);
+        transition-duration: var(--duration-press);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .nr-icon-button[aria-busy='true'] > .nr-icon[data-icon='refresh'] {
+          animation: nr-icon-spin 900ms linear infinite;
+        }
+        .nr-icon[data-icon='check'] {
+          animation: nr-icon-pop var(--duration-medium) var(--ease-spring-snappy);
+        }
+      }
+      @keyframes nr-icon-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes nr-icon-pop {
+        from {
+          opacity: 0;
+          transform: scale(0.6);
+        }
       }
 
       /* Chip */
@@ -364,6 +536,15 @@
         font: var(--type-label-large);
         white-space: nowrap;
         cursor: pointer;
+        transition:
+          transform var(--duration-medium) var(--ease-spring-snappy),
+          background-color var(--duration-short) var(--ease-standard),
+          color var(--duration-short) var(--ease-standard),
+          box-shadow var(--duration-short) var(--ease-standard);
+      }
+      .nr-chip:not(:disabled):active {
+        transform: scale(0.95);
+        transition-duration: var(--duration-press);
       }
       .nr-chip::after {
         content: '';
@@ -402,6 +583,18 @@
       }
       .nr-card--interactive {
         cursor: pointer;
+        transition:
+          transform var(--duration-medium) var(--ease-spring-snappy),
+          background-color var(--duration-short) var(--ease-standard);
+      }
+      @media (hover: hover) {
+        .nr-card--interactive:not(:disabled):hover {
+          transform: translateY(-1px);
+        }
+      }
+      .nr-card--interactive:not(:disabled):active {
+        transform: scale(0.985);
+        transition-duration: var(--duration-press);
       }
 
       /* ListItem */
@@ -409,6 +602,9 @@
         display: flex;
         align-items: center;
         min-block-size: var(--list-one-line);
+        transition:
+          background-color var(--duration-short) var(--ease-standard),
+          color var(--duration-short) var(--ease-standard);
       }
       .nr-list-item--two-line {
         min-block-size: var(--list-two-line);
@@ -537,6 +733,7 @@
         box-sizing: border-box;
         max-block-size: calc(100dvh - 48px - var(--inset-top) - var(--inset-bottom));
         overflow: auto;
+        overscroll-behavior: contain;
         padding: var(--space-6);
         border-radius: var(--shape-xl);
         background: var(--surface-container-high);
@@ -607,6 +804,7 @@
       .nr-dialog--fullscreen .nr-dialog__body {
         flex: 1;
         overflow: auto;
+        overscroll-behavior: contain;
         padding: var(--space-4) max(var(--space-4), var(--inset-right))
           calc(var(--space-8) + var(--inset-bottom)) max(var(--space-4), var(--inset-left));
         color: var(--on-surface);
@@ -634,6 +832,7 @@
         box-sizing: border-box;
         max-block-size: 90dvh;
         overflow: auto;
+        overscroll-behavior: contain;
         padding: 0 0 calc(var(--space-4) + var(--inset-bottom));
         border-radius: var(--shape-xl) var(--shape-xl) 0 0;
         background: var(--surface-container-low);
@@ -653,22 +852,48 @@
         letter-spacing: var(--tracking-title);
       }
       @media (prefers-reduced-motion: no-preference) {
+        .nr-modal[open]::backdrop {
+          animation: nr-scrim-in var(--duration-exit) var(--ease-standard);
+        }
         .nr-dialog[open] .nr-modal__surface {
-          animation: nr-dialog-in var(--duration-enter) var(--ease-standard);
+          animation: nr-dialog-in var(--duration-enter) var(--ease-spring-snappy);
+        }
+        .nr-dialog--fullscreen[open] .nr-modal__surface {
+          animation: nr-dialog-fullscreen-in var(--duration-enter) var(--ease-decelerate);
         }
         .nr-sheet[open] .nr-modal__surface {
           animation: nr-sheet-in var(--duration-enter) var(--ease-spring);
+        }
+        .nr-sheet[open] .nr-sheet__handle {
+          animation: nr-handle-in var(--duration-enter) var(--ease-spring-snappy);
+        }
+      }
+      @keyframes nr-scrim-in {
+        from {
+          opacity: 0;
         }
       }
       @keyframes nr-dialog-in {
         from {
           opacity: 0;
-          transform: scale(0.96);
+          transform: translateY(8px) scale(0.96);
+        }
+      }
+      @keyframes nr-dialog-fullscreen-in {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
         }
       }
       @keyframes nr-sheet-in {
         from {
           transform: translateY(100%);
+        }
+      }
+      @keyframes nr-handle-in {
+        from {
+          opacity: 0;
+          transform: scaleX(0.4);
         }
       }
 
@@ -682,6 +907,7 @@
         z-index: 30;
         inset-block-start: 100%;
         inset-inline-end: 4px;
+        inline-size: max-content;
         min-inline-size: 12rem;
         max-inline-size: min(17.5rem, calc(100vw - 16px));
         padding: 8px 0;
@@ -689,10 +915,32 @@
         background: var(--surface-container);
         color: var(--on-surface);
         box-shadow: var(--elevation-2);
+        transform-origin: top right;
       }
       .nr-menu--up {
         inset-block-start: auto;
         inset-block-end: 100%;
+        transform-origin: bottom right;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .nr-menu {
+          animation: nr-menu-in var(--duration-medium) var(--ease-spring-snappy);
+        }
+        .nr-menu--up {
+          animation: nr-menu-up-in var(--duration-medium) var(--ease-spring-snappy);
+        }
+      }
+      @keyframes nr-menu-in {
+        from {
+          opacity: 0;
+          transform: translateY(-6px) scale(0.95);
+        }
+      }
+      @keyframes nr-menu-up-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px) scale(0.95);
+        }
       }
       /* FAB이 여는 목록: 고정 위치는 anchor가 맡고, 목록은 FAB 오른쪽 끝에 맞춰 위로 펼친다. */
       .nr-menu-anchor--fab {
@@ -745,6 +993,7 @@
         padding: var(--inset-top) max(4px, var(--inset-right)) 0 max(4px, var(--inset-left));
         background: var(--surface);
         color: var(--on-surface);
+        transition: background-color var(--duration-short) var(--ease-standard);
       }
       .nr-top-app-bar[data-scrolled='true'] {
         background: var(--surface-container);
@@ -758,13 +1007,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        transition:
+          opacity var(--duration-short) var(--ease-standard),
+          transform var(--duration-medium) var(--ease-decelerate);
       }
       /* 화면 안 제목이 보이는 동안 숨긴 앱바 제목. 자리는 유지해 동작 버튼이 움직이지 않는다. */
       .nr-top-app-bar__title--concealed {
         opacity: 0;
-      }
-      .nr-top-app-bar__title {
-        transition: opacity var(--duration-short) var(--ease-standard);
+        transform: translateY(4px);
       }
       .nr-top-app-bar__navigation + .nr-top-app-bar__title {
         margin-inline-start: 0;
@@ -794,6 +1044,32 @@
         font: var(--type-label-large);
         box-shadow: var(--elevation-3);
         cursor: pointer;
+        transition:
+          transform var(--duration-medium) var(--ease-spring-snappy),
+          box-shadow var(--duration-short) var(--ease-standard);
+      }
+      @media (hover: hover) {
+        .nr-fab:hover {
+          transform: translateY(-2px);
+        }
+      }
+      .nr-fab[aria-expanded='true'] {
+        transform: scale(0.97);
+      }
+      .nr-fab:active {
+        transform: scale(0.95);
+        transition-duration: var(--duration-press);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .nr-fab {
+          animation: nr-fab-in var(--duration-enter) var(--ease-spring-snappy);
+        }
+      }
+      @keyframes nr-fab-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px) scale(0.9);
+        }
       }
       .nr-fab--collapsed {
         justify-content: center;
@@ -819,7 +1095,7 @@
         box-shadow: var(--elevation-3);
         visibility: visible;
         transition:
-          transform var(--duration-enter) var(--ease-standard),
+          transform var(--duration-enter) var(--ease-decelerate),
           opacity var(--duration-enter) var(--ease-standard),
           visibility 0s linear 0s;
       }
@@ -833,9 +1109,9 @@
         pointer-events: none;
         visibility: hidden;
         transition:
-          transform var(--duration-enter) var(--ease-standard),
-          opacity var(--duration-enter) var(--ease-standard),
-          visibility 0s linear var(--duration-enter);
+          transform var(--duration-exit) var(--ease-accelerate),
+          opacity var(--duration-exit) var(--ease-standard),
+          visibility 0s linear var(--duration-exit);
       }
 
       /* Switch */
@@ -846,6 +1122,12 @@
         min-block-size: var(--list-one-line);
         padding: var(--space-3) var(--space-4);
         cursor: pointer;
+      }
+      .nr-switch-row:has(> .nr-switch:disabled) {
+        cursor: default;
+      }
+      .nr-switch-row:has(> .nr-switch:disabled)::before {
+        display: none;
       }
       .nr-switch-row__text {
         display: flex;
@@ -873,6 +1155,9 @@
         background: var(--surface-container-highest);
         box-shadow: inset 0 0 0 2px var(--outline);
         cursor: pointer;
+        transition:
+          background-color var(--duration-short) var(--ease-standard),
+          box-shadow var(--duration-short) var(--ease-standard);
       }
       .nr-switch::before {
         content: '';
@@ -883,7 +1168,9 @@
         block-size: 16px;
         border-radius: 50%;
         background: var(--outline);
-        transition: transform var(--duration-short) var(--ease-standard);
+        transition:
+          transform var(--duration-medium) var(--ease-spring-snappy),
+          background-color var(--duration-short) var(--ease-standard);
       }
       .nr-switch:checked {
         background: var(--primary-fill);
@@ -892,6 +1179,16 @@
       .nr-switch:checked::before {
         background: var(--on-primary);
         transform: translateX(20px) scale(1.5);
+      }
+      .nr-switch-row:active .nr-switch:not(:disabled)::before,
+      .nr-switch:not(:disabled):active::before {
+        transform: scale(1.18);
+        transition-duration: var(--duration-press);
+      }
+      .nr-switch-row:active .nr-switch:not(:disabled):checked::before,
+      .nr-switch:not(:disabled):checked:active::before {
+        transform: translateX(20px) scale(1.62);
+        transition-duration: var(--duration-press);
       }
 
       /* LinearProgress */
@@ -911,19 +1208,29 @@
         background: var(--primary-fill);
         transform: scaleX(var(--nr-progress, 0));
         transform-origin: left center;
-        transition: transform var(--duration-short) var(--ease-standard);
+        transition: transform var(--duration-medium) var(--ease-decelerate);
       }
       .nr-progress--indeterminate .nr-progress__bar {
         inline-size: 40%;
         transform: none;
-        animation: nr-progress 1.6s var(--ease-standard) infinite;
+        animation: nr-progress 1.5s var(--ease-standard) infinite;
       }
       @keyframes nr-progress {
-        from {
-          transform: translateX(-100%);
+        0% {
+          transform: translateX(-100%) scaleX(0.6);
         }
-        to {
-          transform: translateX(250%);
+        50% {
+          transform: translateX(90%) scaleX(1.25);
+        }
+        100% {
+          transform: translateX(260%) scaleX(0.7);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .nr-progress--indeterminate .nr-progress__bar {
+          animation: none;
+          inline-size: 100%;
+          opacity: 0.45;
         }
       }
 
@@ -939,6 +1246,17 @@
         color: var(--on-primary-container);
         font: var(--type-label-large);
         box-shadow: var(--elevation-2);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .nr-status-pill {
+          animation: nr-float-in var(--duration-medium) var(--ease-spring-snappy);
+        }
+      }
+      @keyframes nr-float-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px) scale(0.97);
+        }
       }
       .nr-status-pill__text {
         display: flex;
@@ -957,6 +1275,11 @@
         color: inherit;
         font: var(--type-label-large);
         cursor: pointer;
+        transition: transform var(--duration-medium) var(--ease-spring-snappy);
+      }
+      .nr-status-pill__action:active {
+        transform: scale(0.95);
+        transition-duration: var(--duration-press);
       }
       .nr-status-pill__action::after {
         content: '';
@@ -982,6 +1305,7 @@
         overflow: visible;
         padding: 0 16px;
         pointer-events: none;
+        transition: inset-block-end var(--duration-enter) var(--ease-standard);
       }
       .nr-snackbar-region:not(:popover-open) {
         display: flex;
@@ -1000,6 +1324,17 @@
         box-shadow: var(--elevation-3);
         pointer-events: auto;
       }
+      @media (prefers-reduced-motion: no-preference) {
+        .nr-snackbar {
+          animation: nr-snackbar-in var(--duration-medium) var(--ease-spring-snappy);
+        }
+      }
+      @keyframes nr-snackbar-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px) scale(0.96);
+        }
+      }
       .nr-snackbar__text {
         flex: 1;
       }
@@ -1012,6 +1347,11 @@
         color: var(--inverse-primary);
         font: var(--type-label-large);
         cursor: pointer;
+        transition: transform var(--duration-medium) var(--ease-spring-snappy);
+      }
+      .nr-snackbar__action:active {
+        transform: scale(0.95);
+        transition-duration: var(--duration-press);
       }
     </style>
     <style>
@@ -1047,6 +1387,7 @@
         *::after {
           transition-duration: 0ms !important;
           animation-duration: 0ms !important;
+          animation-iteration-count: 1 !important;
           scroll-behavior: auto !important;
         }
       }
@@ -1314,6 +1655,16 @@
         text-align: center;
         color: var(--on-primary-container);
       }
+      .demo-icons {
+        gap: 4px;
+        --demo-icon-arrow_back: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2248%22%20height%3D%2248%22%20viewBox%3D%220%20-960%20960%20960%22%3E%3Cpath%20d%3D%22m274-450%20248%20248-42%2042-320-320%20320-320%2042%2042-248%20248h526v60H274Z%22%2F%3E%3C%2Fsvg%3E");
+        --demo-icon-refresh: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M17.65%206.35A7.95%207.95%200%200%200%2012%204a8%208%200%201%200%207.93%209h-2.02A6%206%200%201%201%2012%206c1.66%200%203.14.69%204.22%201.78L13%2011h7V4z%22%2F%3E%3C%2Fsvg%3E");
+        --demo-icon-link: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M3.9%2012a5.1%205.1%200%200%201%205.1-5.1h3v2h-3a3.1%203.1%200%201%200%200%206.2h3v2h-3A5.1%205.1%200%200%201%203.9%2012Zm5.1%201h6v-2H9v2Zm6-6.1h3a5.1%205.1%200%201%201%200%2010.2h-3v-2h3a3.1%203.1%200%201%200%200-6.2h-3v-2Z%22%2F%3E%3C%2Fsvg%3E");
+        --demo-icon-settings: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2248%22%20height%3D%2248%22%20viewBox%3D%220%20-960%20960%20960%22%3E%3Cpath%20d%3D%22m388-80-20-126q-19-7-40-19t-37-25l-118%2054-93-164%20108-79q-2-9-2.5-20.5T185-480q0-9%20.5-20.5T188-521L80-600l93-164%20118%2054q16-13%2037-25t40-18l20-127h184l20%20126q19%207%2040.5%2018.5T669-710l118-54%2093%20164-108%2077q2%2010%202.5%2021.5t.5%2021.5q0%2010-.5%2021t-2.5%2021l108%2078-93%20164-118-54q-16%2013-36.5%2025.5T592-206L572-80H388Zm48-60h88l14-112q33-8%2062.5-25t53.5-41l106%2046%2040-72-94-69q4-17%206.5-33.5T715-480q0-17-2-33.5t-7-33.5l94-69-40-72-106%2046q-23-26-52-43.5T538-708l-14-112h-88l-14%20112q-34%207-63.5%2024T306-642l-106-46-40%2072%2094%2069q-4%2017-6.5%2033.5T245-480q0%2017%202.5%2033.5T254-413l-94%2069%2040%2072%20106-46q24%2024%2053.5%2041t62.5%2025l14%20112Zm44-210q54%200%2092-38t38-92q0-54-38-92t-92-38q-54%200-92%2038t-38%2092q0%2054%2038%2092t92%2038Zm0-130Z%22%2F%3E%3C%2Fsvg%3E");
+        --demo-icon-close: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2248%22%20height%3D%2248%22%20viewBox%3D%220%20-960%20960%20960%22%3E%3Cpath%20d%3D%22m249-207-42-42%20231-231-231-231%2042-42%20231%20231%20231-231%2042%2042-231%20231%20231%20231-42%2042-231-231-231%20231Z%22%2F%3E%3C%2Fsvg%3E");
+        --demo-icon-more_vert: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2248%22%20height%3D%2248%22%20viewBox%3D%220%20-960%20960%20960%22%3E%3Cpath%20d%3D%22M479.86-160Q460-160%20446-174.14t-14-34Q432-228%20446.14-242t34-14Q500-256%20514-241.86t14%2034Q528-188%20513.86-174t-34%2014Zm0-272Q460-432%20446-446.14t-14-34Q432-500%20446.14-514t34-14Q500-528%20514-513.86t14%2034Q528-460%20513.86-446t-34%2014Zm0-272Q460-704%20446-718.14t-14-34Q432-772%20446.14-786t34-14Q500-800%20514-785.86t14%2034Q528-732%20513.86-718t-34%2014Z%22%2F%3E%3C%2Fsvg%3E");
+        --demo-icon-delete: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22currentColor%22%20d%3D%22M16%209v10H8V9h8m-1.5-6h-5l-1%201H5v2h14V4h-3.5l-1-1zM18%207H6v12c0%201.1.9%202%202%202h8c1.1%200%202-.9%202-2V7z%22%2F%3E%3C%2Fsvg%3E");
+      }
       .demo-progress {
         margin: 16px 0;
       }
@@ -1360,6 +1711,9 @@
         }
         .row {
           gap: 12px;
+        }
+        .row.demo-icons {
+          gap: 2px;
         }
         .nr-button {
           max-width: 100%;
@@ -1521,14 +1875,131 @@
                   원문
                 </button>
               </div>
+              <div class="row demo-icons" aria-label="아이콘 상호작용 샘플">
+                <button
+                  type="button"
+                  class="nr-icon-button"
+                  aria-label="뒤로 가기 샘플"
+                  data-demo="뒤로 가기 아이콘"
+                >
+                  <span
+                    class="nr-icon"
+                    aria-hidden="true"
+                    data-icon="arrow_back"
+                    style="--nr-icon: var(--demo-icon-arrow_back)"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="demo-refresh"
+                  class="nr-icon-button"
+                  aria-label="새 회차 확인 샘플"
+                  aria-busy="false"
+                >
+                  <span
+                    class="nr-icon"
+                    aria-hidden="true"
+                    data-icon="refresh"
+                    style="--nr-icon: var(--demo-icon-refresh)"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  class="nr-icon-button"
+                  aria-label="URL로 열기 샘플"
+                  data-demo="링크 아이콘"
+                >
+                  <span
+                    class="nr-icon"
+                    aria-hidden="true"
+                    data-icon="link"
+                    style="--nr-icon: var(--demo-icon-link)"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  class="nr-icon-button"
+                  aria-label="설정 샘플"
+                  data-demo="설정 아이콘"
+                >
+                  <span
+                    class="nr-icon"
+                    aria-hidden="true"
+                    data-icon="settings"
+                    style="--nr-icon: var(--demo-icon-settings)"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  class="nr-icon-button"
+                  aria-label="닫기 샘플"
+                  data-demo="닫기 아이콘"
+                >
+                  <span
+                    class="nr-icon"
+                    aria-hidden="true"
+                    data-icon="close"
+                    style="--nr-icon: var(--demo-icon-close)"
+                  ></span>
+                </button>
+                <div class="nr-menu-anchor">
+                  <button
+                    type="button"
+                    id="demo-menu-btn"
+                    class="nr-icon-button"
+                    aria-label="더보기 샘플"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                  >
+                    <span
+                      class="nr-icon"
+                      aria-hidden="true"
+                      data-icon="more_vert"
+                      style="--nr-icon: var(--demo-icon-more_vert)"
+                    ></span>
+                  </button>
+                  <div id="demo-menu" role="menu" aria-label="더보기 샘플" class="nr-menu" hidden>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      class="nr-menu__item"
+                      data-menu-demo="원문 사이트에서 보기"
+                    >
+                      <span
+                        class="nr-icon"
+                        aria-hidden="true"
+                        data-icon="link"
+                        style="--nr-icon: var(--demo-icon-link); --nr-icon-size: 20px"
+                      ></span>
+                      원문 사이트에서 보기
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      class="nr-menu__item nr-menu__item--danger"
+                      data-menu-demo="서재에서 제거하기"
+                    >
+                      <span
+                        class="nr-icon"
+                        aria-hidden="true"
+                        data-icon="delete"
+                        style="--nr-icon: var(--demo-icon-delete); --nr-icon-size: 20px"
+                      ></span>
+                      서재에서 제거하기
+                    </button>
+                  </div>
+                </div>
+              </div>
               <p id="button-log" class="demo-log" role="status">
                 샘플 행동을 기다립니다.
               </p>
             </div>
             <p class="annotation">
-              현재 구현 · <code>Button.tsx</code> / <code>Chip.tsx</code> /
+              현재 구현 · <code>Button.tsx</code> / <code>IconButton.tsx</code> /
+              <code>Chip.tsx</code> / <code>Menu.tsx</code> /
               <code>components.css</code>입니다. Hover는 8%, focus·pressed는 10%
-              상태 레이어를 사용합니다. 초점 윤곽은 3px입니다.
+              상태 레이어와 눌림·아이콘 마이크로 인터랙션을 사용합니다. 초점
+              윤곽은 3px입니다.
             </p>
           </section>
           <section id="fields">
@@ -1892,6 +2363,39 @@
             b.textContent + " 보기 샘플을 선택했습니다.";
         }),
       );
+      $("demo-refresh").addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        const busy = btn.getAttribute("aria-busy") === "true";
+        btn.setAttribute("aria-busy", String(!busy));
+        $("button-log").textContent = !busy
+          ? "새 회차 확인 진행 중(aria-busy) 회전 샘플을 켰습니다. 다시 누르면 멈춥니다."
+          : "새 회차 확인 회전 샘플을 멈췄습니다.";
+      });
+      $("demo-menu-btn").addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        const next = btn.getAttribute("aria-expanded") !== "true";
+        btn.setAttribute("aria-expanded", String(next));
+        $("demo-menu").hidden = !next;
+      });
+      document.querySelectorAll("[data-menu-demo]").forEach((item) =>
+        item.addEventListener("click", () => {
+          $("demo-menu").hidden = true;
+          $("demo-menu-btn").setAttribute("aria-expanded", "false");
+          $("button-log").textContent =
+            `${item.dataset.menuDemo} 메뉴 샘플을 선택했습니다. 실제 작업은 실행하지 않습니다.`;
+          $("demo-menu-btn").focus();
+        }),
+      );
+      document.addEventListener("pointerdown", (e) => {
+        if (
+          !$("demo-menu").hidden &&
+          !$("demo-menu").contains(e.target) &&
+          !$("demo-menu-btn").contains(e.target)
+        ) {
+          $("demo-menu").hidden = true;
+          $("demo-menu-btn").setAttribute("aria-expanded", "false");
+        }
+      });
       function validate() {
         const invalid = !$("demo-input").value.trim();
         $("demo-input").setAttribute("aria-invalid", String(invalid));

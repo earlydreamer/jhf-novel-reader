@@ -21,6 +21,16 @@
   background: var(--reading-surface);
   color: var(--reading-on-surface);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .nr-immersive-reader {
+    animation: nr-reader-in var(--duration-short) var(--ease-decelerate);
+  }
+}
+@keyframes nr-reader-in {
+  from {
+    opacity: 0;
+  }
+}
 
 /* 시스템 바 보호(#131): 본문이 상태바·내비게이션 바(폴드 작업 표시줄 포함) 밑으로 지나가며 가려지지 않게
    그 자리를 독서 배경으로 덮는다. 스크롤 좌표는 그대로라 독서 위치 계산에 영향이 없다. */
@@ -54,7 +64,7 @@
   opacity: 1;
   visibility: visible;
   transition:
-    transform var(--duration-enter) var(--ease-standard),
+    transform var(--duration-enter) var(--ease-decelerate),
     opacity var(--duration-enter) var(--ease-standard),
     visibility 0s linear 0s;
 }
@@ -69,9 +79,9 @@
   transform: translateY(calc(-100% - var(--inset-top)));
   visibility: hidden;
   transition:
-    transform var(--duration-enter) var(--ease-standard),
-    opacity var(--duration-enter) var(--ease-standard),
-    visibility 0s linear var(--duration-enter);
+    transform var(--duration-exit) var(--ease-accelerate),
+    opacity var(--duration-exit) var(--ease-standard),
+    visibility 0s linear var(--duration-exit);
 }
 
 .nr-reader-reveal {
@@ -191,6 +201,18 @@
   text-decoration-style: dotted;
   text-underline-offset: 3px;
   border-radius: 2px;
+  transition: background-color var(--duration-short) var(--ease-standard);
+}
+@media (hover: hover) {
+  .nr-term:hover {
+    background: color-mix(in srgb, currentColor 18%, transparent);
+  }
+}
+
+.nr-reader-paragraph {
+  transition:
+    background-color var(--duration-short) var(--ease-standard),
+    outline-color var(--duration-short) var(--ease-standard);
 }
 
 .nr-reader-paragraph--failed {
@@ -350,6 +372,11 @@
   margin-inline: auto;
   transition: inset-block-end var(--duration-enter) var(--ease-standard);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .nr-immersive-reader > .nr-reader-float {
+    animation: nr-float-in var(--duration-medium) var(--ease-spring-snappy);
+  }
+}
 
 .nr-immersive-reader > .nr-immersive-appbar--hidden ~ .nr-reader-float {
   inset-block-end: calc(16px + var(--inset-bottom));
@@ -507,11 +534,67 @@
   color: inherit;
   font: var(--type-title-medium);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--duration-medium) var(--ease-spring-snappy),
+    background-color var(--duration-short) var(--ease-standard),
+    color var(--duration-short) var(--ease-standard);
+}
+.nr-reader-symbol-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.84);
+  transition:
+    opacity var(--duration-short) var(--ease-standard),
+    transform var(--duration-medium) var(--ease-spring-snappy);
+}
+.nr-reader-symbol-button:not(:disabled):hover::before {
+  opacity: var(--state-hover);
+  transform: scale(1);
+}
+.nr-reader-symbol-button:not(:disabled):focus-visible::before {
+  opacity: var(--state-focus);
+  transform: scale(1);
+}
+.nr-reader-symbol-button:not(:disabled):active::before {
+  opacity: var(--state-pressed);
+  transform: scale(1);
+}
+.nr-reader-symbol-button:not(:disabled):active {
+  transform: scale(0.93);
+  transition-duration: var(--duration-press);
+}
+.nr-reader-symbol-button[aria-pressed='true'] {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+/* 앱바 안 상징 버튼(文)도 옆 IconButton과 같은 시각 40px·터치 영역 48px로 맞춘다. */
+.nr-top-app-bar .nr-reader-symbol-button {
+  min-inline-size: var(--icon-button);
+  min-block-size: var(--icon-button);
+  inline-size: var(--icon-button);
+  block-size: var(--icon-button);
+  margin: 4px;
+  padding-inline: 0;
+}
+.nr-top-app-bar .nr-reader-symbol-button::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .nr-reader-symbol-button:disabled {
   opacity: 0.38;
   cursor: default;
+}
+.nr-reader-symbol-button:disabled::before {
+  display: none;
 }
 
 .nr-reader-symbol-button:focus-visible {

@@ -348,6 +348,134 @@ describe('CSS 토큰 참조', () => {
     }
     expect(missing).toEqual([]);
   });
+  it('src의 CSS가 쓰는 var(--ease-…), var(--duration-…) 모션 토큰은 모두 tokens.css에 정의돼 있다', () => {
+    const tokens = readFileSync('src/ui/theme/tokens.css', 'utf8');
+    const defined = new Set(
+      [...tokens.matchAll(/--((?:ease|duration)-[\w-]+)\s*:/g)].map((match) => match[1]),
+    );
+    const sheets = readdirSync('src', { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith('.css'));
+    const missing: string[] = [];
+    for (const sheet of sheets) {
+      const source = readFileSync(join('src', sheet), 'utf8');
+      for (const match of source.matchAll(/var\(--((?:ease|duration)-[\w-]+)/g)) {
+        if (!defined.has(match[1]!)) missing.push(`${sheet}: --${match[1]}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+});
+
+describe('UI 및 아이콘 상호작용 애니메이션 계약 (#459)', () => {
+  it('감소된 모션에서는 반복 애니메이션 횟수를 1로 제한하고 비결정형 진행 막대를 정적 표현으로 전환한다', () => {
+    expect(baseCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*animation-iteration-count:\s*1\s*!important;/,
+    );
+    expect(componentsCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.nr-progress--indeterminate\s+\.nr-progress__bar\s*\{[^}]*animation:\s*none;/,
+    );
+  });
+
+  it('모든 아이콘 이름에 대한 상호작용 규칙과 진행 중 refresh 회전 애니메이션을 정의한다', () => {
+    for (const icon of [
+      'arrow_back',
+      'chevron_right',
+      'settings',
+      'close',
+      'link',
+      'search',
+      'more_vert',
+      'refresh',
+      'delete',
+      'check',
+    ]) {
+      expect(componentsCss, icon).toContain(`[data-icon='${icon}']`);
+    }
+    expect(componentsCss).toMatch(
+      /\.nr-icon-button\[aria-busy='true'\]\s*\{[^}]*color:\s*var\(--primary\);/,
+    );
+    expect(componentsCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*no-preference\)[\s\S]*\.nr-icon-button\[aria-busy='true'\]\s*>\s*\.nr-icon\[data-icon='refresh'\]\s*\{[^}]*animation:\s*nr-icon-spin /,
+    );
+  });
+
+  it('터치 장치의 호버 고착을 막기 위해 아이콘·카드·FAB의 :hover 이동·회전은 hover: hover 미디어 쿼리 안에 둔다', () => {
+    expect(componentsCss).toMatch(
+      /@media\s*\(hover:\s*hover\)[\s\S]*\.nr-icon\[data-icon='settings'\]/,
+    );
+    expect(componentsCss).toMatch(
+      /@media\s*\(hover:\s*hover\)[\s\S]*\.nr-card--interactive:not\(:disabled\):hover/,
+    );
+    expect(componentsCss).toMatch(/@media\s*\(hover:\s*hover\)[\s\S]*\.nr-fab:hover/);
+  });
+
+  it('핵심 인터랙티브 컴포넌트와 리더 상징 버튼에 눌림 피드백과 상태 레이어를 제공한다', () => {
+    for (const selector of [
+      '.nr-button:not(:disabled):active',
+      '.nr-icon-button:not(:disabled):active',
+      '.nr-chip:not(:disabled):active',
+      '.nr-card--interactive:not(:disabled):active',
+      '.nr-fab:active',
+    ]) {
+      const rule = rules(componentsCss).find((item) => item.selector === selector);
+      expect(rule?.body, selector).toMatch(/transform:\s*scale\(/);
+    }
+    const readerSymbolBefore = rules(readerCss).find(
+      (item) => item.selector === '.nr-reader-symbol-button::before',
+    );
+    expect(readerSymbolBefore?.body).toMatch(/background:\s*currentColor;/);
+    const readerSymbolPressed = rules(readerCss).find(
+      (item) => item.selector === ".nr-reader-symbol-button[aria-pressed='true']",
+    );
+    expect(readerSymbolPressed?.body).toMatch(/background:\s*var\(--primary-container\);/);
+    const readerSymbolActive = rules(readerCss).find(
+      (item) => item.selector === '.nr-reader-symbol-button:not(:disabled):active',
+    );
+    expect(readerSymbolActive?.body).toMatch(/transform:\s*scale\(/);
+    const readerAppbarSymbol = rules(readerCss).find(
+      (item) => item.selector === '.nr-top-app-bar .nr-reader-symbol-button',
+    );
+    expect(readerAppbarSymbol?.body).toMatch(/inline-size:\s*var\(--icon-button\);/);
+    const menu = rules(componentsCss).find((item) => item.selector === '.nr-menu');
+    expect(menu?.body).toMatch(/inline-size:\s*max-content;/);
+  });
+
+  it('메뉴·스낵바·상태 알약·스크림에 등장 애니메이션을 두고 모달 스크롤 영역은 배경 스크롤 전파를 막는다', () => {
+    expect(componentsCss).toContain('@keyframes nr-scrim-in');
+    expect(componentsCss).toContain('@keyframes nr-menu-in');
+    expect(componentsCss).toContain('@keyframes nr-snackbar-in');
+    expect(componentsCss).toContain('@keyframes nr-float-in');
+    for (const selector of [
+      '.nr-dialog .nr-modal__surface',
+      '.nr-dialog--fullscreen .nr-dialog__body',
+      '.nr-sheet .nr-modal__surface',
+    ]) {
+      const rule = rules(componentsCss).find((item) => item.selector === selector);
+      expect(rule?.body, selector).toMatch(/overscroll-behavior:\s*contain;/);
+    }
+  });
+
+  it('리더 앱바와 플로팅 툴바는 숨김 전환에 --duration-exit를 사용한다', () => {
+    const appbarHidden = rules(readerCss).find(
+      (item) => item.selector === '.nr-immersive-appbar--hidden',
+    );
+    expect(appbarHidden?.body).toMatch(/var\(--duration-exit\)/);
+    const toolbarHidden = rules(componentsCss).find(
+      (item) => item.selector === '.nr-toolbar--hidden',
+    );
+    expect(toolbarHidden?.body).toMatch(/var\(--duration-exit\)/);
+  });
+
+  it('화면 루트 전환 애니메이션은 고정 요소 기준 좌표를 깨뜨리지 않도록 opacity만 사용한다', () => {
+    const screenKeyframes = css.match(/@keyframes\s+nr-screen-in\s*\{[\s\S]*?\}\s*\}/)?.[0] ?? '';
+    expect(screenKeyframes).toContain('opacity: 0;');
+    expect(screenKeyframes).not.toContain('transform');
+    const readerKeyframes =
+      readerCss.match(/@keyframes\s+nr-reader-in\s*\{[\s\S]*?\}\s*\}/)?.[0] ?? '';
+    expect(readerKeyframes).toContain('opacity: 0;');
+    expect(readerKeyframes).not.toContain('transform');
+  });
 });
 
 describe('디자인 시스템 상호작용·접근성 계약 (#455)', () => {
