@@ -209,6 +209,10 @@
 .nr-work-chapters .nr-list-item--current .nr-list-item__main {
   padding-inline: var(--space-2);
 }
+/* 행을 들인 만큼 끝쪽 메뉴 버튼을 되돌려 다른 회차 행의 버튼과 같은 세로선에 둔다(#462). */
+.nr-work-chapters .nr-list-item--current .nr-list-item__trailing {
+  margin-inline-end: calc(var(--space-2) * -1);
+}
 .nr-chapter-ordinal {
   display: inline-block;
   min-inline-size: 3.2ch;
