@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { TopAppBar } from '../../../src/ui/components/TopAppBar';
 import { IconButton } from '../../../src/ui/components/IconButton';
 import { ExtendedFab } from '../../../src/ui/components/ExtendedFab';
@@ -84,6 +85,30 @@ describe('TopAppBar', () => {
     expect(document.querySelector('.nr-top-app-bar__title')).not.toHaveClass(
       'nr-top-app-bar__title--concealed',
     );
+  });
+
+  it('화면 안 제목을 기준으로 받으면 판정 전 첫 렌더부터 앱바 제목을 숨긴다 (#463)', () => {
+    const markup = renderToStaticMarkup(
+      <TopAppBar title="합성 작품" titleAs="span" revealTitleAfter=".page-heading" />,
+    );
+    expect(markup).toContain('nr-top-app-bar__title--concealed');
+  });
+
+  it('앱바가 유지된 채 화면이 바뀌면 제목 요소를 새로 만들어 숨긴 상태로 시작한다 (#463)', () => {
+    const heading = document.createElement('h1');
+    heading.className = 'page-heading';
+    document.body.append(heading);
+    heading.getBoundingClientRect = () => ({ bottom: 200 }) as DOMRect;
+    const { rerender } = render(<TopAppBar title="서재" titleAs="span" />);
+    const homeTitle = document.querySelector('.nr-top-app-bar__title')!;
+    expect(homeTitle).not.toHaveClass('nr-top-app-bar__title--concealed');
+
+    rerender(<TopAppBar title="합성 작품" titleAs="span" revealTitleAfter=".page-heading" />);
+    const workTitle = document.querySelector('.nr-top-app-bar__title')!;
+    // 같은 요소의 클래스만 바꾸면 opacity 전환으로 보였다가 사라진다.
+    expect(workTitle).not.toBe(homeTitle);
+    expect(workTitle).toHaveClass('nr-top-app-bar__title--concealed');
+    heading.remove();
   });
 });
 
