@@ -570,3 +570,17 @@ describe('immersive-reader.css reader toolbar disabled (#169)', () => {
     expect(disabled?.body).toMatch(/box-shadow:\s*none;/);
   });
 });
+
+describe('목차 읽는 중 회차 행 (#462)', () => {
+  it('행을 들인 만큼 끝쪽 메뉴 버튼을 되돌려 다른 회차 행과 같은 세로선에 둔다', () => {
+    const current = rules(css).find(
+      (rule) => rule.selector === '.nr-work-chapters .nr-list-item--current',
+    );
+    const trailing = rules(css).find(
+      (rule) =>
+        rule.selector === '.nr-work-chapters .nr-list-item--current .nr-list-item__trailing',
+    );
+    expect(current?.body).toMatch(/margin-inline:\s*var\(--space-2\);/);
+    expect(trailing?.body).toMatch(/margin-inline-end:\s*calc\(var\(--space-2\) \* -1\);/);
+  });
+});
