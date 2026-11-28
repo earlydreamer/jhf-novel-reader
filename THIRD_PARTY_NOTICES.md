@@ -80,21 +80,23 @@
 
 | 아티팩트 | 버전 | 라이선스 |
 | --- | --- | --- |
-| androidx.activity:activity | 1.11.0 | Apache-2.0 |
-| androidx.activity:activity-ktx | 1.11.0 | Apache-2.0 |
-| androidx.annotation:annotation | 1.8.1 | Apache-2.0 |
+| androidx.activity:activity | 1.13.0 | Apache-2.0 |
+| androidx.activity:activity-ktx | 1.13.0 | Apache-2.0 |
+| androidx.annotation:annotation | 1.10.0 | Apache-2.0 |
 | androidx.annotation:annotation-experimental | 1.4.1 | Apache-2.0 |
-| androidx.annotation:annotation-jvm | 1.8.1 | Apache-2.0 |
-| androidx.appcompat:appcompat | 1.7.1 | Apache-2.0 |
-| androidx.appcompat:appcompat-resources | 1.7.1 | Apache-2.0 |
+| androidx.annotation:annotation-jvm | 1.10.0 | Apache-2.0 |
+| androidx.appcompat:appcompat | 1.8.0 | Apache-2.0 |
+| androidx.appcompat:appcompat-resources | 1.8.0 | Apache-2.0 |
 | androidx.arch.core:core-common | 2.2.0 | Apache-2.0 |
 | androidx.arch.core:core-runtime | 2.2.0 | Apache-2.0 |
-| androidx.collection:collection | 1.4.2 | Apache-2.0 |
-| androidx.collection:collection-jvm | 1.4.2 | Apache-2.0 |
+| androidx.collection:collection | 1.6.0 | Apache-2.0 |
+| androidx.collection:collection-jvm | 1.6.0 | Apache-2.0 |
+| androidx.compose.runtime:runtime-annotation | 1.9.0 | Apache-2.0 |
+| androidx.compose.runtime:runtime-annotation-android | 1.9.0 | Apache-2.0 |
 | androidx.concurrent:concurrent-futures | 1.1.0 | Apache-2.0 |
 | androidx.coordinatorlayout:coordinatorlayout | 1.3.0 | Apache-2.0 |
-| androidx.core:core | 1.17.0 | Apache-2.0 |
-| androidx.core:core-ktx | 1.17.0 | Apache-2.0 |
+| androidx.core:core | 1.18.0 | Apache-2.0 |
+| androidx.core:core-ktx | 1.18.0 | Apache-2.0 |
 | androidx.core:core-splashscreen | 1.2.0 | Apache-2.0 |
 | androidx.core:core-viewtree | 1.0.0 | Apache-2.0 |
 | androidx.cursoradapter:cursoradapter | 1.0.0 | Apache-2.0 |
@@ -102,30 +104,40 @@
 | androidx.drawerlayout:drawerlayout | 1.0.0 | Apache-2.0 |
 | androidx.emoji2:emoji2 | 1.3.0 | Apache-2.0 |
 | androidx.emoji2:emoji2-views-helper | 1.3.0 | Apache-2.0 |
-| androidx.fragment:fragment | 1.8.9 | Apache-2.0 |
+| androidx.fragment:fragment | 1.9.1 | Apache-2.0 |
 | androidx.interpolator:interpolator | 1.0.0 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-common | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-livedata | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-livedata-core | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-process | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-runtime | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-runtime-ktx | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-viewmodel | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-viewmodel-ktx | 2.6.2 | Apache-2.0 |
-| androidx.lifecycle:lifecycle-viewmodel-savedstate | 2.6.2 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-common | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-common-jvm | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-livedata | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-livedata-core | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-livedata-core-ktx | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-process | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-runtime | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-runtime-android | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-runtime-ktx | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-runtime-ktx-android | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-viewmodel | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-viewmodel-android | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-viewmodel-ktx | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-viewmodel-savedstate | 2.10.0 | Apache-2.0 |
+| androidx.lifecycle:lifecycle-viewmodel-savedstate-android | 2.10.0 | Apache-2.0 |
 | androidx.loader:loader | 1.0.0 | Apache-2.0 |
+| androidx.navigationevent:navigationevent | 1.0.0 | Apache-2.0 |
+| androidx.navigationevent:navigationevent-android | 1.0.0 | Apache-2.0 |
 | androidx.profileinstaller:profileinstaller | 1.4.0 | Apache-2.0 |
 | androidx.resourceinspection:resourceinspection-annotation | 1.0.1 | Apache-2.0 |
-| androidx.savedstate:savedstate | 1.2.1 | Apache-2.0 |
-| androidx.savedstate:savedstate-ktx | 1.2.1 | Apache-2.0 |
+| androidx.savedstate:savedstate | 1.4.0 | Apache-2.0 |
+| androidx.savedstate:savedstate-android | 1.4.0 | Apache-2.0 |
+| androidx.savedstate:savedstate-ktx | 1.4.0 | Apache-2.0 |
 | androidx.startup:startup-runtime | 1.1.1 | Apache-2.0 |
-| androidx.tracing:tracing | 1.2.0 | Apache-2.0 |
+| androidx.tracing:tracing | 2.0.0 | Apache-2.0 |
+| androidx.tracing:tracing-android | 2.0.0 | Apache-2.0 |
 | androidx.vectordrawable:vectordrawable | 1.1.0 | Apache-2.0 |
 | androidx.vectordrawable:vectordrawable-animated | 1.1.0 | Apache-2.0 |
 | androidx.versionedparcelable:versionedparcelable | 1.1.1 | Apache-2.0 |
 | androidx.viewpager:viewpager | 1.0.0 | Apache-2.0 |
-| androidx.webkit:webkit | 1.14.0 | Apache-2.0 |
-| com.google.ai.edge.litertlm:litertlm-android | 0.18.0 | Apache-2.0 |
+| androidx.webkit:webkit | 1.18.0 | Apache-2.0 |
+| com.google.ai.edge.litertlm:litertlm-android | 0.19.1 | Apache-2.0 |
 | com.google.code.gson:gson | 2.14.0 | Apache-2.0 |
 | com.google.errorprone:error_prone_annotations | 2.48.0 | Apache-2.0 |
 | com.google.guava:listenablefuture | 1.0 | Apache-2.0 |
@@ -136,6 +148,8 @@
 | org.jetbrains.kotlinx:kotlinx-coroutines-android | 1.11.0 | Apache-2.0 |
 | org.jetbrains.kotlinx:kotlinx-coroutines-core | 1.11.0 | Apache-2.0 |
 | org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm | 1.11.0 | Apache-2.0 |
+| org.jetbrains.kotlinx:kotlinx-serialization-core | 1.7.3 | Apache-2.0 |
+| org.jetbrains.kotlinx:kotlinx-serialization-core-jvm | 1.7.3 | Apache-2.0 |
 | org.jetbrains:annotations | 23.0.0 | Apache-2.0 |
 | org.jspecify:jspecify | 1.0.0 | Apache-2.0 |
 
@@ -147,7 +161,7 @@ Capacitor·플러그인 Android 모듈은 위 npm 패키지와 같은 라이선�
 
 ### Apache-2.0
 
-사용 구성 요소: Material Symbols (Outlined, weight 400) 0.47.6, EmbeddingGemma 2 (Google DeepMind) 9be6e8b9, androidx.activity:activity 1.11.0, androidx.activity:activity-ktx 1.11.0, androidx.annotation:annotation 1.8.1, androidx.annotation:annotation-experimental 1.4.1, androidx.annotation:annotation-jvm 1.8.1, androidx.appcompat:appcompat 1.7.1, androidx.appcompat:appcompat-resources 1.7.1, androidx.arch.core:core-common 2.2.0, androidx.arch.core:core-runtime 2.2.0, androidx.collection:collection 1.4.2, androidx.collection:collection-jvm 1.4.2, androidx.concurrent:concurrent-futures 1.1.0, androidx.coordinatorlayout:coordinatorlayout 1.3.0, androidx.core:core 1.17.0, androidx.core:core-ktx 1.17.0, androidx.core:core-splashscreen 1.2.0, androidx.core:core-viewtree 1.0.0, androidx.cursoradapter:cursoradapter 1.0.0, androidx.customview:customview 1.0.0, androidx.drawerlayout:drawerlayout 1.0.0, androidx.emoji2:emoji2 1.3.0, androidx.emoji2:emoji2-views-helper 1.3.0, androidx.fragment:fragment 1.8.9, androidx.interpolator:interpolator 1.0.0, androidx.lifecycle:lifecycle-common 2.6.2, androidx.lifecycle:lifecycle-livedata 2.6.2, androidx.lifecycle:lifecycle-livedata-core 2.6.2, androidx.lifecycle:lifecycle-process 2.6.2, androidx.lifecycle:lifecycle-runtime 2.6.2, androidx.lifecycle:lifecycle-runtime-ktx 2.6.2, androidx.lifecycle:lifecycle-viewmodel 2.6.2, androidx.lifecycle:lifecycle-viewmodel-ktx 2.6.2, androidx.lifecycle:lifecycle-viewmodel-savedstate 2.6.2, androidx.loader:loader 1.0.0, androidx.profileinstaller:profileinstaller 1.4.0, androidx.resourceinspection:resourceinspection-annotation 1.0.1, androidx.savedstate:savedstate 1.2.1, androidx.savedstate:savedstate-ktx 1.2.1, androidx.startup:startup-runtime 1.1.1, androidx.tracing:tracing 1.2.0, androidx.vectordrawable:vectordrawable 1.1.0, androidx.vectordrawable:vectordrawable-animated 1.1.0, androidx.versionedparcelable:versionedparcelable 1.1.1, androidx.viewpager:viewpager 1.0.0, androidx.webkit:webkit 1.14.0, com.google.ai.edge.litertlm:litertlm-android 0.18.0, com.google.code.gson:gson 2.14.0, com.google.errorprone:error_prone_annotations 2.48.0, com.google.guava:listenablefuture 1.0, org.apache.cordova:framework 14.0.1, org.jetbrains.kotlin:kotlin-reflect 2.4.0, org.jetbrains.kotlin:kotlin-stdlib 2.4.0, org.jetbrains.kotlinx:kotlinx-coroutines-android 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm 1.11.0, org.jetbrains:annotations 23.0.0, org.jspecify:jspecify 1.0.0
+사용 구성 요소: Material Symbols (Outlined, weight 400) 0.47.6, EmbeddingGemma 2 (Google DeepMind) 9be6e8b9, androidx.activity:activity 1.13.0, androidx.activity:activity-ktx 1.13.0, androidx.annotation:annotation 1.10.0, androidx.annotation:annotation-experimental 1.4.1, androidx.annotation:annotation-jvm 1.10.0, androidx.appcompat:appcompat 1.8.0, androidx.appcompat:appcompat-resources 1.8.0, androidx.arch.core:core-common 2.2.0, androidx.arch.core:core-runtime 2.2.0, androidx.collection:collection 1.6.0, androidx.collection:collection-jvm 1.6.0, androidx.compose.runtime:runtime-annotation 1.9.0, androidx.compose.runtime:runtime-annotation-android 1.9.0, androidx.concurrent:concurrent-futures 1.1.0, androidx.coordinatorlayout:coordinatorlayout 1.3.0, androidx.core:core 1.18.0, androidx.core:core-ktx 1.18.0, androidx.core:core-splashscreen 1.2.0, androidx.core:core-viewtree 1.0.0, androidx.cursoradapter:cursoradapter 1.0.0, androidx.customview:customview 1.0.0, androidx.drawerlayout:drawerlayout 1.0.0, androidx.emoji2:emoji2 1.3.0, androidx.emoji2:emoji2-views-helper 1.3.0, androidx.fragment:fragment 1.9.1, androidx.interpolator:interpolator 1.0.0, androidx.lifecycle:lifecycle-common 2.10.0, androidx.lifecycle:lifecycle-common-jvm 2.10.0, androidx.lifecycle:lifecycle-livedata 2.10.0, androidx.lifecycle:lifecycle-livedata-core 2.10.0, androidx.lifecycle:lifecycle-livedata-core-ktx 2.10.0, androidx.lifecycle:lifecycle-process 2.10.0, androidx.lifecycle:lifecycle-runtime 2.10.0, androidx.lifecycle:lifecycle-runtime-android 2.10.0, androidx.lifecycle:lifecycle-runtime-ktx 2.10.0, androidx.lifecycle:lifecycle-runtime-ktx-android 2.10.0, androidx.lifecycle:lifecycle-viewmodel 2.10.0, androidx.lifecycle:lifecycle-viewmodel-android 2.10.0, androidx.lifecycle:lifecycle-viewmodel-ktx 2.10.0, androidx.lifecycle:lifecycle-viewmodel-savedstate 2.10.0, androidx.lifecycle:lifecycle-viewmodel-savedstate-android 2.10.0, androidx.loader:loader 1.0.0, androidx.navigationevent:navigationevent 1.0.0, androidx.navigationevent:navigationevent-android 1.0.0, androidx.profileinstaller:profileinstaller 1.4.0, androidx.resourceinspection:resourceinspection-annotation 1.0.1, androidx.savedstate:savedstate 1.4.0, androidx.savedstate:savedstate-android 1.4.0, androidx.savedstate:savedstate-ktx 1.4.0, androidx.startup:startup-runtime 1.1.1, androidx.tracing:tracing 2.0.0, androidx.tracing:tracing-android 2.0.0, androidx.vectordrawable:vectordrawable 1.1.0, androidx.vectordrawable:vectordrawable-animated 1.1.0, androidx.versionedparcelable:versionedparcelable 1.1.1, androidx.viewpager:viewpager 1.0.0, androidx.webkit:webkit 1.18.0, com.google.ai.edge.litertlm:litertlm-android 0.19.1, com.google.code.gson:gson 2.14.0, com.google.errorprone:error_prone_annotations 2.48.0, com.google.guava:listenablefuture 1.0, org.apache.cordova:framework 14.0.1, org.jetbrains.kotlin:kotlin-reflect 2.4.0, org.jetbrains.kotlin:kotlin-stdlib 2.4.0, org.jetbrains.kotlinx:kotlinx-coroutines-android 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core 1.11.0, org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm 1.11.0, org.jetbrains.kotlinx:kotlinx-serialization-core 1.7.3, org.jetbrains.kotlinx:kotlinx-serialization-core-jvm 1.7.3, org.jetbrains:annotations 23.0.0, org.jspecify:jspecify 1.0.0
 
 ```text
 

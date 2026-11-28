@@ -99,11 +99,12 @@ dependencies {
     // 원문 브라우저의 문서 시작 스크립트. Capacitor가 쓰는 버전과 같게 둔다.
     implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     // 기기 임베딩(EmbeddingGemma 2). 버전 고정: latest.release 금지.
-    implementation "com.google.ai.edge.litertlm:litertlm-android:0.18.0"
+    // 0.20.0은 Java 25 바이트코드(class 69)라 JDK 21 javac로 컴파일할 수 없다.
+    implementation "com.google.ai.edge.litertlm:litertlm-android:0.19.1"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     // JVM 검사에서 android.jar의 org.json 빈 구현 대신 실제 구현을 쓴다. 앱 APK에는 들어가지 않는다.
-    testImplementation "org.json:json:20250517"
+    testImplementation "org.json:json:20260814"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
